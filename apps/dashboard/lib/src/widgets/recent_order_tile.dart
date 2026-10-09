@@ -94,8 +94,15 @@ class RecentOrderTile extends StatelessWidget {
               // Reuses the app's established status mapper - a THIRD copy of
               // that mapping is exactly what this slice exists to avoid.
               RestoflowStatusPill(
-                label: statusLabel(l10n, row.status),
-                tone: statusTone(row.status),
+                label: statusLabel(
+                  l10n,
+                  row.status,
+                  hasActiveRound: row.hasActiveRound,
+                ),
+                tone: statusTone(
+                  row.status,
+                  hasActiveRound: row.hasActiveRound,
+                ),
               ),
               RestoflowStatusPill(
                 label: row.isPaid ? l10n.dashboardPaid : l10n.dashboardUnpaid,

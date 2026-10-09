@@ -193,6 +193,12 @@ class RealActiveOrdersRepository implements ActiveOrdersRepository {
     kitchenWorkOpen: row['kitchen_work_open'] is bool
         ? row['kitchen_work_open'] as bool
         : null,
+    // ORDER-EDIT-001G (API_CONTRACT §4.47a): additive; an older server sends
+    // neither key, which reads exactly as before (no badge, status label only).
+    editCount: _int(row['edit_count']),
+    hasActiveRound: row['has_active_round'] is bool
+        ? row['has_active_round'] as bool
+        : null,
   );
 
   static DateTime? _utcOrNull(Object? value) {

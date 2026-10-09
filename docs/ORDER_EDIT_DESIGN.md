@@ -913,16 +913,23 @@ shows no change card.
   - `replaced_out_minor` = Σ `line_total_minor` of retired lines that a row with
     `replaces_order_item_id` replaces;
   - `replaced_in_minor` = Σ `line_total_minor` of those live replacement or
-    continuation rows;
+    continuation rows (live when that edit wrote them; see below);
   - `added_minor` = Σ `line_total_minor` of live rows with `edit_id` set and no
-    `replaces_order_item_id` (added lines and +N delta rows);
+    `replaces_order_item_id` (added lines and +N delta rows; live when that edit
+    wrote them; see below);
   - `net_change_minor` = `replaced_in_minor` + `added_minor` − `removed_minor` −
     `replaced_out_minor`.
 
   Each figure is also broken down by `reason_code` and by employee. The gross retired
   value (`removed_minor` + `replaced_out_minor`) is always shown, so the gross void
   amounts stay visible as MONEY §12.2 requires. Net of replacements is a derived
-  column and never replaces the gross figure.
+  column and never replaces the gross figure. "Live" in `replaced_in_minor` and
+  `added_minor` means live when that edit wrote them: the figures are computed per
+  edit as written, from provenance only (`removed_by_edit_id`, `edit_id`,
+  `replaces_order_item_id`), so a later edit or a whole-order void never rewrites an
+  earlier edit's figures; a written row counts at `line_total_minor` +
+  `line_discount_minor`, so a later item discount on it does not either
+  (ORDER-EDIT-001G; MONEY §13, API_CONTRACT §4.47).
 
 Worked example (tax off): Burger 4000 (+Tomato, +Cucumber, both free options), Fries
 1500, Cola 800 → subtotal 6300. Edit: burger without tomato, fries removed, one
@@ -981,6 +988,48 @@ titles, the `_displayableKeys` labels and a green `auditRegistryViolations` guar
 an approved exception to the shared-package split, following the PSC-001D and
 POS-CASH-DRAWER-MANUAL-OPEN-001 precedent. The owner approved that exception on
 2026-10-08; 001C carries no audit strings.
+
+*Implemented — ORDER-EDIT-001G (Dashboard; no shared-package or l10n change):*
+
+- **Server.** Migration `20261009100000_order_edit_001g_owner_order_edits.sql` adds
+  the read-only `owner_order_edits` reader (API_CONTRACT §4.47): M13 figures per edit
+  as written, branches without a time zone left out, staff names for manager and
+  above only (`staff_visible`), `reason_text` never returned. Migration
+  `20261009100100_order_edit_001g_dashboard_reads.sql` re-emits `owner_active_orders`,
+  `owner_order_history` and `owner_order_detail` from their live 001A bodies, adding
+  only `edit_count`, `has_active_round`, `active_rounds_ready` and `edits[]`, and adds
+  the reader `get_branch_order_edit_settings` (§4.47a). pgTAP:
+  `order_edit_001g_owner_order_edits_test`, `order_edit_001g_dashboard_reads_test`
+  and the support-session cases in `platform_support_sessions_126b_test`.
+- **Overview "Order edits" card.** Shown when editing was turned on somewhere in the
+  scope or the window has edits; never requested in platform support mode (the
+  reader names staff). Edits, edited orders, the gross removed value always beside
+  the net change, then removed, replaced (before / after) and added; by reason (an
+  edit with no reason reads "Added") and by staff member when `staff_visible`; the
+  newest five edits with "Load more" (25 per page, keyset). When the edits are in
+  another currency than the window, or in several, it shows counts only.
+- **Order lists and drawer.** A `served` order with an active round reads "In
+  kitchen" on the active board, in the history and in the Overview recent orders;
+  the drawer says "Ready" when every active round is ready. "Served" / "Picked up"
+  return once no round is active (STATE_MACHINES §1). The "paid, not completed"
+  warning waits while a round is active. "Edited ×N" sits beside the status pill.
+  The drawer's "Changes" timeline lists each edit (change number, time, reason with
+  the "Other" text) and what the kitchen did: waiting to confirm, confirmed at, or
+  "Printed for the kitchen" on the paper channel (also shown when the change slip
+  failed to print; accepted for v1). `edits[]` is parsed all or nothing, and absent
+  keys from an older server read as before.
+- **Settings.** An "Editing sent orders" card under Kitchen workflow holds the two
+  switches over `set_branch_order_edit_settings`: owner only (managers and cashiers
+  see them locked with the owner-only note), never optimistic (the server echo is
+  adopted, then re-read), with the printer-only note on the finished-food switch.
+  Do not turn "Allow editing sent orders" on for any branch before ORDER-EDIT-001R
+  (§11).
+- **Staff.** The `void_order` switch reads "Can cancel unpaid orders and remove sent
+  items" with its hint; its key and its payload are unchanged.
+- **Deferred until #288 merges:** the IMPLEMENTATION_CHECKLIST 001G row, the
+  STATE_MACHINES §1 "Not yet implemented" note, the DECISIONS D-043 point 10
+  wording, the API_CONTRACT §4.45.10 status line, and the SECURITY_AND_THREAT_MODEL
+  and TESTING_STRATEGY rows.
 
 ## 10. Implementation plan
 

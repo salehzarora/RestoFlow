@@ -26,7 +26,7 @@ import '../format/money_format.dart';
 import '../state/active_orders_providers.dart';
 import 'order_detail_sheet.dart';
 import 'order_history_screen.dart'
-    show orderTypeLabel, statusLabelFor, statusTone;
+    show orderEditedBadge, orderTypeLabel, statusLabelFor, statusTone;
 import 'settlement_badge.dart';
 
 /// Above this width the board renders as a dense operational table; below it,
@@ -774,10 +774,19 @@ class ActiveOrderTile extends ConsumerWidget {
       runSpacing: RestoflowSpacing.xs,
       children: [
         RestoflowStatusPill(
-          label: statusLabelFor(l10n, row.status, row.orderType),
-          tone: statusTone(row.status),
+          label: statusLabelFor(
+            l10n,
+            row.status,
+            row.orderType,
+            hasActiveRound: row.hasActiveRound == true,
+          ),
+          tone: statusTone(
+            row.status,
+            hasActiveRound: row.hasActiveRound == true,
+          ),
         ),
         settlementPill(l10n, row.settlement),
+        if (row.editCount > 0) orderEditedBadge(l10n, row.editCount),
         // STALE-TABLE-ORDER-RECOVERY-001: operational WARNINGS, display only.
         // The board never mutates an order from these; the recovery is the
         // POS table → order → pay / cancel path.
@@ -1015,7 +1024,12 @@ List<Widget> staleOrderPills(
   }
   // SETTLED, not merely paid: a zero-total (not_chargeable) served order is the
   // same auto-completion gap (the ONE settlement predicate treats it as settled).
-  if (row.status == 'served' && row.settlement.isSettled) {
+  // ORDER-EDIT-001G: not while a service round is still in the kitchen — the
+  // server completes the order only once every round is served, so a paid
+  // order waiting for its round is expected, not a gap.
+  if (row.status == 'served' &&
+      row.settlement.isSettled &&
+      row.hasActiveRound != true) {
     pills.add(
       RestoflowStatusPill(
         key: Key('stale-paid-not-completed-${row.orderId}'),

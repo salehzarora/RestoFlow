@@ -22,7 +22,7 @@ import '../print/order_preview_builders.dart';
 import '../state/order_history_providers.dart';
 import 'order_complete_action.dart';
 import 'order_history_screen.dart'
-    show statusLabelFor, statusTone, orderTypeLabel;
+    show orderEditedBadge, statusLabelFor, statusTone, orderTypeLabel;
 import 'order_preview_dialog.dart';
 import 'settlement_badge.dart';
 
@@ -191,6 +191,13 @@ class _DetailContent extends StatelessWidget {
           _infoCard(),
           const SizedBox(height: RestoflowSpacing.md),
           _itemsCard(),
+          // ORDER-EDIT-001G: the order's changes after it was sent, oldest
+          // first. Hidden when the server sent none (an unedited order, an
+          // older server, or a list that could not be read whole).
+          if (detail.edits?.isNotEmpty ?? false) ...[
+            const SizedBox(height: RestoflowSpacing.md),
+            _editsCard(context),
+          ],
           const SizedBox(height: RestoflowSpacing.md),
           _paymentCard(),
           if (counts.isNotEmpty) ...[
@@ -288,16 +295,91 @@ class _DetailContent extends StatelessWidget {
   }
 
   Widget statusLabelPill() {
+    // ORDER-EDIT-001G (STATE_MACHINES §1): a `served` order with a round still
+    // in the kitchen reads the round's stage; the drawer knows whether every
+    // active round is ready, so it can say "Ready" where lists say
+    // "In kitchen".
+    final hasActiveRound = detail.hasActiveRound == true;
+    final roundsReady = detail.activeRoundsReady == true;
     return Padding(
       padding: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.xs),
       child: Align(
         alignment: AlignmentDirectional.centerStart,
-        child: RestoflowStatusPill(
-          label: statusLabelFor(l10n, detail.status, detail.orderType),
-          tone: statusTone(detail.status),
+        child: Wrap(
+          spacing: RestoflowSpacing.xs,
+          runSpacing: RestoflowSpacing.xs,
+          children: [
+            RestoflowStatusPill(
+              key: const Key('order-detail-status-pill'),
+              label: statusLabelFor(
+                l10n,
+                detail.status,
+                detail.orderType,
+                hasActiveRound: hasActiveRound,
+                activeRoundsReady: roundsReady,
+              ),
+              tone: statusTone(
+                detail.status,
+                hasActiveRound: hasActiveRound,
+                activeRoundsReady: roundsReady,
+              ),
+            ),
+            if (detail.editCount > 0) orderEditedBadge(l10n, detail.editCount),
+          ],
         ),
       ),
     );
+  }
+
+  /// ORDER-EDIT-001G — the "Changes" timeline (API_CONTRACT §4.47a). Each
+  /// entry: the change number and time, the reason (with the free text of an
+  /// `other` reason), and what the kitchen did with it. Money-free.
+  Widget _editsCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(color: kRestoflowInk2);
+    return RestoflowSectionCard(
+      key: const Key('order-detail-edits'),
+      title: l10n.ordersEditTimelineTitle,
+      children: [
+        for (final e in detail.edits!)
+          Padding(
+            key: Key('order-edit-entry-${e.editNumber}'),
+            padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xs),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Row(
+                  l10n.kitchenEditChangeNumber(e.editNumber),
+                  e.createdAtLabel,
+                ),
+                if (orderEditReasonLabel(l10n, e.reasonCode) case final reason?)
+                  Text(
+                    e.reasonCode == 'other' && e.reasonText != null
+                        ? '$reason · ${e.reasonText}'
+                        : reason,
+                    style: muted,
+                  ),
+                if (_kitchenLine(e) case final line?)
+                  Text(
+                    line,
+                    key: Key('order-edit-kitchen-${e.editNumber}'),
+                    style: muted,
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// What the kitchen did with an edit, or null when there is nothing to say.
+  /// A pending confirmation wins; the paper channel has no confirmation step.
+  String? _kitchenLine(OrderEditTimelineEntry e) {
+    if (e.kitchenAckPending) return l10n.ordersEditKitchenPending;
+    final ackAt = e.kitchenAckAtLabel;
+    if (ackAt != null) return l10n.ordersEditKitchenConfirmedAt(ackAt);
+    if (e.printedForKitchen) return l10n.ordersEditKitchenPrinted;
+    return null;
   }
 
   Widget _itemsCard() {

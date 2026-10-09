@@ -194,6 +194,10 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
         'row',
         'paid_amount_minor',
       ),
+      // ORDER-EDIT-001G (API_CONTRACT §4.47a): additive; absent keys read
+      // exactly as before.
+      editCount: _count(row['edit_count']),
+      hasActiveRound: _boolOrNull(row['has_active_round']),
     );
   }
 
@@ -240,7 +244,49 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
       payments: paymentsRaw is List
           ? paymentsRaw.whereType<Map>().map(_payment).toList(growable: false)
           : const [],
+      editCount: _count(order['edit_count']),
+      hasActiveRound: _boolOrNull(order['has_active_round']),
+      activeRoundsReady: _boolOrNull(order['active_rounds_ready']),
+      edits: parseOrderEditTimeline(order['edits']),
     );
+  }
+
+  /// ORDER-EDIT-001G — `owner_order_detail.order.edits[]` (API_CONTRACT §4.47a),
+  /// ALL OR NOTHING: absent, not a list, or ANY malformed element gives null,
+  /// and the drawer then shows no timeline. A partial history would tell the
+  /// owner an order was changed fewer times than it was.
+  static List<OrderEditTimelineEntry>? parseOrderEditTimeline(Object? raw) {
+    if (raw is! List) return null;
+    final entries = <OrderEditTimelineEntry>[];
+    for (final e in raw) {
+      if (e is! Map) return null;
+      final number = e['edit_number'];
+      final createdAt = _strOrNull(e['created_at']);
+      final channel = _strOrNull(e['kitchen_channel']);
+      final required = e['kitchen_ack_required'];
+      final pending = e['kitchen_ack_pending'];
+      if (number is! int ||
+          number < 1 ||
+          createdAt == null ||
+          channel == null ||
+          required is! bool ||
+          pending is! bool) {
+        return null;
+      }
+      entries.add(
+        OrderEditTimelineEntry(
+          editNumber: number,
+          createdAtLabel: createdAt,
+          reasonCode: _strOrNull(e['reason_code']),
+          reasonText: _strOrNull(e['reason_text']),
+          kitchenChannel: channel,
+          kitchenAckRequired: required,
+          kitchenAckAtLabel: _strOrNull(e['kitchen_ack_at']),
+          kitchenAckPending: pending,
+        ),
+      );
+    }
+    return List.unmodifiable(entries);
   }
 
   OrderDetailItem _item(Map raw) {
@@ -380,6 +426,8 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
   /// a bill.
   static int _count(Object? value) =>
       value is int ? value : int.tryParse('$value') ?? 0;
+
+  static bool? _boolOrNull(Object? value) => value is bool ? value : null;
 
   static num? _numOrNull(Object? value) {
     if (value == null) return null;
