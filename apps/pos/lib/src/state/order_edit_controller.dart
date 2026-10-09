@@ -13,7 +13,10 @@ import '../data/order_detail_repository.dart';
 import '../data/order_edit_baseline.dart';
 import '../data/order_edit_diff.dart';
 import '../data/order_edit_journal_store.dart';
+import '../data/order_edit_read_model.dart' show PosKitchenChannel;
 import '../data/order_edit_response.dart';
+import '../data/order_edit_slip.dart'
+    show OrderEditSlipItem, orderEditSlipWasLines;
 import 'addition_controller.dart';
 import 'cart_controller.dart';
 import 'discount_controller.dart' show staffCapabilitiesProvider;
@@ -64,6 +67,7 @@ class OrderEditAttempt {
     required this.summary,
     required this.clientCreatedAt,
     this.employeeProfileId,
+    this.slipWas,
   });
 
   /// A restored journal record as an attempt (cart-free: no edit cart is ever
@@ -78,6 +82,7 @@ class OrderEditAttempt {
         summary: r.summary,
         clientCreatedAt: r.clientCreatedAt,
         employeeProfileId: r.employeeProfileId,
+        slipWas: r.slipWas,
       );
 
   /// The D-022 idempotency identity — one per attempt, reused by every retry.
@@ -103,6 +108,11 @@ class OrderEditAttempt {
   /// The worker who froze it — diagnostic only (decision D12).
   final String? employeeProfileId;
 
+  /// ORDER-EDIT-001F (D2): the money-free "was" projections of the lines the
+  /// payload names, frozen from the baseline on a PAPER edit (null on KDS), so
+  /// a cart-free replay can still hand-build the full change slip.
+  final Map<String, OrderEditSlipItem>? slipWas;
+
   /// Whether the payload told the server a pre-bill had been presented
   /// (decision D7) — the result then offers "Bill changed: print new bill?".
   bool get billPresented => payload.containsKey('bill_presented_at');
@@ -121,6 +131,7 @@ class OrderEditAttempt {
     phase: phase,
     attemptCount: attemptCount,
     employeeProfileId: employeeProfileId,
+    slipWas: slipWas,
   );
 }
 
@@ -1159,20 +1170,26 @@ class OrderEditController extends Notifier<OrderEditState> {
         error: 'blocked',
       );
     }
+    final payload = buildOrderEditPayload(
+      plan,
+      reasonCode: reasonCode,
+      reasonText: reasonText,
+      billPresentedAt: billPresentedAt,
+    );
     final attempt = OrderEditAttempt(
       localOperationId: ref.read(clientIdGeneratorProvider).newId(),
       orderId: context.orderId,
       orderCode: context.orderCode,
       generation: gen,
-      payload: buildOrderEditPayload(
-        plan,
-        reasonCode: reasonCode,
-        reasonText: reasonText,
-        billPresentedAt: billPresentedAt,
-      ),
+      payload: payload,
       summary: plan.summary,
       clientCreatedAt: DateTime.now().toUtc(),
       employeeProfileId: ref.read(posSignedInEmployeeProfileIdProvider),
+      // ORDER-EDIT-001F (D2): the paper slip's "was" lines, frozen with the
+      // payload from the same baseline.
+      slipWas: context.baseline.channel == PosKitchenChannel.paper
+          ? orderEditSlipWasLines(context.baseline, payload)
+          : null,
     );
     final cartController = ref.read(cartControllerProvider.notifier);
     final owner = _ownerOf(attempt);

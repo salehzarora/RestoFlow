@@ -7,7 +7,12 @@ import 'local_storage_health.dart';
 import 'order_edit_diff.dart' show OrderEditAttemptSummary;
 import 'order_edit_read_model.dart' show PosKitchenChannel;
 import 'order_edit_response.dart'
-    show OrderEditApplied, OrderEditKitchenDispatch;
+    show
+        OrderEditApplied,
+        OrderEditAppliedChange,
+        OrderEditKitchenDispatch,
+        kOrderEditChangeKinds;
+import 'order_edit_slip.dart' show OrderEditSlipItem;
 import 'sync_cursor_store.dart' show PosPersistenceException;
 
 /// ORDER-EDIT-001E — the durable SENT-ORDER-EDIT JOURNAL (design §7.1 point 7,
@@ -63,6 +68,7 @@ class OrderEditJournalRecord {
     this.employeeProfileId,
     this.lastErrorCode,
     this.applied,
+    this.slipWas,
   });
 
   /// The D-022 idempotency identity AND this record's key — one per attempt,
@@ -107,6 +113,15 @@ class OrderEditJournalRecord {
   /// verifies against them. Carries the paper dispatch for ORDER-EDIT-001F.
   final OrderEditApplied? applied;
 
+  /// ORDER-EDIT-001F (decision D2): the money-free kitchen projections of the
+  /// lines the payload names, FROZEN from the entry baseline on a PAPER edit,
+  /// keyed by lower-case `order_item_id` — so a cart-free replay after a
+  /// restart can still hand-build the full change slip. Null on a KDS edit and
+  /// on a record written before 001F (its slip then stays unbuilt; the spool
+  /// backup covers it). Slip evidence only: an unreadable value decodes as
+  /// null and NEVER costs the record its identity.
+  final Map<String, OrderEditSlipItem>? slipWas;
+
   bool get isConflict => phase == OrderEditJournalPhase.conflict;
 
   bool get awaitingRefresh =>
@@ -131,6 +146,7 @@ class OrderEditJournalRecord {
     employeeProfileId: employeeProfileId,
     lastErrorCode: clearError ? null : (lastErrorCode ?? this.lastErrorCode),
     applied: applied ?? this.applied,
+    slipWas: slipWas,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -146,6 +162,13 @@ class OrderEditJournalRecord {
     'employee_profile_id': employeeProfileId,
     'last_error_code': lastErrorCode,
     'applied': applied == null ? null : _appliedToJson(applied!),
+    // ORDER-EDIT-001F: written only when present, so a KDS edit's record is
+    // byte-identical to its 001E form.
+    if (slipWas != null)
+      'slip_was': <Object?>[
+        for (final e in slipWas!.entries)
+          <String, Object?>{'order_item_id': e.key, 'item': e.value.toJson()},
+      ],
   };
 
   /// STRICT decoding (the 003A/003B house style): a record this build cannot
@@ -242,8 +265,29 @@ class OrderEditJournalRecord {
       employeeProfileId: optionalString('employee_profile_id'),
       lastErrorCode: optionalString('last_error_code'),
       applied: applied,
+      slipWas: _slipWasFromJson(json['slip_was']),
     );
   }
+}
+
+/// ORDER-EDIT-001F: TOLERANT on purpose — the frozen "was" lines are slip
+/// evidence, not part of the money operation, so anything this build cannot
+/// read exactly yields null (an unbuilt slip) rather than quarantining a
+/// record whose identity may be live on the server.
+Map<String, OrderEditSlipItem>? _slipWasFromJson(Object? raw) {
+  if (raw is! List) return null;
+  final out = <String, OrderEditSlipItem>{};
+  try {
+    for (final e in raw) {
+      if (e is! Map) return null;
+      final id = e['order_item_id'];
+      if (id is! String || id.isEmpty || e.length != 2) return null;
+      out[id.toLowerCase()] = OrderEditSlipItem.fromJson(e['item']);
+    }
+  } catch (_) {
+    return null;
+  }
+  return out;
 }
 
 Map<String, Object?> _appliedToJson(OrderEditApplied a) => <String, Object?>{
@@ -265,7 +309,48 @@ Map<String, Object?> _appliedToJson(OrderEditApplied a) => <String, Object?>{
         },
   'order_status': a.orderStatus,
   'auto_completed': a.autoCompleted,
+  // ORDER-EDIT-001F: the envelope changes the hand-built slip zips with the
+  // payload. Written only when present (a KDS edit keeps its 001E bytes).
+  if (a.changes.isNotEmpty)
+    'changes': <Object?>[
+      for (final c in a.changes)
+        <String, Object?>{
+          'kind': c.kind,
+          'order_item_id': c.orderItemId,
+          'new_order_item_ids': c.newOrderItemIds,
+        },
+    ],
 };
+
+/// ORDER-EDIT-001F: TOLERANT, like `slip_was` — the changes only feed the
+/// change slip, so an unreadable list reads as empty (an unbuilt slip) and
+/// never quarantines the applied record the reconcile depends on.
+List<OrderEditAppliedChange> _appliedChangesFromJson(Object? raw) {
+  if (raw is! List) return const <OrderEditAppliedChange>[];
+  final out = <OrderEditAppliedChange>[];
+  for (final c in raw) {
+    if (c is! Map) return const <OrderEditAppliedChange>[];
+    final kind = c['kind'];
+    final id = c['order_item_id'];
+    final ids = c['new_order_item_ids'];
+    if (kind is! String ||
+        !kOrderEditChangeKinds.contains(kind) ||
+        (id != null && (id is! String || id.isEmpty)) ||
+        (kind == 'add') != (id == null) ||
+        ids is! List ||
+        ids.any((n) => n is! String || n.isEmpty)) {
+      return const <OrderEditAppliedChange>[];
+    }
+    out.add(
+      OrderEditAppliedChange(
+        kind: kind,
+        orderItemId: id as String?,
+        newOrderItemIds: List<String>.unmodifiable(ids.cast<String>()),
+      ),
+    );
+  }
+  return List<OrderEditAppliedChange>.unmodifiable(out);
+}
 
 /// STRICT: the facts the reconcile verifies against must be exact.
 OrderEditApplied _appliedFromJson(Object? raw) {
@@ -336,6 +421,7 @@ OrderEditApplied _appliedFromJson(Object? raw) {
     kitchenDispatch: dispatch,
     orderStatus: status as String?,
     autoCompleted: auto,
+    changes: _appliedChangesFromJson(raw['changes']),
   );
 }
 

@@ -579,6 +579,50 @@ void main() {
       expect(result.status, OrderEditSubmitStatus.applied);
     });
 
+    test('ORDER-EDIT-001F (D2): a PAPER attempt journals the frozen "was" '
+        'projections of the lines it names, before the invoke', () async {
+      final h = _H(script: [_applied(channel: 'paper', ackRequired: false)]);
+      h.details.byId['order-1'] = _order(
+        channel: PosKitchenChannel.paper,
+        items: [
+          _burger(),
+          _fries(notes: '  extra salt '),
+        ],
+      );
+      await h.enter();
+      h.transport.gate = Completer<void>();
+      h.cart.removeLine('sent-oi-fries');
+      final pending = h.edit.submit(reasonCode: 'entry_mistake');
+      await _settle();
+
+      // Journaled and in flight: the record already carries the slip lines.
+      expect(h.log, ['persist:dispatching', 'invoke:op-1']);
+      final record = (await h.journal!.stored())['op-1']!;
+      expect(record.slipWas!.keys, ['oi-fries']);
+      final fries = record.slipWas!['oi-fries']!;
+      expect(fries.qty, 1);
+      expect(fries.name, 'Fries');
+      expect(fries.note, 'extra salt');
+      expect(h.state.attempt!.slipWas!.keys, ['oi-fries']);
+
+      h.transport.gate!.complete();
+      await pending;
+    });
+
+    test('ORDER-EDIT-001F: a KDS attempt freezes no slip lines', () async {
+      final h = _H(script: [_applied()]);
+      await h.enter();
+      h.transport.gate = Completer<void>();
+      h.cart.removeLine('sent-oi-fries');
+      final pending = h.edit.submit(reasonCode: 'entry_mistake');
+      await _settle();
+      final record = (await h.journal!.stored())['op-1']!;
+      expect(record.slipWas, isNull);
+      expect(record.toJson().containsKey('slip_was'), isFalse);
+      h.transport.gate!.complete();
+      await pending;
+    });
+
     test('a refused journal write sends NOTHING and keeps the edit', () async {
       final h = _H();
       await h.enter();

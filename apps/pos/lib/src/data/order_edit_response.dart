@@ -107,13 +107,42 @@ enum OrderEditRejection {
 }
 
 /// The paper-channel `order_edit` dispatch, born claimed by this POS
-/// (§4.45.9). Carried for ORDER-EDIT-001F; nothing in 001E acts on it.
+/// (§4.45.9). ORDER-EDIT-001F prints its change slip directly and reports
+/// it through `acknowledge_kitchen_print_dispatch`.
 class OrderEditKitchenDispatch {
   const OrderEditKitchenDispatch({required this.id, this.claimExpiresAt});
 
   final String id;
   final DateTime? claimExpiresAt;
 }
+
+/// ORDER-EDIT-001F — one entry of the envelope's `changes[]` (request order),
+/// reduced to what the hand-built change slip needs: the op, the line it names
+/// and the rows the server wrote for it. Money-free.
+class OrderEditAppliedChange {
+  const OrderEditAppliedChange({
+    required this.kind,
+    this.orderItemId,
+    this.newOrderItemIds = const <String>[],
+  });
+
+  /// `remove` / `set_quantity` / `modify` / `add`.
+  final String kind;
+
+  /// The retired / kept line; null on an `add`.
+  final String? orderItemId;
+
+  /// The rows the server wrote for this change, in envelope order.
+  final List<String> newOrderItemIds;
+}
+
+/// The four change kinds `app.edit_order` answers with.
+const Set<String> kOrderEditChangeKinds = <String>{
+  'remove',
+  'set_quantity',
+  'modify',
+  'add',
+};
 
 /// The applied envelope's facts this POS relies on.
 class OrderEditApplied {
@@ -129,6 +158,7 @@ class OrderEditApplied {
     this.kitchenDispatch,
     this.orderStatus,
     this.autoCompleted = false,
+    this.changes = const <OrderEditAppliedChange>[],
   });
 
   final String orderEditId;
@@ -149,6 +179,12 @@ class OrderEditApplied {
   final OrderEditKitchenDispatch? kitchenDispatch;
   final String? orderStatus;
   final bool autoCompleted;
+
+  /// ORDER-EDIT-001F: the envelope's `changes[]`, in request order — the
+  /// input of the hand-built change slip. ALL OR NOTHING: empty when the key
+  /// is absent or ANY entry is unreadable (a partial list would misalign the
+  /// slip with the request), never a reason to doubt the edit itself.
+  final List<OrderEditAppliedChange> changes;
 }
 
 /// The server's own figures, returned with `totals_mismatch`.
@@ -375,8 +411,45 @@ OrderEditOutcome _applied(Map<dynamic, dynamic> r, String orderId) {
       kitchenDispatch: dispatch,
       orderStatus: _nonBlank(r['order_status']),
       autoCompleted: r['auto_completed'] == true,
+      changes: _appliedChanges(changes),
     ),
   );
+}
+
+/// ORDER-EDIT-001F: the envelope's `changes[]` for the change slip — all or
+/// nothing (see [OrderEditApplied.changes]).
+List<OrderEditAppliedChange> _appliedChanges(Object? raw) {
+  if (raw is! List) return const <OrderEditAppliedChange>[];
+  final out = <OrderEditAppliedChange>[];
+  for (final c in raw) {
+    if (c is! Map) return const <OrderEditAppliedChange>[];
+    final kind = c['kind'];
+    if (kind is! String || !kOrderEditChangeKinds.contains(kind)) {
+      return const <OrderEditAppliedChange>[];
+    }
+    final idRaw = c['order_item_id'];
+    final id = _nonBlank(idRaw);
+    // An add names no line; every other change names exactly one.
+    if ((kind == 'add') ? idRaw != null : id == null) {
+      return const <OrderEditAppliedChange>[];
+    }
+    final newIdsRaw = c['new_order_item_ids'];
+    if (newIdsRaw is! List) return const <OrderEditAppliedChange>[];
+    final newIds = <String>[];
+    for (final n in newIdsRaw) {
+      final s = _nonBlank(n);
+      if (s == null) return const <OrderEditAppliedChange>[];
+      newIds.add(s);
+    }
+    out.add(
+      OrderEditAppliedChange(
+        kind: kind,
+        orderItemId: id,
+        newOrderItemIds: List<String>.unmodifiable(newIds),
+      ),
+    );
+  }
+  return List<OrderEditAppliedChange>.unmodifiable(out);
 }
 
 OrderEditOutcome _rejected(Map<dynamic, dynamic> r) {

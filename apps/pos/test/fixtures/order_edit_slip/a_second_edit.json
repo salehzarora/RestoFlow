@@ -1,0 +1,809 @@
+{
+  "_comment": "ORDER-EDIT-001F parity fixture: a REAL paper edit captured by capture_probe.sql on a local PostgreSQL build of supabase/migrations. before/after = app.pos_order_detail, envelope = the public.sync_push answer, dispatch = the STORED kitchen_print_dispatches.money_free_payload. Fictional people. Never hand-edit; re-capture instead.",
+  "after": {
+    "branch_features": {
+      "order_edit_enabled": true,
+      "order_edit_finished_food_manager_only": false
+    },
+    "edits": [
+      {
+        "created_at": "2026-10-09T05:31:12.606845+00:00",
+        "edit_number": 1,
+        "kitchen_ack_at": null,
+        "kitchen_ack_pending": false,
+        "kitchen_ack_required": false,
+        "kitchen_channel": "paper",
+        "order_edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "reason_code": "other",
+        "reason_text": "guest asked twice"
+      },
+      {
+        "created_at": "2026-10-09T05:31:12.606845+00:00",
+        "edit_number": 2,
+        "kitchen_ack_at": null,
+        "kitchen_ack_pending": false,
+        "kitchen_ack_required": false,
+        "kitchen_channel": "paper",
+        "order_edit_id": "14ee04e5-165d-43a6-987b-8a3f18950122",
+        "reason_code": "entry_mistake",
+        "reason_text": null
+      }
+    ],
+    "entity": "order_detail",
+    "items": [
+      {
+        "category_display_order_snapshot": 2,
+        "edit_id": null,
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 4,
+        "line_total_minor": 900,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001004",
+        "menu_item_name_snapshot": "Lemonade",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "fed00000-0000-0000-0000-0000000a1004",
+        "prep_snapshot": null,
+        "quantity": 1,
+        "round_number": null,
+        "service_round_id": null,
+        "status": "pending",
+        "unit_price_minor_snapshot": 900,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 2,
+        "edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 7,
+        "line_total_minor": 1800,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001004",
+        "menu_item_name_snapshot": "Lemonade",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "d18dd245-0278-4ad0-b29f-4edd9ca41ae3",
+        "prep_snapshot": null,
+        "quantity": 2,
+        "round_number": 2,
+        "service_round_id": "049e8e29-bc57-484f-90dc-35e122c3fe99",
+        "status": "pending",
+        "unit_price_minor_snapshot": 900,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 2,
+        "edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "item_display_order_snapshot": 2,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 3,
+        "line_total_minor": 800,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001003",
+        "menu_item_name_snapshot": "Cola",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "0de74e10-4f67-4300-80ab-02b3841911f5",
+        "prep_snapshot": null,
+        "quantity": 1,
+        "round_number": null,
+        "service_round_id": null,
+        "status": "pending",
+        "unit_price_minor_snapshot": 800,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 2,
+        "edit_id": "14ee04e5-165d-43a6-987b-8a3f18950122",
+        "item_display_order_snapshot": 2,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 10,
+        "line_total_minor": 800,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001003",
+        "menu_item_name_snapshot": "Cola",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "0618de6c-b6ce-45e2-b7c8-e683eac0ecba",
+        "prep_snapshot": null,
+        "quantity": 1,
+        "round_number": 3,
+        "service_round_id": "f1b93fbd-d3b3-4e89-a336-c6e6824ee460",
+        "status": "pending",
+        "unit_price_minor_snapshot": 800,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 5,
+        "edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 5,
+        "line_total_minor": 4000,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001001",
+        "menu_item_name_snapshot": "Burger",
+        "modifiers": [
+          {
+            "meat_snapshot": {
+              "quantity": 1,
+              "unit": "pc"
+            },
+            "modifier_group_display_order_snapshot": 1,
+            "modifier_name_snapshot": "Extras",
+            "modifier_option_display_order_snapshot": 2,
+            "modifier_option_id": "fed00000-0000-0000-0000-00000000e002",
+            "option_name_snapshot": "cucumber",
+            "price_minor_snapshot": 0,
+            "quantity": 1
+          }
+        ],
+        "notes": null,
+        "order_item_id": "74b5828a-460e-4f38-98da-7c117e836fa9",
+        "prep_snapshot": [
+          {
+            "name": "Bun",
+            "quantity": 1,
+            "unit": "pc"
+          }
+        ],
+        "quantity": 1,
+        "round_number": null,
+        "service_round_id": null,
+        "status": "pending",
+        "unit_price_minor_snapshot": 4000,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 5,
+        "edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 6,
+        "line_total_minor": 4000,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001001",
+        "menu_item_name_snapshot": "Burger",
+        "modifiers": [
+          {
+            "meat_snapshot": null,
+            "modifier_group_display_order_snapshot": 1,
+            "modifier_name_snapshot": "Extras",
+            "modifier_option_display_order_snapshot": 2,
+            "modifier_option_id": "fed00000-0000-0000-0000-00000000e002",
+            "option_name_snapshot": "cucumber",
+            "price_minor_snapshot": 0,
+            "quantity": 1
+          }
+        ],
+        "notes": "  well done ",
+        "order_item_id": "d41036a8-179a-4bd2-9782-493c420212f4",
+        "prep_snapshot": [
+          {
+            "name": "Bun",
+            "quantity": 1,
+            "unit": "pc"
+          },
+          {
+            "name": "Patty",
+            "quantity": 1.5,
+            "unit": "pc"
+          }
+        ],
+        "quantity": 1,
+        "round_number": 2,
+        "service_round_id": "049e8e29-bc57-484f-90dc-35e122c3fe99",
+        "status": "pending",
+        "unit_price_minor_snapshot": 4000,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 5,
+        "edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 8,
+        "line_total_minor": 4300,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001001",
+        "menu_item_name_snapshot": "Burger",
+        "modifiers": [
+          {
+            "meat_snapshot": {
+              "quantity": 1,
+              "unit": "pc"
+            },
+            "modifier_group_display_order_snapshot": 1,
+            "modifier_name_snapshot": "Extras",
+            "modifier_option_display_order_snapshot": 2,
+            "modifier_option_id": "fed00000-0000-0000-0000-00000000e002",
+            "option_name_snapshot": "cucumber",
+            "price_minor_snapshot": 0,
+            "quantity": 1
+          },
+          {
+            "meat_snapshot": null,
+            "modifier_group_display_order_snapshot": 1,
+            "modifier_name_snapshot": null,
+            "modifier_option_display_order_snapshot": 3,
+            "modifier_option_id": "fed00000-0000-0000-0000-00000000e003",
+            "option_name_snapshot": "cheese",
+            "price_minor_snapshot": 300,
+            "quantity": 1
+          }
+        ],
+        "notes": null,
+        "order_item_id": "149961c3-555c-438b-aa1e-97f55274fb70",
+        "prep_snapshot": [
+          {
+            "name": "Bun",
+            "quantity": 1,
+            "unit": "pc"
+          }
+        ],
+        "quantity": 1,
+        "round_number": 2,
+        "service_round_id": "049e8e29-bc57-484f-90dc-35e122c3fe99",
+        "status": "pending",
+        "unit_price_minor_snapshot": 4000,
+        "unit_status": "submitted"
+      }
+    ],
+    "ok": true,
+    "order": {
+      "created_at": "2026-10-09T05:31:12.606845+00:00",
+      "currency_code": "ILS",
+      "customer_name": "  Noa Levi  ",
+      "customer_phone": null,
+      "discount_total_minor": 0,
+      "dispatch_mode": "kds",
+      "edit_count": 2,
+      "grand_total_minor": 16600,
+      "has_active_round": true,
+      "kitchen_channel": "paper",
+      "order_code": "#00A001",
+      "order_id": "fed00000-0000-0000-0000-00000000a001",
+      "order_type": "dine_in",
+      "receipt_number": null,
+      "revision": 3,
+      "status": "submitted",
+      "subtotal_minor": 16600,
+      "table_label": "T4",
+      "tax_total_minor": 0,
+      "updated_at": "2026-10-09T05:31:12.606845+00:00"
+    },
+    "payment": null,
+    "rounds": [
+      {
+        "created_at": "2026-10-09T05:31:12.606845+00:00",
+        "ready_at": null,
+        "round_id": "049e8e29-bc57-484f-90dc-35e122c3fe99",
+        "round_number": 2,
+        "status": "submitted"
+      },
+      {
+        "created_at": "2026-10-09T05:31:12.606845+00:00",
+        "ready_at": null,
+        "round_id": "f1b93fbd-d3b3-4e89-a336-c6e6824ee460",
+        "round_number": 3,
+        "status": "submitted"
+      }
+    ],
+    "server_ts": "2026-10-09T05:31:12.606845+00:00"
+  },
+  "before": {
+    "branch_features": {
+      "order_edit_enabled": true,
+      "order_edit_finished_food_manager_only": false
+    },
+    "edits": [
+      {
+        "created_at": "2026-10-09T05:31:12.606845+00:00",
+        "edit_number": 1,
+        "kitchen_ack_at": null,
+        "kitchen_ack_pending": false,
+        "kitchen_ack_required": false,
+        "kitchen_channel": "paper",
+        "order_edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "reason_code": "other",
+        "reason_text": "guest asked twice"
+      }
+    ],
+    "entity": "order_detail",
+    "items": [
+      {
+        "category_display_order_snapshot": 2,
+        "edit_id": null,
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 4,
+        "line_total_minor": 900,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001004",
+        "menu_item_name_snapshot": "Lemonade",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "fed00000-0000-0000-0000-0000000a1004",
+        "prep_snapshot": null,
+        "quantity": 1,
+        "round_number": null,
+        "service_round_id": null,
+        "status": "pending",
+        "unit_price_minor_snapshot": 900,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 2,
+        "edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 7,
+        "line_total_minor": 1800,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001004",
+        "menu_item_name_snapshot": "Lemonade",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "d18dd245-0278-4ad0-b29f-4edd9ca41ae3",
+        "prep_snapshot": null,
+        "quantity": 2,
+        "round_number": 2,
+        "service_round_id": "049e8e29-bc57-484f-90dc-35e122c3fe99",
+        "status": "pending",
+        "unit_price_minor_snapshot": 900,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 2,
+        "edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "item_display_order_snapshot": 2,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 3,
+        "line_total_minor": 800,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001003",
+        "menu_item_name_snapshot": "Cola",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "0de74e10-4f67-4300-80ab-02b3841911f5",
+        "prep_snapshot": null,
+        "quantity": 1,
+        "round_number": null,
+        "service_round_id": null,
+        "status": "pending",
+        "unit_price_minor_snapshot": 800,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 2,
+        "edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "item_display_order_snapshot": 3,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 9,
+        "line_total_minor": 0,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001005",
+        "menu_item_name_snapshot": "Water",
+        "modifiers": [],
+        "notes": "no ice",
+        "order_item_id": "449109e9-2942-4697-bd6c-79da5ba5751e",
+        "prep_snapshot": null,
+        "quantity": 1,
+        "round_number": 2,
+        "service_round_id": "049e8e29-bc57-484f-90dc-35e122c3fe99",
+        "status": "pending",
+        "unit_price_minor_snapshot": 0,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 5,
+        "edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 5,
+        "line_total_minor": 4000,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001001",
+        "menu_item_name_snapshot": "Burger",
+        "modifiers": [
+          {
+            "meat_snapshot": {
+              "quantity": 1,
+              "unit": "pc"
+            },
+            "modifier_group_display_order_snapshot": 1,
+            "modifier_name_snapshot": "Extras",
+            "modifier_option_display_order_snapshot": 2,
+            "modifier_option_id": "fed00000-0000-0000-0000-00000000e002",
+            "option_name_snapshot": "cucumber",
+            "price_minor_snapshot": 0,
+            "quantity": 1
+          }
+        ],
+        "notes": null,
+        "order_item_id": "74b5828a-460e-4f38-98da-7c117e836fa9",
+        "prep_snapshot": [
+          {
+            "name": "Bun",
+            "quantity": 1,
+            "unit": "pc"
+          }
+        ],
+        "quantity": 1,
+        "round_number": null,
+        "service_round_id": null,
+        "status": "pending",
+        "unit_price_minor_snapshot": 4000,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 5,
+        "edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 6,
+        "line_total_minor": 4000,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001001",
+        "menu_item_name_snapshot": "Burger",
+        "modifiers": [
+          {
+            "meat_snapshot": null,
+            "modifier_group_display_order_snapshot": 1,
+            "modifier_name_snapshot": "Extras",
+            "modifier_option_display_order_snapshot": 2,
+            "modifier_option_id": "fed00000-0000-0000-0000-00000000e002",
+            "option_name_snapshot": "cucumber",
+            "price_minor_snapshot": 0,
+            "quantity": 1
+          }
+        ],
+        "notes": "  well done ",
+        "order_item_id": "d41036a8-179a-4bd2-9782-493c420212f4",
+        "prep_snapshot": [
+          {
+            "name": "Bun",
+            "quantity": 1,
+            "unit": "pc"
+          },
+          {
+            "name": "Patty",
+            "quantity": 1.5,
+            "unit": "pc"
+          }
+        ],
+        "quantity": 1,
+        "round_number": 2,
+        "service_round_id": "049e8e29-bc57-484f-90dc-35e122c3fe99",
+        "status": "pending",
+        "unit_price_minor_snapshot": 4000,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 5,
+        "edit_id": "8797d875-d86b-4b61-b2ec-c46805975789",
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 8,
+        "line_total_minor": 4300,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001001",
+        "menu_item_name_snapshot": "Burger",
+        "modifiers": [
+          {
+            "meat_snapshot": {
+              "quantity": 1,
+              "unit": "pc"
+            },
+            "modifier_group_display_order_snapshot": 1,
+            "modifier_name_snapshot": "Extras",
+            "modifier_option_display_order_snapshot": 2,
+            "modifier_option_id": "fed00000-0000-0000-0000-00000000e002",
+            "option_name_snapshot": "cucumber",
+            "price_minor_snapshot": 0,
+            "quantity": 1
+          },
+          {
+            "meat_snapshot": null,
+            "modifier_group_display_order_snapshot": 1,
+            "modifier_name_snapshot": null,
+            "modifier_option_display_order_snapshot": 3,
+            "modifier_option_id": "fed00000-0000-0000-0000-00000000e003",
+            "option_name_snapshot": "cheese",
+            "price_minor_snapshot": 300,
+            "quantity": 1
+          }
+        ],
+        "notes": null,
+        "order_item_id": "149961c3-555c-438b-aa1e-97f55274fb70",
+        "prep_snapshot": [
+          {
+            "name": "Bun",
+            "quantity": 1,
+            "unit": "pc"
+          }
+        ],
+        "quantity": 1,
+        "round_number": 2,
+        "service_round_id": "049e8e29-bc57-484f-90dc-35e122c3fe99",
+        "status": "pending",
+        "unit_price_minor_snapshot": 4000,
+        "unit_status": "submitted"
+      }
+    ],
+    "ok": true,
+    "order": {
+      "created_at": "2026-10-09T05:31:12.606845+00:00",
+      "currency_code": "ILS",
+      "customer_name": "  Noa Levi  ",
+      "customer_phone": null,
+      "discount_total_minor": 0,
+      "dispatch_mode": "kds",
+      "edit_count": 1,
+      "grand_total_minor": 15800,
+      "has_active_round": true,
+      "kitchen_channel": "paper",
+      "order_code": "#00A001",
+      "order_id": "fed00000-0000-0000-0000-00000000a001",
+      "order_type": "dine_in",
+      "receipt_number": null,
+      "revision": 2,
+      "status": "submitted",
+      "subtotal_minor": 15800,
+      "table_label": "T4",
+      "tax_total_minor": 0,
+      "updated_at": "2026-10-09T05:31:12.606845+00:00"
+    },
+    "payment": null,
+    "rounds": [
+      {
+        "created_at": "2026-10-09T05:31:12.606845+00:00",
+        "ready_at": null,
+        "round_id": "049e8e29-bc57-484f-90dc-35e122c3fe99",
+        "round_number": 2,
+        "status": "submitted"
+      }
+    ],
+    "server_ts": "2026-10-09T05:31:12.606845+00:00"
+  },
+  "dispatch": {
+    "created_at": "2026-10-09T05:31:12.606845+00:00",
+    "customer_display_name": "Noa Levi",
+    "edit_lines": [
+      {
+        "op": "remove",
+        "was": {
+          "modifiers": [],
+          "name": "Water",
+          "note": "no ice",
+          "qty": 1
+        }
+      },
+      {
+        "now_qty": 2,
+        "op": "set_quantity",
+        "was": {
+          "modifiers": [],
+          "name": "Cola",
+          "qty": 1
+        }
+      }
+    ],
+    "edit_number": 2,
+    "kind": "order_edit",
+    "order_code": "#00A001",
+    "order_now": [
+      {
+        "modifiers": [],
+        "name": "Lemonade",
+        "qty": 1
+      },
+      {
+        "modifiers": [],
+        "name": "Lemonade",
+        "qty": 2
+      },
+      {
+        "modifiers": [],
+        "name": "Cola",
+        "qty": 1
+      },
+      {
+        "modifiers": [],
+        "name": "Cola",
+        "qty": 1
+      },
+      {
+        "modifiers": [
+          {
+            "name": "cucumber",
+            "prep": {
+              "quantity": 1,
+              "unit": "pc"
+            },
+            "qty": 1
+          }
+        ],
+        "name": "Burger",
+        "prep": [
+          {
+            "name": "Bun",
+            "quantity": 1,
+            "unit": "pc"
+          }
+        ],
+        "qty": 1
+      },
+      {
+        "modifiers": [
+          {
+            "name": "cucumber",
+            "qty": 1
+          }
+        ],
+        "name": "Burger",
+        "note": "well done",
+        "prep": [
+          {
+            "name": "Bun",
+            "quantity": 1,
+            "unit": "pc"
+          },
+          {
+            "name": "Patty",
+            "quantity": 1.5,
+            "unit": "pc"
+          }
+        ],
+        "qty": 1
+      },
+      {
+        "modifiers": [
+          {
+            "name": "cucumber",
+            "prep": {
+              "quantity": 1,
+              "unit": "pc"
+            },
+            "qty": 1
+          },
+          {
+            "name": "cheese",
+            "qty": 1
+          }
+        ],
+        "name": "Burger",
+        "prep": [
+          {
+            "name": "Bun",
+            "quantity": 1,
+            "unit": "pc"
+          }
+        ],
+        "qty": 1
+      }
+    ],
+    "order_type": "dine_in",
+    "reason_code": "entry_mistake",
+    "staff_name": "Bartholomew-Alexander-Maximilian-Fitzger",
+    "table_label": "T4",
+    "v": 1
+  },
+  "envelope": {
+    "ok": true,
+    "results": [
+      {
+        "auto_completed": false,
+        "before": {
+          "discount_total_minor": 0,
+          "grand_total_minor": 15800,
+          "subtotal_minor": 15800,
+          "tax_total_minor": 0
+        },
+        "changes": [
+          {
+            "kind": "remove",
+            "landing": "removed",
+            "new_order_item_ids": [],
+            "order_item_id": "449109e9-2942-4697-bd6c-79da5ba5751e",
+            "outcome_status": "voided",
+            "remake": false,
+            "unit_stage": "printed"
+          },
+          {
+            "kind": "set_quantity",
+            "landing": "edit_round",
+            "new_order_item_ids": [
+              "0618de6c-b6ce-45e2-b7c8-e683eac0ecba"
+            ],
+            "order_item_id": "0de74e10-4f67-4300-80ab-02b3841911f5",
+            "outcome_status": "kept",
+            "remake": false,
+            "unit_stage": "printed"
+          }
+        ],
+        "edit_number": 2,
+        "idempotency_replay": false,
+        "kitchen_ack_required": false,
+        "kitchen_channel": "paper",
+        "kitchen_dispatch": {
+          "claim_expires_at": "2026-10-09T05:41:12.606845+00:00",
+          "id": "a77a57f6-bd9b-4126-b2b7-3593f7801e60"
+        },
+        "local_operation_id": "slip-a-2",
+        "new_round_id": "f1b93fbd-d3b3-4e89-a336-c6e6824ee460",
+        "new_round_number": 3,
+        "ok": true,
+        "operation_type": "order.edit",
+        "order_code": "#00A001",
+        "order_edit_id": "14ee04e5-165d-43a6-987b-8a3f18950122",
+        "order_id": "fed00000-0000-0000-0000-00000000a001",
+        "order_status": "submitted",
+        "revision": 3,
+        "rounds_closed": [],
+        "server_ts": "2026-10-09T05:31:12.606845+00:00",
+        "status": "applied",
+        "totals": {
+          "discount_total_minor": 0,
+          "grand_total_minor": 16600,
+          "subtotal_minor": 16600,
+          "tax_total_minor": 0
+        },
+        "unit1_closed": false
+      }
+    ],
+    "server_ts": "2026-10-09T05:31:12.606845+00:00"
+  },
+  "local_operation_id": "slip-a-2",
+  "payload": {
+    "changes": [
+      {
+        "op": "remove",
+        "order_item_id": "449109e9-2942-4697-bd6c-79da5ba5751e"
+      },
+      {
+        "op": "set_quantity",
+        "order_item_id": "0de74e10-4f67-4300-80ab-02b3841911f5",
+        "quantity": 2
+      }
+    ],
+    "expected": {
+      "grand_total_minor": 16600,
+      "subtotal_minor": 16600,
+      "tax_total_minor": 0
+    },
+    "order_id": "fed00000-0000-0000-0000-00000000a001",
+    "reason_code": "entry_mistake"
+  },
+  "staff_display_name": "Bartholomew-Alexander-Maximilian-Fitzgerald Jones"
+}

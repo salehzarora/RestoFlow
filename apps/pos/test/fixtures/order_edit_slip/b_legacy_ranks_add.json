@@ -1,0 +1,372 @@
+{
+  "_comment": "ORDER-EDIT-001F parity fixture: a REAL paper edit captured by capture_probe.sql on a local PostgreSQL build of supabase/migrations. before/after = app.pos_order_detail, envelope = the public.sync_push answer, dispatch = the STORED kitchen_print_dispatches.money_free_payload. Fictional people. Never hand-edit; re-capture instead.",
+  "after": {
+    "branch_features": {
+      "order_edit_enabled": true,
+      "order_edit_finished_food_manager_only": false
+    },
+    "edits": [
+      {
+        "created_at": "2026-10-09T05:31:12.606845+00:00",
+        "edit_number": 1,
+        "kitchen_ack_at": null,
+        "kitchen_ack_pending": false,
+        "kitchen_ack_required": false,
+        "kitchen_channel": "paper",
+        "order_edit_id": "838515b3-733e-4f0f-9510-957e544a0dd4",
+        "reason_code": "customer_changed_mind",
+        "reason_text": null
+      }
+    ],
+    "entity": "order_detail",
+    "items": [
+      {
+        "category_display_order_snapshot": 0,
+        "edit_id": null,
+        "item_display_order_snapshot": 0,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 1,
+        "line_total_minor": 3000,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001002",
+        "menu_item_name_snapshot": "Fries",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "fed00000-0000-0000-0000-0000000b1001",
+        "prep_snapshot": null,
+        "quantity": 2,
+        "round_number": null,
+        "service_round_id": null,
+        "status": "pending",
+        "unit_price_minor_snapshot": 1500,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 2,
+        "edit_id": "838515b3-733e-4f0f-9510-957e544a0dd4",
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 4,
+        "line_total_minor": 1800,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001004",
+        "menu_item_name_snapshot": "Lemonade",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "7d43ca69-0ace-4852-9837-de2d81143561",
+        "prep_snapshot": null,
+        "quantity": 2,
+        "round_number": 2,
+        "service_round_id": "9062c874-527d-42a8-a528-ae56372bc118",
+        "status": "pending",
+        "unit_price_minor_snapshot": 900,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 5,
+        "edit_id": null,
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 3,
+        "line_total_minor": 4000,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001001",
+        "menu_item_name_snapshot": "Burger",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "fed00000-0000-0000-0000-0000000b1003",
+        "prep_snapshot": null,
+        "quantity": 1,
+        "round_number": null,
+        "service_round_id": null,
+        "status": "pending",
+        "unit_price_minor_snapshot": 4000,
+        "unit_status": "submitted"
+      }
+    ],
+    "ok": true,
+    "order": {
+      "created_at": "2026-10-09T05:31:12.606845+00:00",
+      "currency_code": "ILS",
+      "customer_name": null,
+      "customer_phone": null,
+      "discount_total_minor": 0,
+      "dispatch_mode": "kds",
+      "edit_count": 1,
+      "grand_total_minor": 8800,
+      "has_active_round": true,
+      "kitchen_channel": "paper",
+      "order_code": "#00B001",
+      "order_id": "fed00000-0000-0000-0000-00000000b001",
+      "order_type": "takeaway",
+      "receipt_number": null,
+      "revision": 2,
+      "status": "submitted",
+      "subtotal_minor": 8800,
+      "table_label": null,
+      "tax_total_minor": 0,
+      "updated_at": "2026-10-09T05:31:12.606845+00:00"
+    },
+    "payment": null,
+    "rounds": [
+      {
+        "created_at": "2026-10-09T05:31:12.606845+00:00",
+        "ready_at": null,
+        "round_id": "9062c874-527d-42a8-a528-ae56372bc118",
+        "round_number": 2,
+        "status": "submitted"
+      }
+    ],
+    "server_ts": "2026-10-09T05:31:12.606845+00:00"
+  },
+  "before": {
+    "branch_features": {
+      "order_edit_enabled": true,
+      "order_edit_finished_food_manager_only": false
+    },
+    "edits": [],
+    "entity": "order_detail",
+    "items": [
+      {
+        "category_display_order_snapshot": 0,
+        "edit_id": null,
+        "item_display_order_snapshot": 0,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 1,
+        "line_total_minor": 3000,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001002",
+        "menu_item_name_snapshot": "Fries",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "fed00000-0000-0000-0000-0000000b1001",
+        "prep_snapshot": null,
+        "quantity": 2,
+        "round_number": null,
+        "service_round_id": null,
+        "status": "pending",
+        "unit_price_minor_snapshot": 1500,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 0,
+        "edit_id": null,
+        "item_display_order_snapshot": 0,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 2,
+        "line_total_minor": 800,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001003",
+        "menu_item_name_snapshot": "Cola",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "fed00000-0000-0000-0000-0000000b1002",
+        "prep_snapshot": null,
+        "quantity": 1,
+        "round_number": null,
+        "service_round_id": null,
+        "status": "pending",
+        "unit_price_minor_snapshot": 800,
+        "unit_status": "submitted"
+      },
+      {
+        "category_display_order_snapshot": 5,
+        "edit_id": null,
+        "item_display_order_snapshot": 1,
+        "item_size_snapshot": null,
+        "item_variant_snapshot": null,
+        "legacy": false,
+        "line_discount_minor": 0,
+        "line_position": 3,
+        "line_total_minor": 4000,
+        "menu_item_id": "fed00000-0000-0000-0000-000000001001",
+        "menu_item_name_snapshot": "Burger",
+        "modifiers": [],
+        "notes": null,
+        "order_item_id": "fed00000-0000-0000-0000-0000000b1003",
+        "prep_snapshot": null,
+        "quantity": 1,
+        "round_number": null,
+        "service_round_id": null,
+        "status": "pending",
+        "unit_price_minor_snapshot": 4000,
+        "unit_status": "submitted"
+      }
+    ],
+    "ok": true,
+    "order": {
+      "created_at": "2026-10-09T05:31:12.606845+00:00",
+      "currency_code": "ILS",
+      "customer_name": null,
+      "customer_phone": null,
+      "discount_total_minor": 0,
+      "dispatch_mode": "kds",
+      "edit_count": 0,
+      "grand_total_minor": 7800,
+      "has_active_round": false,
+      "kitchen_channel": "paper",
+      "order_code": "#00B001",
+      "order_id": "fed00000-0000-0000-0000-00000000b001",
+      "order_type": "takeaway",
+      "receipt_number": null,
+      "revision": 1,
+      "status": "submitted",
+      "subtotal_minor": 7800,
+      "table_label": null,
+      "tax_total_minor": 0,
+      "updated_at": "2026-10-09T05:31:12.606845+00:00"
+    },
+    "payment": null,
+    "rounds": [],
+    "server_ts": "2026-10-09T05:31:12.606845+00:00"
+  },
+  "dispatch": {
+    "created_at": "2026-10-09T05:31:12.606845+00:00",
+    "edit_lines": [
+      {
+        "op": "remove",
+        "was": {
+          "modifiers": [],
+          "name": "Cola",
+          "qty": 1
+        }
+      },
+      {
+        "now": [
+          {
+            "modifiers": [],
+            "name": "Lemonade",
+            "qty": 2
+          }
+        ],
+        "op": "add"
+      }
+    ],
+    "edit_number": 1,
+    "kind": "order_edit",
+    "order_code": "#00B001",
+    "order_now": [
+      {
+        "modifiers": [],
+        "name": "Fries",
+        "qty": 2
+      },
+      {
+        "modifiers": [],
+        "name": "Lemonade",
+        "qty": 2
+      },
+      {
+        "modifiers": [],
+        "name": "Burger",
+        "qty": 1
+      }
+    ],
+    "order_type": "takeaway",
+    "reason_code": "customer_changed_mind",
+    "staff_name": "سارة",
+    "v": 1
+  },
+  "envelope": {
+    "ok": true,
+    "results": [
+      {
+        "auto_completed": false,
+        "before": {
+          "discount_total_minor": 0,
+          "grand_total_minor": 7800,
+          "subtotal_minor": 7800,
+          "tax_total_minor": 0
+        },
+        "changes": [
+          {
+            "kind": "remove",
+            "landing": "removed",
+            "new_order_item_ids": [],
+            "order_item_id": "fed00000-0000-0000-0000-0000000b1002",
+            "outcome_status": "voided",
+            "remake": false,
+            "unit_stage": "printed"
+          },
+          {
+            "kind": "add",
+            "landing": "edit_round",
+            "new_order_item_ids": [
+              "7d43ca69-0ace-4852-9837-de2d81143561"
+            ],
+            "order_item_id": null,
+            "outcome_status": "added",
+            "remake": false,
+            "unit_stage": "printed"
+          }
+        ],
+        "edit_number": 1,
+        "idempotency_replay": false,
+        "kitchen_ack_required": false,
+        "kitchen_channel": "paper",
+        "kitchen_dispatch": {
+          "claim_expires_at": "2026-10-09T05:41:12.606845+00:00",
+          "id": "dfb72125-09e8-45f4-86cc-d3a4ecccca7c"
+        },
+        "local_operation_id": "slip-b-1",
+        "new_round_id": "9062c874-527d-42a8-a528-ae56372bc118",
+        "new_round_number": 2,
+        "ok": true,
+        "operation_type": "order.edit",
+        "order_code": "#00B001",
+        "order_edit_id": "838515b3-733e-4f0f-9510-957e544a0dd4",
+        "order_id": "fed00000-0000-0000-0000-00000000b001",
+        "order_status": "submitted",
+        "revision": 2,
+        "rounds_closed": [],
+        "server_ts": "2026-10-09T05:31:12.606845+00:00",
+        "status": "applied",
+        "totals": {
+          "discount_total_minor": 0,
+          "grand_total_minor": 8800,
+          "subtotal_minor": 8800,
+          "tax_total_minor": 0
+        },
+        "unit1_closed": false
+      }
+    ],
+    "server_ts": "2026-10-09T05:31:12.606845+00:00"
+  },
+  "local_operation_id": "slip-b-1",
+  "payload": {
+    "changes": [
+      {
+        "op": "remove",
+        "order_item_id": "fed00000-0000-0000-0000-0000000b1002"
+      },
+      {
+        "item": {
+          "menu_item_id": "fed00000-0000-0000-0000-000000001004",
+          "menu_item_name_snapshot": "Lemonade",
+          "modifiers": [],
+          "quantity": 2,
+          "unit_price_minor_snapshot": 900
+        },
+        "op": "add"
+      }
+    ],
+    "expected": {
+      "grand_total_minor": 8800,
+      "subtotal_minor": 8800,
+      "tax_total_minor": 0
+    },
+    "order_id": "fed00000-0000-0000-0000-00000000b001",
+    "reason_code": "customer_changed_mind"
+  },
+  "staff_display_name": "سارة أحمد"
+}
