@@ -28,6 +28,9 @@ class KdsScreen extends StatefulWidget {
     this.onAcknowledgeCancellation,
     this.ackPendingOrderIds = const <String>{},
     this.ackFailedOrderIds = const <String>{},
+    this.onAcknowledgeChange,
+    this.changeAckPendingKeys = const <String>{},
+    this.changeAckFailedKeys = const <String>{},
     super.key,
   });
 
@@ -89,6 +92,18 @@ class KdsScreen extends StatefulWidget {
   /// PSC-001D: ORDER ids whose last acknowledgement attempt failed.
   final Set<String> ackFailedOrderIds;
 
+  /// ORDER-EDIT-001D: "Got it" for a card's unconfirmed sent-order change
+  /// (the LIVE board sends `order.edit_ack`); null (demo / bare tests)
+  /// renders no "Got it".
+  final void Function(KdsTicketView ticket)? onAcknowledgeChange;
+
+  /// ORDER-EDIT-001D: CHANGE ALERT keys (`KdsTicketView.changeAlertKey`)
+  /// whose "Got it" is in flight or applied, awaiting the pull.
+  final Set<String> changeAckPendingKeys;
+
+  /// ORDER-EDIT-001D: change alert keys whose last "Got it" failed.
+  final Set<String> changeAckFailedKeys;
+
   @override
   State<KdsScreen> createState() => _KdsScreenState();
 }
@@ -117,7 +132,12 @@ class _KdsScreenState extends State<KdsScreen> {
     final now = DateTime.now();
     final currentNewIds = <String>{
       for (final t in widget.tickets)
-        if (t.status == KitchenTicketStatus.newTicket) t.kitchenTicketId,
+        // ORDER-EDIT-001D: a STANDALONE change card is not a new order — it
+        // may sit in New only because its former stage is unknown — so it
+        // never gets the "New order" badge (its own amber pulse applies).
+        if (t.status == KitchenTicketStatus.newTicket &&
+            t.change?.standalone != true)
+          t.kitchenTicketId,
     };
     if (!_newArrivalInitialized) {
       for (final id in currentNewIds) {
@@ -168,6 +188,41 @@ class _KdsScreenState extends State<KdsScreen> {
     };
   }
 
+  /// ORDER-EDIT-001D (design §7.2): first-seen tracking for unconfirmed
+  /// sent-order CHANGES — one finite amber pulse when a change ARRIVES during
+  /// this screen's life. Keyed by the change alert key (work unit + newest
+  /// pending edit), never the ticket id: a second edit of the same card is a
+  /// NEW key and pulses again. Keys present on the FIRST build are seeded in
+  /// the past (no pulse on page load / restart — the amber header is the
+  /// persistent signal); keys that disappear (acknowledged) are pruned. Same
+  /// enable flag + window as the new-arrival alert.
+  final Map<String, DateTime> _firstSeenChange = <String, DateTime>{};
+  bool _changeArrivalInitialized = false;
+
+  Set<String> _computeChangeArrivalKeys() {
+    if (!widget.enableNewArrivalAlert) return const <String>{};
+    final now = DateTime.now();
+    final currentKeys = <String>{
+      for (final t in widget.tickets)
+        if (t.change != null && !t.requiresAck) t.changeAlertKey!,
+    };
+    if (!_changeArrivalInitialized) {
+      for (final key in currentKeys) {
+        _firstSeenChange[key] = _seenInThePast;
+      }
+      _changeArrivalInitialized = true;
+    } else {
+      for (final key in currentKeys) {
+        _firstSeenChange.putIfAbsent(key, () => now);
+      }
+    }
+    _firstSeenChange.removeWhere((key, _) => !currentKeys.contains(key));
+    return <String>{
+      for (final entry in _firstSeenChange.entries)
+        if (now.difference(entry.value) < widget.newArrivalWindow) entry.key,
+    };
+  }
+
   /// Advance [ticket] to [to] via the existing forward state-machine edges
   /// (acknowledge / start / mark-ready / bump). Mutates the local view first
   /// (instant feedback), then notifies [KdsScreen.onAdvanced] so a LIVE board
@@ -199,6 +254,7 @@ class _KdsScreenState extends State<KdsScreen> {
 
     final newArrivalIds = _computeNewArrivalIds();
     final cancelledArrivalIds = _computeCancelledArrivalIds();
+    final changeArrivalKeys = _computeChangeArrivalKeys();
     final body = widget.tickets.isEmpty
         ? KdsStateMessage(
             icon: Icons.restaurant_outlined,
@@ -217,6 +273,10 @@ class _KdsScreenState extends State<KdsScreen> {
             ackPendingOrderIds: widget.ackPendingOrderIds,
             ackFailedOrderIds: widget.ackFailedOrderIds,
             cancelledArrivalIds: cancelledArrivalIds,
+            onAcknowledgeChange: widget.onAcknowledgeChange,
+            changeAckPendingKeys: widget.changeAckPendingKeys,
+            changeAckFailedKeys: widget.changeAckFailedKeys,
+            changeArrivalKeys: changeArrivalKeys,
           );
 
     return Scaffold(
