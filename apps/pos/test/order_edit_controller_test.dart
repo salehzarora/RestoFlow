@@ -1588,4 +1588,109 @@ void main() {
       expect(h.transport.ops, isEmpty);
     });
   });
+
+  group('the cart is held for the whole rebase (review fix)', () {
+    test('a re-baseline: a tap while the detail loads is REFUSED, never '
+        'shown and then thrown away; the cart is free again after', () async {
+      final h = _H();
+      await h.enter();
+      h.cart.removeLine('sent-oi-fries');
+      final gate = Completer<void>();
+      h.details.gate = gate;
+
+      final pending = h.edit.refreshBaseline();
+      await _settle();
+      expect(h.state.phase, OrderEditPhase.rebasing);
+      // The flag the line tiles and the menu grid are disabled by.
+      expect(h.cartState.lockedByAddition, isTrue);
+      // A menu tap, a '+' and an undo all bounce off the held cart.
+      expect(h.cart.addItem(_lemonade), CartMutationResult.lockedByAddition);
+      expect(
+        h.cart.increaseQuantity('sent-oi-burger'),
+        CartMutationResult.lockedByAddition,
+      );
+      expect(
+        h.cart.undoRemove('sent-oi-fries'),
+        CartMutationResult.lockedByAddition,
+      );
+
+      h.details.gate = null;
+      gate.complete();
+      final r = await pending;
+      expect(r.notice, isNull);
+      expect(h.state.phase, OrderEditPhase.active);
+      expect(h.cartState.lockedByAddition, isFalse);
+      // Exactly the cashier's intents before the rebase — nothing that was
+      // shown during it has silently vanished.
+      final lines = h.cartState.lines;
+      expect(lines.map((l) => l.lineId), ['sent-oi-burger', 'sent-oi-fries']);
+      expect(lines.first.quantity, 2);
+      expect(lines.last.editRemoved, isTrue);
+      // ...and the cart takes input again.
+      expect(h.cart.addItem(_lemonade), CartMutationResult.applied);
+    });
+
+    test('a refused send (line_changed): held from the refusal to the '
+        'reload; the added dish survives the rebase', () async {
+      final h = _H(script: [_refused('line_changed')]);
+      await h.enter();
+      h.cart.addItem(_lemonade);
+      final gate = Completer<void>();
+      h.details.gate = gate;
+
+      final pending = h.edit.submit();
+      await _settle();
+      expect(h.state.phase, OrderEditPhase.rebasing);
+      expect(h.cartState.lockedByAddition, isTrue);
+      expect(
+        h.cart.increaseQuantity('sent-oi-burger'),
+        CartMutationResult.lockedByAddition,
+      );
+
+      h.details.gate = null;
+      gate.complete();
+      final r = await pending;
+      expect(r.notice, OrderEditNotice.rebased);
+      expect(h.state.phase, OrderEditPhase.active);
+      expect(h.cartState.lockedByAddition, isFalse);
+      final lines = h.cartState.lines;
+      expect(lines.first.quantity, 2);
+      expect(lines.last.menuItemId, 'mi-lemonade');
+      expect(lines.last.editAdded, isTrue);
+    });
+
+    test('a rebase that cannot load the detail releases the cart', () async {
+      final h = _H();
+      await h.enter();
+      final gate = Completer<void>();
+      h.details.gate = gate;
+      final pending = h.edit.refreshBaseline();
+      await _settle();
+      expect(h.cartState.lockedByAddition, isTrue);
+
+      h.details
+        ..gate = null
+        ..error = const PosOrderDetailException(
+          PosOrderDetailFailure.transport,
+        );
+      gate.complete();
+      final r = await pending;
+      expect(r.notice, OrderEditNotice.detailUnavailable);
+      expect(h.state.phase, OrderEditPhase.active);
+      expect(h.cartState.lockedByAddition, isFalse);
+      expect(h.cart.addItem(_lemonade), CartMutationResult.applied);
+    });
+
+    test('a rebase onto an order that is no longer editable releases the '
+        'cart and ends the edit', () async {
+      final h = _H();
+      await h.enter();
+      h.details.byId['order-1'] = _order(status: 'voided');
+      final r = await h.edit.refreshBaseline();
+      expect(r.effect, OrderEditRefusalEffect.exit);
+      expect(h.state.phase, OrderEditPhase.idle);
+      expect(h.cartState.isEditing, isFalse);
+      expect(h.cartState.lockedByAddition, isFalse);
+    });
+  });
 }

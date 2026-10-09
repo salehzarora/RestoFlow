@@ -31,6 +31,7 @@ import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/receipt_print_controller.dart';
 import 'package:restoflow_pos/src/widgets/cart_panel.dart';
+import 'package:restoflow_pos/src/widgets/discount_sheet.dart';
 import 'package:restoflow_pos/src/widgets/modifier_selection_sheet.dart';
 import 'package:restoflow_pos/src/widgets/order_edit_cart_widgets.dart';
 import 'package:restoflow_pos/src/widgets/order_setup_section.dart';
@@ -210,6 +211,27 @@ PosOrderDetail _proven(PosOrderDetail d) => PosOrderDetail(
   editCount: 1,
   edits: const [PosOrderDetailEdit(orderEditId: 'edit-1', editNumber: 1)],
 );
+
+/// [d] at another [revision] — the same order and money, moved on by a
+/// kitchen status bump.
+PosOrderDetail _revised(PosOrderDetail d, {required int revision}) =>
+    PosOrderDetail(
+      orderId: d.orderId,
+      orderCode: d.orderCode,
+      orderType: d.orderType,
+      status: d.status,
+      revision: revision,
+      currencyCode: d.currencyCode,
+      subtotalMinor: d.subtotalMinor,
+      discountTotalMinor: d.discountTotalMinor,
+      taxTotalMinor: d.taxTotalMinor,
+      grandTotalMinor: d.grandTotalMinor,
+      items: d.items,
+      rounds: d.rounds,
+      tableLabel: d.tableLabel,
+      kitchenChannel: d.kitchenChannel,
+      branchFeatures: d.branchFeatures,
+    );
 
 class _H {
   _H({
@@ -764,6 +786,53 @@ void main() {
       );
       expect(_sendEnabled(tester), isTrue);
       expect(h.transport.ops, isEmpty);
+    });
+
+    testWidgets('"Lower discount" opens the sheet on the order\'s CURRENT '
+        'revision, not the one the edit was opened with', (tester) async {
+      final h = _H(order: detail(items: _items(), discount: 9000));
+      await _open(tester, h);
+      expect(h.edit.baseline!.detail.revision, 3);
+      // The KDS moved the order on since the edit opened: a status bump
+      // raises `orders.revision` (API_CONTRACT §4.45.5); the money is the
+      // same.
+      h.details.byId['order-1'] = _revised(
+        detail(items: _items(), discount: 9000),
+        revision: 4,
+      );
+      await _tap(tester, 'cart-remove-sent-oi-burger');
+      await _tap(tester, 'order-edit-lower-discount');
+
+      final sheet = tester.widget<DiscountSheet>(find.byType(DiscountSheet));
+      // `apply_discount` refuses a stale revision as a conflict.
+      expect(sheet.expectedRevision, 4);
+      expect(sheet.orderId, 'order-1');
+      expect(sheet.subtotalMinor, 10800);
+      expect(sheet.taxTotalMinor, 0);
+      // The cashier's intent survived the refresh, and nothing was sent.
+      expect(
+        h.c
+            .read(cartControllerProvider)
+            .lines
+            .singleWhere((l) => l.lineId == 'sent-oi-burger')
+            .editRemoved,
+        isTrue,
+      );
+      expect(h.transport.ops, isEmpty);
+    });
+
+    testWidgets('"Lower discount" whose refresh cannot load says so and '
+        'opens nothing on stale figures', (tester) async {
+      final l10n = await _l10n();
+      final h = _H(order: detail(items: _items(), discount: 9000));
+      await _open(tester, h);
+      await _tap(tester, 'cart-remove-sent-oi-burger');
+      h.details.byId.remove('order-1');
+      await _tap(tester, 'order-edit-lower-discount');
+
+      expect(find.byType(DiscountSheet), findsNothing);
+      expect(find.text(l10n.posAdditionFailedRetry), findsOneWidget);
+      expect(h.c.read(cartControllerProvider).isEditing, isTrue);
     });
 
     testWidgets('"Cancel order" opens the existing cancel sheet; a cancelled '

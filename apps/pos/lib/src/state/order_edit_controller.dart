@@ -1587,6 +1587,24 @@ class OrderEditController extends Notifier<OrderEditState> {
     final orderId = s.entryOrderId!;
     final previous = s.baseline;
     final previousLines = ref.read(cartControllerProvider).editLines;
+    // THE CART IS HELD FOR THE WHOLE REBASE. The intents are read from the
+    // lines above, synchronously, and the cart is then REPLACED by their
+    // replay onto the fresh detail — so a tap landing in between (a menu
+    // item, a '+', an option sheet closing) would be shown and then silently
+    // thrown away. Taken in the same synchronous block as the snapshot, and
+    // released on every way out (right before the reload, which refuses a
+    // held cart).
+    final cart = ref.read(cartControllerProvider.notifier);
+    final hold = CartLockOwner(
+      generation: gen,
+      orderId: orderId,
+      localOperationId: 'order-edit-rebase',
+    );
+    final held = cart.lockForAddition(hold);
+    void release() {
+      if (held && !_disposed) cart.unlockForAddition(hold);
+    }
+
     _publish(s.copyWith(phase: OrderEditPhase.rebasing));
     OrderEditResult result(
       OrderEditNotice? notice,
@@ -1616,6 +1634,8 @@ class OrderEditController extends Notifier<OrderEditState> {
     } catch (_) {
       menu = null;
     }
+    // Every way out below releases the hold first.
+    release();
     if (_disposed ||
         state.generation != gen ||
         state.phase != OrderEditPhase.rebasing) {

@@ -1,6 +1,8 @@
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/order_actions.dart' show PosOrderEditHold;
 import '../data/order_edit_diff.dart' show OrderEditSendBlock;
+import '../data/order_edit_journal_store.dart' show OrderEditJournalRecord;
 import '../data/order_edit_read_model.dart' show PosKitchenChannel;
 import '../data/order_edit_response.dart' show OrderEditApplied;
 import '../state/order_edit_controller.dart';
@@ -166,3 +168,36 @@ String? orderEditEntryMessage(
     l10n.posOrderEditErrorKitchenModeChanged,
   OrderEditEntryResult.detailUnavailable => l10n.posAdditionFailedRetry,
 };
+
+/// The row pill of an `orderEdit` pending stamp, by what the stamp
+/// actually is ([PosOrderEditHold]) — the same words the cart banner uses for
+/// the same states:
+///
+///  * on the wire, or outcome unknown — "Sending changes…";
+///  * APPLIED, the refresh not yet proven — "Change N saved" (never "not
+///    sent": the server has it and the kitchen was told). Without a number,
+///    the refresh it needs — "Refresh orders";
+///  * a conflict — the existing "needs to be resolved" wording;
+///  * the journal's startup blanket — the neutral "Checking for unfinished
+///    changes" wording: it is no evidence about this order.
+String orderEditHoldLabel(
+  AppLocalizations l10n,
+  PosOrderEditHold? hold, {
+  int? appliedEditNumber,
+}) => switch (hold) {
+  PosOrderEditHold.appliedAwaitingRefresh =>
+    appliedEditNumber == null
+        ? l10n.posOrdersRefresh
+        : l10n.posOrderEditResultSaved(appliedEditNumber),
+  PosOrderEditHold.conflict => l10n.posAdditionConflictBlocked,
+  PosOrderEditHold.journalLoading => l10n.posAdditionLoadingPending,
+  PosOrderEditHold.sending || null => l10n.posOrderEditSending,
+};
+
+/// The label of the row's Retry for [record]: an applied edit only needs its
+/// refresh ("Refresh orders" — the retry never sends it again); an edit whose
+/// outcome is unknown is replayed ("Changes not sent — tap to retry").
+String orderEditRetryLabel(
+  AppLocalizations l10n,
+  OrderEditJournalRecord record,
+) => record.awaitingRefresh ? l10n.posOrdersRefresh : l10n.posOrderEditRetry;

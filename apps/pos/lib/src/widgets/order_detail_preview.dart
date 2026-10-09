@@ -11,6 +11,7 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../state/order_preview_controller.dart';
 import 'order_action_row.dart';
+import 'order_edit_messages.dart' show orderEditHoldLabel;
 import 'order_status_pills.dart';
 
 /// ORDER-DETAIL-PREVIEW-001 — the READ-ONLY order detail preview.
@@ -245,7 +246,7 @@ class _Header extends StatelessWidget {
               if (actions.pendingKind case final p?)
                 RestoflowStatusPill(
                   key: Key('preview-pending-${order.orderNumber}'),
-                  label: _pendingLabel(l10n, p),
+                  label: _pendingLabel(l10n, p, actions),
                   tone: RestoflowTone.info,
                   icon: Icons.sync,
                 ),
@@ -257,14 +258,24 @@ class _Header extends StatelessWidget {
   }
 }
 
-String _pendingLabel(AppLocalizations l10n, PosPendingKind k) => switch (k) {
+String _pendingLabel(
+  AppLocalizations l10n,
+  PosPendingKind k,
+  PosOrderActions actions,
+) => switch (k) {
   PosPendingKind.submit ||
   PosPendingKind.payment => l10n.posOrdersPendingPayment,
   PosPendingKind.discount => l10n.posOrdersPendingDiscount,
   PosPendingKind.cancellation => l10n.posOrdersPendingCancellation,
   PosPendingKind.itemsAdd => l10n.posAdditionPending,
-  // ORDER-EDIT-001E: a sent-order edit in flight from THIS device.
-  PosPendingKind.orderEdit => l10n.posOrderEditSending,
+  // ORDER-EDIT-001E: a sent-order edit of THIS device — worded by what it
+  // actually is (sending, applied awaiting its refresh, in conflict, or the
+  // journal's startup blanket), never "Sending changes…" for all of them.
+  PosPendingKind.orderEdit => orderEditHoldLabel(
+    l10n,
+    actions.editHold,
+    appliedEditNumber: actions.appliedEditNumber,
+  ),
 };
 
 /// A STATIC skeleton: an indeterminate spinner never settles, so a widget test

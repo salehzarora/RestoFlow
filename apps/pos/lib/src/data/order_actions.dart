@@ -36,6 +36,9 @@ class PosOrderActions {
     this.canPrintBill = false,
     this.submitUnacknowledged = false,
     this.canEditOrder = false,
+    this.canRetryEdit = false,
+    this.editHold,
+    this.appliedEditNumber,
   });
 
   final bool canPay;
@@ -91,6 +94,23 @@ class PosOrderActions {
   /// permission_denied); this only declines to offer a button that would fail.
   final bool canEditOrder;
 
+  /// ORDER-EDIT-001E: this device holds an unresolved edit of the order that
+  /// its row's Retry can settle — an outcome-unknown attempt (replayed with
+  /// the SAME identity and payload) or an applied one not yet proven (only
+  /// the refresh is retried). A FACT ABOUT THIS DEVICE, like [pendingKind]:
+  /// that edit is exactly what withdrew every other action on the order, so
+  /// without it a host that skips an empty row would hide the one control
+  /// that can release the order.
+  final bool canRetryEdit;
+
+  /// ORDER-EDIT-001E: what a [PosPendingKind.orderEdit] stamp on this order
+  /// actually is, so its pill says the true thing. Null for any other stamp.
+  final PosOrderEditHold? editHold;
+
+  /// The `edit_number` of an applied edit awaiting its refresh
+  /// ([PosOrderEditHold.appliedAwaitingRefresh]) — "Change N saved".
+  final int? appliedEditNumber;
+
   /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap B): the explicit printer-only
   /// COMPLETE safety net may be offered — a served, fully-settled order on a
   /// VERIFIED printer_only branch, not terminal, no transition in flight, the
@@ -133,12 +153,17 @@ class PosOrderActions {
       !canAddItems &&
       !canComplete &&
       // ORDER-EDIT-001E: a row offering only Edit must still render its row.
-      !canEditOrder;
+      !canEditOrder &&
+      // ...and so must a row whose only control is the edit's Retry: the
+      // unresolved edit withdrew everything else, so skipping the row would
+      // leave the order blocked on this till with no way to settle it.
+      !canRetryEdit;
 
   /// ORDER-EDIT-001E: a field-for-field copy with the named verdicts replaced.
   /// The ONE way to adjust a resolved action set — a hand-written copy
   /// silently drops every field it forgets (a new one reads false). The
-  /// [pendingKind] is a fact about this device and is always carried over.
+  /// [pendingKind], [canRetryEdit], [editHold] and [appliedEditNumber] are
+  /// facts about this device and are always carried over.
   PosOrderActions copyWith({
     bool? canPay,
     bool? canDiscount,
@@ -164,7 +189,34 @@ class PosOrderActions {
     canPrintBill: canPrintBill ?? this.canPrintBill,
     submitUnacknowledged: submitUnacknowledged ?? this.submitUnacknowledged,
     canEditOrder: canEditOrder ?? this.canEditOrder,
+    canRetryEdit: canRetryEdit,
+    editHold: editHold,
+    appliedEditNumber: appliedEditNumber,
   );
+}
+
+/// ORDER-EDIT-001E — WHY a [PosPendingKind.orderEdit] stamp sits on an order.
+///
+/// One stamp withdraws the money actions for several different reasons, and
+/// they must not all read "Sending changes…": an edit the server already
+/// APPLIED is not being sent, a conflict is waiting for a person, and the
+/// startup blanket is no evidence about this order at all.
+enum PosOrderEditHold {
+  /// This device's edit is on the wire, or its outcome is still unknown (a
+  /// `dispatching` / `transportUncertain` record the row's Retry replays).
+  sending,
+
+  /// The server APPLIED the edit; the authoritative refresh has not proven it
+  /// yet. Never sent again — only the refresh is retried.
+  appliedAwaitingRefresh,
+
+  /// A server-declared conflict, or two unresolved edits of one order: a
+  /// person must settle it.
+  conflict,
+
+  /// The edit journal is still being read (or could not be): the startup
+  /// blanket, held on every order until it is known which carry an edit.
+  journalLoading,
 }
 
 /// The local mutation this device currently has queued/in flight for an order.
@@ -306,6 +358,16 @@ PosOrderActions resolveOrderActions(
   // confirmation screen's direct call and every caller that does not know
   // keep Edit hidden — a demo order has no server row to edit.
   bool isRealMode = false,
+  // ORDER-EDIT-001E: whether this device holds an unresolved edit of the
+  // order that a Retry can settle (the shared assembly asks the edit
+  // controller). Carried straight into [PosOrderActions.canRetryEdit]. It
+  // grants nothing: the Retry replays an identity the server already holds,
+  // or only re-reads an edit the server already applied.
+  bool editRetryable = false,
+  // ORDER-EDIT-001E: what an `orderEdit` stamp on this order is, and the
+  // applied edit's number — kept only alongside that stamp.
+  PosOrderEditHold? editHold,
+  int? appliedEditNumber,
 }) {
   // A LOCAL DRAFT has no server order. Nothing can be done to it here; it is not a
   // server order at all and must never be presented as one.
@@ -536,5 +598,14 @@ PosOrderActions resolveOrderActions(
     // sync terms rather than connectivity terms.
     submitUnacknowledged: submitUnacknowledged,
     canEditOrder: canEditOrder,
+    // ORDER-EDIT-001E: the unresolved edit's Retry — not gated by anything
+    // above, because that edit is what withdrew the rest.
+    canRetryEdit: editRetryable,
+    editHold: pending == PosPendingKind.orderEdit ? editHold : null,
+    appliedEditNumber:
+        pending == PosPendingKind.orderEdit &&
+            editHold == PosOrderEditHold.appliedAwaitingRefresh
+        ? appliedEditNumber
+        : null,
   );
 }

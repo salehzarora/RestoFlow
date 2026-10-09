@@ -798,13 +798,36 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
   /// order (a separate committed `order.discount`), then the edit is
   /// re-baselined in place with every intent kept. Discarding the edit later
   /// leaves the lowered discount in place: it was its own change.
+  ///
+  /// The sheet is opened on the order's CURRENT revision and totals, never on
+  /// the ones the edit was opened with: a kitchen bump moves `orders.revision`
+  /// all the time (API_CONTRACT §4.45.5), and `apply_discount` refuses a
+  /// stale `expected_revision` as a conflict. So the edit is re-baselined
+  /// FIRST (the same in-place refresh, every intent kept) and the sheet reads
+  /// the fresh detail. A refresh that could not load, ended the edit or had
+  /// to leave an intent out says so and opens nothing — the cashier looks
+  /// again before discounting.
   Future<void> _lowerDiscountFromEdit(
     CartEditContext editContext,
     AppLocalizations l10n,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     final container = ProviderScope.containerOf(context, listen: false);
-    final detail = editContext.baseline.detail;
+    final edit = container.read(orderEditControllerProvider.notifier);
+    final current = await edit.refreshBaseline();
+    if (!mounted) return;
+    final fresh = container.read(cartControllerProvider).editContext;
+    if (current.effect != OrderEditRefusalEffect.rebaseline ||
+        current.notice != null ||
+        fresh == null ||
+        fresh.orderId != editContext.orderId) {
+      final message = orderEditResultMessage(l10n, current);
+      if (message != null && messenger.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+      }
+      return;
+    }
+    final detail = fresh.baseline.detail;
     await DiscountSheet.show(
       context,
       orderId: detail.orderId,
@@ -813,9 +836,7 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
       currencyCode: detail.currencyCode,
       expectedRevision: detail.revision,
     );
-    final result = await container
-        .read(orderEditControllerProvider.notifier)
-        .refreshBaseline();
+    final result = await edit.refreshBaseline();
     final message = orderEditResultMessage(l10n, result);
     if (message != null && messenger.mounted) {
       messenger.showSnackBar(SnackBar(content: Text(message)));

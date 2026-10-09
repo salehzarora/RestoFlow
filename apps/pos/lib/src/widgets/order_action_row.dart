@@ -37,7 +37,8 @@ import 'order_edit_cart_widgets.dart'
         OrderEditCartChoice,
         showOrderEditCartNotEmptyPrompt,
         showOrderEditResult;
-import 'order_edit_messages.dart' show orderEditEntryMessage;
+import 'order_edit_messages.dart'
+    show orderEditEntryMessage, orderEditRetryLabel;
 import 'receipt_print_preview.dart';
 
 /// ORDER-DETAIL-PREVIEW-001 — the SHARED order action row.
@@ -322,7 +323,9 @@ class OrderActionRow extends ConsumerWidget {
     // ORDER-EDIT-001E: an edit of this order whose outcome is unknown (or that
     // is applied but not yet proven) blocks the order's money actions until it
     // is resolved — so its retry rides the row itself, whatever else the
-    // policy withdrew. It replays the SAME identity; it never mints a new one.
+    // policy withdrew (the policy's `canRetryEdit` keeps every host drawing
+    // the row for it). It replays the SAME identity; it never mints a new
+    // one — and for an APPLIED edit it only refreshes, so it says so.
     final editOrderId = order.orderId;
     final retryable = editOrderId == null || editOrderId.isEmpty
         ? null
@@ -338,7 +341,7 @@ class OrderActionRow extends ConsumerWidget {
             key: Key('$keyPrefix-edit-retry-${order.orderNumber}'),
             onPressed: () => _retryEdit(context, editOrderId),
             icon: const Icon(Icons.refresh, size: 18),
-            label: Text(l10n.posOrderEditRetry),
+            label: Text(orderEditRetryLabel(l10n, retryable)),
           ),
         ),
       );

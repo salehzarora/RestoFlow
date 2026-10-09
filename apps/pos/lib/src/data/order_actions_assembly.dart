@@ -43,13 +43,15 @@ class PosOrderActionsAssembly {
     required Set<String> hydrationBlanketOnly,
     required KitchenModeResult? verifiedMode,
     required Set<String> completingIds,
+    required OrderEditState edit,
   }) : _capabilities = capabilities,
        _isDemo = isDemo,
        _pendingByIdentity = pendingByIdentity,
        _submitByIdentity = submitByIdentity,
        _hydrationBlanketOnly = hydrationBlanketOnly,
        _verifiedMode = verifiedMode,
-       _completingIds = completingIds;
+       _completingIds = completingIds,
+       _edit = edit;
 
   /// Watches every input provider and builds the per-identity joins over the
   /// FULL loaded collection [orders] (always pass the whole
@@ -155,6 +157,7 @@ class PosOrderActionsAssembly {
       hydrationBlanketOnly: hydrationBlanketOnly,
       verifiedMode: verifiedMode,
       completingIds: completingIds,
+      edit: edit,
     );
   }
 
@@ -165,6 +168,10 @@ class PosOrderActionsAssembly {
   final Set<String> _hydrationBlanketOnly;
   final KitchenModeResult? _verifiedMode;
   final Set<String> _completingIds;
+
+  /// ORDER-EDIT-001E: the WATCHED edit state — the source of each order's
+  /// Retry and of what its `orderEdit` stamp means.
+  final OrderEditState _edit;
 
   /// This device's queued mutation for [order], if any (after the amendment
   /// blanket stamping) — the same value fed into [resolveFor].
@@ -183,10 +190,13 @@ class PosOrderActionsAssembly {
   /// sheet has always computed per row.
   PosOrderActions resolveFor(PosRecentOrder order) {
     final unacknowledged = submitUnacknowledgedFor(order);
+    final id = order.orderId;
+    final pending = pendingFor(order);
+    final hold = pending == PosPendingKind.orderEdit ? _editHoldFor(id) : null;
     return resolveOrderActions(
       order,
       capabilities: _capabilities,
-      pending: pendingFor(order),
+      pending: pending,
       submitUnacknowledged: unacknowledged,
       // Pass C: this row's `itemsAdd` stamp is the startup blanket, not a
       // known amendment — it relaxes the read-only pre-bill and nothing else.
@@ -194,6 +204,13 @@ class PosOrderActionsAssembly {
       // ORDER-EDIT-001E: Edit needs a real backend; the policy fails closed
       // without this, so only this shared assembly ever offers it.
       isRealMode: !_isDemo,
+      // ORDER-EDIT-001E: the unresolved edit's Retry rides the row whenever a
+      // retryable record exists — that edit withdrew every other action, so
+      // a host skipping an "empty" row must not hide it.
+      editRetryable:
+          id != null && id.isNotEmpty && _edit.retryableRecordFor(id) != null,
+      editHold: hold?.$1,
+      appliedEditNumber: hold?.$2,
       // Gap B: the central close-eligibility policy decides the printer-only
       // Complete safety net (server re-enforces).
       completeEligible:
@@ -211,5 +228,38 @@ class PosOrderActionsAssembly {
           ) ==
           PosOrderCloseEligibility.allowed,
     );
+  }
+
+  /// ORDER-EDIT-001E: what this device's `orderEdit` stamp on [orderId] is
+  /// (and, for an applied edit, its `edit_number`). An order no edit record
+  /// or attempt holds carries the stamp only as the journal's startup
+  /// blanket.
+  (PosOrderEditHold, int?) _editHoldFor(String? orderId) {
+    final edit = _edit;
+    if (orderId == null || !edit.blockedOrderIds.contains(orderId)) {
+      return (PosOrderEditHold.journalLoading, null);
+    }
+    if (edit.conflictingOrderIds.contains(orderId)) {
+      return (PosOrderEditHold.conflict, null);
+    }
+    final attempt = edit.attempt;
+    if (attempt != null && attempt.orderId == orderId) {
+      if (edit.phase == OrderEditPhase.appliedAwaitingRefresh) {
+        return (
+          PosOrderEditHold.appliedAwaitingRefresh,
+          edit.applied?.editNumber,
+        );
+      }
+      if (edit.phase == OrderEditPhase.sending ||
+          edit.phase == OrderEditPhase.rebasing) {
+        return (PosOrderEditHold.sending, null);
+      }
+    }
+    for (final r in edit.records.values) {
+      if (r.orderId == orderId && r.awaitingRefresh) {
+        return (PosOrderEditHold.appliedAwaitingRefresh, r.applied?.editNumber);
+      }
+    }
+    return (PosOrderEditHold.sending, null);
   }
 }
