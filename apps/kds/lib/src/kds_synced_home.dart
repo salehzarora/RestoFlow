@@ -11,8 +11,11 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
 import 'package:restoflow_sync/restoflow_sync.dart' show KdsSyncStatus;
 
 import 'kds_screen.dart';
+import 'print/kds_acknowledge_print.dart';
+import 'print/kds_change_chit.dart';
 import 'print/kds_native_printer.dart';
 import 'print/kds_ticket_document.dart';
+import 'state/kds_edit_ack_controller.dart';
 import 'state/kds_kitchen_print_controller.dart';
 import 'state/kds_printer_assignments.dart';
 import 'state/kds_session.dart';
@@ -53,6 +56,21 @@ class KdsSyncedHome extends ConsumerWidget {
         for (final t in vs.tickets)
           if (t.requiresAck && t.orderId != null) t.orderId!,
       ]);
+      // ORDER-EDIT-001D: the same rule for "Got it" — drop pending/failed
+      // entries whose change alert key the fresh pull no longer shows
+      // (confirmed here or on another KDS, superseded by a void, or moved on
+      // to a newer edit). Same exact-data gate, same COMPLETE ticket list.
+      final changeAlertKeys = [
+        for (final t in vs.tickets)
+          if (t.changeAlertKey != null) t.changeAlertKey!,
+      ];
+      ref
+          .read(kdsEditAckControllerProvider.notifier)
+          .reconcile(changeAlertKeys);
+      // ORDER-EDIT-001D: a fresh pull proves the server is reachable — replay
+      // any "Got it" whose outcome was unknown once the board shows its edits
+      // confirmed, and print the chit it owes (once, from the tap's board).
+      unawaited(_printOwedChits(ref, l10n, vs.tickets));
     });
     final async = ref.watch(kdsViewStateProvider);
     return async.when(
@@ -124,6 +142,9 @@ class KdsSyncedHome extends ConsumerWidget {
         // cancellation cards (pending until the authoritative pull clears the
         // card; failed stays visible + retryable).
         final ackState = ref.watch(kdsVoidAckControllerProvider);
+        // ORDER-EDIT-001D: the per-card "Got it" state, keyed by change alert
+        // key; a sibling card covered by an in-flight tap shows pending too.
+        final editAck = ref.watch(kdsEditAckControllerProvider);
         return KdsScreen(
           tickets: vs.tickets,
           allowRecall: false,
@@ -134,6 +155,10 @@ class KdsSyncedHome extends ConsumerWidget {
           // A2: subtle new-arrival attention glow on the LIVE board (tickets that
           // ARRIVE during this session; not the ones already present on load).
           enableNewArrivalAlert: true,
+          // ORDER-EDIT-001D: the change pulse seeds "already on the board at
+          // load" only from a fresh pull — never from the temporary EMPTY
+          // initial / loading board of an app start or sign-in.
+          boardIsAuthoritative: vs.status == KdsSyncStatus.data,
           printStatusFor: (ticket) => _printStatusFor(
             ref,
             l10n,
@@ -156,6 +181,23 @@ class KdsSyncedHome extends ConsumerWidget {
           },
           ackPendingOrderIds: ackState.pending,
           ackFailedOrderIds: ackState.failed,
+          // ORDER-EDIT-001D: "Got it" — the server-authoritative
+          // order.edit_ack through the existing sync path (online-only, like
+          // order.void_ack). No live session => no "Got it" (never a dead
+          // button). The change stays until the pull returns kitchen_ack_at.
+          onAcknowledgeChange: pusher == null
+              ? null
+              : (ticket) => unawaited(_gotIt(ref, l10n, ticket, vs.tickets)),
+          changeAckPendingKeys: {
+            for (final t in vs.tickets)
+              if (t.changeAlertKey != null && editAck.isPending(t))
+                t.changeAlertKey!,
+          },
+          changeAckFailedKeys: {
+            for (final t in vs.tickets)
+              if (t.changeAlertKey != null && editAck.isFailed(t))
+                t.changeAlertKey!,
+          },
           onAdvanced: pusher == null
               ? null
               : (ticket, to) async {
@@ -186,13 +228,24 @@ class KdsSyncedHome extends ConsumerWidget {
                     final bridge = await ref.read(
                       kdsActivePrintBridgeReadyProvider.future,
                     );
+                    // ORDER-EDIT-001D: print the ticket RE-DERIVED from the
+                    // board after the post-push pull, never the one captured
+                    // at tap time — an edit that landed before the tap's pull
+                    // prints fresh. Same work unit, so the same idempotency
+                    // key; nothing prints when the unit left the board, was
+                    // voided, or exists only as a change card.
+                    final printable = kdsTicketForAcknowledgePrint(
+                      ticket,
+                      ref.read(kdsRepositoryProvider).viewState.tickets,
+                    );
+                    if (printable == null) return;
                     ref
                         .read(kdsKitchenPrintControllerProvider.notifier)
                         .prepareOnAcknowledge(
-                          ticket,
+                          printable,
                           buildDocument: () => buildKdsTicketDocument(
                             l10n,
-                            ticket,
+                            printable,
                             restaurantName: ref.read(kdsRestaurantNameProvider),
                           ),
                           submitToBridge: bridge == null ? null : bridge.submit,
@@ -207,6 +260,94 @@ class KdsSyncedHome extends ConsumerWidget {
     );
   }
 
+  /// ORDER-EDIT-001D (design §7.2): one "Got it" tap. Sends
+  /// `order.edit_ack` for [ticket]'s newest pending edit and — ONLY when the
+  /// server applied it AND this tap stamped at least one edit
+  /// (`acknowledged_count > 0`; 0 means another KDS confirmed first and
+  /// printed its own) — prints ONE money-free change chit for the order's
+  /// units already on paper, when this device auto-prints.
+  ///
+  /// The chit is computed from [board] — the board the cook CONFIRMED,
+  /// copied BEFORE the ack's immediate pull clears the change. A refusal, a
+  /// superseding void or a skipped tap prints nothing; an UNKNOWN outcome
+  /// owes its chit, printed by [_printOwedChits] once a fresh pull shows the
+  /// edits confirmed and the replay of the same operation applied.
+  Future<void> _gotIt(
+    WidgetRef ref,
+    AppLocalizations l10n,
+    KdsTicketView ticket,
+    List<KdsTicketView> board,
+  ) async {
+    final orderId = ticket.orderId;
+    final change = ticket.change;
+    if (orderId == null || change == null) return;
+    final snapshot = List<KdsTicketView>.of(board);
+    final result = await ref
+        .read(kdsEditAckControllerProvider.notifier)
+        .acknowledge(ticket, confirmedBoard: snapshot);
+    if (result.outcome != KdsEditAckOutcome.applied ||
+        result.acknowledgedCount <= 0) {
+      return;
+    }
+    await _printChit(
+      ref,
+      l10n,
+      orderId: orderId,
+      upToEditNumber: change.upToEditNumber,
+      board: snapshot,
+    );
+  }
+
+  /// ORDER-EDIT-001D: replays the owed chits whose edits the fresh pull's
+  /// [board] shows confirmed and prints each one the server applied with
+  /// `acknowledged_count > 0`, from the board saved at the tap.
+  Future<void> _printOwedChits(
+    WidgetRef ref,
+    AppLocalizations l10n,
+    List<KdsTicketView> board,
+  ) async {
+    final owed = await ref
+        .read(kdsEditAckControllerProvider.notifier)
+        .replayOwedChits(board);
+    for (final chit in owed) {
+      await _printChit(
+        ref,
+        l10n,
+        orderId: chit.orderId,
+        upToEditNumber: chit.upToEditNumber,
+        board: chit.board,
+      );
+    }
+  }
+
+  /// One change chit through the print controller (idempotent per order and
+  /// number; the controller applies the auto-print gating).
+  Future<void> _printChit(
+    WidgetRef ref,
+    AppLocalizations l10n, {
+    required String orderId,
+    required int upToEditNumber,
+    required List<KdsTicketView> board,
+  }) async {
+    // BLUETOOTH-FIRST-PRINT: await the saved printer profile (as on
+    // Acknowledge) so a chit right after process recreation still prints.
+    final bridge = await ref.read(kdsActivePrintBridgeReadyProvider.future);
+    await ref
+        .read(kdsKitchenPrintControllerProvider.notifier)
+        .printChangeChit(
+          orderId: orderId,
+          upToEditNumber: upToEditNumber,
+          board: board,
+          buildDocument: (view) => buildKdsChangeChitDocument(
+            l10n,
+            view,
+            restaurantName: ref.read(kdsRestaurantNameProvider),
+          ),
+          submitToBridge: bridge == null ? null : bridge.submit,
+          nativePrinterConfigured: ref.read(hasNativePrinterProvider),
+        );
+  }
+
   /// The honest kitchen print-job status for a ticket, or null when no job
   /// exists yet (auto-print off / not acknowledged). A confirmed bridge write
   /// shows "sent to printer" (NOT a hardware-confirmed print, which stays
@@ -218,6 +359,9 @@ class KdsSyncedHome extends ConsumerWidget {
     KdsPrintJob? job,
   ) {
     if (job == null) return null;
+    // ORDER-EDIT-001D: a standalone change card keeps its old unit's key, so
+    // the job describes a ticket that no longer exists — show nothing.
+    if (ticket.change?.standalone == true) return null;
     // (label, isError, isReprint): error states show a danger-tone Retry;
     // PRINT-STABILITY-001 adds a quiet Reprint on an already-SENT ticket so staff
     // can print another money-free copy (paper jam / extra copy) without changing
@@ -261,6 +405,9 @@ class KdsSyncedHome extends ConsumerWidget {
     AppLocalizations l10n,
     KdsTicketView ticket,
   ) async {
+    // ORDER-EDIT-001D: never reprint from a standalone change card — it would
+    // print the emptied (or vanished) unit's ticket.
+    if (ticket.change?.standalone == true) return;
     final assignments = switch (ref
         .read(kdsPrinterAssignmentsProvider)
         .valueOrNull) {

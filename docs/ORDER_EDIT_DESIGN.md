@@ -436,6 +436,65 @@ change):*
   ticket, round status for a round), never per dish, because item statuses do not
   advance. Labels say "In kitchen", not "cooking this burger".
 
+*Implemented — ORDER-EDIT-001D (KDS app only; no shared-package, l10n or server
+change):*
+
+- **Card.** A changed card leads with an amber header ("CHANGED", or the
+  all-items-removed title and stop instruction for an emptied unit), then one row
+  per pending edit on the card: "Change N · time · reason" (the change slip's reason
+  rule; an unknown code is never shown raw, and no staff name is read). Live lines
+  carry NEW / "+N" (the row names the dish; its quantity is the increase) / CHANGED
+  with "was: 2× Burger +Tomato" once per changed group / REMAKE "instead of: …"
+  (permanent). Removed lines are struck through under a REMOVED word, with "Remade
+  in Round M" when the dish moved. A round opened by an edit reads "Change N · Round
+  M" on the card and on its paper. A red cancellation card never shows change UI.
+- **Standalone card.** Full amber card in its former column (the overlay's status),
+  with no status chip, kitchen counts, print status or Reprint, because it keeps the
+  old unit's print key. It never gets the "New order" badge or glow.
+- **Alert.** A finite, reduce-motion-aware amber pulse keyed by the change alert key
+  (`<ticket id>|e<N>`), so a second edit pulses again. Changes already on the board
+  at load do not pulse; the new-order glow wins when both apply. No audio.
+- **"Got it".** Replaces the advance action (Acknowledge included) for every status
+  while the card shows a change; without a live session neither control renders.
+  State is per card (change alert key), never per order: a tap covers sibling cards
+  whose newest edit is at or below its number (shown pending too), and an "Also
+  confirms change …" caption names older pending edits that are not on the card.
+  The op is online-only (no outbox). `order_voided` is treated as superseded (no
+  failure line; the red card replaces the card on the next pull). Any other refusal
+  shows the failure line and the retry is a new operation; an unknown outcome (a
+  throw or no matching result) reuses the same `local_operation_id` (D-022 replay).
+  Pending and failed entries are reconciled only on a fresh `data` pull, from the
+  complete board, exactly like PSC-001D. A "Got it" whose outcome is unknown owes its
+  chit: once a fresh pull no longer shows any pending edit of that order up to N,
+  the same operation id is replayed (at most three times), so the server returns its
+  stored answer and the chit prints once, from the board the cook confirmed. The
+  record is in memory and belongs to the PIN session that tapped (D-004).
+- **Print on Acknowledge** prints the ticket re-derived from the board after the
+  post-push pull (same work-unit key), and prints nothing when the unit left the
+  board, became a red card, exists only as a standalone or emptied card, or has no
+  live line. The job records the newest pending edit its paper already shows.
+- **Change chit.** Printed once per (order, N) only after an applied "Got it" with
+  `acknowledged_count > 0` (so only the stamping device prints), only when this
+  device auto-prints, from the board the cook confirmed (copied before the ack's
+  pull). It covers every unit of the order with a pending change that is already
+  on paper: this device's own job, or, without one (restart, another display), the
+  unit's stage (Acknowledged and later) plus the removed line's stage. It lists
+  REMOVED, CHANGE (Was/Now), "+N" and in-place ADD lines for edits above the unit's
+  watermark and up to N; it never prints REMAKE or a unit still in New (those dishes
+  print on their own round's Acknowledge). A Reprint keeps the older paper's
+  watermark for REMOVED and Was/Now lines, which the older paper on the rail still
+  lists (safe to repeat); ADD and "+N" use the newest paper's watermark, so they are
+  never repeated. A failed chit is recorded under its own
+  key only; there is no card left to show a Retry (follow-up S-2).
+- **Residuals** (R-002, R-007): `refresh()` does not pull while a poll is in flight,
+  so the Acknowledge paper can be pre-edit (the later chit covers it); watermarks
+  are in memory, so after a restart the stage proxy can repeat a chit line, never
+  omit one; concurrent "Got it" on two displays, or a partial page drain, can repeat
+  a line; a display with auto-print off prints no chit; "Got it" needs a connection.
+  "·" and "×" need the raster path (Q-015), as on today's tickets.
+- The API_CONTRACT §4.46 and IMPLEMENTATION_CHECKLIST "Implemented" markers for this
+  slice are reconciled after #288 merges, because both files are in #288's diff.
+
 ### 7.3 Kitchen without a screen (printer-only branches)
 
 - **Channel:** "paper" iff `branches.kitchen_workflow_mode = 'printer_only'` OR

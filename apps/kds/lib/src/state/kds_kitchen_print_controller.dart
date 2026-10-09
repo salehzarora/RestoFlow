@@ -1,9 +1,16 @@
+import 'dart:math' show max, min;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_core/restoflow_core.dart';
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show KitchenTicketStatus;
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show OrderChangeSlipView;
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_printing/restoflow_printing.dart'
     show BridgeSubmitOutcome, BridgeSubmitResult, PrinterErrorCategory;
 
+import '../print/kds_change_chit.dart';
 import '../print/print_document.dart';
 import 'kds_auto_print_prefs.dart';
 import 'kds_printer_assignments.dart';
@@ -31,6 +38,11 @@ enum KdsPrintJobStatus {
   failed,
 }
 
+/// ORDER-EDIT-001D: the edit watermarks of a work unit's papers on the
+/// kitchen rail — the NEWEST and the OLDEST [KdsPrintJob.printedThroughEdit]
+/// among them (0 for a paper printed with no unconfirmed change).
+typedef KdsPaperWatermarks = ({int newestThrough, int oldestThrough});
+
 class KdsPrintJob {
   const KdsPrintJob({
     required this.status,
@@ -38,6 +50,8 @@ class KdsPrintJob {
     this.failureCategory,
     this.failureMessage,
     this.at,
+    this.printedThroughEdit,
+    this.earlierPapers,
   });
 
   final KdsPrintJobStatus status;
@@ -52,17 +66,32 @@ class KdsPrintJob {
   /// When the last bridge outcome was recorded (drives the "last job" row).
   final DateTime? at;
 
+  /// ORDER-EDIT-001D: the newest unconfirmed sent-order edit this job's paper
+  /// already shows (the printed ticket's `change.upToEditNumber`), or null.
+  /// A later change chit never repeats lines of edits at or below it.
+  final int? printedThroughEdit;
+
+  /// ORDER-EDIT-001D: the watermarks of the EARLIER papers of this work unit
+  /// that a Retry / Reprint replaced in the job map but that are still on the
+  /// kitchen rail; null when no earlier job reached the print path. A later
+  /// change chit keeps their REMOVED and Was/Now news (see
+  /// [KdsKitchenPrintController.printFactsFor]).
+  final KdsPaperWatermarks? earlierPapers;
+
   KdsPrintJob copyWith({
     KdsPrintJobStatus? status,
     PrinterErrorCategory? failureCategory,
     String? failureMessage,
     DateTime? at,
+    KdsPaperWatermarks? earlierPapers,
   }) => KdsPrintJob(
     status: status ?? this.status,
     document: document,
     failureCategory: failureCategory,
     failureMessage: failureMessage,
     at: at ?? this.at,
+    printedThroughEdit: printedThroughEdit,
+    earlierPapers: earlierPapers ?? this.earlierPapers,
   );
 }
 
@@ -83,7 +112,17 @@ typedef KdsBridgeSubmit =
 /// station — and each has to print on its own.
 class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
   @override
-  Map<String, KdsPrintJob> build() => const {};
+  Map<String, KdsPrintJob> build() {
+    _chitThrough.clear();
+    return const {};
+  }
+
+  /// ORDER-EDIT-001D: per WORK UNIT ([keyFor]), the newest edit number a
+  /// change chit printed by THIS device already covered — so a second "Got
+  /// it" before the pull clears the first change never repeats its lines.
+  /// In memory only: after a restart the stage proxy may print a line twice,
+  /// never omit one.
+  final Map<String, int> _chitThrough = {};
 
   /// The idempotency key for [ticket] — its WORK UNIT, not its order.
   ///
@@ -131,6 +170,9 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
         key: KdsPrintJob(
           status: KdsPrintJobStatus.prepared,
           document: document,
+          // ORDER-EDIT-001D: the paper carries the live lines of the
+          // unconfirmed edits the ticket shows, so a later chit skips them.
+          printedThroughEdit: ticket.change?.upToEditNumber,
         ),
       };
     } catch (_) {
@@ -191,6 +233,11 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
   /// clears the existing entry, re-prepares with the given printer availability,
   /// and re-dispatches. Called from the ticket's explicit Retry action, so it
   /// does NOT re-check the auto-print toggle.
+  ///
+  /// ORDER-EDIT-001D: the replaced job's paper (and any paper before it)
+  /// stays on the kitchen rail, so its watermarks move to the new job's
+  /// [KdsPrintJob.earlierPapers] — a Reprint of a changed card must not hide
+  /// the REMOVED and Was/Now lines that earlier paper still needs.
   Future<void> retry(
     KdsTicketView ticket, {
     required bool hasEnabledPrinter,
@@ -198,12 +245,17 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
     KdsBridgeSubmit? submitToBridge,
   }) async {
     final key = keyFor(ticket);
+    final earlierPapers = _papersOnRail(state[key]);
     state = {...state}..remove(key);
     prepareForTicket(
       ticket,
       hasEnabledPrinter: hasEnabledPrinter,
       buildDocument: buildDocument,
     );
+    final job = state[key];
+    if (earlierPapers != null && job != null) {
+      state = {...state, key: job.copyWith(earlierPapers: earlierPapers)};
+    }
     await _dispatch(key, submitToBridge);
   }
 
@@ -291,6 +343,134 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
   }
 
   KdsPrintJob? jobFor(KdsTicketView ticket) => state[keyFor(ticket)];
+
+  /// ORDER-EDIT-001D: the change chit's idempotency key — one chit per (order,
+  /// "Got it" number). It can never equal a [keyFor] key, which always
+  /// carries `|station:` (or is a bare demo ticket id).
+  static String chitKeyFor(String orderId, int upToEditNumber) =>
+      '$orderId|chit:e$upToEditNumber';
+
+  /// Job statuses that mean this device's ticket went down its print path.
+  static const Set<KdsPrintJobStatus> _paperJobStatuses = {
+    KdsPrintJobStatus.prepared,
+    KdsPrintJobStatus.sentToPrinter,
+    KdsPrintJobStatus.printed,
+  };
+
+  /// Unit stages that were printed on Acknowledge (the proxy after a restart,
+  /// or when another display printed the ticket).
+  static const Set<KitchenTicketStatus> _printedTicketStatuses = {
+    KitchenTicketStatus.acknowledged,
+    KitchenTicketStatus.inPreparation,
+    KitchenTicketStatus.ready,
+  };
+
+  /// ORDER-EDIT-001D: the watermarks of every paper of a unit still on the
+  /// rail — [job]'s own when it reached the print path, plus the
+  /// [KdsPrintJob.earlierPapers] it replaced — or null when none did.
+  static KdsPaperWatermarks? _papersOnRail(KdsPrintJob? job) {
+    if (job == null) return null;
+    final earlier = job.earlierPapers;
+    if (!_paperJobStatuses.contains(job.status)) return earlier;
+    final own = job.printedThroughEdit ?? 0;
+    if (earlier == null) return (newestThrough: own, oldestThrough: own);
+    return (
+      newestThrough: max(earlier.newestThrough, own),
+      oldestThrough: min(earlier.oldestThrough, own),
+    );
+  }
+
+  /// ORDER-EDIT-001D: what this device knows about [unit]'s paper — its own
+  /// job(s) when one exists, else the unit's stage — plus the edit
+  /// watermarks: ADD / "+N" lines are on the NEWEST paper, but REMOVED and
+  /// Was/Now lines never reach a later paper, so they use the OLDEST paper
+  /// still on the rail (a Reprint never raises it). An earlier chit covers
+  /// both.
+  KdsUnitPrintFacts printFactsFor(KdsTicketView unit) {
+    final key = keyFor(unit);
+    final job = state[key];
+    final chit = _chitThrough[key] ?? 0;
+    if (job != null) {
+      final papers = _papersOnRail(job);
+      return (
+        printed: papers != null,
+        fromLocalJob: true,
+        through: max(papers?.newestThrough ?? 0, chit),
+        removalThrough: max(papers?.oldestThrough ?? 0, chit),
+      );
+    }
+    return (
+      printed: _printedTicketStatuses.contains(unit.status),
+      fromLocalJob: false,
+      through: chit,
+      removalThrough: chit,
+    );
+  }
+
+  /// ORDER-EDIT-001D (design §7.2): after a "Got it" that STAMPED edits up to
+  /// [upToEditNumber] of [orderId], prints ONE money-free change chit for the
+  /// order's units already on paper (see [kdsChangeChitView]). [board] is the
+  /// board the cook confirmed — taken BEFORE the ack's refresh clears the
+  /// change.
+  ///
+  /// The SAME gating as [prepareOnAcknowledge] (toggle off, no assignment
+  /// read and no device printer, or no enabled printer => nothing — no marker,
+  /// since no card would show it once the change clears). Idempotent per
+  /// [chitKeyFor]. A builder throw or a bridge failure is recorded ONLY under
+  /// the chit key; the card's own job is never touched.
+  Future<void> printChangeChit({
+    required String orderId,
+    required int upToEditNumber,
+    required List<KdsTicketView> board,
+    required PrintDocument Function(OrderChangeSlipView view) buildDocument,
+    KdsBridgeSubmit? submitToBridge,
+    bool nativePrinterConfigured = false,
+  }) async {
+    final stored = ref.read(kdsAutoPrintAcknowledgeProvider).valueOrNull;
+    if (stored == false) return; // the staff turned auto-print off
+    final assignments = switch (ref
+        .read(kdsPrinterAssignmentsProvider)
+        .valueOrNull) {
+      Success(:final value) => value,
+      _ => null,
+    };
+    if (assignments == null && !nativePrinterConfigured) return;
+    final hasEnabledPrinter =
+        (assignments?.hasEnabledPrinter ?? false) || nativePrinterConfigured;
+    if (!hasEnabledPrinter) return;
+    final key = chitKeyFor(orderId, upToEditNumber);
+    if (state.containsKey(key)) return; // idempotent per (order, N)
+    final view = kdsChangeChitView(
+      orderId: orderId,
+      upToEditNumber: upToEditNumber,
+      board: board,
+      facts: printFactsFor,
+    );
+    if (view == null) return; // nothing already on paper changed
+    final PrintDocument document;
+    try {
+      document = buildDocument(view);
+    } catch (_) {
+      state = {
+        ...state,
+        key: const KdsPrintJob(status: KdsPrintJobStatus.failed),
+      };
+      return;
+    }
+    state = {
+      ...state,
+      key: KdsPrintJob(status: KdsPrintJobStatus.prepared, document: document),
+    };
+    // The chit covers every unconfirmed edit up to N of this order's units.
+    for (final unit in board) {
+      if (unit.orderId != orderId || unit.change == null || unit.requiresAck) {
+        continue;
+      }
+      final unitKey = keyFor(unit);
+      _chitThrough[unitKey] = max(_chitThrough[unitKey] ?? 0, upToEditNumber);
+    }
+    await _dispatch(key, submitToBridge);
+  }
 }
 
 final kdsKitchenPrintControllerProvider =
