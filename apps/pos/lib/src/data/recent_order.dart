@@ -263,6 +263,15 @@ class PosRecentOrder {
   /// The canonical server status, when known.
   String? get serverStatus => snapshot?.status ?? status;
 
+  /// ORDER-EDIT-001E: the server snapshot's sent-order-edit surface (§4.30c).
+  /// Money-free; a row the server has not spoken about yet reads the defaults
+  /// (no active round, never edited, nothing awaiting the kitchen).
+  bool get hasActiveRound => snapshot?.hasActiveRound ?? false;
+
+  int get editCount => snapshot?.editCount ?? 0;
+
+  bool get kitchenEditAckPending => snapshot?.kitchenEditAckPending ?? false;
+
   String get currencyCode =>
       order?.currencyCode ?? snapshot?.currencyCode ?? '';
 

@@ -6,6 +6,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
 
 import '../state/pos_session.dart';
 import '../state/submitted_order_view.dart';
+import 'order_edit_read_model.dart';
 import 'payment.dart';
 
 /// PSC-001C — the AUTHORITATIVE POS order detail (`public.pos_order_detail`).
@@ -39,6 +40,12 @@ class PosOrderDetail {
     this.receiptNumber,
     this.payment,
     this.createdAt,
+    this.dispatchMode,
+    this.kitchenChannel,
+    this.editCount = 0,
+    this.hasActiveRound = false,
+    this.edits,
+    this.branchFeatures,
   });
 
   final String orderId;
@@ -63,6 +70,62 @@ class PosOrderDetail {
   /// instant) for the canonical kitchen ticket header; tolerant — null when
   /// absent/unparseable (an RPC predating the key). Non-money.
   final DateTime? createdAt;
+
+  /// ORDER-EDIT-001B (§4.45.10) — the order's sent-order-edit surface. Every
+  /// field is a TOLERANT, money-free pluck: an older server (no keys) or a
+  /// malformed value degrades to the documented default and NEVER fails this
+  /// money-strict detail.
+  ///
+  /// `orders.dispatch_mode`, verbatim (null when absent).
+  final String? dispatchMode;
+
+  /// How the kitchen hears about an edit of THIS order (`kds` / `paper`), or
+  /// null when the server reports it unresolvable — `app.edit_order` refuses
+  /// such an order `kitchen_mode_changed`.
+  final PosKitchenChannel? kitchenChannel;
+
+  /// `orders.edit_count`: how many edits have been applied (0 when absent or
+  /// malformed).
+  final int editCount;
+
+  /// Any service round of the order in `submitted..ready` — the flag behind
+  /// the STATE_MACHINES §1 label rule (false when absent or malformed).
+  final bool hasActiveRound;
+
+  /// The applied edits, oldest first; NULL when the key is absent or any
+  /// element is unreadable (unknown — never a partial history), `[]` when the
+  /// order has none.
+  final List<PosOrderDetailEdit>? edits;
+
+  /// The session branch's two edit switches, as this read saw them — fresher
+  /// than the session's capability probe. Null when absent or malformed.
+  final PosBranchFeatures? branchFeatures;
+
+  /// The stage of the order's ACTIVE rounds (`submitted..ready`), for the
+  /// status label of a `served` order whose kitchen work is still live
+  /// (STATE_MACHINES §1): every active round Ready gives [PosRoundStage.ready],
+  /// any earlier one gives [PosRoundStage.inKitchen]. With no active round in
+  /// [rounds] it trusts the server's [hasActiveRound] alone ("In kitchen" —
+  /// never a "Ready" it cannot see), and null means nothing is active.
+  PosRoundStage? get activeRoundStage {
+    final live = [
+      for (final r in rounds)
+        if (_activeRoundStatuses.contains(r.status)) r,
+    ];
+    if (live.isEmpty) return hasActiveRound ? PosRoundStage.inKitchen : null;
+    return live.every((r) => r.status == 'ready')
+        ? PosRoundStage.ready
+        : PosRoundStage.inKitchen;
+  }
+
+  /// The `app.void_order` live-round predicate, the same set
+  /// `has_active_round` is computed from.
+  static const Set<String> _activeRoundStatuses = {
+    'submitted',
+    'accepted',
+    'preparing',
+    'ready',
+  };
 
   static PosOrderDetail? fromJson(Object? raw) {
     if (raw is! Map) return null;
@@ -156,6 +219,17 @@ class PosOrderDetail {
       createdAt: order['created_at'] is String
           ? DateTime.tryParse(order['created_at'] as String)
           : null,
+      // ORDER-EDIT-001B: tolerant, money-free plucks — read only after every
+      // strict check above, and none of them can fail the detail.
+      dispatchMode: _nonEmptyString(order['dispatch_mode']),
+      kitchenChannel: PosKitchenChannel.fromWire(order['kitchen_channel']),
+      editCount: switch (order['edit_count']) {
+        final int n when n >= 0 => n,
+        _ => 0,
+      },
+      hasActiveRound: order['has_active_round'] == true,
+      edits: PosOrderDetailEdit.listFromJson(raw['edits']),
+      branchFeatures: PosBranchFeatures.tryParse(raw['branch_features']),
     );
   }
 }
@@ -179,6 +253,9 @@ class PosOrderDetailItem {
     this.orderItemId,
     this.menuItemId,
     this.status,
+    this.unitStatus,
+    this.legacy,
+    this.editId,
   });
 
   final String name;
@@ -218,6 +295,22 @@ class PosOrderDetailItem {
   final String? orderItemId;
   final String? menuItemId;
   final String? status;
+
+  /// ORDER-EDIT-001B (§4.45.10): the RAW status of the line's work unit — the
+  /// order's for the original ticket, the round's for a round line (a D-018
+  /// token, never a pseudo-state; see [posLineStageFor]). Tolerant: null when
+  /// absent or not a non-empty string. Non-money.
+  final String? unitStatus;
+
+  /// ORDER-EDIT-001B: the server-computed M1a legacy-price flag
+  /// (`app.order_item_is_legacy_priced`). NULL when absent or malformed, and
+  /// a consumer MUST treat null as legacy (remove-only): an unknown price
+  /// history is never editable as if it were current. Non-money.
+  final bool? legacy;
+
+  /// ORDER-EDIT-001B: the edit that wrote this line, or null. Order-scoped
+  /// identifier; tolerant. Non-money.
+  final String? editId;
 
   static PosOrderDetailItem? fromJson(Object? raw) {
     if (raw is! Map) return null;
@@ -273,6 +366,10 @@ class PosOrderDetailItem {
       orderItemId: _nonEmptyString(raw['order_item_id']),
       menuItemId: _nonEmptyString(raw['menu_item_id']),
       status: _nonEmptyString(raw['status']),
+      // ORDER-EDIT-001B: tolerant, money-free plucks.
+      unitStatus: _nonEmptyString(raw['unit_status']),
+      legacy: raw['legacy'] is bool ? raw['legacy'] as bool : null,
+      editId: _nonEmptyString(raw['edit_id']),
     );
   }
 }

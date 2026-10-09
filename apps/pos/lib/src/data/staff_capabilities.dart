@@ -1,5 +1,7 @@
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
+import 'order_edit_read_model.dart' show PosBranchFeatures;
+
 /// FULL-COMP-PERMISSION-001 — the EFFECTIVE rights of the human behind the current
 /// PIN session, as the SERVER resolves them.
 ///
@@ -19,6 +21,8 @@ class PosStaffCapabilities {
     this.manageTableOperations = false,
     this.openCashDrawer = false,
     this.role,
+    this.voidOrder,
+    this.branchFeatures,
   });
 
   /// FAIL-CLOSED default: knowing nothing, we assume nothing is granted.
@@ -29,6 +33,8 @@ class PosStaffCapabilities {
     manageTableOperations: false,
     openCashDrawer: false,
     role: null,
+    voidOrder: false,
+    branchFeatures: null,
   );
 
   /// KITCHEN-PRINT-DUAL-001D: the membership role of the current PIN session, as
@@ -52,6 +58,24 @@ class PosStaffCapabilities {
   bool get canFinishKitchenOrders =>
       role != null && _kitchenStatusRoles.contains(role);
 
+  /// ORDER-EDIT-001E: the roles `app.edit_order` accepts. `kitchen_staff`
+  /// reads `void_order` FALSE, yet the server refuses that role EVERY edit —
+  /// additions included — so the POS entry gates on the role, not on the
+  /// capability (API_CONTRACT §4.30b). Deliberately a separate set from
+  /// [_kitchenStatusRoles]: the two server rules happen to agree today and
+  /// must be free to diverge. Gates a client affordance only — never grants.
+  static const Set<String> _orderEditRoles = {
+    'cashier',
+    'manager',
+    'restaurant_owner',
+    'org_owner',
+  };
+
+  /// Whether this session's role may edit a sent order. Unknown role reads
+  /// false: the entry is hidden rather than offered to a role the server
+  /// refuses outright.
+  bool get canEditOrders => role != null && _orderEditRoles.contains(role);
+
   /// May apply ordinary discounts.
   final bool applyDiscount;
 
@@ -71,14 +95,41 @@ class PosStaffCapabilities {
   /// manager/owner. Server-authoritative — the unlock and every open re-check it.
   final bool openCashDrawer;
 
+  /// ORDER-EDIT-001B / 001E: the effective `void_order` right — the predicate
+  /// `app.void_order` and `app.edit_order`'s REMOVAL gate enforce (manager+ by
+  /// role, or the deny-only cashier capability). It gates the REMOVING changes
+  /// of a sent-order edit (remove, reduce, modify), never the "Edit order"
+  /// entry itself: additions and +1 stay possible without it.
+  ///
+  /// NULLABLE, unlike its siblings: null means the server did not say (an
+  /// older server, or a restored offline snapshot), and UNKNOWN IS NOT DENIED
+  /// — the removing controls stay usable and the server decides
+  /// (API_CONTRACT §4.30b). An explicit non-boolean is malformed and reads
+  /// false.
+  final bool? voidOrder;
+
+  /// ORDER-EDIT-001B / 001E: the session branch's two edit switches (the
+  /// top-level `branch_features`, a SIBLING of `capabilities` in the probe).
+  /// Null when unknown — and the rollout gate HIDES "Edit order" when unknown.
+  /// Never persisted to the offline snapshot: editing is online-only, and a
+  /// restored rollout gate would be stale.
+  final PosBranchFeatures? branchFeatures;
+
   /// Parses the `capabilities` object from `public.pin_session_capabilities`.
   ///
   /// All use `== true`, so a missing field, an old server that does not send the
   /// key, a null, or any malformed value resolves to DENIED. The client never
   /// invents a permission it was not explicitly given.
+  ///
+  /// ORDER-EDIT-001E — the one exception is [voidOrder]: an ABSENT key is
+  /// unknown (null), not denied, per the §4.30b client rule; a present
+  /// non-boolean still resolves to denied. [branchFeatures] is the probe's
+  /// top-level `branch_features` (a sibling of `capabilities`, so the caller
+  /// passes it in), parsed atomically by [PosBranchFeatures.tryParse].
   static PosStaffCapabilities fromJson(
     Map<Object?, Object?> json, {
     Object? role,
+    Object? branchFeatures,
   }) => PosStaffCapabilities(
     applyDiscount: json['apply_discount'] == true,
     applyFullComp: json['apply_full_comp'] == true,
@@ -86,6 +137,10 @@ class PosStaffCapabilities {
     manageTableOperations: json['manage_table_operations'] == true,
     openCashDrawer: json['open_cash_drawer'] == true,
     role: role is String ? role : null,
+    voidOrder: json.containsKey('void_order')
+        ? json['void_order'] == true
+        : null,
+    branchFeatures: PosBranchFeatures.tryParse(branchFeatures),
   );
 }
 
@@ -151,6 +206,12 @@ class RealStaffCapabilitiesRepository implements StaffCapabilitiesRepository {
     if (raw is! Map || raw['ok'] != true) return null;
     final caps = raw['capabilities'];
     if (caps is! Map) return null;
-    return PosStaffCapabilities.fromJson(caps, role: raw['role']);
+    // ORDER-EDIT-001E: `branch_features` is a top-level SIBLING of
+    // `capabilities` (§4.30b) — absent on an older server, which hides Edit.
+    return PosStaffCapabilities.fromJson(
+      caps,
+      role: raw['role'],
+      branchFeatures: raw['branch_features'],
+    );
   }
 }

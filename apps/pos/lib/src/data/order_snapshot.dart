@@ -195,6 +195,10 @@ class PosOrderSnapshot {
     this.orderType,
     this.tableLabel,
     this.currencyCode,
+    this.editCount = 0,
+    this.kitchenEditAckPending = false,
+    this.hasActiveRound = false,
+    this.editSurfaceKnown = true,
   });
 
   final String orderId;
@@ -228,6 +232,33 @@ class PosOrderSnapshot {
   final String? orderType;
   final String? tableLabel;
   final String? currencyCode;
+
+  /// ORDER-EDIT-001B (§4.30c) — the order's sent-order-edit surface, three
+  /// MONEY-FREE fields read TOLERANTLY: unlike everything above they never
+  /// reject the snapshot. A persisted snapshot that fails to parse throws on
+  /// restore (`PosRecentOrder.fromJson`), so a strict read here would turn an
+  /// older server — or this device's own cache from before 001E — into a
+  /// bricked restore.
+  ///
+  /// `orders.edit_count` (0 when absent or malformed).
+  final int editCount;
+
+  /// TRUE while an edit of the order needs a kitchen confirmation that has not
+  /// been given (the server's verdict; FALSE on a voided order).
+  final bool kitchenEditAckPending;
+
+  /// Any service round of the order in `submitted..ready` — a `served` order
+  /// with this set shows the round's stage, never "Served" / "Picked up"
+  /// (STATE_MACHINES §1).
+  final bool hasActiveRound;
+
+  /// Whether the source actually carried the edit surface (keyed on
+  /// `has_active_round` being a boolean). False for a row from a server that
+  /// predates ORDER-EDIT-001B and for a snapshot this device cached before
+  /// 001E — whose three fields above are then DEFAULTS, not facts. Drives the
+  /// one-time backfill in [isNewerThan] and keeps [toJson] from persisting a
+  /// default as if the server had said it.
+  final bool editSurfaceKnown;
 
   /// Terminal per the CANONICAL set only. An unknown status is NOT terminal: we
   /// will not invent a lifecycle state, and wrongly calling an order terminal
@@ -284,6 +315,15 @@ class PosOrderSnapshot {
       orderType: _str(raw['order_type']),
       tableLabel: _str(raw['table_label']),
       currencyCode: _str(raw['currency_code']),
+      // ORDER-EDIT-001B: tolerant, AFTER every strict check — these three can
+      // never reject the snapshot (see [editSurfaceKnown]).
+      editCount: switch (raw['edit_count']) {
+        final int n when n >= 0 => n,
+        _ => 0,
+      },
+      kitchenEditAckPending: raw['kitchen_edit_ack_pending'] == true,
+      hasActiveRound: raw['has_active_round'] == true,
+      editSurfaceKnown: raw['has_active_round'] is bool,
     );
   }
 
@@ -303,6 +343,14 @@ class PosOrderSnapshot {
     if (orderType != null) 'order_type': orderType,
     if (tableLabel != null) 'table_label': tableLabel,
     if (currencyCode != null) 'currency_code': currencyCode,
+    // ORDER-EDIT-001E: only what the server actually said. A surface-less
+    // snapshot persists without the keys, so it reloads as surface-less and
+    // stays eligible for the one-time backfill in [isNewerThan].
+    if (editSurfaceKnown) ...<String, Object?>{
+      'edit_count': editCount,
+      'kitchen_edit_ack_pending': kitchenEditAckPending,
+      'has_active_round': hasActiveRound,
+    },
   };
 
   /// The cursor position of this snapshot.
@@ -317,9 +365,22 @@ class PosOrderSnapshot {
   /// all; without it a paid order would never become "paid" on this device.
   ///
   /// An OLDER revision NEVER wins, whatever its timestamp says.
+  ///
+  /// ORDER-EDIT-001E — ONE narrow tiebreak, at EXACTLY equal revision AND
+  /// equal `sync_at`: a snapshot that carries the edit surface is newer than
+  /// one that does not ([editSurfaceKnown]). Rows cached before this build
+  /// hold the same (revision, sync_at) the server still reports, so without
+  /// it reconciliation would never re-apply them, and a `served` order with a
+  /// live round would keep reading "Served" until the order next changed. It
+  /// fires at most once per cached row (afterwards both sides carry the
+  /// surface and equal stays not-newer, so re-applying the same row is still
+  /// a no-op), and it can never let an older revision or an older `sync_at`
+  /// win (RISK R-002).
   bool isNewerThan(PosOrderSnapshot other) {
     if (revision != other.revision) return revision > other.revision;
-    return syncAt.isAfter(other.syncAt);
+    if (syncAt.isAfter(other.syncAt)) return true;
+    if (syncAt.isBefore(other.syncAt)) return false;
+    return editSurfaceKnown && !other.editSurfaceKnown;
   }
 }
 
