@@ -23,6 +23,7 @@ import '../admin/supabase_users_repository.dart';
 import '../menu/supabase_menu_image_storage.dart';
 import '../printers/printers_repository.dart';
 import '../staff/staff_repository.dart';
+import '../storefront/storefront_media_publisher.dart';
 import '../tables/tables_repository.dart';
 import 'auth_callback.dart';
 import 'auth_failure_classifier.dart';
@@ -75,6 +76,7 @@ const String kDefaultOnboardingTimezone = 'Asia/Jerusalem';
   PrintersRepository Function(AdminScope scope) printersRepositoryFor,
   StaffRepository Function(AdminScope scope) staffRepositoryFor,
   TablesAdminRepository Function(AdminScope scope) tablesRepositoryFor,
+  StorefrontFunctionInvoker storefrontFunctionInvoker,
   SyncRpcTransport transport,
 })
 buildDashboardRealAuth(
@@ -151,6 +153,11 @@ buildDashboardRealAuth(
       scope: scope,
       currentUserId: currentUserId,
     ),
+    // STOREFRONT-PUBLISH-001: the `storefront-media-publish` Edge Function
+    // seam, built ONCE over the same authenticated anon-key client — the
+    // function runs as the CALLER (their JWT), never a service-role key
+    // (D-011). The Dashboard sends identifiers only, never image bytes.
+    storefrontFunctionInvoker: SupabaseStorefrontFunctionInvoker(client),
     // The session-carrying transport itself (sprint): the Overview's real
     // sales-summary read rides the SAME authenticated client.
     transport: transport,

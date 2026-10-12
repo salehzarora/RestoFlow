@@ -29,6 +29,8 @@ import 'src/dashboard_shell.dart';
 import 'src/printers/printers_repository.dart';
 import 'src/staff/staff_repository.dart';
 import 'src/state/locale_controller.dart';
+import 'src/storefront/storefront_dark_gate.dart';
+import 'src/storefront/storefront_media_publisher.dart';
 import 'src/support/platform_support.dart';
 import 'src/support/support_handoff.dart';
 import 'src/support/support_mode_gate.dart';
@@ -169,6 +171,14 @@ Future<void> main() async {
         printersRepositoryFor: real.printersRepositoryFor,
         staffRepositoryFor: real.staffRepositoryFor,
         tablesRepositoryFor: real.tablesRepositoryFor,
+        // STOREFRONT-PUBLISH-001: the Edge Function seam for the Settings
+        // Storefront editor (built once in buildDashboardRealAuth; the
+        // storefront repos are built in the shell from the transport + scope).
+        // STOREFRONT-INTEGRATE-001 (DARK): handed over only when the build
+        // enables the editor; a production build never invokes it.
+        storefrontFunctionInvoker: kStorefrontEditorEnabled
+            ? real.storefrontFunctionInvoker
+            : null,
         reportsTransport: real.transport,
         selectedContextStore: SharedPreferencesSelectedContextStore(),
       ),
@@ -199,6 +209,7 @@ class DashboardApp extends ConsumerWidget {
     this.printersRepositoryFor,
     this.staffRepositoryFor,
     this.tablesRepositoryFor,
+    this.storefrontFunctionInvoker,
     this.reportsTransport,
     this.realModeUnconfigured = false,
     this.demoModeMisconfigured = false,
@@ -254,6 +265,11 @@ class DashboardApp extends ConsumerWidget {
 
   /// Builds the REAL dining-tables repository per admin scope.
   final TablesAdminRepository Function(AdminScope scope)? tablesRepositoryFor;
+
+  /// STOREFRONT-PUBLISH-001: the `storefront-media-publish` Edge Function seam
+  /// (real mode only). Null in demo mode / tests => the Storefront editor's
+  /// media slots show an honest "not available" note.
+  final StorefrontFunctionInvoker? storefrontFunctionInvoker;
 
   /// The authenticated dashboard transport for the Overview's real
   /// sales-summary read (sprint). Null in demo mode / tests.
@@ -358,6 +374,7 @@ class DashboardApp extends ConsumerWidget {
           printersRepository: printersRepositoryFor?.call(scope),
           staffRepository: staffRepositoryFor?.call(scope),
           tablesRepository: tablesRepositoryFor?.call(scope),
+          storefrontFunctionInvoker: storefrontFunctionInvoker,
           reportsTransport: reportsTransport,
           // Sign-out from the shell header; the auth flow's session stream
           // drives the transition + context clearing.
