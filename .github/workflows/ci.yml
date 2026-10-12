@@ -234,6 +234,24 @@ jobs:
           cache: npm
           cache-dependency-path: storefront/package-lock.json
 
+      # STOREFRONT-PUBLISH-001: the storefront media Edge Function, run by Node
+      # 24 against the SAME vendored, sha-pinned jSquash wasm codecs the function
+      # loads (recipe storefront-media-c4): the enum-validation regression suite
+      # (prototype-chain names), the recipe goldens (identical on Node 22, Node 24
+      # and edge-runtime v1.74.3) with the PNG image-data bound, the caller-JWT
+      # workflow and its recovery after a killed request (against a test double
+      # of Auth / PostgREST / Storage), the engine-poisoning retirement, the
+      # licence pins (every vendored file and the notices, byte-exact) and the
+      # static guard (no privileged key, two env reads, relative imports, no
+      # delete path). Dependency-free: no install, no Docker, no network, no
+      # secret. The edge-runtime run of the same function is a LOCAL /
+      # hosted-canary gate (docs/DEPLOYMENT.md), not part of this Docker-free job.
+      - name: Tests — storefront media Edge Function (Node, pinned wasm)
+        working-directory: supabase/functions/storefront-media-publish
+        run: |
+          node --version
+          node --test test/validation.test.mjs test/recipe.test.mjs test/handler.test.mjs test/engine_poison.test.mjs test/license.test.mjs test/static_guard.test.mjs
+
       - name: Storefront — install (locked)
         working-directory: storefront
         run: |

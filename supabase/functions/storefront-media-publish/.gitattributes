@@ -1,0 +1,3 @@
+vendor/** -text
+vendor/**/*.wasm binary
+test/fixtures/*.jpg binary
