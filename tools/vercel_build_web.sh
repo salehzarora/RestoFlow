@@ -31,6 +31,14 @@
 # server-approved phase. RESTOFLOW_PRINT_BRIDGE_URL is a per-device LOCAL
 # loopback define, NOT a hosted var — it is never set here.
 #
+# STOREFRONT-PRODUCTION-ENABLE-001: the Dashboard alone also gets the
+# Storefront editor's compile-time gate RESTOFLOW_STOREFRONT_EDITOR
+# (apps/dashboard/lib/src/storefront/storefront_dark_gate.dart). It is `true`
+# ONLY when the Vercel env var of the same name is exactly `true` (an owner
+# setting for the Production environment only) and `false` otherwise:
+# unset, Preview, Development or any other value. POS, KDS and Kiosk never
+# receive it.
+#
 # Run from the repo root (Vercel runs the build command there); Flutter is the
 # pinned clone from vercel.json `installCommand` at ../../flutter.
 # ============================================================================
@@ -43,8 +51,12 @@ DEFINES=(
   --dart-define=RESTOFLOW_SUPABASE_ANON_KEY="$RESTOFLOW_SUPABASE_ANON_KEY"
 )
 
+STOREFRONT_EDITOR=false
+if [ "${RESTOFLOW_STOREFRONT_EDITOR:-}" = "true" ]; then STOREFRONT_EDITOR=true; fi
+echo "dashboard storefront editor gate: $STOREFRONT_EDITOR"
+
 # 1. Dashboard (root, base-href /) — the output directory Vercel serves.
-(cd apps/dashboard && "$FLUTTER" build web --release --base-href=/ "${DEFINES[@]}")
+(cd apps/dashboard && "$FLUTTER" build web --release --base-href=/ "${DEFINES[@]}" --dart-define=RESTOFLOW_STOREFRONT_EDITOR="$STOREFRONT_EDITOR")
 
 # 2. POS (base-href /pos/).
 (cd apps/pos && "$FLUTTER" build web --release --base-href=/pos/ "${DEFINES[@]}")

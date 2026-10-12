@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 // Absolute end assertion: JavaScript's $ alone also accepts a final newline.
 const SHA = /^[a-f0-9]{40}(?![\s\S])/i;
 const ENGINE = 'tools/vercel/ignore-build.mjs';
-const BUILD_SCRIPT_HASH = '9ea4df7bef84320e65d416c490cd5562d97c6542f01c2c50ca965f52a51cac49';
+const BUILD_SCRIPT_HASH = '9d741ce15e7c8d5a121edf254660b0f101b16f8871e8747821dc15a79f741d9f';
 const SITE_BUILDER_HASH = 'fb6cb2b72d9f889f29787fa64b84a931786324e79c8497c707d6c5d995f0d15e';
 // Exported so storefront/tests/config-hash.test.mjs can pin the file it
 // describes without exposing hash(). A changed next.config always BUILDs
