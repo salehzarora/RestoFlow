@@ -121,8 +121,10 @@ class RealSettingsView extends StatefulWidget {
 
   /// STOREFRONT-PUBLISH-001: the Storefront editor's seams (profile + media
   /// repositories, branch list, source catalog, Edge Function publisher).
-  /// Null when there is no authenticated transport or no concrete restaurant
-  /// in scope — the Storefront card then shows an honest "not connected" note.
+  /// Null when the build does not enable the editor, in platform support
+  /// mode, or when there is no authenticated transport or no concrete
+  /// restaurant in scope — the Storefront card is then not shown at all
+  /// (STOREFRONT-PRODUCTION-ENABLE-001; it used to show a "not connected" note).
   final StorefrontEditorSeams? storefrontSeams;
 
   @override
@@ -713,7 +715,10 @@ class _RealSettingsViewState extends State<RealSettingsView> {
         // level like branding. READ BEFORE EDIT: the section shows nothing
         // editable until the manager read answers, and the SERVER's verdict
         // (not the client role) decides whether it is editable at all.
-        if (_hasRestaurant && membership.restaurantId != null) ...[
+        // STOREFRONT-PRODUCTION-ENABLE-001: no seams -> no card at all.
+        if (_hasRestaurant &&
+            membership.restaurantId != null &&
+            widget.storefrontSeams != null) ...[
           const SizedBox(height: RestoflowSpacing.md),
           StorefrontSection(
             seams: widget.storefrontSeams,

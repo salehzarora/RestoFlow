@@ -2189,6 +2189,18 @@ void main() {
   });
 
   group('Settings placement', () {
+    const placementMember = MembershipContext(
+      id: 'm-1',
+      organizationId: 'org-1',
+      organizationName: 'Olive Group',
+      restaurantId: 'rest-1',
+      restaurantName: 'Olive North',
+      branchId: 'branch-1',
+      branchName: 'Main hall',
+      role: MembershipRole.manager,
+      status: 'active',
+    );
+
     testWidgets('RealSettingsView shows the card right after branding', (
       tester,
     ) async {
@@ -2212,18 +2224,51 @@ void main() {
           localizationsDelegates: restoflowLocalizationsDelegates,
           supportedLocales: kSupportedLocales,
           locale: const Locale('en'),
-          home: const Scaffold(body: RealSettingsView(membership: membership)),
+          // STOREFRONT-PRODUCTION-ENABLE-001: the card exists only with
+          // seams (an enabled build outside platform support mode).
+          home: Scaffold(
+            body: RealSettingsView(
+              membership: membership,
+              storefrontSeams: _seams(
+                _FakeProfileRepo(profile: _profileJson()),
+              ),
+            ),
+          ),
         ),
       );
       await tester.pumpAndSettle();
       final branding = find.text(l10n.brandingSectionTitle);
       final storefront = find.byKey(const Key('storefront-section'));
       expect(storefront, findsOneWidget);
-      expect(find.text(l10n.storefrontUnavailableNote), findsOneWidget);
+      expect(find.text(l10n.storefrontUnavailableNote), findsNothing);
       expect(
         tester.getTopLeft(storefront).dy,
         greaterThan(tester.getTopLeft(branding).dy),
       );
+    });
+
+    testWidgets('RealSettingsView shows NO Storefront card without seams '
+        '(STOREFRONT-PRODUCTION-ENABLE-001)', (tester) async {
+      final l10n = await _l10n();
+      tester.view.physicalSize = const Size(1200, 5000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          locale: const Locale('en'),
+          home: const Scaffold(
+            body: RealSettingsView(membership: placementMember),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // Branding still renders where the Storefront card would follow it.
+      expect(find.text(l10n.brandingSectionTitle), findsOneWidget);
+      expect(find.byKey(const Key('storefront-section')), findsNothing);
+      expect(find.byKey(const Key('storefront-unavailable')), findsNothing);
+      expect(find.text(l10n.storefrontUnavailableNote), findsNothing);
     });
   });
 }
