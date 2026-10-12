@@ -187,11 +187,13 @@ class DashboardShell extends StatefulWidget {
   /// media slots show an honest "not available" note).
   final StorefrontFunctionInvoker? storefrontFunctionInvoker;
 
-  /// STOREFRONT-INTEGRATE-001: the Storefront editor's DARK gate. Defaults
-  /// to the compile-time [kStorefrontEditorEnabled] - FALSE in every
-  /// production build - so the shell builds no Storefront seams and the
-  /// Settings card shows its existing "not connected" note. Tests that
-  /// exercise the WIRED editor pass `true`.
+  /// STOREFRONT-INTEGRATE-001: the Storefront editor's build gate. Defaults
+  /// to the compile-time [kStorefrontEditorEnabled] - FALSE unless the build
+  /// passes `RESTOFLOW_STOREFRONT_EDITOR=true` (the production web build does
+  /// so only from the Vercel Production env var of the same name). While it
+  /// is false the shell builds no Storefront seams and Settings shows NO
+  /// Storefront card (STOREFRONT-PRODUCTION-ENABLE-001). Tests that exercise
+  /// the WIRED editor pass `true`.
   final bool storefrontEditorEnabled;
 
   /// The REAL printers repository (null => labelled demo store).
@@ -438,11 +440,14 @@ class _DashboardShellState extends State<DashboardShell> {
   }
 
   /// STOREFRONT-PUBLISH-001: the Settings Storefront editor's seams, built
-  /// once per membership (restaurant-level, like branding). Null unless there
-  /// is an authenticated transport AND a concrete restaurant in scope -> the
-  /// card then shows an honest "not connected" note. The publisher exists
-  /// only when the app-lifetime Edge Function invoker was injected (real
-  /// mode); without it the media slots say publishing is not available here.
+  /// once per membership (restaurant-level, like branding). Null unless the
+  /// build enables the editor AND there is an authenticated transport AND a
+  /// concrete restaurant in scope -> Settings then shows no Storefront card at
+  /// all (STOREFRONT-PRODUCTION-ENABLE-001). The publisher exists only when the
+  /// app-lifetime Edge Function invoker was injected (real mode); without it
+  /// the media slots say publishing is not available here. Read only outside
+  /// platform support mode (see the Settings wiring), so a support session
+  /// never builds them.
   late final StorefrontEditorSeams? _storefrontSeams = _buildStorefrontSeams();
 
   StorefrontEditorSeams? _buildStorefrontSeams() {
@@ -703,7 +708,12 @@ class _DashboardShellState extends State<DashboardShell> {
                   brandingRepository: _brandingRepo,
                   brandingStorage: widget.brandingLogoStorage,
                   quickNotesRepository: _quickNotesRepo,
-                  storefrontSeams: _storefrontSeams,
+                  // STOREFRONT-PRODUCTION-ENABLE-001: withheld in platform
+                  // support mode even when the build enables the editor, like
+                  // the order-editing card above: no Storefront card, no
+                  // profile or media RPC and no storefront-media-publish call
+                  // in a support session. The lazy seams are not even built.
+                  storefrontSeams: supportMode ? null : _storefrontSeams,
                 ),
       },
     );
