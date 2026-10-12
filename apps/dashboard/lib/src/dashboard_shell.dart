@@ -29,6 +29,7 @@ import 'staff/staff_repository.dart';
 import 'staff/staff_screen.dart';
 import 'state/dashboard_providers.dart';
 import 'state/setup_device_providers.dart';
+import 'storefront/storefront_dark_gate.dart';
 import 'storefront/storefront_media_publisher.dart';
 import 'storefront/storefront_media_repository.dart';
 import 'storefront/storefront_profile_repository.dart';
@@ -140,6 +141,7 @@ class DashboardShell extends StatefulWidget {
     this.staffRepository,
     this.tablesRepository,
     this.storefrontFunctionInvoker,
+    this.storefrontEditorEnabled = kStorefrontEditorEnabled,
     this.reportsTransport,
     this.onSignOut,
     this.debugOnSetupInvalidation,
@@ -184,6 +186,13 @@ class DashboardShell extends StatefulWidget {
   /// (app-lifetime, real mode only; null in demo -> the Storefront editor's
   /// media slots show an honest "not available" note).
   final StorefrontFunctionInvoker? storefrontFunctionInvoker;
+
+  /// STOREFRONT-INTEGRATE-001: the Storefront editor's DARK gate. Defaults
+  /// to the compile-time [kStorefrontEditorEnabled] - FALSE in every
+  /// production build - so the shell builds no Storefront seams and the
+  /// Settings card shows its existing "not connected" note. Tests that
+  /// exercise the WIRED editor pass `true`.
+  final bool storefrontEditorEnabled;
 
   /// The REAL printers repository (null => labelled demo store).
   final PrintersRepository? printersRepository;
@@ -437,6 +446,10 @@ class _DashboardShellState extends State<DashboardShell> {
   late final StorefrontEditorSeams? _storefrontSeams = _buildStorefrontSeams();
 
   StorefrontEditorSeams? _buildStorefrontSeams() {
+    // STOREFRONT-INTEGRATE-001 (DARK): no seams at all unless the build
+    // enables the editor - nothing is read, nothing is written (so no
+    // `is_published`) and `storefront-media-publish` is never invoked.
+    if (!widget.storefrontEditorEnabled) return null;
     final transport = widget.reportsTransport;
     final membership = widget.membership;
     final restaurantId = membership?.restaurantId;

@@ -29,6 +29,7 @@ import 'src/dashboard_shell.dart';
 import 'src/printers/printers_repository.dart';
 import 'src/staff/staff_repository.dart';
 import 'src/state/locale_controller.dart';
+import 'src/storefront/storefront_dark_gate.dart';
 import 'src/storefront/storefront_media_publisher.dart';
 import 'src/support/platform_support.dart';
 import 'src/support/support_handoff.dart';
@@ -173,7 +174,11 @@ Future<void> main() async {
         // STOREFRONT-PUBLISH-001: the Edge Function seam for the Settings
         // Storefront editor (built once in buildDashboardRealAuth; the
         // storefront repos are built in the shell from the transport + scope).
-        storefrontFunctionInvoker: real.storefrontFunctionInvoker,
+        // STOREFRONT-INTEGRATE-001 (DARK): handed over only when the build
+        // enables the editor; a production build never invokes it.
+        storefrontFunctionInvoker: kStorefrontEditorEnabled
+            ? real.storefrontFunctionInvoker
+            : null,
         reportsTransport: real.transport,
         selectedContextStore: SharedPreferencesSelectedContextStore(),
       ),

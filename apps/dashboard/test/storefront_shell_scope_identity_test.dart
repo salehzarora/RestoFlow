@@ -85,6 +85,9 @@ Widget _app(
       membership: membership,
       currencyCode: currencyCode,
       reportsTransport: transport,
+      // STOREFRONT-INTEGRATE-001: the editor is DARK by default; this test
+      // proves the WIRED editor's identity, so it opens the gate.
+      storefrontEditorEnabled: true,
     ),
   ),
 );
