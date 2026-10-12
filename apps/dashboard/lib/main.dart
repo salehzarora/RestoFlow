@@ -174,8 +174,10 @@ Future<void> main() async {
         // STOREFRONT-PUBLISH-001: the Edge Function seam for the Settings
         // Storefront editor (built once in buildDashboardRealAuth; the
         // storefront repos are built in the shell from the transport + scope).
-        // STOREFRONT-INTEGRATE-001 (DARK): handed over only when the build
-        // enables the editor; a production build never invokes it.
+        // STOREFRONT-INTEGRATE-001: handed over only when the build enables
+        // the editor (STOREFRONT-PRODUCTION-ENABLE-001: the production web
+        // build does so only in a Vercel Production build whose
+        // RESTOFLOW_STOREFRONT_EDITOR is exactly `true`).
         storefrontFunctionInvoker: kStorefrontEditorEnabled
             ? real.storefrontFunctionInvoker
             : null,

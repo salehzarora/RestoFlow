@@ -34,10 +34,14 @@
 # STOREFRONT-PRODUCTION-ENABLE-001: the Dashboard alone also gets the
 # Storefront editor's compile-time gate RESTOFLOW_STOREFRONT_EDITOR
 # (apps/dashboard/lib/src/storefront/storefront_dark_gate.dart). It is `true`
-# ONLY when the Vercel env var of the same name is exactly `true` (an owner
-# setting for the Production environment only) and `false` otherwise:
-# unset, Preview, Development or any other value. POS, KDS and Kiosk never
-# receive it.
+# ONLY in a Vercel PRODUCTION build (the Vercel system variable VERCEL_ENV is
+# `production`) whose env var RESTOFLOW_STOREFRONT_EDITOR is exactly `true`
+# (an owner setting, Production scope), and `false` otherwise: unset, any
+# other value, and every Preview or Development build whatever the variable's
+# scope. POS, KDS and Kiosk never receive it. The variable is read when a
+# build runs: changing it starts no build, and the deployment filter
+# (tools/vercel/ignore-build.mjs) ignores a redeploy of an unchanged commit, so
+# set it BEFORE the production build that should carry it.
 #
 # Run from the repo root (Vercel runs the build command there); Flutter is the
 # pinned clone from vercel.json `installCommand` at ../../flutter.
@@ -52,8 +56,8 @@ DEFINES=(
 )
 
 STOREFRONT_EDITOR=false
-if [ "${RESTOFLOW_STOREFRONT_EDITOR:-}" = "true" ]; then STOREFRONT_EDITOR=true; fi
-echo "dashboard storefront editor gate: $STOREFRONT_EDITOR"
+if [ "${RESTOFLOW_STOREFRONT_EDITOR:-}" = "true" ] && [ "${VERCEL_ENV:-}" = "production" ]; then STOREFRONT_EDITOR=true; fi
+echo "dashboard storefront editor gate: $STOREFRONT_EDITOR (VERCEL_ENV=${VERCEL_ENV:-unset})"
 
 # 1. Dashboard (root, base-href /) — the output directory Vercel serves.
 (cd apps/dashboard && "$FLUTTER" build web --release --base-href=/ "${DEFINES[@]}" --dart-define=RESTOFLOW_STOREFRONT_EDITOR="$STOREFRONT_EDITOR")

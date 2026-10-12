@@ -8,9 +8,9 @@
 /// Compile-time FALSE unless a build passes
 /// `--dart-define=RESTOFLOW_STOREFRONT_EDITOR=true`. STOREFRONT-PRODUCTION-
 /// ENABLE-001: the production web build (`tools/vercel_build_web.sh`) passes
-/// the define to the Dashboard ONLY, and `true` ONLY when the Vercel env var
-/// of the same name is exactly `true` - an owner setting for the Production
-/// environment only; Preview and Development builds stay closed. While the
+/// the define to the Dashboard ONLY, and `true` ONLY in a Vercel Production
+/// build (`VERCEL_ENV=production`) whose env var of the same name is exactly
+/// `true` - an owner setting; every Preview or Development build stays closed. While the
 /// gate is closed the shell builds NO Storefront seams: no profile read or
 /// write (so no `is_published`), no media RPC, no function invocation, and
 /// Settings shows no Storefront card. Even with the gate open, platform
