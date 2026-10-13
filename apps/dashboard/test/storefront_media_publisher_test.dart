@@ -90,6 +90,37 @@ Future<StorefrontPublishResult> _publishLogo(_FakeInvoker invoker) =>
 
 void main() {
   group('request body', () {
+    test('item uses current menu original and never a profile slot', () async {
+      final invoker = _FakeInvoker([
+        _published(bucket: 'menu-images', key: _menuKey),
+      ]);
+      final result = await _publisher(invoker).publish(
+        slot: StorefrontItemTarget.item,
+        source: const StorefrontMediaSource.menuImage(_menuKey),
+        requestId: _req,
+      );
+      expect(result.isPublished, isTrue);
+      expect(invoker.bodies.single['slot'], 'item');
+      expect(invoker.bodies.single['variant'], 'w480');
+      expect(
+        invoker.bodies.single.keys.toList(),
+        StorefrontMediaPublisher.requestKeys,
+      );
+      expect(StorefrontSlot.values.length, 2);
+    });
+
+    test('item refuses a mismatched published source even on retry', () async {
+      final invoker = _FakeInvoker([_published()]);
+      final result = await _publisher(invoker).publish(
+        slot: StorefrontItemTarget.item,
+        source: const StorefrontMediaSource.menuImage(_menuKey),
+        requestId: _req,
+      );
+      expect(result.status, StorefrontPublishStatus.uncertain);
+      expect(invoker.bodies.length, 2);
+      expect(invoker.bodies.first, invoker.bodies.last);
+    });
+
     test(
       'exactly the 8 contract keys; identifiers only, never bytes',
       () async {

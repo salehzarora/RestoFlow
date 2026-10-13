@@ -9395,4 +9395,40 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get storefrontLogoRecheckAction => 'تحقّق من شعار الإيصال مجددًا';
+
+  @override
+  String get storefrontItemImageDenied => 'يتطلب النشر صلاحية مدير.';
+
+  @override
+  String get storefrontItemImageFailed =>
+      'لم يتم النشر. حدّث المصدر وحاول مرة أخرى.';
+
+  @override
+  String get storefrontItemImagePublish => 'نشر / تحديث';
+
+  @override
+  String get storefrontItemImagePublished => 'تم نشر النسخة العامة';
+
+  @override
+  String storefrontItemImagesCount(int count) {
+    return '$count صورة أصلية موجودة';
+  }
+
+  @override
+  String get storefrontItemImagesHelp =>
+      'انشر أو حدّث نسخًا عامة من صور المنتجات الموجودة. تبقى الصور الأصلية خاصة. لا تتغير المنتجات أو الأسعار أو الشعار أو صورة الغلاف.';
+
+  @override
+  String get storefrontItemImagesPublishAll => 'نشر / تحديث الكل';
+
+  @override
+  String get storefrontItemImagesTitle => 'صور المنتجات';
+
+  @override
+  String get storefrontItemImagesUnavailable =>
+      'تعذّر التحقق من صور المنتجات الحالية. حاول مرة أخرى.';
+
+  @override
+  String get storefrontItemImageUnknown =>
+      'النتيجة غير مؤكدة. أعد المحاولة للتحقق من الطلب نفسه.';
 }

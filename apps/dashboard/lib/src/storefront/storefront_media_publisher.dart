@@ -114,7 +114,7 @@ class StorefrontMediaSource {
   const StorefrontMediaSource.receiptLogo(this.key)
     : bucket = StorefrontSourceBucket.restaurantLogos;
 
-  /// A menu item's original image (`menu-images`) — hero only.
+  /// A menu item's original image (`menu-images`) — hero or item derivative.
   const StorefrontMediaSource.menuImage(this.key)
     : bucket = StorefrontSourceBucket.menuImages;
 
@@ -221,7 +221,7 @@ class StorefrontPublishResult {
 
   final StorefrontPublishStatus status;
   final String requestId;
-  final StorefrontSlot slot;
+  final StorefrontPublishTarget slot;
 
   /// published: the LIVE derivative.
   final StorefrontPublishedMedia? media;
@@ -299,7 +299,7 @@ class StorefrontMediaPublisher {
   /// UUID per logical publish (reused across rungs and the retry; a
   /// `restartRequired` answer needs a NEW one).
   Future<StorefrontPublishResult> publish({
-    required StorefrontSlot slot,
+    required StorefrontPublishTarget slot,
     required StorefrontMediaSource source,
     required String requestId,
   }) async {
@@ -335,6 +335,16 @@ class StorefrontMediaPublisher {
         );
         calls++;
         step = _classify(reply, rung);
+        // A product may only claim publication of its exact current source.
+        // Logo/hero retain their existing cross-source deduplication contract.
+        final media = step.media;
+        if (slot == StorefrontItemTarget.item &&
+            media != null &&
+            (media.sourceKey != source.key ||
+                media.sourceBucket != source.bucket ||
+                media.variant != StorefrontVariant.w480)) {
+          step = const _Step.ambiguous();
+        }
         if (step.serverUncertain) serverUncertain = true;
         if (!step.isAmbiguous) break;
       }
@@ -374,7 +384,7 @@ class StorefrontMediaPublisher {
   }
 
   Map<String, Object?> _body({
-    required StorefrontSlot slot,
+    required StorefrontPublishTarget slot,
     required StorefrontMediaSource source,
     required String requestId,
     required int rung,
@@ -617,7 +627,7 @@ class _Step {
 
   StorefrontPublishResult toResult({
     required String requestId,
-    required StorefrontSlot slot,
+    required StorefrontPublishTarget slot,
     required int rung,
     required int calls,
     required bool serverUncertain,

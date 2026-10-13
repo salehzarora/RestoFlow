@@ -502,6 +502,7 @@ test('F31. TNV-7: every typed upstream answer maps to its exact status and body'
     // stage: typed envelopes
     ['stage permission_denied', 'stage_storefront_media', envelope('permission_denied'), 403, { ok: false, status: 'permission_denied' }],
     ['stage source_not_found', 'stage_storefront_media', envelope('source_not_found'), 404, { ok: false, status: 'source_not_found' }],
+    ['stage source_stale', 'stage_storefront_media', envelope('source_stale'), 422, { ok: false, status: 'refused', code: 'source_stale' }],
     ['stage content_mismatch', 'stage_storefront_media', envelope('content_mismatch'), 409, { ok: false, status: 'object_conflict' }],
     ['stage stale_request', 'stage_storefront_media', envelope('stale_request'), 409, { ok: false, status: 'restart_required' }],
     ['stage invalid + reason', 'stage_storefront_media', envelope('invalid', { reason: 'dimensions_invalid' }), 422, { ok: false, status: 'refused', code: 'dimensions_invalid' }],
@@ -522,6 +523,8 @@ test('F31. TNV-7: every typed upstream answer maps to its exact status and body'
     ['upload 400 other', 'upload', { status: 400, body: { statusCode: '400', error: 'InvalidKey', message: 'x' } }, 500, { ok: false, status: 'internal_error', retryable: true, uncertain: true }],
     // finalize: typed envelopes and raised errors
     ['finalize permission_denied', 'finalize_storefront_media', envelope('permission_denied'), 403, { ok: false, status: 'permission_denied' }],
+    ['finalize source_not_found', 'finalize_storefront_media', envelope('source_not_found'), 404, { ok: false, status: 'source_not_found' }],
+    ['finalize source_stale', 'finalize_storefront_media', envelope('source_stale'), 422, { ok: false, status: 'refused', code: 'source_stale' }],
     ['finalize not_found', 'finalize_storefront_media', envelope('not_found'), 409, { ok: false, status: 'restart_required' }],
     ['finalize stale_request', 'finalize_storefront_media', envelope('stale_request'), 409, { ok: false, status: 'restart_required' }],
     ['finalize object_mismatch', 'finalize_storefront_media', envelope('object_mismatch'), 409, { ok: false, status: 'object_conflict' }],
@@ -720,4 +723,201 @@ test('F38. STOREFRONT-CANARY-GATE-001: an API key is never a credential here (as
   expectStatus(await call((await setup({ engine: engineThat(async () => { throw new DerivationError('decode_failed', 'png'); }, false) })).handle, post(body())), 422, '422');
   expectStatus(await call((await setup({ engine: engineThat(async () => { throw new TypeError('not a codec error'); }, false) })).handle, post(body())), 500, '500');
   expectStatus(await call((await setup({ engine: engineThat(async () => { throw new DerivationError('engine_unavailable', 'trap'); }, true) })).handle, post(body())), 503, '503');
+});
+
+// ------------------------------------------------------------------ STOREFRONT-PUBLISH-002
+const itemBody = (over = {}) => body({ slot: 'item', source_bucket: 'menu-images', source_key: MENU_KEY, ...over });
+const itemSetup = (over = {}) => setup({ hero: 'logo_opaque_rgb_1200x600', ...over });
+
+test('F39. item publication uses the pinned w480 recipe and caller authority, capturing the source before its download', async () => {
+  const { handle, fake } = await itemSetup();
+  const r = await call(handle, post(itemBody()));
+  assert.equal(r.status, 200, r.text);
+  assert.deepEqual([r.json.media.source_bucket, r.json.media.source_key, r.json.media.variant], ['menu-images', MENU_KEY, 'w480']);
+  assert.deepEqual([r.json.media.content_hash, r.json.media.width, r.json.media.height, r.json.media.bytes],
+    [LOGO_W480.hash, LOGO_W480.width, LOGO_W480.height, LOGO_W480.bytes]);
+  assert.equal(r.json.source_mismatch, false);
+  assert.equal(r.json.profile_version, null, 'an item has no profile-slot assignment');
+  assert.ok(!r.text.includes('source_snapshot'), 'private source generation stays inside the workflow');
+  assert.deepEqual(fake.calls.slice(0, 4).map((c) => c.path), ['/auth/v1/user', '/rest/v1/rpc/list_storefront_media',
+    '/rest/v1/rpc/get_storefront_item_source', `/storage/v1/object/authenticated/menu-images/${MENU_KEY}`]);
+  for (const c of fake.calls) {
+    assert.equal(c.headers.authorization, `Bearer ${TOKEN}`, c.path);
+    assert.equal(c.headers.apikey, ANON, c.path);
+  }
+  await assertSingleClean(fake);
+});
+
+test('F40. an item cannot bypass tenant validation or manager preflight and cannot accept a client-supplied source snapshot', async () => {
+  const { handle, fake } = await itemSetup();
+  const other = '0b5e0000-0000-4000-8000-0000000000ee';
+  for (const source_key of [MENU_KEY.replace(ORG, other), MENU_KEY.replace(RESTO, other)]) {
+    const r = await call(handle, post(itemBody({ source_key })));
+    assert.deepEqual([r.status, r.json.field, r.json.reason], [400, 'source_key', 'mismatch']);
+  }
+  const spoofed = await call(handle, post(itemBody({ source_snapshot: { storage_object_id: other } })));
+  assert.deepEqual([spoofed.status, spoofed.json.field, spoofed.json.reason], [400, 'source_snapshot', 'unknown_field']);
+  assert.ok(fake.calls.every((c) => c.path === '/auth/v1/user'));
+  const denied = await itemSetup({ canManage: false, engine: async () => { assert.fail('a non-manager reached the engine'); } });
+  assert.equal((await call(denied.handle, post(itemBody()))).status, 403);
+  assert.deepEqual(denied.fake.calls.map((c) => c.path), ['/auth/v1/user', '/rest/v1/rpc/list_storefront_media']);
+});
+
+test('F41. an item source getter failure or malformed snapshot refuses before any download, derivation or stage', async () => {
+  const good = { storage_object_id: ORG, storage_version: null, storage_updated_at: '2026-10-13T00:00:00Z' };
+  const cases = [
+    [{ ok: false, error: 'source_not_found' }, 404, 'source_not_found'],
+    [{ ok: false, error: 'permission_denied' }, 403, 'permission_denied'],
+    [{ ok: false, error: 'source_stale' }, 422, 'refused'],
+    [{ ok: false, error: 'surprise' }, 500, 'internal_error'],
+    ...[null, [], {}, { ...good, storage_object_id: 'not-a-uuid' }, { ...good, storage_version: 1 },
+      { ...good, storage_updated_at: '' }, { ...good, extra: true }].map((source_snapshot) => [{ ok: true, source_snapshot }, 500, 'internal_error']),
+  ];
+  for (const [answer, status, name] of cases) {
+    const { handle, fake } = await itemSetup({ engine: async () => { assert.fail('a refused source reached the engine'); } });
+    fake.faults.set('get_storefront_item_source', { status: 200, body: answer });
+    const r = await call(handle, post(itemBody()));
+    assert.deepEqual([r.status, r.json.status], [status, name], JSON.stringify(answer));
+    if (status === 500) assert.equal(r.json.uncertain, false);
+    assert.ok(fake.calls.every((c) => !c.path.startsWith('/storage/')));
+    assert.equal(stageCalls(fake), 0);
+  }
+});
+
+test('F42. each item recovery boundary converges after a lost response without overwriting or changing its association', async () => {
+  for (const step of ['stage_storefront_media', 'upload', 'finalize_storefront_media']) {
+    const { handle, fake } = await itemSetup();
+    fake.faults.set(step, 'after_commit');
+    const lost = await call(handle, post(itemBody()));
+    assert.deepEqual([lost.status, lost.json.status, lost.json.uncertain], [503, 'upstream_unavailable', true], step);
+    const retry = await call(handle, post(itemBody()));
+    assert.equal(retry.status, 200, `${step}: ${retry.text}`);
+    assert.equal(retry.json.media.source_key, MENU_KEY);
+    assert.equal(retry.json.media.variant, 'w480');
+    assert.equal(retry.json.source_mismatch, false);
+    await assertSingleClean(fake);
+  }
+});
+
+test('F43. a deleted or replaced current item source is never reported as published at any boundary', async () => {
+  for (const step of ['get_storefront_item_source', 'download', 'stage_storefront_media', 'finalize_storefront_media']) {
+    for (const mutation of ['delete', 'replace_image_path']) {
+      const { handle, fake } = await itemSetup();
+      fake.faults.set(step, (state) => {
+        if (mutation === 'delete') state.privateObjects.delete(`menu-images/${MENU_KEY}`);
+        else state.currentItemSources.delete(`menu-images/${MENU_KEY}`);
+        return null;
+      });
+      const r = await call(handle, post(itemBody()));
+      // Path replacement after the getter is caught by stage; a deleted private
+      // object is caught either by download or by the source-aware RPCs.
+      assert.deepEqual([r.status, r.json], [404, { ok: false, status: 'source_not_found' }], `${step}/${mutation}`);
+      assert.ok([...fake.media.values()].every((m) => m.published_at === null));
+    }
+  }
+});
+
+test('F44. an in-place overwrite between snapshot, download, stage or finalize is a source_stale refusal, including identical-byte overwrites', async () => {
+  for (const step of ['download', 'stage_storefront_media', 'finalize_storefront_media']) {
+    const { handle, fake } = await itemSetup();
+    fake.faults.set(step, (state) => {
+      state.privateObjects.set(`menu-images/${MENU_KEY}`, state.privateObjects.get(`menu-images/${MENU_KEY}`).slice());
+      return null;
+    });
+    const r = await call(handle, post(itemBody()));
+    assert.deepEqual([r.status, r.json], [422, { ok: false, status: 'refused', code: 'source_stale' }], step);
+    assert.ok([...fake.media.values()].every((m) => m.published_at === null));
+    if (step !== 'finalize_storefront_media') assert.equal(storageCallsToPublic(fake), 0, 'stale bytes never reach public storage');
+  }
+});
+
+test('F45. distinct items with identical bytes retain their own media associations while sharing one public object with a logo', async () => {
+  const { handle, fake } = await itemSetup();
+  const logo = await call(handle, post(body()));
+  assert.equal(logo.status, 200);
+  const first = await call(handle, post(itemBody({ request_id: '0b5e0000-0000-4000-8000-0000000000f1' })));
+  assert.equal(first.status, 200, first.text);
+  const secondKey = MENU_KEY.replace('0000000000b1', '0000000000b2');
+  fake.privateObjects.set(`menu-images/${secondKey}`, await fixture('logo_opaque_rgb_1200x600'));
+  fake.currentItemSources.add(`menu-images/${secondKey}`);
+  const second = await call(handle, post(itemBody({ request_id: '0b5e0000-0000-4000-8000-0000000000f2', source_key: secondKey })));
+  assert.equal(second.status, 200, second.text);
+  assert.equal(first.json.media.source_key, MENU_KEY);
+  assert.equal(second.json.media.source_key, secondKey);
+  assert.equal(first.json.source_mismatch, false);
+  assert.equal(second.json.source_mismatch, false);
+  assert.equal(new Set([logo.json.media.id, first.json.media.id, second.json.media.id]).size, 3);
+  assert.equal(new Set([logo.json.media.object_key, first.json.media.object_key, second.json.media.object_key]).size, 1);
+  assert.equal(fake.uploads.created, 1);
+  assert.equal(fake.media.size, 3);
+});
+
+test('F46. an item refuses a stage response for another source or variant before public read, upload or finalize', async () => {
+  for (const wrong of [{ source_bucket: 'restaurant-logos', source_key: LOGO_KEY }, { variant: 'w960' },
+    { source_key: MENU_KEY.replace('0000000000b1', '0000000000b2') }, { source_mismatch: true }, { source_mismatch: null }, { source_mismatch: 'false' }]) {
+    const { handle, fake } = await itemSetup();
+    fake.faults.set('stage_storefront_media', { status: 200, body: {
+      ok: true, media_id: 'm-other', object_key: `${'a'.repeat(32)}/${LOGO_W480.hash}.webp`,
+      source_bucket: 'menu-images', source_key: MENU_KEY, variant: 'w480', source_mismatch: false, ...wrong,
+    } });
+    const r = await call(handle, post(itemBody()));
+    assert.deepEqual([r.status, r.json], [500, { ok: false, status: 'internal_error', retryable: true, uncertain: true }]);
+    assert.equal(storageCallsToPublic(fake), 0);
+    assert.equal(finalizeCalls(fake), 0);
+  }
+});
+
+test('F47. retry after an item image replacement refuses the old path; a fresh request publishes the current original', async () => {
+  const { handle, fake } = await itemSetup();
+  assert.equal((await call(handle, post(itemBody()))).status, 200);
+  const nextKey = MENU_KEY.replace('0000000000c1', '0000000000c2');
+  fake.privateObjects.set(`menu-images/${nextKey}`, await fixture('logo_opaque_rgb_1200x600'));
+  fake.currentItemSources.delete(`menu-images/${MENU_KEY}`);
+  fake.currentItemSources.add(`menu-images/${nextKey}`);
+  const old = await call(handle, post(itemBody()));
+  assert.deepEqual([old.status, old.json.status], [404, 'source_not_found']);
+  const fresh = await call(handle, post(itemBody({ request_id: '0b5e0000-0000-4000-8000-0000000000f3', source_key: nextKey })));
+  assert.equal(fresh.status, 200, fresh.text);
+  assert.equal(fresh.json.media.source_key, nextKey);
+  assert.equal(fake.uploads.created, 1, 'identical derived bytes are compared and reused, never overwritten');
+});
+
+test('F48. a successful item finalize must confirm the same media association and published state', async () => {
+  for (const wrong of [{ media_id: 'm-other' }, { object_key: `${'b'.repeat(32)}/${LOGO_W480.hash}.webp` }, { state: 'staged' }]) {
+    const { handle, fake } = await itemSetup();
+    fake.faults.set('finalize_storefront_media', { status: 200, body: {
+      ok: true, media_id: 'm-1', object_key: `${'a'.repeat(32)}/${LOGO_W480.hash}.webp`, state: 'published', ...wrong,
+    } });
+    const r = await call(handle, post(itemBody()));
+    assert.deepEqual([r.status, r.json], [500, { ok: false, status: 'internal_error', retryable: true, uncertain: true }]);
+  }
+});
+
+test('F49. item originals keep the existing 5 MiB streaming cap', async () => {
+  const { handle, fake } = await itemSetup();
+  fake.privateObjects.set(`menu-images/${MENU_KEY}`, new Uint8Array(64 * 1048576));
+  fake.downloadShape = 'counted';
+  const r = await call(handle, post(itemBody()));
+  assert.deepEqual(r.json, { ok: false, status: 'refused', code: 'input_too_large' });
+  assert.ok(fake.pulled > 5242880 && fake.pulled <= 5242880 + 2 * 65536);
+  assert.equal(stageCalls(fake), 0);
+});
+
+test('F50. an overwritten item generation needs a new request even when its bytes are identical; null legacy storage versions are supported', async () => {
+  const { handle, fake } = await itemSetup();
+  const key = `menu-images/${MENU_KEY}`;
+  fake.sourceGenerations.set(key, { bytes: fake.privateObjects.get(key), snapshot: {
+    storage_object_id: ORG, storage_version: null, storage_updated_at: '2026-10-13T00:00:00Z',
+  } });
+  const first = await call(handle, post(itemBody()));
+  assert.equal(first.status, 200, first.text);
+  fake.privateObjects.set(key, fake.privateObjects.get(key).slice());
+  const replay = await call(handle, post(itemBody()));
+  assert.deepEqual([replay.status, replay.json], [409, { ok: false, status: 'restart_required' }]);
+  const fresh = await call(handle, post(itemBody({ request_id: '0b5e0000-0000-4000-8000-0000000000f4' })));
+  assert.equal(fresh.status, 200, fresh.text);
+  assert.notEqual(fresh.json.media.id, first.json.media.id);
+  assert.equal(fresh.json.replaced_media_id, first.json.media.id);
+  assert.equal(fake.uploads.created, 1);
+  assert.equal([...fake.media.values()].filter((m) => m.published_at !== null && m.unpublished_at === null).length, 1);
 });

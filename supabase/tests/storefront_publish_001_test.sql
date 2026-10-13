@@ -9,7 +9,7 @@
 --      refusal cannot pass for it), the anon allowlist and the public DEFINER set
 --      still exactly {storefront_menu(text)}, the LIVE-only live-source index.
 --   B. stage: exact enumerations (prototype-style names, case variants),
---      item-image refusal, content address, source proof (missing / foreign
+--      item-image snapshot requirement, content address, source proof (missing / foreign
 --      scope / wrong bucket), authority (rank 1 audited, rank 0 / cross-tenant
 --      42501, anonymous 42501), idempotency (replay, key reuse), existing bytes.
 --      Every refused stage uses its OWN request id, so a mutant that stops one
@@ -111,7 +111,7 @@ grant select, insert on _pm to anon, authenticated;
 -- A. contract introspection ............................................. (16)
 -- ============================================================================
 create temp table _fns as select * from (values
-  ('stage_storefront_media(uuid,uuid,uuid,text,text,text,text,integer,integer,integer)'),
+  ('stage_storefront_media(uuid,uuid,uuid,text,text,text,text,integer,integer,integer,jsonb)'),
   ('finalize_storefront_media(uuid,uuid,uuid,uuid)'),
   ('cancel_storefront_media(uuid,uuid,uuid,uuid)'),
   ('retract_storefront_media(uuid,uuid,uuid,uuid)'),
@@ -232,7 +232,7 @@ select is((select r ->> 'reason' from _pm where label = 'v_case') || '/' || (sel
   'B7. case and whitespace variants of w480 are refused');
 select is((select r ->> 'reason' from _pm where label = 'b_proto') || '/' || (select r ->> 'reason' from _pm where label = 'b_public'), 'source_bucket_invalid/source_bucket_invalid',
   'B8. source bucket "toString" and the PUBLIC bucket itself are refused as sources');
-select is((select r ->> 'reason' from _pm where label = 'b_items'), 'variant_not_allowed', 'B9. (menu-images, w480) = item images: refused (out of scope)');
+select is((select r ->> 'reason' from _pm where label = 'b_items'), 'source_snapshot_required', 'B9. item images require the pre-download source snapshot');
 select is((select r ->> 'reason' from _pm where label = 'b_hash'), 'content_hash_invalid', 'B10. a non-lower-hex content hash is refused');
 select is((select r ->> 'reason' from _pm where label = 'b_dims') || '/' || (select r ->> 'reason' from _pm where label = 'b_bytes'), 'dimensions_invalid/bytes_invalid',
   'B11. a side above the variant box and a size above 512 KiB are refused');
@@ -295,7 +295,12 @@ select '00000000-0000-0000-0000-00b10000fc01', '00000000-0000-0000-0000-00b10000
 set local role anon;
 insert into _pm select 'menu_c_forced', public.storefront_menu('sfp1-alpha');
 reset role;
-update storefront_media set published_at = now() where id = '00000000-0000-0000-0000-00b10000fc01';
+-- A LIVE item now needs its original generation and the real public object.
+update storefront_media set published_at = now(), item_source_snapshot = app.storefront_item_source_snapshot(
+  organization_id, restaurant_id, source_key) where id = '00000000-0000-0000-0000-00b10000fc01';
+insert into storage.objects (bucket_id, name, metadata)
+select 'storefront-media', object_key, jsonb_build_object('mimetype', 'image/webp', 'size', bytes)
+ from storefront_media where id = '00000000-0000-0000-0000-00b10000fc01';
 set local role anon;
 insert into _pm select 'menu_c_item_live', public.storefront_menu('sfp1-alpha');
 reset role;

@@ -9330,4 +9330,39 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get storefrontLogoRecheckAction => 'בדוק שוב את הלוגו בקבלה';
+
+  @override
+  String get storefrontItemImageDenied => 'פרסום דורש הרשאת מנהל.';
+
+  @override
+  String get storefrontItemImageFailed => 'לא פורסם. רעננו את המקור ונסו שוב.';
+
+  @override
+  String get storefrontItemImagePublish => 'פרסום / רענון';
+
+  @override
+  String get storefrontItemImagePublished => 'העותק הציבורי פורסם';
+
+  @override
+  String storefrontItemImagesCount(int count) {
+    return '$count תמונות מקור קיימות';
+  }
+
+  @override
+  String get storefrontItemImagesHelp =>
+      'פרסמו או רעננו עותקים ציבוריים של תמונות מוצרים קיימות. תמונות המקור נשארות פרטיות. אין שינוי במוצרים, במחירים, בלוגו או בתמונת הכותרת.';
+
+  @override
+  String get storefrontItemImagesPublishAll => 'פרסום / רענון הכול';
+
+  @override
+  String get storefrontItemImagesTitle => 'תמונות מוצרים';
+
+  @override
+  String get storefrontItemImagesUnavailable =>
+      'לא ניתן לאמת את תמונות המוצרים הנוכחיות. נסו שוב.';
+
+  @override
+  String get storefrontItemImageUnknown =>
+      'התוצאה לא ידועה. נסו שוב כדי לבדוק את אותה בקשה.';
 }

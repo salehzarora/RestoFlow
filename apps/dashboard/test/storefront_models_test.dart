@@ -282,9 +282,16 @@ void main() {
       final readSql = _repoFile(
         'supabase/migrations/20260923120000_storefront_read_001.sql',
       ).readAsStringSync();
-      final publishSql = _repoFile(
-        'supabase/migrations/20260925100000_storefront_publish_001.sql',
-      ).readAsStringSync();
+      final publishSql =
+          _repoFile(
+            'supabase/migrations/20260925100000_storefront_publish_001.sql',
+          ).readAsStringSync() +
+          _repoFile(
+                'supabase/migrations/20261013140622_storefront_publish_002_item_images.sql',
+              )
+              .readAsStringSync()
+              .split('create or replace function app.finalize_storefront_media')
+              .first;
       final fn = _functionLibSource();
 
       // The writer's typed `invalid` reasons: every literal one, plus the

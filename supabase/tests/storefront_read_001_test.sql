@@ -108,8 +108,8 @@ insert into menu_categories (id, organization_id, restaurant_id, branch_id, name
   ('00000000-0000-0000-0000-00ad0000c1a7', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a70', null, 'Big Cat', 0, true, null),
   ('00000000-0000-0000-0000-00ad0000c1a9', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a90', null, 'A9 Cat', 0, true, null);
 insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, description, base_price_minor, currency_code, display_order, is_active, sku, prep_minutes, kitchen_note, attributes, image_path, tags, item_type) values
-  ('00000000-0000-0000-0000-00ad00011a01', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', null, '00000000-0000-0000-0000-00ad0000c1a1', 'Burger', 'Beef and bun', 4000, 'ILS', 0, true, 'SKU-SECRET-7', 12, 'internal kitchen note', '{"prep_components":[{"name":"bun","quantity":1,"unit":"pc"}]}'::jsonb, 'privateorg/privaterest/global/menu_item/x/burger.jpg', '["popular","new","internal-x"]'::jsonb, 'food'),
-  ('00000000-0000-0000-0000-00ad00011a02', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', null, '00000000-0000-0000-0000-00ad0000c1a1', 'Cola', null, 1000, 'ILS', 1, true, null, null, null, null, 'privateorg/privaterest/global/menu_item/y/cola.jpg', null, 'drink'),
+  ('00000000-0000-0000-0000-00ad00011a01', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', null, '00000000-0000-0000-0000-00ad0000c1a1', 'Burger', 'Beef and bun', 4000, 'ILS', 0, true, 'SKU-SECRET-7', 12, 'internal kitchen note', '{"prep_components":[{"name":"bun","quantity":1,"unit":"pc"}]}'::jsonb, '00000000-0000-0000-0000-00ad00000a00/00000000-0000-0000-0000-00ad00000a10/global/menu_item/00000000-0000-0000-0000-00ad00011a01/00000000-0000-0000-0000-00ad0001f101.jpg', '["popular","new","internal-x"]'::jsonb, 'food'),
+  ('00000000-0000-0000-0000-00ad00011a02', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', null, '00000000-0000-0000-0000-00ad0000c1a1', 'Cola', null, 1000, 'ILS', 1, true, null, null, null, null, '00000000-0000-0000-0000-00ad00000a00/00000000-0000-0000-0000-00ad00000a10/global/menu_item/00000000-0000-0000-0000-00ad00011a02/00000000-0000-0000-0000-00ad0001f102.jpg', null, 'drink'),
   ('00000000-0000-0000-0000-00ad00011a03', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', null, '00000000-0000-0000-0000-00ad0000c1a1', 'PausedItem', 'sold out today', 900, 'ILS', 2, true, null, null, null, null, null, '["vegetarian"]'::jsonb, null),
   ('00000000-0000-0000-0000-00ad00011a04', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', '00000000-0000-0000-0000-00ad00000a1b', '00000000-0000-0000-0000-00ad0000c1a1', 'SiblingOnly', null, 800, 'ILS', 3, true, null, null, null, null, null, null, null),
   ('00000000-0000-0000-0000-00ad00011a05', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', null, '00000000-0000-0000-0000-00ad0000c1a1', 'DeadItem', null, 700, 'ILS', 4, false, null, null, null, null, null, null, null),
@@ -146,10 +146,19 @@ insert into modifier_options (id, organization_id, restaurant_id, branch_id, mod
   ('00000000-0000-0000-0000-00ad0000d2a7', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', null, '00000000-0000-0000-0000-00ad0000d1a4', 'SiblingOpt', 100,  0, true,  null, null);
 -- published derivative for Burger (w480), an UNPUBLISHED one for Cola
 insert into storefront_media (id, organization_id, restaurant_id, source_bucket, source_key, variant, object_key, content_hash, width, height, bytes, published_at, unpublished_at) values
-  ('00000000-0000-0000-0000-00ad0000f0a1', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', 'menu-images', 'privateorg/privaterest/global/menu_item/x/burger.jpg', 'w480',
+  ('00000000-0000-0000-0000-00ad0000f0a1', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', 'menu-images', '00000000-0000-0000-0000-00ad00000a00/00000000-0000-0000-0000-00ad00000a10/global/menu_item/00000000-0000-0000-0000-00ad00011a01/00000000-0000-0000-0000-00ad0001f101.jpg', 'w480',
    app.storefront_media_prefix('00000000-0000-0000-0000-00ad00000a10') || '/' || repeat('a', 64) || '.webp', repeat('a', 64), 480, 480, 12345, now() - interval '1 day', null),
-  ('00000000-0000-0000-0000-00ad0000f0a2', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', 'menu-images', 'privateorg/privaterest/global/menu_item/y/cola.jpg', 'w480',
+  ('00000000-0000-0000-0000-00ad0000f0a2', '00000000-0000-0000-0000-00ad00000a00', '00000000-0000-0000-0000-00ad00000a10', 'menu-images', '00000000-0000-0000-0000-00ad00000a00/00000000-0000-0000-0000-00ad00000a10/global/menu_item/00000000-0000-0000-0000-00ad00011a02/00000000-0000-0000-0000-00ad0001f102.jpg', 'w480',
    app.storefront_media_prefix('00000000-0000-0000-0000-00ad00000a10') || '/' || repeat('b', 64) || '.webp', repeat('b', 64), 480, 480, 12345, now() - interval '2 day', now() - interval '1 day');
+
+-- READ-001's published item fixture now proves its private generation and
+-- corresponding public derivative, exactly as the item publisher requires.
+insert into storage.objects (bucket_id, name)
+select 'menu-images', image_path from menu_items
+ where id in ('00000000-0000-0000-0000-00ad00011a01', '00000000-0000-0000-0000-00ad00011a02');
+update storefront_media sm set item_source_snapshot = app.storefront_item_source_snapshot(
+  sm.organization_id, sm.restaurant_id, sm.source_key)
+ where sm.id in ('00000000-0000-0000-0000-00ad0000f0a1', '00000000-0000-0000-0000-00ad0000f0a2');
 
 -- profiles (direct harness inserts; the RPC path is exercised in section E).
 -- "always open": two windows per day, 00:00-12:00 and 11:00-00:00 (crossing midnight).
@@ -388,6 +397,10 @@ reset role;
 -- ============================================================================
 -- C. the projection as the REAL role anon .............................. (24)
 -- ============================================================================
+-- Restore the public item object intentionally deleted by the storage ACL test.
+insert into storage.objects (bucket_id, name, metadata)
+select 'storefront-media', object_key, jsonb_build_object('mimetype', 'image/webp', 'size', bytes)
+ from storefront_media where id = '00000000-0000-0000-0000-00ad0000f0a1';
 set local role anon;
 insert into _sf values ('alpha', public.storefront_menu('sfr1-alpha'));
 insert into _sf values ('bravo', public.storefront_menu('sfr1-bravo'));

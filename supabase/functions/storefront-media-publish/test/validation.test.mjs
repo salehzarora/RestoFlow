@@ -31,7 +31,7 @@ const NEAR_MISSES = [
   "ｗ480", "w４80", // full-width look-alikes
   'menu-images ', ' menu-images', 'Menu-Images', 'MENU-IMAGES', 'menu_images', 'menu-image', 'menu-images/',
   'restaurant-logos ', 'Restaurant-Logos', 'restaurant_logos', 'restaurant-logo', 'storefront-media',
-  'logo ', 'Logo', 'LOGO', 'hero ', 'Hero', 'items', 'item', 'banner', 'favicon', 'w720', 'w1440', 'originals',
+  'logo ', 'Logo', 'LOGO', 'hero ', 'Hero', 'items', 'item ', 'Item', 'ITEM', 'banner', 'favicon', 'w720', 'w1440', 'originals',
 ];
 const NON_STRINGS = [
   null, undefined, 0, 480, 960, true, false, NaN, [], ['w480'], ['menu-images'], {}, { toString: () => 'w480' },
@@ -131,7 +131,7 @@ const base = (over = {}) => ({
   slot: 'logo', variant: 'w480', source_bucket: 'restaurant-logos', source_key: LOGO_KEY, rung: 0, ...over,
 });
 
-test('A9. the request validator accepts exactly the two slot shapes', () => {
+test('A9. the request validator accepts the logo, hero and item slot shapes', () => {
   const logo = validateRequest(base());
   assert.equal(logo.ok, true);
   assert.equal(logo.value.variantWidth, 480);
@@ -144,6 +144,13 @@ test('A9. the request validator accepts exactly the two slot shapes', () => {
   // A branch-scoped menu original is accepted too.
   const branchKey = MENU_KEY.replace('/global/', '/0b5e0000-0000-4000-8000-0000000000d1/');
   assert.equal(validateRequest(base({ slot: 'hero', variant: 'w960', source_bucket: 'menu-images', source_key: branchKey })).ok, true);
+  for (const source_key of [MENU_KEY, branchKey]) {
+    const item = validateRequest(base({ slot: 'item', source_bucket: 'menu-images', source_key }));
+    assert.equal(item.ok, true, source_key);
+    assert.equal(item.value.slot, 'item');
+    assert.equal(item.value.variantWidth, 480);
+    assert.equal(item.value.sourceMaxBytes, 5242880);
+  }
 });
 
 test('A10. hostile slot / variant / source_bucket values are refused by the request validator', () => {
@@ -157,10 +164,12 @@ test('A10. hostile slot / variant / source_bucket values are refused by the requ
   }
 });
 
-test('A11. slot / variant / bucket combinations outside D3-D4 are refused (item images stay out)', () => {
+test('A11. slot / variant / bucket combinations outside their exact shapes are refused', () => {
   assert.deepEqual(validateRequest(base({ variant: 'w960' })), { ok: false, field: 'variant', reason: 'mismatch' });
   assert.deepEqual(validateRequest(base({ source_bucket: 'menu-images', source_key: MENU_KEY })), { ok: false, field: 'source_bucket', reason: 'mismatch' });
   assert.deepEqual(validateRequest(base({ slot: 'hero', variant: 'w480', source_bucket: 'menu-images', source_key: MENU_KEY })), { ok: false, field: 'variant', reason: 'mismatch' });
+  assert.deepEqual(validateRequest(base({ slot: 'item', variant: 'w960', source_bucket: 'menu-images', source_key: MENU_KEY })), { ok: false, field: 'variant', reason: 'mismatch' });
+  assert.deepEqual(validateRequest(base({ slot: 'item' })), { ok: false, field: 'source_bucket', reason: 'mismatch' });
 });
 
 test('A12. the key set is exact: prototype keys (JSON __proto__, constructor), extra and missing keys are refused', () => {
@@ -199,6 +208,12 @@ test('A13. ids must be canonical lower-case UUIDs; the source key must match its
   const OTHER = '0b5e0000-0000-4000-8000-0000000000ee';
   assert.deepEqual(validateRequest(base({ source_key: LOGO_KEY.replace(ORG, OTHER) })), { ok: false, field: 'source_key', reason: 'mismatch' });
   assert.deepEqual(validateRequest(base({ source_key: LOGO_KEY.replace(RESTO, OTHER) })), { ok: false, field: 'source_key', reason: 'mismatch' });
+  for (const source_key of [MENU_KEY.replace(ORG, OTHER), MENU_KEY.replace(RESTO, OTHER)]) {
+    assert.deepEqual(validateRequest(base({ slot: 'item', source_bucket: 'menu-images', source_key })), { ok: false, field: 'source_key', reason: 'mismatch' });
+  }
+  for (const source_key of [LOGO_KEY, MENU_KEY.replace('/menu_item/', '/item/'), MENU_KEY.replace('/global/', '/global/../'), `${MENU_KEY}?x=1`]) {
+    assert.deepEqual(validateRequest(base({ slot: 'item', source_bucket: 'menu-images', source_key })), { ok: false, field: 'source_key', reason: 'value' });
+  }
 });
 
 test('A14. rung must be an integer 0..4', () => {

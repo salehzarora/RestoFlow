@@ -6,7 +6,7 @@
 //     source_bucket, source_key, rung }
 // Every field is validated here, BEFORE any object lookup, download or engine
 // work. Enumerations are checked by EXACT membership only:
-//   - slot          exactly 'logo' | 'hero'                      (switch on ===)
+//   - slot          exactly 'logo' | 'hero' | 'item'             (switch on ===)
 //   - variant       exactly 'w480' | 'w960'                      (Map, recipe)
 //   - source_bucket exactly 'restaurant-logos' | 'menu-images'   (Map, recipe)
 // and only when the value is a primitive string, so no inherited property name
@@ -33,19 +33,21 @@ const MAX_SOURCE_KEY_LENGTH = 512;
 /**
  * The media slot a request publishes for. Exhaustive switch on exact strings:
  * owner decisions D3/D4 — logo = w480 from the receipt logo (restaurant-logos);
- * hero = w960 from the receipt logo or a menu-item original. Item images
- * (menu-images at w480) are NOT a slot of this ticket.
+ * hero = w960 from the receipt logo or a menu-item original;
+ * STOREFRONT-PUBLISH-002 adds item = w480 from a menu-item original only.
  */
 export function slotSpec(slot) {
   if (typeof slot !== 'string') return null;
   switch (slot) {
     case 'logo': return LOGO_SLOT;
     case 'hero': return HERO_SLOT;
+    case 'item': return ITEM_SLOT;
     default: return null;
   }
 }
 const LOGO_SLOT = Object.freeze({ slot: 'logo', variant: 'w480', buckets: Object.freeze(['restaurant-logos']) });
 const HERO_SLOT = Object.freeze({ slot: 'hero', variant: 'w960', buckets: Object.freeze(['restaurant-logos', 'menu-images']) });
+const ITEM_SLOT = Object.freeze({ slot: 'item', variant: 'w480', buckets: Object.freeze(['menu-images']) });
 
 function keyMatch(bucket, key) {
   switch (bucket) {

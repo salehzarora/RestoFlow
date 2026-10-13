@@ -9479,4 +9479,40 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get storefrontLogoRecheckAction => 'Check the receipt logo again';
+
+  @override
+  String get storefrontItemImageDenied => 'Publishing requires manager access.';
+
+  @override
+  String get storefrontItemImageFailed =>
+      'Not published. Refresh the source and try again.';
+
+  @override
+  String get storefrontItemImagePublish => 'Publish / refresh';
+
+  @override
+  String get storefrontItemImagePublished => 'Public copy published';
+
+  @override
+  String storefrontItemImagesCount(int count) {
+    return '$count existing originals';
+  }
+
+  @override
+  String get storefrontItemImagesHelp =>
+      'Publish or refresh public copies of existing product photos. Originals stay private. This does not change products, prices, the logo, or the hero.';
+
+  @override
+  String get storefrontItemImagesPublishAll => 'Publish / refresh all';
+
+  @override
+  String get storefrontItemImagesTitle => 'Product images';
+
+  @override
+  String get storefrontItemImagesUnavailable =>
+      'The current product images could not be verified. Try again.';
+
+  @override
+  String get storefrontItemImageUnknown =>
+      'Outcome unknown. Retry to check the same request.';
 }
