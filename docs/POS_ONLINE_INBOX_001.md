@@ -132,12 +132,16 @@ environment activation remain separate; ordering and delivery stay OFF.
   waits and whole-transaction deadlock recovery with the same decision identity.
 - Existing focused SQL: 475 passed (public ACL, tenant/policy coverage, WEB-ORDERS,
   device/PIN authorization, canonical RPC and printer-only lifecycle regressions).
-- POS: 40 new repository/controller/widget tests, plus 94 existing menu/session/
-  sync/notification/auth-gate tests passed. Geometry covers AR/HE/EN at phone,
+- POS: 82 new repository/controller/widget tests, plus 173 existing menu/session/
+  sync/notification/auth-gate/navbar tests passed. Geometry covers AR/HE/EN at phone,
   tablet and desktop widths and 1x/2x text. Localization checks cover matching ARB
   keys and RTL/LTR directionality.
 - One independent read-only review approved with no Blocker/Major finding. Its
   minor badge-expiry observation was corrected and covered by a focused test.
+- Initial normal CI passed all 298 SQL suites / 8,640 assertions and found one POS
+  navbar-height regression. The inbox was moved into the existing action cluster;
+  original height/brand assertions stayed intact. All 143 targeted navbar/responsive/
+  inbox-widget checks passed after correction; no backend code changed.
 
 Focused client command:
 

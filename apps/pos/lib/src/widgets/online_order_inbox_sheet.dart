@@ -11,9 +11,10 @@ import '../state/online_order_inbox_controller.dart';
 import '../state/pos_offline_state.dart';
 
 /// One visible entry owns lifecycle signals; polling itself lives only in the
-/// singleton controller. A separate navbar row preserves existing phone actions.
+/// singleton controller. The compact variant shares the existing navbar row.
 class OnlineOrderInboxButton extends ConsumerStatefulWidget {
-  const OnlineOrderInboxButton({super.key});
+  const OnlineOrderInboxButton({super.key, this.compact = false});
+  final bool compact;
   @override
   ConsumerState<OnlineOrderInboxButton> createState() => _InboxButtonState();
 }
@@ -75,6 +76,26 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
     final count = state.pendingCountAt(
       ref.read(onlineOrderInboxControllerProvider.notifier).now(),
     );
+    final icon = Badge(
+      isLabelVisible: count > 0,
+      label: Text(l10n.posOnlineInboxCount(count, state.hasMore ? '+' : '')),
+      child: const Icon(Icons.shopping_bag_outlined),
+    );
+    if (widget.compact) {
+      return IconButton(
+        key: const Key('online-inbox-button'),
+        tooltip: l10n.posOnlineInboxTitle,
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        style: const ButtonStyle(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        onPressed: _open,
+        icon: Semantics(
+          label: '${l10n.posOnlineInboxTitle}, $count',
+          child: icon,
+        ),
+      );
+    }
     return Semantics(
       button: true,
       label: '${l10n.posOnlineInboxTitle}, $count',
@@ -86,13 +107,7 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
           padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
         onPressed: _open,
-        icon: Badge(
-          isLabelVisible: count > 0,
-          label: Text(
-            l10n.posOnlineInboxCount(count, state.hasMore ? '+' : ''),
-          ),
-          child: const Icon(Icons.shopping_bag_outlined),
-        ),
+        icon: icon,
         label: Text(
           l10n.posOnlineInboxTitle,
           maxLines: 1,

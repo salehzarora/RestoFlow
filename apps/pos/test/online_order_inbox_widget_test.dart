@@ -3,8 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/online_order_inbox.dart';
+import 'package:restoflow_pos/src/data/order_submission.dart';
+import 'package:restoflow_pos/src/design/pos_visual_tokens.dart';
+import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/state/online_order_inbox_controller.dart';
+import 'package:restoflow_pos/src/state/outbox_controller.dart';
+import 'package:restoflow_pos/src/state/ready_notifications_controller.dart';
+import 'package:restoflow_pos/src/widgets/device_settings_menu.dart';
+import 'package:restoflow_pos/src/widgets/language_selector.dart';
 import 'package:restoflow_pos/src/widgets/online_order_inbox_sheet.dart';
+import 'package:restoflow_pos/src/widgets/outbox_status_indicator.dart';
+import 'package:restoflow_pos/src/widgets/ready_notification_bell.dart';
+import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
 
 import 'online_order_inbox_fixtures.dart';
 
@@ -46,6 +56,65 @@ class _Controller extends OnlineOrderInboxController {
       ),
     );
   }
+}
+
+class _QuietReady extends PosReadyNotificationsController {
+  @override
+  PosReadyNotificationsState build() => const PosReadyNotificationsState();
+}
+
+class _QuietOutbox extends OutboxController {
+  @override
+  List<OutboxEntry> build() => const [];
+}
+
+Future<void> pumpNavbar(
+  WidgetTester tester, {
+  required String locale,
+  required double width,
+  required double scale,
+}) async {
+  tester.view.physicalSize = Size(width, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        onlineOrderInboxControllerProvider.overrideWith(
+          () => _Controller(
+            OnlineOrderInboxState(
+              requests: [inboxRequest()],
+              serverTime: inboxNow,
+            ),
+          ),
+        ),
+        onlineOrderInboxIdentityProvider.overrideWithValue('test-authority'),
+        posReadyNotificationsControllerProvider.overrideWith(_QuietReady.new),
+        outboxControllerProvider.overrideWith(_QuietOutbox.new),
+      ],
+      child: MaterialApp(
+        locale: Locale(locale),
+        localizationsDelegates: restoflowLocalizationsDelegates,
+        supportedLocales: kSupportedLocales,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(scale)),
+          child: child!,
+        ),
+        // Use the real POS appbar; keep this regression focused on its geometry
+        // instead of unrelated cart/menu text scaling.
+        home: Builder(
+          builder: (context) {
+            final screen = const PosMenuScreen().build(context) as Scaffold;
+            return Scaffold(appBar: screen.appBar);
+          },
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 Future<_Controller> pumpInbox(
@@ -93,6 +162,70 @@ Future<_Controller> pumpInbox(
 }
 
 void main() {
+  for (final locale in ['en', 'ar', 'he']) {
+    for (final width in [320.0, 360.0, 390.0, 430.0, 480.0, 900.0, 1280.0]) {
+      for (final scale in [1.0, 2.0]) {
+        testWidgets(
+          '$locale ${width}px ${scale}x inbox shares approved navbar height',
+          (tester) async {
+            await pumpNavbar(
+              tester,
+              locale: locale,
+              width: width,
+              scale: scale,
+            );
+            expect(tester.takeException(), isNull);
+            expect(tester.widget<AppBar>(find.byType(AppBar)).bottom, isNull);
+            expect(
+              tester.getSize(find.byType(AppBar)).height,
+              posTopBarMetricsFor(width).height,
+            );
+            expect(
+              tester.getSize(find.byKey(const Key('pos-brand-tile'))).width,
+              greaterThan(0),
+            );
+            final inbox = find.byKey(const Key('online-inbox-button'));
+            expect(inbox.hitTestable(), findsOneWidget);
+            expect(tester.getSize(inbox).width, greaterThanOrEqualTo(44));
+            expect(tester.getSize(inbox).height, greaterThanOrEqualTo(44));
+            final inboxWidget = tester.widget<IconButton>(inbox);
+            expect(inboxWidget.tooltip, isNotEmpty);
+            final badge = tester.widget<Badge>(
+              find.descendant(of: inbox, matching: find.byType(Badge)),
+            );
+            expect(badge.isLabelVisible, isTrue);
+            final existingActions = [
+              find.byType(ReadyNotificationBell),
+              find.byType(RecentOrdersButton),
+              find.byType(OutboxStatusIndicator),
+              find.byType(LanguageSelector),
+              find.byType(DeviceSettingsMenu),
+            ];
+            for (final action in existingActions) {
+              expect(action.hitTestable(), findsOneWidget);
+            }
+            final coordinates = [
+              tester.getCenter(existingActions.first).dx,
+              tester.getCenter(inbox).dx,
+              ...existingActions.skip(1).map((f) => tester.getCenter(f).dx),
+            ];
+            for (var i = 1; i < coordinates.length; i++) {
+              expect(
+                coordinates[i],
+                locale == 'en'
+                    ? greaterThan(coordinates[i - 1])
+                    : lessThan(coordinates[i - 1]),
+              );
+            }
+            await tester.tap(inbox);
+            await tester.pumpAndSettle();
+            expect(find.byKey(const Key('online-inbox-sheet')), findsOneWidget);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  }
   for (final locale in ['en', 'ar', 'he']) {
     for (final size in [
       const Size(390, 844),
