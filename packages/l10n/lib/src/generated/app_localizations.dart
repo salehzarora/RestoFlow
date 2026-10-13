@@ -100,6 +100,168 @@ abstract class AppLocalizations {
     Locale('he'),
   ];
 
+  /// No description provided for @posOnlineInboxCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}{more}'**
+  String posOnlineInboxCount(int count, String more);
+
+  /// No description provided for @posOnlineInboxTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Online pickup orders'**
+  String get posOnlineInboxTitle;
+
+  /// No description provided for @posOnlineInboxEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No pending pickup orders'**
+  String get posOnlineInboxEmpty;
+
+  /// No description provided for @posOnlineInboxLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading pickup orders…'**
+  String get posOnlineInboxLoading;
+
+  /// No description provided for @posOnlineInboxUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Online orders are unavailable on this server.'**
+  String get posOnlineInboxUnavailable;
+
+  /// No description provided for @posOnlineInboxConnection.
+  ///
+  /// In en, this message translates to:
+  /// **'A connection is required for online orders. Refresh to try again.'**
+  String get posOnlineInboxConnection;
+
+  /// No description provided for @posOnlineInboxError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load online orders. Refresh to try again.'**
+  String get posOnlineInboxError;
+
+  /// No description provided for @posOnlineInboxSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again with an authorized staff PIN to view online orders.'**
+  String get posOnlineInboxSession;
+
+  /// No description provided for @posOnlineInboxQuoteChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The quote changed. The customer needs to submit a new request.'**
+  String get posOnlineInboxQuoteChanged;
+
+  /// No description provided for @posOnlineInboxItemUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'An item or option is unavailable. The customer needs to submit a new request.'**
+  String get posOnlineInboxItemUnavailable;
+
+  /// No description provided for @posOnlineInboxShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a shift on this device before accepting.'**
+  String get posOnlineInboxShift;
+
+  /// No description provided for @posOnlineInboxExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'This request expired. Ask the customer to submit again.'**
+  String get posOnlineInboxExpired;
+
+  /// No description provided for @posOnlineInboxConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'This request was decided elsewhere or is no longer available. Refresh the inbox.'**
+  String get posOnlineInboxConflict;
+
+  /// No description provided for @posOnlineInboxAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept order'**
+  String get posOnlineInboxAccept;
+
+  /// No description provided for @posOnlineInboxReject.
+  ///
+  /// In en, this message translates to:
+  /// **'Reject order'**
+  String get posOnlineInboxReject;
+
+  /// No description provided for @posOnlineInboxReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejection reason'**
+  String get posOnlineInboxReason;
+
+  /// No description provided for @posOnlineInboxReasonHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a reason (required, up to 240 characters)'**
+  String get posOnlineInboxReasonHint;
+
+  /// No description provided for @posOnlineInboxUncertain.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the previous decision. Both actions stay locked until the outcome is confirmed.'**
+  String get posOnlineInboxUncertain;
+
+  /// No description provided for @posOnlineInboxChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking decision…'**
+  String get posOnlineInboxChecking;
+
+  /// No description provided for @posOnlineInboxRecover.
+  ///
+  /// In en, this message translates to:
+  /// **'Check decision'**
+  String get posOnlineInboxRecover;
+
+  /// No description provided for @posOnlineInboxRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh online orders'**
+  String get posOnlineInboxRefresh;
+
+  /// No description provided for @posOnlineInboxMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get posOnlineInboxMore;
+
+  /// No description provided for @posOnlineInboxSelect.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a request to view its details'**
+  String get posOnlineInboxSelect;
+
+  /// No description provided for @posOnlineInboxBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to pending orders'**
+  String get posOnlineInboxBack;
+
+  /// No description provided for @posOnlineInboxAge.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min ago'**
+  String posOnlineInboxAge(int minutes);
+
+  /// No description provided for @posOnlineInboxExpires.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires in {minutes} min'**
+  String posOnlineInboxExpires(int minutes);
+
+  /// No description provided for @posOnlineInboxNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer notes'**
+  String get posOnlineInboxNotes;
+
   /// No description provided for @dashboardNavActivity.
   ///
   /// In en, this message translates to:

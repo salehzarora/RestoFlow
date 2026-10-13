@@ -379,6 +379,13 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 
 ---
 
+### 6.5 `web_order_decisions` (POS-ONLINE-INBOX-001, proposed D-046)
+
+- **Purpose:** Private append-only attribution and replay ledger for cashier acceptance/rejection of the immutable pending requests described in [WEB_ORDERS_001](WEB_ORDERS_001.md). It is not an offline outbox or a new canonical order state.
+- **Scope/identity:** Organization, restaurant and branch derive from the real token-proven POS and matching employee PIN. One terminal decision per request; stable decision identity cannot be reused for another request or changed intent. Records include the real acting device, PIN, employee and membership and the accepted canonical mapping.
+- **Safety:** Accepted mapping, canonical creation and ledger insertion share one transaction. A rejection never creates an order. Existing request terminal guards and same-scope canonical constraints remain authoritative. No customer capability, contact or raw device token is copied into this ledger.
+- **Access/lifecycle:** Forced RLS, four explicit per-command denial policies, no direct app-role grants, and append-only update/delete/truncate guards. The three authenticated RPCs in [API_CONTRACT](API_CONTRACT.md) §4.49 are the only POS entry points; no customer or KDS direct access is added.
+
 ## 7. Kitchen entities
 
 ### 7.1 `kitchen_tickets`

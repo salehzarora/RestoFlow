@@ -9,6 +9,106 @@ class AppLocalizationsHe extends AppLocalizations {
   AppLocalizationsHe([String locale = 'he']) : super(locale);
 
   @override
+  String posOnlineInboxCount(int count, String more) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString$more';
+  }
+
+  @override
+  String get posOnlineInboxTitle => 'הזמנות איסוף מקוונות';
+
+  @override
+  String get posOnlineInboxEmpty => 'אין הזמנות איסוף ממתינות';
+
+  @override
+  String get posOnlineInboxLoading => 'טוען הזמנות איסוף…';
+
+  @override
+  String get posOnlineInboxUnavailable => 'הזמנות מקוונות אינן זמינות בשרת זה.';
+
+  @override
+  String get posOnlineInboxConnection =>
+      'נדרש חיבור לטיפול בהזמנות מקוונות. יש לרענן ולנסות שוב.';
+
+  @override
+  String get posOnlineInboxError =>
+      'לא ניתן לטעון הזמנות מקוונות. יש לרענן ולנסות שוב.';
+
+  @override
+  String get posOnlineInboxSession =>
+      'יש להיכנס שוב עם קוד עובד מורשה כדי לצפות בהזמנות מקוונות.';
+
+  @override
+  String get posOnlineInboxQuoteChanged =>
+      'המחיר השתנה. על הלקוח לשלוח בקשה חדשה.';
+
+  @override
+  String get posOnlineInboxItemUnavailable =>
+      'פריט או אפשרות אינם זמינים. על הלקוח לשלוח בקשה חדשה.';
+
+  @override
+  String get posOnlineInboxShift =>
+      'יש לפתוח משמרת במכשיר זה לפני קבלת ההזמנה.';
+
+  @override
+  String get posOnlineInboxExpired =>
+      'תוקף הבקשה פג. יש לבקש מהלקוח לשלוח שוב.';
+
+  @override
+  String get posOnlineInboxConflict =>
+      'הבקשה טופלה במכשיר אחר או אינה זמינה עוד. יש לרענן את התיבה.';
+
+  @override
+  String get posOnlineInboxAccept => 'קבלת הזמנה';
+
+  @override
+  String get posOnlineInboxReject => 'דחיית הזמנה';
+
+  @override
+  String get posOnlineInboxReason => 'סיבת הדחייה';
+
+  @override
+  String get posOnlineInboxReasonHint => 'יש להזין סיבה (חובה, עד 240 תווים)';
+
+  @override
+  String get posOnlineInboxUncertain =>
+      'בודק את ההחלטה הקודמת. שני הכפתורים נעולים עד לאישור התוצאה.';
+
+  @override
+  String get posOnlineInboxChecking => 'בודק החלטה…';
+
+  @override
+  String get posOnlineInboxRecover => 'בדיקת החלטה';
+
+  @override
+  String get posOnlineInboxRefresh => 'רענון הזמנות מקוונות';
+
+  @override
+  String get posOnlineInboxMore => 'טעינת נוספות';
+
+  @override
+  String get posOnlineInboxSelect => 'יש לבחור בקשה לצפייה בפרטים';
+
+  @override
+  String get posOnlineInboxBack => 'חזרה להזמנות הממתינות';
+
+  @override
+  String posOnlineInboxAge(int minutes) {
+    return 'לפני $minutes דק׳';
+  }
+
+  @override
+  String posOnlineInboxExpires(int minutes) {
+    return 'יפוג בעוד $minutes דק׳';
+  }
+
+  @override
+  String get posOnlineInboxNotes => 'הערות הלקוח';
+
+  @override
   String get dashboardNavActivity => 'יומן פעילות';
 
   @override

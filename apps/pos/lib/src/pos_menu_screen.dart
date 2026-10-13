@@ -26,6 +26,7 @@ import 'widgets/menu_availability_sheet.dart';
 import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
 import 'widgets/open_orders_strip.dart';
+import 'widgets/online_order_inbox_sheet.dart';
 import 'widgets/order_edit_slip_widgets.dart' show OrderEditSlipBanner;
 import 'widgets/outbox_status_indicator.dart';
 import 'widgets/pos_identity_title.dart';
@@ -46,6 +47,26 @@ class PosMenuScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // Keep the brand visible beside six accessible action targets on a
+    // 320px phone; larger bars retain their established title spacing.
+    final navbarTitleSpacing = MediaQuery.sizeOf(context).width < 360
+        ? RestoflowSpacing.xs
+        : RestoflowSpacing.lg;
+    // At the 480px full-label breakpoint, reserve the brand and all action
+    // targets before giving the outbox prose its existing 220px maximum.
+    final navbarOutboxMaxWidth =
+        (MediaQuery.sizeOf(context).width -
+                4 * kMinInteractiveDimension -
+                44 -
+                RestoflowSpacing.sm -
+                2 * navbarTitleSpacing -
+                posNavbarSymbolPlateWidth(
+                  posTopBarMetricsFor(
+                    MediaQuery.sizeOf(context).width,
+                  ).markSize,
+                ))
+            .clamp(44, 220)
+            .toDouble();
 
     return Scaffold(
       // POS-PREMIUM-VISUAL-POLISH-001: the menu canvas is the one warm note
@@ -72,7 +93,7 @@ class PosMenuScreen extends StatelessWidget {
         // when a CUSTOM pair picks a light primary bar.
         iconTheme: IconThemeData(color: PosThemePair.of(context).navInk),
         actionsIconTheme: IconThemeData(color: PosThemePair.of(context).navInk),
-        titleSpacing: RestoflowSpacing.lg,
+        titleSpacing: navbarTitleSpacing,
         title: LayoutBuilder(
           builder: (context, constraints) {
             final metrics = posTopBarMetricsFor(
@@ -116,7 +137,7 @@ class PosMenuScreen extends StatelessWidget {
                 // the bar's edge) and stands as tall as the brand mark.
                 Expanded(
                   child: PosIdentityTitle(
-                    barStartInset: RestoflowSpacing.lg + plate.width,
+                    barStartInset: navbarTitleSpacing + plate.width,
                     logoSize: metrics.markSize,
                   ),
                 ),
@@ -174,22 +195,33 @@ class PosMenuScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // PSC-001A: the ready-notification bell leads the action
                     // group.
-                    ReadyNotificationBell(),
-                    RecentOrdersButton(),
+                    const ReadyNotificationBell(),
+                    const OnlineOrderInboxButton(compact: true),
+                    const RecentOrdersButton(),
                     // POS-CASH-DRAWER-MANUAL-OPEN-001: renders nothing unless
                     // this till can pulse a drawer, and never below
                     // kPosDrawerInlineMinWidth (the ⋮ menu carries it there),
                     // so the existing cluster is unchanged wherever it cannot
                     // help.
-                    CashDrawerButton(),
-                    OutboxStatusIndicator(),
-                    LanguageSelector(),
-                    DeviceSettingsMenu(),
+                    const CashDrawerButton(),
+                    if (MediaQuery.sizeOf(context).width >=
+                            kPosCompactAppBarWidth &&
+                        navbarOutboxMaxWidth < 220)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: navbarOutboxMaxWidth,
+                        ),
+                        child: const OutboxStatusIndicator(),
+                      )
+                    else
+                      const OutboxStatusIndicator(),
+                    const LanguageSelector(),
+                    const DeviceSettingsMenu(),
                   ],
                 ),
               ),

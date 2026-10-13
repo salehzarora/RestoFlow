@@ -9,6 +9,108 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String posOnlineInboxCount(int count, String more) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString$more';
+  }
+
+  @override
+  String get posOnlineInboxTitle => 'Online pickup orders';
+
+  @override
+  String get posOnlineInboxEmpty => 'No pending pickup orders';
+
+  @override
+  String get posOnlineInboxLoading => 'Loading pickup orders…';
+
+  @override
+  String get posOnlineInboxUnavailable =>
+      'Online orders are unavailable on this server.';
+
+  @override
+  String get posOnlineInboxConnection =>
+      'A connection is required for online orders. Refresh to try again.';
+
+  @override
+  String get posOnlineInboxError =>
+      'Could not load online orders. Refresh to try again.';
+
+  @override
+  String get posOnlineInboxSession =>
+      'Sign in again with an authorized staff PIN to view online orders.';
+
+  @override
+  String get posOnlineInboxQuoteChanged =>
+      'The quote changed. The customer needs to submit a new request.';
+
+  @override
+  String get posOnlineInboxItemUnavailable =>
+      'An item or option is unavailable. The customer needs to submit a new request.';
+
+  @override
+  String get posOnlineInboxShift =>
+      'Open a shift on this device before accepting.';
+
+  @override
+  String get posOnlineInboxExpired =>
+      'This request expired. Ask the customer to submit again.';
+
+  @override
+  String get posOnlineInboxConflict =>
+      'This request was decided elsewhere or is no longer available. Refresh the inbox.';
+
+  @override
+  String get posOnlineInboxAccept => 'Accept order';
+
+  @override
+  String get posOnlineInboxReject => 'Reject order';
+
+  @override
+  String get posOnlineInboxReason => 'Rejection reason';
+
+  @override
+  String get posOnlineInboxReasonHint =>
+      'Enter a reason (required, up to 240 characters)';
+
+  @override
+  String get posOnlineInboxUncertain =>
+      'Checking the previous decision. Both actions stay locked until the outcome is confirmed.';
+
+  @override
+  String get posOnlineInboxChecking => 'Checking decision…';
+
+  @override
+  String get posOnlineInboxRecover => 'Check decision';
+
+  @override
+  String get posOnlineInboxRefresh => 'Refresh online orders';
+
+  @override
+  String get posOnlineInboxMore => 'Load more';
+
+  @override
+  String get posOnlineInboxSelect => 'Select a request to view its details';
+
+  @override
+  String get posOnlineInboxBack => 'Back to pending orders';
+
+  @override
+  String posOnlineInboxAge(int minutes) {
+    return '$minutes min ago';
+  }
+
+  @override
+  String posOnlineInboxExpires(int minutes) {
+    return 'Expires in $minutes min';
+  }
+
+  @override
+  String get posOnlineInboxNotes => 'Customer notes';
+
+  @override
   String get dashboardNavActivity => 'Activity log';
 
   @override
