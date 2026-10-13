@@ -1,11 +1,12 @@
 // STOREFRONT-PUBLISH-001: the request workflow of `storefront-media-publish`.
 //
-// One POST publishes ONE ladder rung of ONE logo / hero derivative, entirely as the
+// One POST publishes ONE ladder rung of ONE logo / hero / item derivative, entirely as the
 // CALLER (their JWT on every upstream request; no privileged key exists here):
 //
 //   body cap (a top-level key named twice is refused) -> authenticate (GoTrue; only
 //   a signed-in, non-anonymous 'authenticated' user) -> validate every field (exact allowlists)
 //   -> authority preflight (list_storefront_media: manager+ or nothing is read)
+//   -> for an item, capture its current source generation through a manager-only RPC
 //   -> download the PRIVATE original (streamed, capped at its bucket limit)
 //   -> derive ONE rung with the pinned recipe c4 (202 ladder_next when over the cap)
 //   -> stage (idempotent) -> upload the derivative to the PUBLIC bucket
@@ -20,7 +21,8 @@
 //   - the object name is the sha-256 of the deterministic derivative, so a retried
 //     upload finds the same object (compare, never overwrite, never delete);
 //   - nothing public REFERENCES a derivative until finalize proves the object and
-//     the profile writer points a slot at the LIVE row, so a killed request leaves
+//     the profile writer points a slot at the LIVE row (or the item reader finds
+//     its exact current source association), so a killed request leaves
 //     at most a STAGED row and/or an unreferenced object (recoverable: retry the
 //     same request, or cancel the row from the Dashboard). An uploaded object is
 //     fetchable by anyone holding its URL from the moment of upload (the bucket is
@@ -41,6 +43,16 @@ const PUBLIC_BUCKET = 'storefront-media';
 const OBJECT_CACHE_SECONDS = 31536000; // content-addressed: on this path the bytes behind a name never change (Q-033)
 // public.storefront_media.object_key's own CHECK grammar (READ-001 migration)
 const OBJECT_KEY_RE = /^[0-9a-f]{32}\/[0-9a-f]{64}\.webp$/;
+const SOURCE_OBJECT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function validSourceSnapshot(snapshot) {
+  if (snapshot === null || typeof snapshot !== 'object' || Array.isArray(snapshot)) return false;
+  const keys = Object.keys(snapshot).sort();
+  return keys.length === 3 && keys[0] === 'storage_object_id' && keys[1] === 'storage_updated_at' && keys[2] === 'storage_version'
+    && typeof snapshot.storage_object_id === 'string' && SOURCE_OBJECT_ID_RE.test(snapshot.storage_object_id)
+    && (snapshot.storage_version === null || (typeof snapshot.storage_version === 'string' && snapshot.storage_version.length <= 256))
+    && typeof snapshot.storage_updated_at === 'string' && snapshot.storage_updated_at.length > 0 && snapshot.storage_updated_at.length <= 128;
+}
 
 const CORS = Object.freeze({
   'access-control-allow-origin': '*',
@@ -138,6 +150,25 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
         return upstreamFailure(e, false);
       }
 
+      // The item generation is captured BEFORE reading private bytes, then proved
+      // again by stage and finalize. An overwrite between download and stage must
+      // not attach old derived bytes to the new source generation. This snapshot
+      // comes only from the manager-scoped RPC, never from the request body.
+      let sourceSnapshot;
+      if (r.slot === 'item') {
+        let current;
+        try {
+          current = await caller.rpc('get_storefront_item_source', {
+            p_organization_id: r.organizationId, p_restaurant_id: r.restaurantId, p_source_key: r.sourceKey,
+          });
+        } catch (e) {
+          return upstreamFailure(e, false);
+        }
+        if (current.ok !== true) return stageRefusal(current, false);
+        if (!validSourceSnapshot(current.source_snapshot)) return fail(500, 'internal_error', { retryable: true, uncertain: false });
+        sourceSnapshot = current.source_snapshot;
+      }
+
       // (5) the PRIVATE original, as the caller, never buffered beyond its bucket cap
       let source;
       try {
@@ -197,6 +228,7 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
           p_client_request_id: stageId, p_organization_id: r.organizationId, p_restaurant_id: r.restaurantId,
           p_source_bucket: r.sourceBucket, p_source_key: r.sourceKey, p_variant: r.variant,
           p_content_hash: d.sha256, p_width: d.width, p_height: d.height, p_bytes: d.byteLength,
+          ...(r.slot === 'item' ? { p_source_snapshot: sourceSnapshot } : {}),
         });
       } catch (e) {
         return upstreamFailure(e, true);
@@ -206,6 +238,14 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       // the registered key must be exactly <restaurant prefix>/<this content address>.webp
       if (typeof objectKey !== 'string' || !OBJECT_KEY_RE.test(objectKey) || objectKey.slice(33, 97) !== d.sha256 || typeof staged.media_id !== 'string'
           || typeof staged.source_bucket !== 'string' || typeof staged.source_key !== 'string' || typeof staged.variant !== 'string') {
+        return fail(500, 'internal_error', { retryable: true, uncertain: true });
+      }
+      // Item publication needs its own source association even when another item or
+      // profile slot already owns identical public bytes. Never report that other
+      // association as this item's publication (or finalize its logo/hero row).
+      if (r.slot === 'item' && (staged.source_bucket !== r.sourceBucket
+          || staged.source_key !== r.sourceKey || staged.variant !== r.variant
+          || staged.source_mismatch !== false)) {
         return fail(500, 'internal_error', { retryable: true, uncertain: true });
       }
 
@@ -262,12 +302,17 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       if (fin.ok !== true) {
         switch (fin.error) {
           case 'permission_denied': return fail(403, 'permission_denied');
+          case 'source_not_found': return fail(404, 'source_not_found');
+          case 'source_stale': return fail(422, 'refused', { code: 'source_stale' });
           case 'not_found': return fail(409, 'restart_required'); // the staged row was cancelled meanwhile
           case 'stale_request': return fail(409, 'restart_required'); // a replayed publication was retracted since
           case 'object_mismatch': return fail(409, 'object_conflict');
           case 'object_missing': return fail(503, 'upstream_unavailable', { retryable: true, uncertain: true });
           default: return fail(500, 'internal_error', { retryable: true, uncertain: true });
         }
+      }
+      if (r.slot === 'item' && (fin.media_id !== staged.media_id || fin.object_key !== objectKey || fin.state !== 'published')) {
+        return fail(500, 'internal_error', { retryable: true, uncertain: true });
       }
       return reply(200, {
         ok: true,
@@ -280,7 +325,8 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
         replaced_media_id: typeof fin.replaced_media_id === 'string' ? fin.replaced_media_id : null,
         profile_version: Number.isInteger(fin.profile_version) ? fin.profile_version : null,
         // true when the bytes were already registered for ANOTHER source / variant: `media`
-        // then describes that existing row (identical bytes), not the requested source
+        // then describes that existing row (identical bytes), not the requested source.
+        // Item requests require an exact association above and cannot take this path.
         source_mismatch: staged.source_mismatch === true,
         media: {
           id: staged.media_id, object_key: objectKey, content_hash: d.sha256,
@@ -297,14 +343,15 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
   };
 }
 
-function stageRefusal(staged) {
+function stageRefusal(staged, uncertain = true) {
   switch (staged.error) {
     case 'permission_denied': return fail(403, 'permission_denied');
     case 'source_not_found': return fail(404, 'source_not_found');
+    case 'source_stale': return fail(422, 'refused', { code: 'source_stale' });
     case 'content_mismatch': return fail(409, 'object_conflict');
     // the replayed stage names a row that was cancelled since: start a NEW logical request
     case 'stale_request': return fail(409, 'restart_required');
     case 'invalid': return fail(422, 'refused', { code: typeof staged.reason === 'string' ? staged.reason : 'invalid' });
-    default: return fail(500, 'internal_error', { retryable: true, uncertain: true });
+    default: return fail(500, 'internal_error', { retryable: true, uncertain });
   }
 }

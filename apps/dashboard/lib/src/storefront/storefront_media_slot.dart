@@ -656,7 +656,9 @@ class _StorefrontMediaSlotState extends State<StorefrontMediaSlot> {
     final current = widget.profile.mediaIdFor(widget.slot)?.toLowerCase();
     return [
       for (final row in list.media)
-        if (row.variant == widget.slot.variant ||
+        if ((row.variant == widget.slot.variant &&
+                !(row.sourceBucket == StorefrontSourceBucket.menuImages &&
+                    row.variant == StorefrontVariant.w480)) ||
             row.inUse.contains(widget.slot) ||
             row.id.toLowerCase() == current)
           row,
@@ -1062,6 +1064,7 @@ String _refusalMessage(AppLocalizations l10n, String? code) => switch (code) {
   'decode_warning' => l10n.storefrontRefusalDecodeWarning,
   'output_too_large' => l10n.storefrontRefusalOutputTooLarge,
   'self_check_failed' => l10n.storefrontRefusalSelfCheckFailed,
+  'source_stale' => l10n.storefrontItemImageFailed,
   _ => l10n.storefrontRefusalUnknown(code ?? '-'),
 };
 
