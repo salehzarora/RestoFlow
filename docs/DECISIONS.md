@@ -994,6 +994,14 @@ Each entry is an ADR-style block:
 - **Dark release:** Both `WEB_ORDERS_ENABLED=true` and a separately enabled branch channel are required. No enabled row is seeded; existing Storefront ordering/delivery flags and checkout remain OFF. No hosted apply or deployment is authorized by this implementation.
 - **Future integration:** POS acceptance must reuse real device/PIN authorization, lock a pending unexpired request, revalidate its quote, and create/map exactly one canonical order atomically. Only then may existing KDS/printer dispatch occur. No inbox/accept/reject action is added here. See [WEB_ORDERS_001](WEB_ORDERS_001.md) and [API_CONTRACT](API_CONTRACT.md) §4.48.
 
+## D-046 — POS-ONLINE-INBOX-001: real POS authority and atomic acceptance of pending pickup requests
+- **Status:** PROPOSED — implementation explicitly owner-authorized 2026-10-14; independent review and human merge/security approval remain required.
+- **Context:** WEB-ORDERS-001 holds immutable private customer intent outside canonical orders. Only a real paired POS and live employee PIN may inspect or decide it. A transport's anonymous GoTrue user is not the staff actor.
+- **Decision:** Add three narrow authenticated inbox/accept/reject INVOKER wrappers over private app DEFINER functions. Prove the device token and matching live PIN/session, employee, role, scope and acceptance shift on the server. Keep direct web-table access denied; record terminal decisions in a private append-only attributed ledger. Under a scoped request lock, revalidate current availability and the entire immutable price quote; changed quotes require a new request.
+- **Atomicity:** Server-build one order.submit operation and call existing app.sync_push inside the decision transaction. Require its individual applied result and expected canonical ID. Canonical creation, request mapping, attributed decision and final expiry check share one rollback boundary, including rollback of failed sync ledger writes. Same-action retries return the existing mapping; cross-device competing decisions cannot duplicate it. Existing canonical RPCs and KDS/printer orchestration are preserved.
+- **Catalog concurrency:** Existing catalog reparent/reorder writers may cause a deadlock or serialization abort. Propagate that whole-transaction failure for same-identity recovery; never retain a partial acceptance or silently create another decision. No canonical/catalog writer rewrite is included.
+- **Alternatives/consequences:** Direct canonical inserts, a deferred client sync, copying only submit_order while omitting its orchestration tails, and silent repricing are rejected. The POS inbox requires connectivity and memory-only sensitive state; existing offline POS orders remain unchanged. No hosted rollout or public-ordering activation is included. Full contract and tests: [POS_ONLINE_INBOX_001](POS_ONLINE_INBOX_001.md), API §4.49.
+
 ## Provisional decisions awaiting open questions (quick index)
 
 | Decision | Blocked/conditioned by | Nature of dependency |
@@ -1007,6 +1015,8 @@ Each entry is an ADR-style block:
 See [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) for owners, blocking milestones, and status. Money/tax correctness more broadly remains exposed to **RISK R-008** until **Q-001..Q-004** are resolved (tax rules owned by [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md)).
 
 ## Changelog
+
+- **POS-ONLINE-INBOX-001 (2026-10-14): PROPOSED D-046** records owner-authorized real POS authority, private branch inbox and atomic acceptance through existing canonical orchestration. Independent review and human merge/security approval remain required. Hosted activation remains separate; next free decision ID is D-047.
 
 - **WEB-ORDERS-001 (2026-10-13): PROPOSED D-045** records the owner-authorized pending-request API, authoritative pricing, private status capability, bounded admission and dark activation gates. The existing anonymous database allowlist and canonical POS/KDS contracts are unchanged. Human security and merge approval remain pending; the next free decision ID is D-046.
 

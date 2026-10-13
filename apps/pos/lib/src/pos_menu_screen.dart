@@ -26,6 +26,7 @@ import 'widgets/menu_availability_sheet.dart';
 import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
 import 'widgets/open_orders_strip.dart';
+import 'widgets/online_order_inbox_sheet.dart';
 import 'widgets/order_edit_slip_widgets.dart' show OrderEditSlipBanner;
 import 'widgets/outbox_status_indicator.dart';
 import 'widgets/pos_identity_title.dart';
@@ -73,6 +74,15 @@ class PosMenuScreen extends StatelessWidget {
         iconTheme: IconThemeData(color: PosThemePair.of(context).navInk),
         actionsIconTheme: IconThemeData(color: PosThemePair.of(context).navInk),
         titleSpacing: RestoflowSpacing.lg,
+        // A separate bounded row keeps every existing phone navbar action
+        // reachable while exposing pending online requests at all widths.
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(48),
+          child: Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: OnlineOrderInboxButton(),
+          ),
+        ),
         title: LayoutBuilder(
           builder: (context, constraints) {
             final metrics = posTopBarMetricsFor(

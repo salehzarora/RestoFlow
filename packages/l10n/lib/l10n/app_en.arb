@@ -1,4 +1,46 @@
 {
+  "posOnlineInboxCount": "{count}{more}",
+  "@posOnlineInboxCount": {"placeholders": {"count": {"type": "int", "format": "decimalPattern"}, "more": {"type": "String"}}},
+  "posOnlineInboxTitle": "Online pickup orders",
+  "posOnlineInboxEmpty": "No pending pickup orders",
+  "posOnlineInboxLoading": "Loading pickup orders…",
+  "posOnlineInboxUnavailable": "Online orders are unavailable on this server.",
+  "posOnlineInboxConnection": "A connection is required for online orders. Refresh to try again.",
+  "posOnlineInboxError": "Could not load online orders. Refresh to try again.",
+  "posOnlineInboxSession": "Sign in again with an authorized staff PIN to view online orders.",
+  "posOnlineInboxQuoteChanged": "The quote changed. The customer needs to submit a new request.",
+  "posOnlineInboxItemUnavailable": "An item or option is unavailable. The customer needs to submit a new request.",
+  "posOnlineInboxShift": "Open a shift on this device before accepting.",
+  "posOnlineInboxExpired": "This request expired. Ask the customer to submit again.",
+  "posOnlineInboxConflict": "This request was decided elsewhere or is no longer available. Refresh the inbox.",
+  "posOnlineInboxAccept": "Accept order",
+  "posOnlineInboxReject": "Reject order",
+  "posOnlineInboxReason": "Rejection reason",
+  "posOnlineInboxReasonHint": "Enter a reason (required, up to 240 characters)",
+  "posOnlineInboxUncertain": "Checking the previous decision. Both actions stay locked until the outcome is confirmed.",
+  "posOnlineInboxChecking": "Checking decision…",
+  "posOnlineInboxRecover": "Check decision",
+  "posOnlineInboxRefresh": "Refresh online orders",
+  "posOnlineInboxMore": "Load more",
+  "posOnlineInboxSelect": "Select a request to view its details",
+  "posOnlineInboxBack": "Back to pending orders",
+  "posOnlineInboxAge": "{minutes} min ago",
+  "posOnlineInboxExpires": "Expires in {minutes} min",
+  "posOnlineInboxNotes": "Customer notes",
+  "@posOnlineInboxAge": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@posOnlineInboxExpires": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
   "@@locale": "en",
   "dashboardNavActivity": "Activity log",
   "activityLogTitle": "Activity log",

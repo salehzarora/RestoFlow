@@ -1418,8 +1418,39 @@ delivery, canonical-order insertion or kitchen dispatch.
   create the canonical order and immutable mapping in one transaction. No
   customer caller can invoke acceptance or canonical order creation here.
 
+### 4.49 Authenticated pending web-order inbox (POS-ONLINE-INBOX-001; proposed D-046)
+
+`pos_web_order_inbox`, `pos_accept_web_order` and `pos_reject_web_order` are
+authenticated INVOKER wrappers over private app DEFINER implementations with an
+empty search path. Every call proves the real POS device session token and its
+matching active employee PIN. The anonymous GoTrue transport UID is not a staff
+identity. Organization, restaurant, branch, employee and acceptance shift derive
+server-side; private request/decision tables have no direct app-role access.
+
+All calls take `p_pin_session_id uuid`, `p_device_id uuid` and
+`p_device_session_token text`. Inbox additionally takes optional `p_request_id
+uuid`, paired `p_before_created_at timestamptz` / `p_before_id uuid`, and `p_limit
+integer` (default/max 50). It returns `{ok,server_time,requests,has_more,next_cursor}`;
+normal reads contain only live pending requests. Targeted recovery waits for any
+in-flight decision and returns the scoped terminal/effective-expired state.
+Request projection and exact errors are defined in [POS_ONLINE_INBOX_001](POS_ONLINE_INBOX_001.md).
+
+Accept/reject take `p_request_id uuid` and stable `p_decision_id uuid`; rejection
+also requires `p_reason text` (trimmed 1–240 characters without controls). Success
+is `{ok:true,request_id,status,canonical_order_id,decision_id,replayed}`. Same-action
+replays return the existing mapping; changed/opposite intent conflicts. Customer
+status-capability output is unchanged and does not disclose staff rejection text.
+
+Acceptance locks the request, checks current expiry, proves current published
+branch/catalog/quote, then server-builds one `order.submit` for existing
+`app.sync_push`. The individual operation must be applied with the expected order
+ID. Canonical creation, dispatch, mapping and decision share a rollback boundary;
+reject/expiry never submit. Catalog deadlock/serialization failures abort the whole
+transaction and require reconciliation with the same decision identity. No inbox
+operation is queued in the offline outbox. No activation/deployment is implied.
+
 ## 5. Cross-References
-- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034, D-037, D-039, D-040, D-041, D-042, D-043, D-044, D-045).
+- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034, D-037, D-039, D-040, D-041, D-042, D-043, D-044, D-045, D-046).
 - Open questions: [OPEN_QUESTIONS](OPEN_QUESTIONS.md) (Q-004, Q-007, Q-008, Q-009, Q-010, Q-011, Q-012, Q-014, Q-015, Q-017, Q-028, Q-029, Q-030, Q-031, Q-032, Q-033, Q-034, Q-035, Q-036, Q-039, Q-040, Q-041, Q-042, Q-043, Q-044, Q-045, Q-046).
 - State transitions: [STATE_MACHINES](STATE_MACHINES.md).
 - Authorization, RLS, isolation tests, audit: [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md).

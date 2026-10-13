@@ -15,6 +15,7 @@ import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/data/draft_recovery_store.dart';
+import 'src/data/online_order_inbox.dart';
 import 'src/design/pos_theme.dart';
 import 'src/data/durable_outbox_store.dart';
 import 'src/data/payment_attempt_store.dart';
@@ -36,6 +37,7 @@ import 'src/media/clear_pairing_media.dart';
 import 'src/pos_pin_gate.dart';
 import 'src/state/locale_controller.dart';
 import 'src/state/order_sync_controller.dart';
+import 'src/state/online_order_inbox_controller.dart';
 import 'src/state/outbox_controller.dart';
 import 'src/state/pos_branch_tax.dart';
 import 'src/state/pos_device_context.dart';
@@ -128,6 +130,7 @@ Widget buildPosBootRoot({
           prefs,
           locale,
           real.seams,
+          inboxSecretStore: boot._secretStore,
           includePeriodicWork: includePeriodicWork,
           extraOverrides: extraOverrides,
         );
@@ -152,10 +155,19 @@ List<Override> _posOverrides(
   SharedPreferences prefs,
   Locale locale,
   PosDeviceSeams? seams, {
+  DeviceSessionSecretStore? inboxSecretStore,
   bool includePeriodicWork = true,
   List<Override> extraOverrides = const [],
 }) => [
   initialLocaleProvider.overrideWithValue(locale),
+  // Memory-only online inbox uses the same real device credential and RPC
+  // transport as pairing/PIN. It never receives a separate credential copy.
+  if (seams != null && inboxSecretStore != null)
+    onlineOrderInboxSecretStoreProvider.overrideWithValue(inboxSecretStore),
+  if (includePeriodicWork)
+    onlineOrderInboxPollIntervalProvider.overrideWithValue(
+      OnlineOrderInboxController.defaultPollInterval,
+    ),
   // PRINT-RTL-001: render Arabic/Hebrew (+ ₪/×) receipts as a raster image
   // on the native Android printer path so they print correctly instead of
   // "?????". Web/loopback stays ESC/POS text (the native path is Android-only).

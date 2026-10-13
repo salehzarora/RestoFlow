@@ -9,6 +9,106 @@ class AppLocalizationsAr extends AppLocalizations {
   AppLocalizationsAr([String locale = 'ar']) : super(locale);
 
   @override
+  String posOnlineInboxCount(int count, String more) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString$more';
+  }
+
+  @override
+  String get posOnlineInboxTitle => 'طلبات الاستلام عبر الإنترنت';
+
+  @override
+  String get posOnlineInboxEmpty => 'لا توجد طلبات استلام معلّقة';
+
+  @override
+  String get posOnlineInboxLoading => 'جارٍ تحميل طلبات الاستلام…';
+
+  @override
+  String get posOnlineInboxUnavailable =>
+      'طلبات الإنترنت غير متاحة على هذا الخادم.';
+
+  @override
+  String get posOnlineInboxConnection =>
+      'يلزم اتصال لمعالجة طلبات الإنترنت. حدّث للمحاولة مجددًا.';
+
+  @override
+  String get posOnlineInboxError =>
+      'تعذّر تحميل طلبات الإنترنت. حدّث للمحاولة مجددًا.';
+
+  @override
+  String get posOnlineInboxSession =>
+      'سجّل الدخول مجددًا برمز موظف مخوّل لعرض طلبات الإنترنت.';
+
+  @override
+  String get posOnlineInboxQuoteChanged =>
+      'تغيّر السعر. يجب على العميل إرسال طلب جديد.';
+
+  @override
+  String get posOnlineInboxItemUnavailable =>
+      'صنف أو خيار غير متاح. يجب على العميل إرسال طلب جديد.';
+
+  @override
+  String get posOnlineInboxShift => 'افتح وردية على هذا الجهاز قبل القبول.';
+
+  @override
+  String get posOnlineInboxExpired =>
+      'انتهت صلاحية الطلب. اطلب من العميل إرساله مجددًا.';
+
+  @override
+  String get posOnlineInboxConflict =>
+      'تمت معالجة هذا الطلب على جهاز آخر أو لم يعد متاحًا. حدّث القائمة.';
+
+  @override
+  String get posOnlineInboxAccept => 'قبول الطلب';
+
+  @override
+  String get posOnlineInboxReject => 'رفض الطلب';
+
+  @override
+  String get posOnlineInboxReason => 'سبب الرفض';
+
+  @override
+  String get posOnlineInboxReasonHint => 'أدخل السبب (مطلوب، حتى 240 حرفًا)';
+
+  @override
+  String get posOnlineInboxUncertain =>
+      'جارٍ التحقق من القرار السابق. يبقى الإجراءان مقفلين حتى تأكيد النتيجة.';
+
+  @override
+  String get posOnlineInboxChecking => 'جارٍ التحقق من القرار…';
+
+  @override
+  String get posOnlineInboxRecover => 'التحقق من القرار';
+
+  @override
+  String get posOnlineInboxRefresh => 'تحديث طلبات الإنترنت';
+
+  @override
+  String get posOnlineInboxMore => 'تحميل المزيد';
+
+  @override
+  String get posOnlineInboxSelect => 'اختر طلبًا لعرض تفاصيله';
+
+  @override
+  String get posOnlineInboxBack => 'العودة إلى الطلبات المعلّقة';
+
+  @override
+  String posOnlineInboxAge(int minutes) {
+    return 'قبل $minutes د';
+  }
+
+  @override
+  String posOnlineInboxExpires(int minutes) {
+    return 'تنتهي الصلاحية خلال $minutes د';
+  }
+
+  @override
+  String get posOnlineInboxNotes => 'ملاحظات العميل';
+
+  @override
   String get dashboardNavActivity => 'سجل النشاط';
 
   @override
