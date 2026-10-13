@@ -986,6 +986,14 @@ Each entry is an ADR-style block:
 
 ---
 
+## D-045 — WEB-ORDERS-001: private pending customer requests behind a bounded server API
+- **Status:** PROPOSED — owner authorized implementation on 2026-10-13; independent review and human security/merge approval remain required.
+- **Decision:** Customer pickup submissions create `web_order_requests`, never canonical `orders`. Full tenant/restaurant/branch scope comes from the published Storefront slug. The server validates live catalog eligibility and recalculates integer-minor item/modifier prices and exclusive tax from authoritative database values. Requests expire after 15 minutes; a hash-only 256-bit customer capability permits a minimal private status projection for 24 hours.
+- **Security boundary:** The new `web-order-submit` HTTP endpoint intentionally accepts anonymous requests (`verify_jwt=false`). Its server-only platform credential invokes exactly two service-only, invoker `public` wrappers over private `app` definer bodies. This is a narrow server-boundary exception to D-011, not permission for service credentials in clients or existing RPCs. PUBLIC, anon and authenticated are denied on both layers and all new tables. The anonymous database allowlist and public definer set remain exactly `storefront_menu(text)` (D-037/D-039).
+- **Reliability and abuse:** Scoped identity/body/token fingerprint, transaction locks and unique constraints provide stable replay, conflict detection and serialized admission. Fixed per-branch minute/day/status budgets, pending capacity and phone caps bound accepted work without trusting client IP headers. There are no automatic write retries after an uncertain transport outcome. Received events are append-only and do not invent a staff identity.
+- **Dark release:** Both `WEB_ORDERS_ENABLED=true` and a separately enabled branch channel are required. No enabled row is seeded; existing Storefront ordering/delivery flags and checkout remain OFF. No hosted apply or deployment is authorized by this implementation.
+- **Future integration:** POS acceptance must reuse real device/PIN authorization, lock a pending unexpired request, revalidate its quote, and create/map exactly one canonical order atomically. Only then may existing KDS/printer dispatch occur. No inbox/accept/reject action is added here. See [WEB_ORDERS_001](WEB_ORDERS_001.md) and [API_CONTRACT](API_CONTRACT.md) §4.48.
+
 ## Provisional decisions awaiting open questions (quick index)
 
 | Decision | Blocked/conditioned by | Nature of dependency |
@@ -999,6 +1007,8 @@ Each entry is an ADR-style block:
 See [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) for owners, blocking milestones, and status. Money/tax correctness more broadly remains exposed to **RISK R-008** until **Q-001..Q-004** are resolved (tax rules owned by [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md)).
 
 ## Changelog
+
+- **WEB-ORDERS-001 (2026-10-13): PROPOSED D-045** records the owner-authorized pending-request API, authoritative pricing, private status capability, bounded admission and dark activation gates. The existing anonymous database allowlist and canonical POS/KDS contracts are unchanged. Human security and merge approval remain pending; the next free decision ID is D-046.
 
 - M0A (RF-001): Initial decision log **drafted** (candidate set proposed for the architecture freeze) covering D-001..D-022 — pending ChatGPT review, independent Codex review, and human approval (Saleh); not yet frozen. No decisions beyond D-022 introduced. Future additions must use the next free ID (D-023+) with a full ADR block and a changelog entry.
 - M0A (RF-003): Added **D-023..D-028** as human-approved proposed corrections (originating from RF-002/RF-003) for the **RF-004 freeze CANDIDATE** — D-023 (completed payment terminal in MVP), D-024 (completed order terminal in MVP), D-025 (payment/fulfillment independence; quick-service pay-first), D-026 (platform admin is not a tenant membership role; `platform_admin_grants` entity), D-027 (M0B blocker classification; "Accepted Open"), D-028 (accountant read-only; shift close/count separated from reconciliation). Also corrected: Payment enumeration (completed terminal; void only pre-completion, D-023); D-004/D-005 membership role keys reduced to six with `platform_admin` removed (D-026); D-019 M0A relabelled as a Freeze Candidate (freeze event is RF-004). These corrections were **approved at the RF-004 architecture freeze (human-approved by Saleh)**. The decision range is now **D-001..D-028**; the next free ID is **D-029+**.
