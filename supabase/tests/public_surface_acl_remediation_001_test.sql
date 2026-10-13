@@ -164,8 +164,12 @@ select is(
      from pg_proc p
     where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
       and not has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  (select string_agg(identity, ', ' order by identity) from sec001_allowlist),
-  'D1. every public function remains EXECUTE-able by authenticated EXCEPT the enumerated anon-only allowlist (explicitly revoked)');
+  (select string_agg(identity, ', ' order by identity) from (
+    select identity from sec001_allowlist
+    union all select 'submit_web_order_request(text,uuid,text,jsonb)'
+    union all select 'get_web_order_request_status(text,uuid,text)'
+  ) denied),
+  'D1. authenticated excludes the anon-only read and the two service-only web-request wrappers');
 
 -- device / pairing
 select ok(has_function_privilege('authenticated', 'public.redeem_device_pairing(text, text)', 'EXECUTE'),

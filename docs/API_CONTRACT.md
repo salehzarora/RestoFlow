@@ -1381,8 +1381,45 @@ Additive, read-only widenings of three Dashboard readers and one new reader, for
 - **(iv)** Reads only: no audit event (**DECISION D-013**), no write, and no `service_role` (**DECISION D-011**).
 - *Implemented (ORDER-EDIT-001G): migration `20261009100100_order_edit_001g_dashboard_reads.sql`, pgTAP `order_edit_001g_dashboard_reads_test`.*
 
+### 4.48 Pending customer web requests (WEB-ORDERS-001; proposed D-045)
+
+The anonymous HTTP boundary is `POST /functions/v1/web-order-submit`; its complete
+validated request, response, pricing, replay and future POS integration contract is
+[WEB_ORDERS_001](WEB_ORDERS_001.md). It is pickup/takeaway only, with no payment,
+delivery, canonical-order insertion or kitchen dispatch.
+
+- Submit: exactly `action=submit`, published `slug`, client UUIDv4 `request_id`,
+  canonical base64url 32-byte random `status_token`, and `order` (takeaway type,
+  name/E.164 phone, notes, item IDs/quantities and option IDs/quantities). No client
+  money, scope, variant, discount or dispatch field is accepted. Duplicate JSON
+  keys and malformed UTF-8 fail closed; body is at most 32 KiB.
+- Status: exactly `action=status`, `slug`, `request_id`, `status_token` in the POST
+  body. Only its SHA-256 hash reaches SQL. Never place the token in URLs/logs.
+- SQL: `public.submit_web_order_request(text,uuid,text,jsonb)` and
+  `public.get_web_order_request_status(text,uuid,text)` are service-role-only
+  invoker wrappers. Their private `app` implementations pin `search_path=''`.
+  Neither anon nor authenticated can invoke them or access the three new tables.
+- Success returns only `{ok,request_id,status,expires_at,totals:{currency_code,
+  subtotal_minor,tax_total_minor,grand_total_minor},replayed}`. Wrong token/slug,
+  missing request and expired capability all return `not_found`. Responses are
+  `no-store`; no PII, internal scope, canonical ID or token is exposed.
+- Prices/modifiers come from the live published DB catalog; exclusive tax uses
+  existing `app.edit_tax_minor`. Replay keeps the original frozen quote and branch.
+  Altered body/token under the same identity conflicts. Pending expires in 15
+  minutes and status access in 24 hours. Branch locks serialize admission limits.
+- Business errors: `invalid_request`, `not_found`, `ordering_unavailable`,
+  `idempotency_conflict`, `item_unavailable`, `modifier_selection_invalid`,
+  `menu_unavailable`, `rate_limited`, `capacity_reached`. A failed/uncertain write
+  transport returns `submission_outcome_unknown`; retain the same identity,
+  token and body, query status, then retry that identity only. The server does not
+  automatically retry a write.
+- Submission remains OFF behind both Edge and branch gates. Future acceptance
+  must authorize the real POS device/PIN, lock and revalidate the request, and
+  create the canonical order and immutable mapping in one transaction. No
+  customer caller can invoke acceptance or canonical order creation here.
+
 ## 5. Cross-References
-- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034, D-037, D-039, D-040, D-041, D-042, D-043, D-044).
+- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034, D-037, D-039, D-040, D-041, D-042, D-043, D-044, D-045).
 - Open questions: [OPEN_QUESTIONS](OPEN_QUESTIONS.md) (Q-004, Q-007, Q-008, Q-009, Q-010, Q-011, Q-012, Q-014, Q-015, Q-017, Q-028, Q-029, Q-030, Q-031, Q-032, Q-033, Q-034, Q-035, Q-036, Q-039, Q-040, Q-041, Q-042, Q-043, Q-044, Q-045, Q-046).
 - State transitions: [STATE_MACHINES](STATE_MACHINES.md).
 - Authorization, RLS, isolation tests, audit: [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md).

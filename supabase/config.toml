@@ -409,6 +409,14 @@ static_files = [
   "./functions/storefront-media-publish/vendor/THIRD_PARTY_NOTICES.txt",
 ]
 
+# WEB-ORDERS-001: intentionally anonymous gateway entry. The Edge Function
+# validates request capabilities and uses server-only service_role RPCs; anon
+# and authenticated roles cannot execute those RPCs. Ordering remains disabled
+# unless both the Edge environment gate and database channel gate are enabled.
+[functions.web-order-submit]
+enabled = true
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
