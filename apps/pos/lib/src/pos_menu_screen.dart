@@ -60,8 +60,11 @@ class PosMenuScreen extends StatelessWidget {
                 44 -
                 RestoflowSpacing.sm -
                 2 * navbarTitleSpacing -
-                kPosNavbarBrandMarkMin -
-                kPosNavbarBrandPlateCompactInsets.horizontal)
+                posNavbarSymbolPlateWidth(
+                  posTopBarMetricsFor(
+                    MediaQuery.sizeOf(context).width,
+                  ).markSize,
+                ))
             .clamp(44, 220)
             .toDouble();
 

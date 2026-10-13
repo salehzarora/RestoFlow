@@ -163,7 +163,16 @@ Future<_Controller> pumpInbox(
 
 void main() {
   for (final locale in ['en', 'ar', 'he']) {
-    for (final width in [320.0, 360.0, 390.0, 430.0, 480.0, 900.0, 1280.0]) {
+    for (final width in [
+      320.0,
+      360.0,
+      390.0,
+      430.0,
+      480.0,
+      520.0,
+      900.0,
+      1280.0,
+    ]) {
       for (final scale in [1.0, 2.0]) {
         testWidgets(
           '$locale ${width}px ${scale}x inbox shares approved navbar height',
@@ -182,7 +191,7 @@ void main() {
             );
             expect(
               tester.getSize(find.byKey(const Key('pos-brand-tile'))).width,
-              greaterThan(0),
+              width == 520 ? greaterThanOrEqualTo(40) : greaterThan(0),
             );
             final inbox = find.byKey(const Key('online-inbox-button'));
             expect(inbox.hitTestable(), findsOneWidget);
