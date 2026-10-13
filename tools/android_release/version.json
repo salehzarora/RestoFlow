@@ -99,6 +99,46 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.57",
+      "versionCode": 57,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / verified / not yet installed at record time / never uploaded",
+      "applicationSourceSha": "556136f1c3c2b3a59c300058a7fe1a82db444fc7",
+      "sourceSha": "556136f1c3c2b3a59c300058a7fe1a82db444fc7",
+      "buildDate": "2026-10-13",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v57-556136f.apk",
+          "packageId": "com.restoflow.pos",
+          "sha256": "f000eb56c46570ded842d76c16209612e0c50f61ae2bdc9fd5d1ae658cda68b9"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v57-556136f.apk",
+          "packageId": "com.restoflow.kds",
+          "sha256": "34d57c2291f7a21b3190d0e305b86a4353e1f3137ba239714f74c52c54cce321"
+        }
+      },
+      "intendedSource": "556136f1c3c2b3a59c300058a7fe1a82db444fc7 (main = the PR #319 source-refresh merge)",
+      "notes": [
+        "Built 2026-10-13 by tools/android_release/build_official_pair.ps1 (PowerShell 7) from main at",
+        "556136f1c3c2b3a59c300058a7fe1a82db444fc7 (the PR #319 source-refresh merge), branch main, clean tree.",
+        "POS and KDS both 0.0.57 / 57; verify_official_apk.ps1 PASS for both: production certificate pin,",
+        "not debuggable, zipalign + apksigner verified, AOT release, demo mode off, hosted project present,",
+        "forbidden reference and localhost absent, no JWT-shaped token. POS 70230211 bytes, KDS 57922358",
+        "bytes; ABIs arm64-v8a, armeabi-v7a, x86_64; minSdk 24, targetSdk 36. Toolchain: Flutter 3.44.2,",
+        "Dart 3.12.2, OpenJDK 21.0.10, Android build-tools 37.0.0. Output folder: dist/official-v57.",
+        "Content: editing an order after it reached the kitchen (ORDER-EDIT-001A..001G), the fail-closed",
+        "kitchen dispatch (PR #304), the order-detail ids (PR #305) and the POS manual cash-drawer button",
+        "(PR #297); Storefront (#316-#318) reaches POS/KDS only as additive l10n strings. Open PRs #314",
+        "and #315 are not included. No hosted migration was pending for v57.",
+        "Not installed at record time; never uploaded. Rollout: KDS first (where used), then POS, as an",
+        "update in place over 0.0.55; 'Editing sent orders' stays OFF until the owner has tested.",
+        "Build facts are recorded from the runner's BUILD-METADATA output. Code 57 stays consumed."
+      ]
+    },
+    {
       "versionName": "0.0.55",
       "versionCode": 55,
       "signing": "restoflow-production",
@@ -486,46 +526,19 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.57",
-    "versionCode": 57,
+    "versionName": "0.0.58",
+    "versionCode": 58,
     "signing": "restoflow-production",
-    "status": "planned - official candidate / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "main after the merge of this source-refresh PR (0db68c65 or later: carries PRs #304-#313 plus the Storefront work #316, #317 and #318, which reach POS/KDS only as additive packages/l10n strings); the exact SHA is recorded at build time",
+    "status": "planned - NOT required yet / NOT built / NOT installed / NOT uploaded",
+    "intendedSource": "to be decided when the next POS/KDS change needs a new pair",
     "notes": [
-      "BIZBOT-ANDROID-RELEASE-V57 (2026-10-09): editing an order after it reached the",
-      "kitchen (ORDER-EDIT-001A..001G: POS edit flow and printed change slip, KDS",
-      "change overlay and acknowledgement) plus the fail-closed kitchen dispatch",
-      "(KITCHEN-DISPATCH-HARDEN-001, PR #304) and the order-detail ids",
-      "(POS-ORDER-DETAIL-IDS-001, PR #305), on top of everything planned for v56",
-      "(POS manual cash-drawer button, PR #297). versionSymmetry holds: POS and KDS",
-      "both 0.0.57 / 57 from one main SHA; 57 > 56 > 55 keeps both lineages strictly",
-      "monotonic. Package ids, signing identity, RESTOFLOW_* names, storage keys and",
-      "channels are unchanged: v57 updates IN PLACE over 0.0.55 (or a v56 built",
-      "outside this ledger).",
-      "Hosted migrations: nothing left to apply for v57. HOSTED-MIGRATION-RECONCILE-001",
-      "applied the nine pending ORDER-EDIT/kitchen migrations (hosted ledger 153, head",
-      "20261009140000; docs/DEPLOYMENT.md section 17). Later Storefront migrations (e.g.",
-      "20261013140622 from #318) are applied by the Storefront deploy steps and are not",
-      "a POS/KDS prerequisite. Install KDS first (where a kitchen screen is used), then",
-      "POS. The branch setting 'Editing sent orders' stays OFF until the owner has",
-      "tested the pair, then is switched on in Dashboard Settings (owner only).",
-      "BIZBOT-ANDROID-RELEASE-V57 source refresh (2026-10-13): main moved on with the",
-      "Storefront work (#316 STOREFRONT-INTEGRATE-001, #317 STOREFRONT-PRODUCTION-ENABLE-001,",
-      "#318 STOREFRONT-PUBLISH-002): Dashboard, Edge Function, Storefront migrations and",
-      "new l10n strings only; no apps/pos, apps/kds or other shared package changed, and",
-      "the pair runner passes no Storefront define. Open PRs #314 (manual kitchen reprint",
-      "of all rounds) and #315 (RTL raster banding, needs real-printer acceptance) are",
-      "NOT part of v57 unless merged before the build. If a v57 pair was already built",
-      "from an older main, do not rebuild under 57: record it here and plan 0.0.58 / 58",
-      "instead.",
-      "Build with tools/android_release/build_official_pair.ps1 from main at the",
-      "intended source only after this prep PR merges and the owner authorizes BUILD.",
-      "The runner never installs, uploads or publishes; rollout is a separate owner step.",
-      "Kiosk is not part of v57: no kiosk app code changed since 0.2.24 / 26, and the",
-      "shared-package changes it compiles in (ORDER-EDIT-001C) only add the",
-      "order-edit types and labels that the kiosk never produces or prints.",
-      "Dashboard keeps its existing independent lineage; the hosted web Dashboard",
-      "carries the ORDER-EDIT-001G screens from main."
+      "BIZBOT-ANDROID-RELEASE-V57 record (2026-10-13): v57 is built and recorded in",
+      "previousOfficialReleases, so 0.0.58 / 58 is reserved for the next synchronized POS/KDS",
+      "pair (58 > 57 keeps both lineages strictly monotonic; update in place over 0.0.57).",
+      "Candidates not yet merged: PR #314 (manual kitchen reprint of all rounds) and PR #315",
+      "(RTL raster banding, needs real-printer acceptance first). Build only after the change",
+      "merges and the owner authorizes BUILD; plan the intended source in a prep PR first.",
+      "The runner never installs, uploads or publishes; rollout is a separate owner step."
     ]
   },
   "androidRendererPolicy": {
