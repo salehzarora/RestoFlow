@@ -16863,6 +16863,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Check the receipt logo again'**
   String get storefrontLogoRecheckAction;
+
+  /// STOREFRONT-PUBLISH-002: Existing product-image publication workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Publishing requires manager access.'**
+  String get storefrontItemImageDenied;
+
+  /// STOREFRONT-PUBLISH-002: Existing product-image publication workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Not published. Refresh the source and try again.'**
+  String get storefrontItemImageFailed;
+
+  /// STOREFRONT-PUBLISH-002: Existing product-image publication workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish / refresh'**
+  String get storefrontItemImagePublish;
+
+  /// STOREFRONT-PUBLISH-002: Existing product-image publication workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Public copy published'**
+  String get storefrontItemImagePublished;
+
+  /// STOREFRONT-PUBLISH-002: Existing product-image publication workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} existing originals'**
+  String storefrontItemImagesCount(int count);
+
+  /// STOREFRONT-PUBLISH-002: Existing product-image publication workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish or refresh public copies of existing product photos. Originals stay private. This does not change products, prices, the logo, or the hero.'**
+  String get storefrontItemImagesHelp;
+
+  /// STOREFRONT-PUBLISH-002: Existing product-image publication workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish / refresh all'**
+  String get storefrontItemImagesPublishAll;
+
+  /// STOREFRONT-PUBLISH-002: Existing product-image publication workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Product images'**
+  String get storefrontItemImagesTitle;
+
+  /// STOREFRONT-PUBLISH-002: Existing product-image publication workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'The current product images could not be verified. Try again.'**
+  String get storefrontItemImagesUnavailable;
+
+  /// STOREFRONT-PUBLISH-002: Existing product-image publication workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Outcome unknown. Retry to check the same request.'**
+  String get storefrontItemImageUnknown;
 }
 
 class _AppLocalizationsDelegate

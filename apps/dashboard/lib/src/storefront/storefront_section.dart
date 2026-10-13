@@ -10,6 +10,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'opening_hours_editor.dart';
 import 'storefront_contrast.dart';
 import 'storefront_copy.dart';
+import 'storefront_item_images.dart';
 import 'storefront_media_publisher.dart';
 import 'storefront_media_repository.dart';
 import 'storefront_media_slot.dart';
@@ -1920,6 +1921,17 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               style: theme.textTheme.bodySmall,
             ),
           ),
+        StorefrontItemImages(
+          publisher: publisher,
+          sources: _sources,
+          reloadSources: _reloadSources,
+          onRefresh: () => _refreshAll(reloadSources: true),
+          onBusyChanged: (busy) {
+            if (mounted) setState(() => _mediaBusy = busy);
+          },
+          nonce: widget.nonce,
+          enabled: !dirty && !_saving && !_mediaBusy && !_stale,
+        ),
         for (final slot in StorefrontSlot.values) ...[
           StorefrontMediaSlot(
             key: ValueKey('storefront-slot-widget-${slot.wire}'),

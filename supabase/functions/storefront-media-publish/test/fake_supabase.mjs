@@ -27,11 +27,42 @@ export function fakeSupabase({ userId = 'user-1', canManage = true, privateObjec
     user: user ?? { id: userId, aud: 'authenticated', role: 'authenticated', is_anonymous: false },
     pulled: 0, // bytes the function actually pulled from a 'counted' private download
     privateObjects,
+    // PUBLISH-002: these keys are still the current image_path of a live item.
+    currentItemSources: new Set([...privateObjects.keys()].filter((key) => key.startsWith('menu-images/'))),
+    sourceGenerations: new Map(),
+    sourceSeq: 0,
     canManage,
     seq: 0,
   };
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   const state = (r) => (r.published_at === null ? 'staged' : r.unpublished_at === null ? 'published' : 'retracted');
+  const isItem = (bucket, variant) => bucket === 'menu-images' && variant === 'w480';
+  const sameSnapshot = (a, b) => a && b && a.storage_object_id === b.storage_object_id
+    && a.storage_version === b.storage_version && a.storage_updated_at === b.storage_updated_at;
+
+  function itemSnapshot(key) {
+    const bytes = s.privateObjects.get(key);
+    if (!bytes || !s.currentItemSources.has(key)) return null;
+    let generation = s.sourceGenerations.get(key);
+    // Replacing the Uint8Array models an upsert to the same storage object,
+    // including an overwrite with identical bytes but a new generation.
+    if (!generation || generation.bytes !== bytes) {
+      const n = ++s.sourceSeq;
+      generation = { bytes, snapshot: {
+        storage_object_id: generation?.snapshot.storage_object_id ?? `0b5e0000-0000-4000-8000-${String(n).padStart(12, '0')}`,
+        storage_version: String(n), storage_updated_at: `2026-10-13T00:00:${String(n).padStart(2, '0')}Z`,
+      } };
+      s.sourceGenerations.set(key, generation);
+    }
+    return generation.snapshot;
+  }
+
+  function getItemSource(p) {
+    if (!s.canManage) return json(200, { ok: false, error: 'permission_denied', entity: 'storefront_media' });
+    const snapshot = itemSnapshot(`menu-images/${p.p_source_key}`);
+    return json(200, snapshot ? { ok: true, entity: 'storefront_media', source_snapshot: snapshot }
+      : { ok: false, error: 'source_not_found', entity: 'storefront_media' });
+  }
 
   function claimOrReplay(op, key, fp) {
     const k = `${op}:${key}`;
@@ -43,18 +74,27 @@ export function fakeSupabase({ userId = 'user-1', canManage = true, privateObjec
 
   function stage(p) {
     if (!s.canManage) return json(200, { ok: false, error: 'permission_denied', entity: 'storefront_media' });
-    const fp = JSON.stringify([p.p_organization_id, p.p_restaurant_id, p.p_source_bucket, p.p_source_key, p.p_variant, p.p_content_hash, p.p_width, p.p_height, p.p_bytes]);
+    const item = isItem(p.p_source_bucket, p.p_variant);
+    const snapshot = item ? itemSnapshot(`${p.p_source_bucket}/${p.p_source_key}`) : null;
+    if (item && !snapshot) return json(200, { ok: false, error: 'source_not_found', entity: 'storefront_media' });
+    if (item && !p.p_source_snapshot) return json(200, { ok: false, error: 'invalid', reason: 'source_snapshot_required', entity: 'storefront_media' });
+    if (item && !sameSnapshot(snapshot, p.p_source_snapshot)) return json(200, { ok: false, error: 'source_stale', entity: 'storefront_media' });
+    const fp = JSON.stringify([p.p_organization_id, p.p_restaurant_id, p.p_source_bucket, p.p_source_key, p.p_variant, p.p_content_hash, p.p_width, p.p_height, p.p_bytes,
+      ...(item ? [p.p_source_snapshot] : [])]);
     const rp = claimOrReplay('stage', p.p_client_request_id, fp);
     if (rp && rp.error) return rp.error;
     if (rp) {
       const stored = s.ledger.get(`stage:${p.p_client_request_id}`).result;
       const live = s.media.get(stored.media_id);
       if (!live) return json(200, { ok: false, error: 'stale_request', entity: 'storefront_media' });
+      if (item && !sameSnapshot(live.source_snapshot, snapshot)) return json(200, { ok: false, error: 'source_stale', entity: 'storefront_media' });
       return json(200, { ...stored, state: state(live), idempotent_replay: true });
     }
     if (!s.privateObjects.has(`${p.p_source_bucket}/${p.p_source_key}`)) return json(200, { ok: false, error: 'source_not_found', entity: 'storefront_media' });
     const objectKey = `${'a'.repeat(32)}/${p.p_content_hash}.webp`;
-    let row = [...s.media.values()].find((m) => m.object_key === objectKey);
+    let row = [...s.media.values()].find((m) => m.object_key === objectKey && (item
+      ? m.source_bucket === p.p_source_bucket && m.source_key === p.p_source_key && m.variant === p.p_variant && sameSnapshot(m.source_snapshot, snapshot)
+      : !isItem(m.source_bucket, m.variant)));
     let result;
     if (row) {
       if (row.width !== p.p_width || row.height !== p.p_height || row.bytes !== p.p_bytes) return json(200, { ok: false, error: 'content_mismatch', entity: 'storefront_media' });
@@ -63,7 +103,8 @@ export function fakeSupabase({ userId = 'user-1', canManage = true, privateObjec
         source_mismatch: row.source_bucket !== p.p_source_bucket || row.source_key !== p.p_source_key || row.variant !== p.p_variant };
     } else {
       row = { id: `m-${++s.seq}`, object_key: objectKey, source_bucket: p.p_source_bucket, source_key: p.p_source_key, variant: p.p_variant,
-        content_hash: p.p_content_hash, width: p.p_width, height: p.p_height, bytes: p.p_bytes, published_at: null, unpublished_at: null };
+        content_hash: p.p_content_hash, width: p.p_width, height: p.p_height, bytes: p.p_bytes, published_at: null, unpublished_at: null,
+        ...(item ? { source_snapshot: { ...snapshot } } : {}) };
       s.media.set(row.id, row);
       result = { ok: true, idempotent_replay: false, entity: 'storefront_media', media_id: row.id, object_key: objectKey, state: 'staged', existing: false,
         source_bucket: p.p_source_bucket, source_key: p.p_source_key, variant: p.p_variant, source_mismatch: false };
@@ -80,6 +121,11 @@ export function fakeSupabase({ userId = 'user-1', canManage = true, privateObjec
     const row = s.media.get(p.p_media_id);
     // a REPLAY re-reads its row too: a publication retracted since (or a row gone) is stale
     if (!row) return json(200, { ok: false, error: rp ? 'stale_request' : 'not_found', entity: 'storefront_media' });
+    if (isItem(row.source_bucket, row.variant)) {
+      const snapshot = itemSnapshot(`${row.source_bucket}/${row.source_key}`);
+      if (!snapshot) return json(200, { ok: false, error: 'source_not_found', entity: 'storefront_media' });
+      if (!sameSnapshot(row.source_snapshot, snapshot)) return json(200, { ok: false, error: 'source_stale', entity: 'storefront_media' });
+    }
     if (rp && state(row) !== 'published') return json(200, { ok: false, error: 'stale_request', entity: 'storefront_media' });
     let result;
     // the object is proven for EVERY outcome, a replay and an already-LIVE row included (as the migration does)
@@ -92,9 +138,12 @@ export function fakeSupabase({ userId = 'user-1', canManage = true, privateObjec
         already_published: true, republished: false, replaced_media_id: null, profile_version: null };
     } else {
       const republished = row.unpublished_at !== null;
+      const old = isItem(row.source_bucket, row.variant) ? [...s.media.values()].find((m) => m.id !== row.id
+        && m.source_bucket === row.source_bucket && m.source_key === row.source_key && m.variant === row.variant && state(m) === 'published') : null;
+      if (old) old.unpublished_at = 't';
       row.published_at = 't'; row.unpublished_at = null;
       result = { ok: true, idempotent_replay: false, entity: 'storefront_media', media_id: row.id, object_key: row.object_key, state: 'published',
-        already_published: false, republished, replaced_media_id: null, profile_version: null };
+        already_published: false, republished, replaced_media_id: old?.id ?? null, profile_version: null };
     }
     s.ledger.set(`finalize:${p.p_client_request_id}`, { fp, result });
     return json(200, result);
@@ -118,6 +167,7 @@ export function fakeSupabase({ userId = 'user-1', canManage = true, privateObjec
     let res;
     if (u.pathname === '/auth/v1/user') res = json(200, s.user);
     else if (step === 'list_storefront_media') res = json(200, s.canManage ? { ok: true, entity: 'storefront_media', media: [] } : { ok: false, error: 'not_found', entity: 'storefront_media' });
+    else if (step === 'get_storefront_item_source') res = getItemSource(JSON.parse(init.body));
     else if (step === 'stage_storefront_media') res = stage(JSON.parse(init.body));
     else if (step === 'finalize_storefront_media') res = finalize(JSON.parse(init.body));
     else if (step === 'download' || step === 'read_public') {

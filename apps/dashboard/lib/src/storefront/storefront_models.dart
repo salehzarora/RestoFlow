@@ -74,10 +74,32 @@ enum StorefrontSourceBucket {
   }
 }
 
-/// The two storefront media slots (CONTRACT §2, owner decisions D3/D4):
+/// A publication target, independent of whether it has a profile pointer.
+abstract interface class StorefrontPublishTarget {
+  String get wire;
+  StorefrontVariant get variant;
+  List<StorefrontSourceBucket> get allowedBuckets;
+}
+
+/// Product images are resolved by the public reader from their current source.
+/// They must never be assigned to a logo/hero profile pointer.
+enum StorefrontItemTarget implements StorefrontPublishTarget {
+  item;
+
+  @override
+  String get wire => 'item';
+  @override
+  StorefrontVariant get variant => StorefrontVariant.w480;
+  @override
+  List<StorefrontSourceBucket> get allowedBuckets => const [
+    StorefrontSourceBucket.menuImages,
+  ];
+}
+
+/// The two storefront profile media slots (CONTRACT §2, owner decisions D3/D4):
 /// logo = `w480` from the receipt logo ONLY; hero = `w960` from the receipt
 /// logo OR a menu item's original. Item images are NOT a slot of this ticket.
-enum StorefrontSlot {
+enum StorefrontSlot implements StorefrontPublishTarget {
   logo(
     wire: 'logo',
     variant: StorefrontVariant.w480,
@@ -236,6 +258,7 @@ StorefrontPublishedPage storefrontPublishedPageOf(List<String> blockers) {
 /// `encode_warning`: recipe `storefront-media-c4` answers any non-trap codec
 /// failure (decode, resize or encode) as `decode_failed`.
 const List<String> kStorefrontRefusalCodes = [
+  'source_stale',
   'unsupported_format',
   'empty',
   'input_too_large',
@@ -264,6 +287,7 @@ const List<String> kStorefrontPublishFaultCodes = [
   'variant_invalid',
   'variant_not_allowed',
   'source_key_invalid',
+  'source_snapshot_required',
   'content_hash_invalid',
   'dimensions_invalid',
   'bytes_invalid',

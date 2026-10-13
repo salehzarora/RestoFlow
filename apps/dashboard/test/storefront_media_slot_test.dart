@@ -453,6 +453,27 @@ String _message(WidgetTester tester, String slot) =>
     tester.widget<Text>(find.byKey(Key('storefront-slot-$slot-message'))).data!;
 
 void main() {
+  testWidgets('item derivatives do not enter logo or hero media pickers', (
+    tester,
+  ) async {
+    final rig = _Rig(
+      rows: [
+        _row(_mediaOld, bucket: 'menu-images', key: _menuKey),
+        _row(_mediaLogo),
+      ],
+    );
+    await _pump(tester, rig);
+    expect(
+      find.byKey(const Key('storefront-media-retract-$_mediaOld')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('storefront-media-retract-$_mediaLogo')),
+      findsOneWidget,
+    );
+    expect(rig.server.saves, isEmpty);
+  });
+
   testWidgets('publish -> assign via CAS -> re-read (logo, rung ladder)', (
     tester,
   ) async {
