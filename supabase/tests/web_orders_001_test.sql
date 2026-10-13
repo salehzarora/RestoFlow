@@ -141,6 +141,14 @@ cross join unnest(array['web_order_channel_settings','web_order_requests','web_o
 select ok(relrowsecurity and relforcerowsecurity,relname||' has enabled and forced RLS')
 from pg_class where oid in ('public.web_order_channel_settings'::regclass,
  'public.web_order_requests'::regclass,'public.web_order_request_events'::regclass);
+-- RF059 policy coverage requires explicit command policies on tenant tables.
+select is((select array_agg(cmd order by cmd)::text[] from pg_policies
+ where schemaname='public' and tablename=t),array['DELETE','INSERT','SELECT','UPDATE']::text[],
+ t||' has exactly one policy per command')
+from unnest(array['web_order_channel_settings','web_order_requests','web_order_request_events']) t;
+select is((select count(*)::int from pg_policies
+ where schemaname='public' and tablename=t and cmd='ALL'),0,t||' has no FOR ALL policy')
+from unnest(array['web_order_channel_settings','web_order_requests','web_order_request_events']) t;
 set local role anon;
 select throws_ok($$select public.submit_web_order_request('wo001-alpha',pg_temp.wo_client(1),repeat('a',64),pg_temp.wo_order())$$,
  '42501',null,'real anon cannot submit');

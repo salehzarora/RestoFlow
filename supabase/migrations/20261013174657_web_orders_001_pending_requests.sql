@@ -93,12 +93,31 @@ alter table public.web_order_requests enable row level security;
 alter table public.web_order_requests force row level security;
 alter table public.web_order_request_events enable row level security;
 alter table public.web_order_request_events force row level security;
-create policy web_order_channel_settings_deny on public.web_order_channel_settings
-  for all to authenticated using (false) with check (false);
-create policy web_order_requests_deny on public.web_order_requests
-  for all to authenticated using (false) with check (false);
-create policy web_order_request_events_deny on public.web_order_request_events
-  for all to authenticated using (false) with check (false);
+-- RF-059 requires explicit per-command policies even for RPC-only deny tables.
+create policy web_order_channel_settings_select on public.web_order_channel_settings
+  for select to authenticated using (false);
+create policy web_order_channel_settings_insert on public.web_order_channel_settings
+  for insert to authenticated with check (false);
+create policy web_order_channel_settings_update on public.web_order_channel_settings
+  for update to authenticated using (false) with check (false);
+create policy web_order_channel_settings_delete on public.web_order_channel_settings
+  for delete to authenticated using (false);
+create policy web_order_requests_select on public.web_order_requests
+  for select to authenticated using (false);
+create policy web_order_requests_insert on public.web_order_requests
+  for insert to authenticated with check (false);
+create policy web_order_requests_update on public.web_order_requests
+  for update to authenticated using (false) with check (false);
+create policy web_order_requests_delete on public.web_order_requests
+  for delete to authenticated using (false);
+create policy web_order_request_events_select on public.web_order_request_events
+  for select to authenticated using (false);
+create policy web_order_request_events_insert on public.web_order_request_events
+  for insert to authenticated with check (false);
+create policy web_order_request_events_update on public.web_order_request_events
+  for update to authenticated using (false) with check (false);
+create policy web_order_request_events_delete on public.web_order_request_events
+  for delete to authenticated using (false);
 revoke all on public.web_order_channel_settings, public.web_order_requests,
   public.web_order_request_events from public, anon, authenticated, service_role;
 
