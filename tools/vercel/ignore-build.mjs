@@ -437,6 +437,24 @@ export function inspectGraph(repoRoot, revision = 'HEAD') {
   return { members: [...members], deployedApps: [...APPS], reachableMembers: [...reachable].sort(), assets };
 }
 
+// D-047: these three literal checkout imports remain fully inspected inputs.
+// No computed path, other loader file, duplicate call or require is permitted.
+const CHECKOUT_LOADER_TARGETS = Object.freeze({
+  'storefront/src/ui/storefront/checkout/FlowEntry.tsx': ['./FlowRuntime', './LiveFlowRuntime'],
+  'storefront/src/ui/storefront/checkout/CheckoutEntry.tsx': ['./LiveCheckoutProvider'],
+});
+export function checkoutLiteralImports(filename, source) {
+  const allowed = CHECKOUT_LOADER_TARGETS[filename] ?? [];
+  const imports = [];
+  const remainder = source.replace(/\bimport\s*\(\s*(['"])([^'"]+)\1\s*\)/g, (call, _quote, target) => {
+    if (!allowed.includes(target) || imports.includes(target)) return call;
+    imports.push(target);
+    return ' ';
+  });
+  if (/\b(?:import|require)\s*(?:\(|\/[/*])/.test(remainder)) return null;
+  return imports;
+}
+
 function inspectMarketing(repo, revision) {
   const controls = git(repo, ['ls-tree', '-r', '-z', '--name-only', revision, '--', '.vercelignore', 'site']).text.split('\0');
   if (controls.some((file) => ['.vercelignore', 'site/.vercelignore'].includes(file) || unsupportedEntrypoint(file, 'site/', false))) fail('unsupported_build_contract');
@@ -608,10 +626,11 @@ function inspectStorefront(repo, revision) {
   if (moduleFiles.length) {
     const sources = readBatch(repo, revision, moduleFiles);
     for (const [filename, source] of sources) {
-      if (/\b(?:import|require)\s*\(/.test(source)) fail('unsupported_graph');
+      const lazy = checkoutLiteralImports(filename, source);
+      if (lazy === null) fail('unsupported_graph');
       if (STOREFRONT_BUILTIN_HANDLES.test(source)) fail('unsupported_graph');
-      for (const match of source.matchAll(/(?:\bfrom\s*|\bimport\s*)["']([^"']+)["']/g)) {
-        const uri = match[1];
+      const imports = [...source.matchAll(/(?:\bfrom\s*|\bimport\s*)["']([^"']+)["']/g)].map((match) => match[1]);
+      for (const uri of [...imports, ...lazy]) {
         if (/[\\%#?$\r\n]/.test(uri)) fail('unsupported_graph');
         if (uri.startsWith('.')) {
           const target = safeRelative(path.posix.dirname(filename), uri);

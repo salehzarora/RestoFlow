@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { after, test } from 'node:test';
+import { checkoutLiteralImports } from './ignore-build.mjs';
 
 // Always exercise the real sibling helper and manifests from this checkout.
 const SOURCE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -1829,4 +1830,42 @@ test('24 same-tree storefront self-check ignores', () => {
 test('24 misspelled storefront selector is an invalid selector', () => {
   const { repo, base } = fixture();
   expectDecision(repo, 'storefrnt', base, 'BUILD');
+});
+
+
+test('checkout literal loaders: exact paths only, never computed or other files', () => {
+  const flow = 'storefront/src/ui/storefront/checkout/FlowEntry.tsx';
+  const provider = 'storefront/src/ui/storefront/checkout/CheckoutEntry.tsx';
+  assert.deepEqual(checkoutLiteralImports(flow, "const a=()=>import('./FlowRuntime');const b=()=>import('./LiveFlowRuntime');"), ['./FlowRuntime', './LiveFlowRuntime']);
+  assert.deepEqual(checkoutLiteralImports(provider, "const p=()=>import('./LiveCheckoutProvider');"), ['./LiveCheckoutProvider']);
+  for (const code of [
+    "import('./Other')", "import('../LiveFlowRuntime')", "import('node:fs')",
+    "import('https://example.test/module.js')", "import(target)",
+    "import('./' + name)", "require('./FlowRuntime')", "import/* gap */('./FlowRuntime')",
+    "import('./FlowRuntime');import('./FlowRuntime')",
+  ]) assert.equal(checkoutLiteralImports(flow, code), null, code);
+  assert.equal(checkoutLiteralImports('storefront/app/page.tsx', "import('./FlowRuntime')"), null);
+  assert.equal(checkoutLiteralImports(provider, "import('./LiveFlowRuntime')"), null);
+});
+
+test('checkout literal loaders: real filter includes targets and fails safe on extra loader', () => {
+  const { repo } = fixture();
+  const dir = 'storefront/src/ui/storefront/checkout';
+  put(repo, `${dir}/FlowEntry.tsx`, "const a=()=>import('./FlowRuntime');const b=()=>import('./LiveFlowRuntime');export {a,b};\n");
+  put(repo, `${dir}/FlowRuntime.tsx`, 'export const a=1;\n');
+  put(repo, `${dir}/LiveFlowRuntime.tsx`, 'export const a=2;\n');
+  commit(repo);
+  const base = runGit(repo, ['rev-parse', 'HEAD']);
+  put(repo, 'docs/checkout-only.md', 'Documentation only.\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'IGNORE');
+  put(repo, `${dir}/LiveFlowRuntime.tsx`, 'export const a=3;\n');
+  commit(repo);
+  expectAll(repo, base, 'IGNORE', 'IGNORE', 'BUILD');
+  put(repo, `${dir}/FlowEntry.tsx`, "const unsafe=()=>import('./Unknown');export {unsafe};\n");
+  commit(repo);
+  expectDecision(repo, 'product', base, 'IGNORE');
+  expectDecision(repo, 'marketing', base, 'IGNORE');
+  const result = expectDecision(repo, 'storefront', base, 'BUILD');
+  assert.equal(result.reason, 'unsupported_graph');
 });

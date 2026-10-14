@@ -94,6 +94,15 @@ export function measure(outDir = OUT) {
     // Preload/modulepreload of the SAME resources must not double count.
     const preloaded = new Set();
     for (const m of html.matchAll(/<link[^>]+rel="(?:preload|modulepreload)"[^>]*href="([^"]+)"/g)) preloaded.add(m[1]);
+    for (const tag of html.matchAll(/<link\b[^>]*>/gi)) {
+      const value = tag[0];
+      const rel = /\brel=["']([^"']+)["']/i.exec(value)?.[1];
+      const as = /\bas=["']([^"']+)["']/i.exec(value)?.[1];
+      const href = /\bhref=["']([^"']+)["']/i.exec(value)?.[1];
+      if (href && (rel === 'modulepreload' || (rel === 'preload' && as === 'script'))) {
+        eager.add(href); preloaded.add(href);
+      }
+    }
     // Speculative next-route prefetch, reported separately.
     const prefetch = new Set();
     for (const m of html.matchAll(/<link[^>]+rel="prefetch"[^>]*href="([^"]+)"/g)) {
