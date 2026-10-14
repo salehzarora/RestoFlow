@@ -26,7 +26,10 @@ class OnlineOrderPrintResult {
     this.attemptId,
     this.sendAuthorized = false,
   });
-  final String requestId, orderId, dispatchId, decisionId, printerAssignmentId;
+  final String requestId, orderId, dispatchId, decisionId;
+  // A status-only available ledger has not selected a printer yet. Claimed
+  // and sendReserved replies still require a valid assignment in the decoder.
+  final String? printerAssignmentId;
   final OnlineOrderPrintState state;
   final PulledKitchenDispatch? dispatch;
   final String? attemptId;
@@ -119,6 +122,14 @@ class RealOnlineOrderPrintRepository implements OnlineOrderPrintRepository {
       };
       final orderId = _id(raw['canonical_order_id']);
       final dispatchId = _id(raw['dispatch_id']);
+      final assignmentId = raw['printer_assignment_id'] == null
+          ? null
+          : _id(raw['printer_assignment_id']);
+      if ((state == OnlineOrderPrintState.claimed ||
+              state == OnlineOrderPrintState.sendReserved) &&
+          assignmentId == null) {
+        throw const OnlineOrderPrintException();
+      }
       final returnedAttempt = raw['attempt_id'] == null
           ? null
           : _id(raw['attempt_id']);
@@ -163,7 +174,7 @@ class RealOnlineOrderPrintRepository implements OnlineOrderPrintRepository {
         orderId: orderId,
         dispatchId: dispatchId,
         decisionId: _id(raw['decision_id']),
-        printerAssignmentId: _id(raw['printer_assignment_id']),
+        printerAssignmentId: assignmentId,
         state: state,
         dispatch: dispatch,
         attemptId: returnedAttempt,

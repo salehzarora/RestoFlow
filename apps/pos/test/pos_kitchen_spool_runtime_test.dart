@@ -120,19 +120,23 @@ const _context = DeviceContext(
   restaurantId: 'rest-1',
   deviceId: 'dev-1',
 );
+const _printerAssignment = 'a0000000-0000-4000-8000-000000000001';
+const _otherPrinterAssignment = 'c0000000-0000-4000-8000-000000000001';
 
 class _WebPrintRepository implements OnlineOrderPrintRepository {
   var claims = 0, begins = 0, finishes = 0;
   var state = OnlineOrderPrintState.claimed;
   var loseBeginReply = false, loseFinishReply = false;
   String? attempt;
+  String? claimedAssignment = _printerAssignment;
+  String? beginAssignment = _printerAssignment;
   Future<void> Function()? afterBegin;
   OnlineOrderPrintResult result({bool grant = false}) => OnlineOrderPrintResult(
     requestId: 'request-web',
     orderId: 'order-web',
     dispatchId: 'dispatch-web',
     decisionId: 'decision-web',
-    printerAssignmentId: 'printer-web',
+    printerAssignmentId: grant ? beginAssignment : claimedAssignment,
     state: state,
     attemptId: attempt,
     sendAuthorized: grant,
@@ -375,7 +379,7 @@ void main() {
       webRepository: repo,
       canWebPrint: active ?? () => true,
       webDestination: (id) async {
-        expect(id, 'printer-web');
+        expect(id, _printerAssignment);
         return destination ?? resolved;
       },
     );
@@ -413,6 +417,64 @@ void main() {
         expect(workerNetworkCalls, hasLength(1));
       },
     );
+    test(
+      'claimed response without assignment cannot resolve or begin transmission',
+      () async {
+        final repo = _WebPrintRepository()..claimedAssignment = null;
+        final rt = target(repo);
+        addTearDown(rt.dispose);
+        expect(
+          await rt.onAcceptedWebOrder('request-web', 'order-web'),
+          WebOrderPrintOutcome.reconciliationRequired,
+        );
+        expect(repo.begins, 0);
+        expect(workerNetworkCalls, isEmpty);
+        expect(await factory().spoolFileExists(), isFalse);
+      },
+    );
+    test(
+      'claim selecting another printer is refused by exact-assignment resolver',
+      () async {
+        final repo = _WebPrintRepository()
+          ..claimedAssignment = _otherPrinterAssignment;
+        final rt = runtime(
+          wireDrain: true,
+          fetchMode: printerMode,
+          webRepository: repo,
+          canWebPrint: () => true,
+          webDestination: (assignment) async => assignment == _printerAssignment
+              ? resolved
+              : const BlockedKitchenDestination(
+                  'kitchen_printer_assignment_mismatch',
+                ),
+        );
+        addTearDown(rt.dispose);
+        transport.enqueue({'ok': true});
+        expect(
+          await rt.onAcceptedWebOrder('request-web', 'order-web'),
+          WebOrderPrintOutcome.blocked,
+        );
+        expect(repo.begins, 0);
+        expect(workerNetworkCalls, isEmpty);
+      },
+    );
+    for (final assignment in [null, _otherPrinterAssignment]) {
+      test(
+        'begin assignment $assignment cannot authorize physical transmission',
+        () async {
+          final repo = _WebPrintRepository()..beginAssignment = assignment;
+          final rt = target(repo);
+          addTearDown(rt.dispose);
+          transport.enqueue({'ok': true});
+          expect(
+            await rt.onAcceptedWebOrder('request-web', 'order-web'),
+            WebOrderPrintOutcome.reconciliationRequired,
+          );
+          expect(repo.begins, 1);
+          expect(workerNetworkCalls, isEmpty);
+        },
+      );
+    }
     test(
       'unsent recovery is read-only, scope isolated, and does not claim or send',
       () async {

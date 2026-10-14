@@ -402,10 +402,13 @@ final class PosKitchenSpoolRuntime
       if (claim.state == OnlineOrderPrintState.busy)
         return WebOrderPrintOutcome.busy;
       final dispatch = claim.dispatch;
-      if (claim.state != OnlineOrderPrintState.claimed || dispatch == null) {
+      final assignmentId = claim.printerAssignmentId;
+      if (claim.state != OnlineOrderPrintState.claimed ||
+          dispatch == null ||
+          assignmentId == null) {
         return WebOrderPrintOutcome.reconciliationRequired;
       }
-      final destination = await resolve(claim.printerAssignmentId);
+      final destination = await resolve(assignmentId);
       if (!active()) return WebOrderPrintOutcome.unavailable;
       final db = await _openDatabase(_databaseFactoryBuilder());
       final store = DriftKitchenSpoolStore(db);
@@ -474,7 +477,7 @@ final class PosKitchenSpoolRuntime
               result.orderId == orderId &&
               result.dispatchId == job.dispatchId &&
               result.decisionId == claim.decisionId &&
-              result.printerAssignmentId == claim.printerAssignmentId &&
+              result.printerAssignmentId == assignmentId &&
               result.attemptId == attempt;
         },
         finishTargetSend: (job) async {
@@ -497,7 +500,7 @@ final class PosKitchenSpoolRuntime
               result.dispatchId == job.dispatchId &&
               result.attemptId == attempt &&
               result.decisionId == claim.decisionId &&
-              result.printerAssignmentId == claim.printerAssignmentId &&
+              result.printerAssignmentId == assignmentId &&
               result.state ==
                   (status == 'transport_accepted'
                       ? OnlineOrderPrintState.transportAccepted

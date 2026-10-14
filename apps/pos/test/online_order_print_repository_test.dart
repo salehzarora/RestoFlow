@@ -83,6 +83,51 @@ void main() {
     });
   });
   test(
+    'real available status with no selected printer decodes without send authority',
+    () async {
+      // app.pos_web_order_print_operation returns this projection before any
+      // claim selects a printer; status includes neither a payload nor a grant.
+      transport.response = <String, Object?>{
+        'ok': true,
+        'request_id': requestId,
+        'canonical_order_id': canonicalId,
+        'decision_id': decisionId,
+        'dispatch_id': dispatchId,
+        'attempt_id': null,
+        'printer_assignment_id': null,
+        'send_authorized': false,
+        'state': 'available',
+      };
+      final status = await repo.status(requestId);
+      expect(status.state, OnlineOrderPrintState.available);
+      expect(status.printerAssignmentId, isNull);
+      expect(status.attemptId, isNull);
+      expect(status.dispatch, isNull);
+      expect(status.sendAuthorized, isFalse);
+      expect(transport.calls.single.$1, 'pos_web_order_print_status');
+    },
+  );
+  for (final state in ['claimed', 'send_reserved']) {
+    for (final invalid in [null, 'invalid-assignment']) {
+      test(
+        '$state requires a valid selected-printer UUID ($invalid)',
+        () async {
+          transport.response = result(
+            state,
+            payload: state == 'claimed',
+            authorized: state == 'send_reserved',
+          )..['printer_assignment_id'] = invalid;
+          await expectLater(
+            state == 'claimed'
+                ? repo.claim(requestId)
+                : repo.begin(requestId, attemptId),
+            throwsA(isA<OnlineOrderPrintException>()),
+          );
+        },
+      );
+    }
+  }
+  test(
     'fresh exact begin is the only send grant; replay is no grant',
     () async {
       transport.response = result('send_reserved', authorized: true);
