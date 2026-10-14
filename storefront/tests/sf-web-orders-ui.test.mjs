@@ -12,7 +12,7 @@ const { addLine, summarise, optionSummary } = await import('../src/cart/cartMode
 const { orderFromCart, validOrderNotes } = await import('../src/orders/index.ts');
 const { EMPTY_DRAFT } = await import('../src/ui/storefront/checkout/draft.ts');
 const { validateCheckout } = await import('../src/ui/storefront/checkout/validation.ts');
-const { orderMessages, orderStatusCopy, orderSnapshotCopy } = await import('../src/i18n/orders.ts');
+const { orderMessages, orderStatusCopy, orderSnapshotCopy, orderErrorCopy } = await import('../src/i18n/orders.ts');
 const { reviewPath, switchLocalePath } = await import('../src/routes/routes.ts');
 const { buildQuote } = await import('../src/money/quote.ts');
 
@@ -132,4 +132,24 @@ test('live checkout uses memory carts and private status; no demo gateway or des
   assert.ok(live.includes('controller?.getSnapshot()'), 'recovery guard must read the effect-started controller before redirecting');
   assert.ok(!status.includes('snapshot.displayCode') && !status.includes('timelineFor') && !status.includes('CancelSheet'));
   assert.ok(status.includes('result.totals.grand_total_minor'), 'confirmed totals come from the server');
+});
+
+test('storage failures after an uncertain write or confirmed acceptance never claim a request was unsent in AR/HE/EN', () => {
+  const unsent = {
+    en: /not been sent|was not sent|not sent|unsent/i,
+    ar: /لم يتم إرسال|لم يُرسل|لم يرسل/,
+    he: /לא נשלחה|לא נשלח/,
+  };
+  for (const locale of ['ar', 'he', 'en']) {
+    const m = orderMessages(locale);
+    assert.equal(orderErrorCopy('storage_unavailable', m), m.recoveryUnavailable);
+    for (const result of [null, { status: 'accepted' }]) {
+      const snapshot = { phase: 'failure', error: 'storage_unavailable', result, canRetry: false, recovered: false };
+      assert.equal(orderSnapshotCopy(snapshot, m), m.recoveryUnavailable);
+      assert.equal(snapshot.result, result, 'availability copy must preserve the known server result');
+      assert.doesNotMatch(orderSnapshotCopy(snapshot, m), unsent[locale]);
+    }
+    assert.equal(orderSnapshotCopy({ phase: 'unknown', error: 'storage_unavailable', result: null }, m), m.unknown);
+    for (const error of ['storage_unavailable', 'configuration_invalid', 'crypto_unavailable']) assert.doesNotMatch(orderErrorCopy(error, m), unsent[locale]);
+  }
 });

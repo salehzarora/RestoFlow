@@ -34,7 +34,8 @@ const en = {
   menuChanged: 'An item or modifier is unavailable or changed. Return to the menu to review your selections.',
   serviceUnavailable: 'The request could not be processed. Check its status before trying again.',
   rateLimited: 'Too many requests. Please wait before checking again.',
-  unsupported: 'Pickup checkout is unavailable in this browser. Your request has not been sent.',
+  recoveryUnavailable: 'Secure request recovery is unavailable. Keep this tab open and check the status before trying again.',
+  unsupported: 'Pickup checkout is unavailable in this browser. Keep this tab open and check any existing request status before trying again.',
 };
 export type OrderMessages = { readonly [K in keyof typeof en]: string };
 const ar: OrderMessages = {
@@ -60,7 +61,8 @@ const ar: OrderMessages = {
   menuChanged: 'أحد الأصناف أو الإضافات غير متاح أو تغيّر. عد إلى القائمة لمراجعة اختياراتك.',
   serviceUnavailable: 'تعذّرت معالجة الطلب. تحقّق من حالته قبل المحاولة مجددًا.',
   rateLimited: 'طلبات كثيرة. يُرجى الانتظار قبل التحقق مجددًا.',
-  unsupported: 'طلب الاستلام غير متاح في هذا المتصفح. لم يتم إرسال طلبك.',
+  recoveryUnavailable: 'استعادة الطلب الآمنة غير متاحة. أبقِ علامة التبويب هذه مفتوحة وتحقّق من حالة الطلب قبل المحاولة مجددًا.',
+  unsupported: 'طلب الاستلام غير متاح في هذا المتصفح. أبقِ علامة التبويب هذه مفتوحة وتحقّق من حالة أي طلب موجود قبل المحاولة مجددًا.',
 };
 const he: OrderMessages = {
   payAtPickup: 'תשלום באיסוף',
@@ -85,7 +87,8 @@ const he: OrderMessages = {
   menuChanged: 'פריט או תוספת אינם זמינים או השתנו. חזרו לתפריט ובדקו את הבחירות.',
   serviceUnavailable: 'לא ניתן לעבד את הבקשה. בדקו את מצבה לפני ניסיון נוסף.',
   rateLimited: 'יותר מדי בקשות. המתינו לפני בדיקה נוספת.',
-  unsupported: 'הזמנת איסוף אינה זמינה בדפדפן זה. הבקשה לא נשלחה.',
+  recoveryUnavailable: 'שחזור הבקשה המאובטח אינו זמין. השאירו את הלשונית הזו פתוחה ובדקו את מצב הבקשה לפני ניסיון נוסף.',
+  unsupported: 'הזמנת איסוף אינה זמינה בדפדפן זה. השאירו את הלשונית הזו פתוחה ובדקו את מצב הבקשה הקיימת לפני ניסיון נוסף.',
 };
 export function orderMessages(locale: Locale): OrderMessages { return locale === 'ar' ? ar : locale === 'he' ? he : en; }
 export function orderStatusCopy(status: WebOrderStatus, m: OrderMessages) {
@@ -97,7 +100,8 @@ export function orderErrorCopy(error: WebOrderErrorCode | null, m: OrderMessages
     case 'item_unavailable': case 'modifier_selection_invalid': case 'menu_unavailable': return m.menuChanged;
     case 'invalid_request': case 'payload_too_large': return m.invalid;
     case 'rate_limited': case 'capacity_reached': return m.rateLimited;
-    case 'storage_unavailable': case 'configuration_invalid': case 'crypto_unavailable': return m.unsupported;
+    case 'storage_unavailable': return m.recoveryUnavailable;
+    case 'configuration_invalid': case 'crypto_unavailable': return m.unsupported;
     case 'recovery_expired': case 'recovery_invalid': return m.noRecovery;
     default: return m.serviceUnavailable;
   }
