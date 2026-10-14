@@ -66,20 +66,18 @@ export function createOrderController(options: OrderControllerOptions): OrderCon
   };
   const receive = (outcome: OrderOutcome, checking: boolean): OrderSnapshot => {
     if (outcome.kind === 'known') {
-      if (record) {
-        const expiry = Math.min(record.expires_at, Date.parse(outcome.result.expires_at));
-        if (outcome.result.status === 'expired' || expiry <= now()) {
-          clearRecovery(storage(), slug);
-        } else if (expiry > record.created_at) {
-          record = Object.freeze({ ...record, expires_at: expiry });
-          // Storage failure cannot erase a result the server has already confirmed.
-          saveRecovery(storage(), record, now());
-        }
+      // Once the server confirms a saved request there is no write left to recover.
+      original = null;
+      if (snapshot.result && snapshot.result.status !== 'pending' && outcome.result.status !== snapshot.result.status) {
+        return update({ phase: 'unavailable', error: 'status_unavailable', canRetry: false });
       }
+      // Server expires_at is the pending request deadline, not the capability's
+      // retention deadline. Terminal results remain recoverable for this tab's 24h TTL.
       return update({ phase: 'status', result: outcome.result, error: null, canRetry: false });
     }
     if (checking && outcome.kind === 'failure' && outcome.error === 'not_found') {
-      return update({ phase: 'not_found', error: 'not_found', canRetry: original !== null && liveRecord() });
+      if (!liveRecord()) return snapshot;
+      return update({ phase: 'not_found', error: 'not_found', canRetry: original !== null });
     }
     if (outcome.kind === 'unknown') return update({ phase: 'unknown', error: outcome.error, canRetry: false });
     if (outcome.kind === 'unavailable') return update({ phase: snapshot.result ? 'unavailable' : 'unknown', error: outcome.error, canRetry: false });
@@ -93,12 +91,20 @@ export function createOrderController(options: OrderControllerOptions): OrderCon
   const check = async (): Promise<OrderSnapshot> => {
     if (!load()) return snapshot;
     update({ phase: 'reconciling', error: null, canRetry: false });
-    return receive(await transport.status(identity()), true);
+    let outcome: OrderOutcome;
+    try { outcome = await transport.status(identity()); }
+    catch { outcome = { kind: 'unavailable', error: 'status_unavailable' }; }
+    return receive(outcome, true);
   };
   const write = async (): Promise<OrderSnapshot> => {
     if (!liveRecord() || !original) return snapshot;
+    const persisted = readRecovery(storage(), slug, now());
+    if (persisted.kind !== 'record') return fail(persisted.kind === 'blocked' ? 'storage_unavailable' : 'recovery_invalid');
+    if (persisted.record.request_id !== record?.request_id || persisted.record.status_token !== record?.status_token) return fail('recovery_invalid');
     update({ phase: 'submitting', error: null, canRetry: false });
-    const outcome = await transport.submit(identity(), original);
+    let outcome: OrderOutcome;
+    try { outcome = await transport.submit(identity(), original); }
+    catch { outcome = { kind: 'unknown', error: 'submission_outcome_unknown' }; }
     receive(outcome, false);
     // Reads are safe to repeat. An uncertain write is never automatically repeated.
     return outcome.kind === 'unknown' ? check() : snapshot;
@@ -118,7 +124,12 @@ export function createOrderController(options: OrderControllerOptions): OrderCon
       // A saved or active identity takes precedence over any newly supplied cart.
       if (record) return check();
       const stored = readRecovery(storage(), slug, now());
-      if (stored.kind !== 'missing') { load(); return record ? check() : snapshot; }
+      if (stored.kind === 'record') {
+        record = stored.record; original = null;
+        update({ recovered: true, canRetry: false });
+        return check();
+      }
+      if (stored.kind !== 'missing') return fail(stored.kind === 'blocked' ? 'storage_unavailable' : stored.kind === 'expired' ? 'recovery_expired' : 'recovery_invalid');
       const frozen = normalizeWebOrder(order);
       let created: RecoveryRecord;
       try { created = createOrderIdentity(slug, now(), options.cryptoImpl); }
