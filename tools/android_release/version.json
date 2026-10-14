@@ -99,6 +99,59 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.58",
+      "versionCode": 58,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / verified / NOT installed / NOT uploaded",
+      "applicationSourceSha": "de292a6229468286eb3831f52adc5ccf4d51d28f",
+      "sourceSha": "a739e6c2be6cecd3e668ed80623f5db2c70bd15d",
+      "buildDate": "2026-10-14",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v58-a739e6c.apk",
+          "packageId": "com.restoflow.pos",
+          "sizeBytes": 70525195,
+          "sha256": "34a16a270a08ed766fe619faac901b65fae0e0343d75b32000ec9298c78a42c8"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v58-a739e6c.apk",
+          "packageId": "com.restoflow.kds",
+          "sizeBytes": 57922358,
+          "sha256": "17bd79d1cdae18952682e2fbccd7b7b65c0bd9948a436701e6b194191a2e300b"
+        }
+      },
+      "intendedSource": "a739e6c2be6cecd3e668ed80623f5db2c70bd15d (PR #325 normal merge; only release preparation differs from approved application source de292a6229468286eb3831f52adc5ccf4d51d28f)",
+      "notes": [
+        "BIZBOT-ANDROID-RELEASE-V58: built 2026-10-14 by the unchanged official",
+        "tools/android_release/build_official_pair.ps1 runner from clean audited",
+        "a739e6c2be6cecd3e668ed80623f5db2c70bd15d on isolated release-record branch,",
+        "using the runner's -SourceSha and -AllowNonMain audited-checkout options.",
+        "Both builds genuinely completed; verify_official_apk.ps1 PASS for POS and KDS:",
+        "0.0.58 / 58, production certificate pin, not debuggable, zipalign and apksigner",
+        "verified, AOT release, demo=false, hosted oqmevrndtivqxgyvcmwy present,",
+        "forbidden/localhost backend references and JWT-shaped tokens absent.",
+        "POS 70525195 bytes (67.26 MiB); KDS 57922358 bytes (55.24 MiB). Both include",
+        "arm64-v8a, armeabi-v7a and x86_64; minSdk 24, targetSdk 36. Flutter 3.44.2,",
+        "Dart 3.12.2, OpenJDK 21.0.10 and Android build-tools 37.0.0 were used.",
+        "Build started 2026-10-14T17:02:48 and completed 2026-10-14T17:06:24, local",
+        "Asia/Jerusalem time. Output: dist/official-v58; official SHA256SUMS.txt was",
+        "re-read and both digests reverified; BUILD-METADATA.txt contains actual build facts.",
+        "Content: Online Orders Inbox / authenticated Accept/Reject (PR #322), item",
+        "notes and modifier quantities (PR #323), existing POS, offline outbox and",
+        "printing functionality. PR #314 and PR #315 are excluded; no KDS or printing",
+        "implementation was changed for this release.",
+        "NOT installed, NOT uploaded, no GitHub Release. No hosted configuration,",
+        "ordering/test admission, pairing, local data, shifts, outbox or printer settings",
+        "were changed. Kiosk and Dashboard Android artifacts are outside this pair.",
+        "Current installed-release facts are preserved; this record does not promote",
+        "v58 to currentOfficialRelease or claim hardware acceptance. Code 58 is consumed.",
+        "Later owner-approved rollout: KDS first where used, then POS, as a compatible",
+        "production-signed update in place. Never uninstall or clear local state to retry."
+      ]
+    },
+    {
       "versionName": "0.0.57",
       "versionCode": 57,
       "signing": "restoflow-production",
@@ -526,32 +579,18 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.58",
-    "versionCode": 58,
+    "versionName": "0.0.59",
+    "versionCode": 59,
     "signing": "restoflow-production",
-    "status": "planned - official candidate / preparation merge pending / NOT built / NOT installed / NOT uploaded",
-    "applicationSourceSha": "de292a6229468286eb3831f52adc5ccf4d51d28f",
-    "intendedSource": "main after this preparation PR merges, with application inputs unchanged from owner-approved de292a6229468286eb3831f52adc5ccf4d51d28f; confirm the exact audited build SHA before running the official runner",
+    "status": "reserved - NOT planned / NOT built / NOT installed / NOT uploaded",
+    "intendedSource": "to be decided when the next POS/KDS change needs a new pair",
     "notes": [
-      "BIZBOT-ANDROID-RELEASE-V58 (2026-10-14): the owner-approved application source is",
-      "de292a6229468286eb3831f52adc5ccf4d51d28f. It includes the Online Orders Inbox",
-      "and authenticated cashier Accept/Reject (PR #322), item notes and modifier",
-      "quantities (PR #323), and all existing merged POS, offline outbox and printing behavior.",
-      "PR #314 and PR #315 are explicitly excluded: do not merge, cherry-pick or copy",
-      "either printing workstream into this release. KDS implementation is unchanged.",
-      "POS and KDS must both report 0.0.58 / 58 from one clean audited source SHA,",
-      "signed with restoflow-production and the existing pinned production certificate.",
-      "58 > 57 keeps both lineages monotonic; update in place over a compatible",
-      "production-signed earlier build without uninstalling or clearing local state.",
-      "Use tools/android_release/build_official_pair.ps1 only after this preparation PR",
-      "merges and the resulting exact build SHA is approved. Expected output: dist/official-v58.",
-      "Build in real mode against oqmevrndtivqxgyvcmwy with a public publishable/anon",
-      "key only and RESTOFLOW_DEMO_MODE=false. Public ordering and controlled test",
-      "admission remain OFF; this release authorizes no hosted changes or test orders.",
-      "Record actual artifact hashes, sizes, versions, signatures and build dates only",
-      "after both APKs have been built and verified. No build or installation is claimed here.",
-      "The runner never installs, uploads or publishes; rollout is a separate owner step.",
-      "No Kiosk or Dashboard Android artifact is part of this synchronized POS/KDS release."
+      "BIZBOT-ANDROID-RELEASE-V58 record (2026-10-14): v58 is built and verified in",
+      "previousOfficialReleases. Code 58 stays consumed; 0.0.59 / 59 is reserved for",
+      "the next synchronized POS/KDS pair and preserves monotonic update versioning.",
+      "Plan the intended source in a preparation PR first; build only after the",
+      "preparation merges and the owner approves the exact audited build source.",
+      "The official runner never installs, uploads or publishes; rollout is separately authorized."
     ]
   },
   "androidRendererPolicy": {
