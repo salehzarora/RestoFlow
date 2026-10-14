@@ -56,8 +56,16 @@ class MainActivity : FlutterActivity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    private var onlineOrderAlertAudio: OnlineOrderAlertAudioChannel? = null
+    private var alertForeground = false
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        onlineOrderAlertAudio?.detach()
+        onlineOrderAlertAudio = OnlineOrderAlertAudioChannel(
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        ).also { it.setForeground(alertForeground) }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -84,7 +92,27 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    override fun onResume() {
+        super.onResume()
+        alertForeground = true
+        onlineOrderAlertAudio?.setForeground(true)
+    }
+
+    override fun onPause() {
+        alertForeground = false
+        onlineOrderAlertAudio?.setForeground(false)
+        super.onPause()
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        onlineOrderAlertAudio?.detach()
+        onlineOrderAlertAudio = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
     override fun onDestroy() {
+        onlineOrderAlertAudio?.detach()
+        onlineOrderAlertAudio = null
         jobExecutor.shutdownNow()
         watchdog.shutdownNow()
         super.onDestroy()

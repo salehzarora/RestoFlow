@@ -48,6 +48,27 @@ class _GatedStore extends InMemoryDeviceSessionSecretStore {
 }
 
 void main() {
+  test(
+    'trusted menu item ID is retained without changing priced snapshots',
+    () {
+      final json = requestJson();
+      final item = OnlineOrderRequest.fromJson(json).items.single;
+      expect(item.menuItemId, json['items'][0]['menu_item_id']);
+      expect(item.name, json['items'][0]['item_name_snapshot']);
+      expect(item.unitPriceMinor, 1000);
+      expect(item.lineTotalMinor, 2800);
+      for (final id in [null, 9, 'not-an-id']) {
+        final invalid = requestJson();
+        final line = Map<String, dynamic>.from(invalid['items'][0]);
+        line['menu_item_id'] = id;
+        invalid['items'] = [line];
+        expect(
+          () => OnlineOrderRequest.fromJson(invalid),
+          throwsA(isA<OnlineInboxException>()),
+        );
+      }
+    },
+  );
   test('optional item notes preserve old snapshots and remain per-line', () {
     final old = OnlineOrderRequest.fromJson(requestJson());
     expect(old.items.single.notes, isNull);
