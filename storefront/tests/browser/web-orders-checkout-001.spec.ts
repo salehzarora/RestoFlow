@@ -1,7 +1,8 @@
 /** Synthetic-only real Chromium evidence; run through verify-web-orders-checkout.mjs. */
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { brotliCompressSync, constants } from 'node:zlib';
 import { SYNTH_IDS } from '../support/envelope.mjs';
 
 const BASE = process.env.SF_WEB_ORDER_BASE ?? '';
@@ -19,6 +20,45 @@ const TOTALS = { currency_code: 'ILS', subtotal_minor: 12345, tax_total_minor: 2
 type State = 'pending' | 'accepted' | 'rejected' | 'expired';
 type RequestBody = { action: 'submit' | 'status'; slug: string; request_id: string; status_token: string; order?: { order_type: string; customer: { name: string; phone: string }; items: { menu_item_id: string; quantity: number; modifiers: { modifier_option_id: string; quantity: number }[]; notes?: string }[]; notes: string } };
 type Entry = { body: RequestBody; state: State; expires: string };
+type JsAsset = { path: string; rawBytes: number; brotliBytes: number };
+const jsSizes = new Map<string, JsAsset>();
+const jsBudgets = new Map<string, { route: string; rawBytes: number; brotliBytes: number; assets: JsAsset[] }>();
+
+/** Measure actual initial script + script/modulepreload URL union, per asset. */
+function recordInitialJs(html: string, route: string) {
+  const urls = new Set<string>();
+  for (const match of html.matchAll(/<(script|link)\b[^>]*>/gi)) {
+    const attributes: Record<string, string> = {};
+    for (const attribute of match[0].matchAll(/([a-zA-Z][\w:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) attributes[attribute[1].toLowerCase()] = attribute[2] ?? attribute[3];
+    if (match[1].toLowerCase() === 'script' && attributes.src) urls.add(attributes.src);
+    if (match[1].toLowerCase() === 'link' && attributes.href) {
+      const relations = (attributes.rel ?? '').toLowerCase().split(/\s+/);
+      if (relations.includes('modulepreload') || (relations.includes('preload') && attributes.as?.toLowerCase() === 'script')) urls.add(attributes.href);
+    }
+  }
+  const staticRoot = path.resolve(APP, '.next/static');
+  const assets = [...urls].sort().map((url) => {
+    const parsed = new URL(url, BASE);
+    expect(parsed.origin).toBe(BASE);
+    expect(parsed.pathname.startsWith('/_next/static/') && parsed.pathname.endsWith('.js')).toBe(true);
+    const relative = decodeURIComponent(parsed.pathname.slice('/_next/static/'.length));
+    const filename = path.resolve(staticRoot, relative);
+    expect(filename.startsWith(staticRoot + path.sep)).toBe(true);
+    let asset = jsSizes.get(parsed.pathname);
+    if (!asset) {
+      const bytes = readFileSync(filename);
+      asset = { path: parsed.pathname, rawBytes: bytes.length, brotliBytes: brotliCompressSync(bytes, { params: { [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT, [constants.BROTLI_PARAM_QUALITY]: 11 } }).length };
+      jsSizes.set(parsed.pathname, asset);
+    }
+    return asset;
+  });
+  const row = { route, rawBytes: assets.reduce((sum, asset) => sum + asset.rawBytes, 0), brotliBytes: assets.reduce((sum, asset) => sum + asset.brotliBytes, 0), assets };
+  jsBudgets.set(route, row);
+  writeFileSync(path.join(RUN, 'live-js-budgets.json'), JSON.stringify({ source: 'live', copiedReleaseGate: true, method: 'unique initial script src + link script/modulepreload URL union; CSS/fonts/speculative prefetch excluded', brotli: { mode: 'TEXT', quality: 11, perAsset: true, modelledCompression: true }, limits: { rawBytes: 690000, brotliBytes: 200000 }, routes: [...jsBudgets.values()].sort((a, b) => a.route.localeCompare(b.route)) }, null, 2) + '\n');
+  expect(assets.length, `${route}: initial JS measurement must be nonempty`).toBeGreaterThan(0);
+  expect(row.rawBytes, `${route}: complete initial JS URL union`).toBeLessThanOrEqual(690000);
+  expect(row.brotliBytes, `${route}: per-asset Brotli quality 11`).toBeLessThanOrEqual(200000);
+}
 
 function root(locale: string) { return locale === 'ar' ? '' : `/${locale}`; }
 function routeFor(locale: string, slug: string, leaf: string) { return `${root(locale)}/s/${slug}/${leaf}`; }
@@ -88,6 +128,7 @@ async function prepare(page: Page, locale: string, slug: string, twoLines = true
   const document = await page.goto(routeFor(locale, slug, 'menu'), { waitUntil: 'networkidle' });
   expect(document?.status()).toBe(200);
   expect(document?.headers()['content-security-policy']).toContain(`connect-src 'self' ${ORIGIN};`);
+  recordInitialJs(await document!.text(), routeFor(locale, slug, 'menu'));
   await assertPage(page, locale);
   await addLine(page, ITEM_NOTES[0], 2, 2);
   if (twoLines) await addLine(page, ITEM_NOTES[1]);
@@ -111,6 +152,11 @@ async function prepare(page: Page, locale: string, slug: string, twoLines = true
   await expect(page.locator('[data-sf-item-note]')).toHaveText(twoLines ? ITEM_NOTES : [ITEM_NOTES[0]]);
   await expect(page.locator('[data-sf-order-notes]')).toContainText(ORDER_NOTE);
   await expect(page.locator('[data-sf-banner="truth-notice"]')).toBeVisible();
+  // A direct server document has its own initial dependency graph; a soft
+  // navigation's existing DOM scripts are not a substitute for this measurement.
+  const directReview = await page.context().request.get(routeFor(locale, slug, 'review'));
+  expect(directReview.status()).toBe(200);
+  recordInitialJs(await directReview.text(), routeFor(locale, slug, 'review'));
 }
 function assertPayload(body: RequestBody, twoLines = true) {
   expect(body.order?.order_type).toBe('takeaway');
