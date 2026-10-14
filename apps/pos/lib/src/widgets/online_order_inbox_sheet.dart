@@ -7,7 +7,9 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/online_order_inbox.dart';
 import '../format/money_format.dart';
+import '../media/pos_media_image.dart';
 import '../state/online_order_inbox_controller.dart';
+import '../state/pos_menu_provider.dart';
 import '../state/pos_offline_state.dart';
 
 /// One visible entry owns lifecycle signals; polling itself lives only in the
@@ -265,7 +267,7 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          SizedBox(width: 290, child: list),
+                          SizedBox(width: 320, child: list),
                           const VerticalDivider(width: 24),
                           Expanded(child: detail),
                         ],
@@ -307,7 +309,7 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
     return ListView.separated(
       key: const Key('online-inbox-requests'),
       itemCount: state.requests.length + (state.hasMore ? 1 : 0),
-      separatorBuilder: (_, _) => const Divider(height: 1),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         if (index == state.requests.length) {
           return TextButton(
@@ -318,35 +320,74 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
           );
         }
         final request = state.requests[index];
-        final expired = request.expiredAt(controller.now());
-        return ListTile(
+        final theme = Theme.of(context);
+        final selected = request.id == _selectedId;
+        return Material(
           key: ValueKey('online-request-${request.id}'),
-          selected: request.id == _selectedId,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 8,
+          color: selected
+              ? theme.colorScheme.primaryContainer
+              : theme.colorScheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: selected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outlineVariant,
+            ),
           ),
-          title: Text(request.customerName),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                expired
-                    ? l10n.posOnlineInboxExpired
-                    : l10n.posOnlineInboxAge(
-                        _age(controller.now(), request.createdAt),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => setState(() => _selectedId = request.id),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _RequestArrival(request: request, now: controller.now()),
+                  const SizedBox(height: 10),
+                  Text(
+                    request.customerName,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.posMenuItemCount(_itemCount(request)),
+                    style: theme.textTheme.labelLarge,
+                  ),
+                  Text(
+                    request.items
+                        .map((item) => '${item.quantity} × ${item.name}')
+                        .join(' · '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 8,
+                    children: [
+                      for (final item in request.items.take(3))
+                        _OrderThumbnail(item: item, size: 46),
+                      Text(
+                        MoneyFormatter.formatMinor(
+                          request.grandTotalMinor,
+                          request.currencyCode,
+                        ),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
+                      const Icon(Icons.chevron_right, size: 20),
+                    ],
+                  ),
+                ],
               ),
-              Text(
-                MoneyFormatter.formatMinor(
-                  request.grandTotalMinor,
-                  request.currencyCode,
-                ),
-              ),
-            ],
+            ),
           ),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => setState(() => _selectedId = request.id),
         );
       },
     );
@@ -415,18 +456,19 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
                 label: Text(l10n.posOnlineInboxBack),
               ),
             ),
+          _RequestArrival(request: request, now: controller.now()),
+          const SizedBox(height: 12),
           Text(
             request.customerName,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           Directionality(
             textDirection: TextDirection.ltr,
             child: SelectableText(request.customerPhone),
           ),
           const SizedBox(height: 8),
-          Text(
-            l10n.posOnlineInboxAge(_age(controller.now(), request.createdAt)),
-          ),
           Text(
             expired
                 ? l10n.posOnlineInboxExpired
@@ -438,37 +480,49 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
                   ),
           ),
           const Divider(height: 24),
+          Text(
+            l10n.posMenuItemCount(_itemCount(request)),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
           for (final item in request.items) ...[
-            Text(
-              '${item.quantity} × ${item.name}',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            Text(money(item.lineTotalMinor)),
-            for (final option in item.modifiers)
-              Padding(
-                padding: const EdgeInsetsDirectional.only(start: 16, top: 4),
-                child: Text(
-                  '${option.quantity} × ${option.name} · ${money(option.priceMinor)}',
-                ),
-              ),
-            if (item.notes?.isNotEmpty == true)
-              Padding(
-                padding: const EdgeInsetsDirectional.only(start: 16, top: 4),
-                child: SelectableText(item.notes!),
-              ),
-            const SizedBox(height: 16),
+            _RequestItem(item: item, currencyCode: request.currencyCode),
+            const SizedBox(height: 12),
           ],
           if (request.notes?.isNotEmpty == true) ...[
-            Text(
-              l10n.posOnlineInboxNotes,
-              style: Theme.of(context).textTheme.titleSmall,
+            _NotePanel(
+              label: l10n.posOnlineInboxNotes,
+              notes: request.notes!,
+              key: const Key('online-inbox-order-notes'),
             ),
-            SelectableText(request.notes!),
             const SizedBox(height: 16),
           ],
-          _total(l10n.posCartSubtotal, money(request.subtotalMinor)),
-          _total(l10n.posTaxLabel, money(request.taxTotalMinor)),
-          _total(l10n.posGrandTotal, money(request.grandTotalMinor)),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _total(l10n.posCartSubtotal, money(request.subtotalMinor)),
+                  _total(l10n.posTaxLabel, money(request.taxTotalMinor)),
+                  const Divider(height: 20),
+                  DefaultTextStyle.merge(
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                    child: _total(
+                      l10n.posGrandTotal,
+                      money(request.grandTotalMinor),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
           if (offline) Text(l10n.posOnlineInboxConnection),
           if (_rejecting) ...[
@@ -485,42 +539,65 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
             ),
             const SizedBox(height: 8),
           ],
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              FilledButton.icon(
-                key: const Key('online-inbox-accept'),
-                onPressed: enabled
-                    ? () => controller.decide(
-                        request.id,
-                        OnlineOrderDecision.accept,
-                      )
-                    : null,
-                icon: const Icon(Icons.check),
-                label: Text(l10n.posOnlineInboxAccept),
-              ),
-              OutlinedButton.icon(
-                key: const Key('online-inbox-reject'),
-                onPressed: !enabled || (_rejecting && !validReason)
-                    ? null
-                    : () {
-                        if (!_rejecting) {
-                          setState(() => _rejecting = true);
-                        } else {
-                          unawaited(
-                            controller.decide(
+          LayoutBuilder(
+            builder: (context, bounds) {
+              final actionWidth =
+                  bounds.maxWidth < 360 ||
+                      MediaQuery.textScalerOf(context).scale(1) >= 1.6
+                  ? bounds.maxWidth
+                  : (bounds.maxWidth - 12) / 2;
+              final style = ButtonStyle(
+                minimumSize: WidgetStatePropertyAll(Size(actionWidth, 56)),
+                padding: const WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                ),
+              );
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: actionWidth,
+                    child: FilledButton.icon(
+                      key: const Key('online-inbox-accept'),
+                      style: style,
+                      onPressed: enabled
+                          ? () => controller.decide(
                               request.id,
-                              OnlineOrderDecision.reject,
-                              reason: _reason.text,
-                            ),
-                          );
-                        }
-                      },
-                icon: const Icon(Icons.close),
-                label: Text(l10n.posOnlineInboxReject),
-              ),
-            ],
+                              OnlineOrderDecision.accept,
+                            )
+                          : null,
+                      icon: const Icon(Icons.check),
+                      label: Text(l10n.posOnlineInboxAccept),
+                    ),
+                  ),
+                  SizedBox(
+                    width: actionWidth,
+                    child: OutlinedButton.icon(
+                      key: const Key('online-inbox-reject'),
+                      style: style,
+                      onPressed: !enabled || (_rejecting && !validReason)
+                          ? null
+                          : () {
+                              if (!_rejecting) {
+                                setState(() => _rejecting = true);
+                              } else {
+                                unawaited(
+                                  controller.decide(
+                                    request.id,
+                                    OnlineOrderDecision.reject,
+                                    reason: _reason.text,
+                                  ),
+                                );
+                              }
+                            },
+                      icon: const Icon(Icons.close),
+                      label: Text(l10n.posOnlineInboxReject),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -535,6 +612,233 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
       children: [Text(label), Text(amount)],
     ),
   );
+}
+
+int _itemCount(OnlineOrderRequest request) =>
+    request.items.fold(0, (count, item) => count + item.quantity);
+
+class _RequestArrival extends StatelessWidget {
+  const _RequestArrival({required this.request, required this.now});
+  final OnlineOrderRequest request;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final expired =
+        request.expiredAt(now) || request.status == OnlineOrderStatus.expired;
+    final pending = !expired && request.status == OnlineOrderStatus.pending;
+    final localCreated = request.createdAt.toLocal();
+    final material = MaterialLocalizations.of(context);
+    final arrival = material.formatTimeOfDay(
+      TimeOfDay.fromDateTime(localCreated),
+      alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+    );
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Container(
+          key: ValueKey('online-inbox-status-${request.id}'),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: pending
+                ? theme.colorScheme.tertiaryContainer
+                : theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            expired
+                ? l10n.posOnlineInboxExpired
+                : request.status == OnlineOrderStatus.accepted
+                ? l10n.posOrderStatusSubmitted
+                : request.status == OnlineOrderStatus.rejected
+                ? l10n.posOrderRejectedTitle
+                : l10n.posOrderPendingTitle,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: pending
+                  ? theme.colorScheme.onTertiaryContainer
+                  : theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Text(
+          '$arrival · ${l10n.posOnlineInboxAge(_age(now, request.createdAt))}',
+          key: ValueKey('online-inbox-arrival-${request.id}'),
+          style: theme.textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+}
+
+/// Images are decoration only. Every textual and monetary field below comes
+/// from the submitted snapshot; the current menu contributes only its photo.
+class _RequestItem extends StatelessWidget {
+  const _RequestItem({required this.item, required this.currencyCode});
+  final OnlineOrderItem item;
+  final String currencyCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    String money(int minor) => MoneyFormatter.formatMinor(minor, currencyCode);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _OrderThumbnail(item: item, size: 72),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        '${item.quantity} × ${item.name}',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.posCartQtyUnit(
+                          item.quantity,
+                          money(item.unitPriceMinor),
+                        ),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      Text(
+                        money(item.lineTotalMinor),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            for (final option in item.modifiers)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '${option.quantity} × ${option.name} · ${money(option.priceMinor)}',
+                  style: theme.textTheme.bodyLarge,
+                ),
+              ),
+            if (item.notes?.isNotEmpty == true) ...[
+              const SizedBox(height: 12),
+              _NotePanel(
+                label: l10n.posModifierItemNoteLabel,
+                notes: item.notes!,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NotePanel extends StatelessWidget {
+  const _NotePanel({super.key, required this.label, required this.notes});
+  final String label;
+  final String notes;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(10),
+        border: BorderDirectional(
+          start: BorderSide(color: theme.colorScheme.secondary, width: 3),
+        ),
+      ),
+      child: DefaultTextStyle.merge(
+        style: TextStyle(color: theme.colorScheme.onSecondaryContainer),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            SelectableText(notes),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OrderThumbnail extends ConsumerWidget {
+  const _OrderThumbnail({required this.item, required this.size});
+  final OnlineOrderItem item;
+  final double size;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Reuse the authenticated, scope-bound POS menu and its already resolved
+    // URLs. Never look up by name or accept an image URL from the request.
+    final menu = ref.watch(posMenuProvider).asData?.value;
+    final menuItem = menu?.items
+        .where((m) => m.id == item.menuItemId)
+        .firstOrNull;
+    final category = menuItem == null
+        ? null
+        : menu?.categoryOf(menuItem.categoryId);
+    final colors = Theme.of(context).colorScheme;
+    Widget fallback() => ColoredBox(
+      key: ValueKey('online-inbox-image-fallback-${item.menuItemId}'),
+      color:
+          category?.color.withValues(alpha: .12) ??
+          colors.surfaceContainerHighest,
+      child: Center(
+        child: Icon(
+          category?.icon ?? Icons.restaurant_menu,
+          color: category?.color ?? colors.onSurfaceVariant,
+        ),
+      ),
+    );
+    final url = menuItem?.imageUrl;
+    return ExcludeSemantics(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: url == null || url.isEmpty
+              ? fallback()
+              : Image(
+                  key: ValueKey('online-inbox-image-${item.menuItemId}'),
+                  image: ResizeImage.resizeIfNeeded(
+                    (size * MediaQuery.devicePixelRatioOf(context)).ceil(),
+                    null,
+                    posMediaImageProvider(url),
+                  ),
+                  width: size,
+                  height: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => fallback(),
+                ),
+        ),
+      ),
+    );
+  }
 }
 
 int _age(DateTime now, DateTime created) =>

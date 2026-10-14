@@ -94,6 +94,7 @@ class OnlineOrderModifier {
 
 class OnlineOrderItem {
   const OnlineOrderItem({
+    required this.menuItemId,
     required this.name,
     required this.quantity,
     required this.unitPriceMinor,
@@ -101,6 +102,9 @@ class OnlineOrderItem {
     required this.modifiers,
     this.notes,
   });
+
+  /// Trusted snapshot identity; used only to match authenticated menu photos.
+  final String menuItemId;
   final String name;
   final int quantity;
   final int unitPriceMinor;
@@ -110,8 +114,8 @@ class OnlineOrderItem {
 
   factory OnlineOrderItem.fromJson(Object? raw) {
     final json = _object(raw);
-    _id(json['menu_item_id']);
     final item = OnlineOrderItem(
+      menuItemId: _id(json['menu_item_id']),
       name: _text(json['item_name_snapshot']),
       quantity: _integer(json['quantity'], minimum: 1),
       unitPriceMinor: _integer(json['unit_price_minor_snapshot']),
