@@ -153,3 +153,52 @@ test('status remains available while submission gate refuses writes', async () =
   storage.setItem(recoveryKey(SLUG), JSON.stringify(record()));
   assert.equal((await controller.recover()).result.status, 'accepted');
 });
+test('explicit order again clears only this tenant after a known terminal result and generates a fresh identity on submit', async () => {
+  for (const status of ['accepted', 'rejected', 'expired']) {
+    const storage = memoryStorage([[recoveryKey('other-kitchen'), 'other tenant recovery']]);
+    let generated = 0; const ids = [];
+    const cryptoImpl = { ...testCrypto(), randomUUID: () => generated++ === 0 ? REQUEST_ID : '44444444-4444-4444-8444-444444444444' };
+    const { controller } = setup(async (_url, init) => {
+      const body = JSON.parse(init.body); ids.push(body.request_id);
+      return response(result(ids.length === 1 ? status : 'pending', { request_id: body.request_id }));
+    }, { storage, cryptoImpl });
+    await controller.submit(order());
+    assert.equal(controller.startNewOrder().phase, 'idle');
+    assert.equal(storage.getItem(recoveryKey(SLUG)), null);
+    assert.equal(storage.getItem(recoveryKey('other-kitchen')), 'other tenant recovery');
+    assert.equal(generated, 1, 'reset itself never generates or submits a new identity');
+    assert.equal((await controller.submit(order())).result.status, 'pending');
+    assert.notEqual(ids[0], ids[1]);
+  }
+});
+test('order again cannot discard pending, unknown or not-found requests', async () => {
+  for (const mode of ['pending', 'unknown', 'not_found']) {
+    const { controller, storage } = setup(async (_url, init) => {
+      const action = JSON.parse(init.body).action;
+      if (mode === 'pending') return response(result());
+      if (mode === 'unknown' || action === 'submit') throw new Error('lost');
+      return response({ ok: false, error: 'not_found' }, 404);
+    });
+    const before = await controller.submit(order()); const saved = storage.getItem(recoveryKey(SLUG));
+    assert.equal(controller.startNewOrder(), before);
+    assert.equal(storage.getItem(recoveryKey(SLUG)), saved);
+  }
+});
+test('order again denies an active status flight and preserves terminal recovery when storage clear is blocked', async () => {
+  const storage = memoryStorage(); let release; let blockClear = false; let calls = 0;
+  const remove = storage.removeItem;
+  storage.removeItem = (key) => { if (blockClear) throw new Error('blocked'); remove(key); };
+  const { controller } = setup(async () => {
+    calls++;
+    if (calls > 1) await new Promise((resolve) => { release = resolve; });
+    return response(result('accepted'));
+  }, { storage });
+  await controller.submit(order());
+  const flight = controller.refresh(); await new Promise((resolve) => setImmediate(resolve));
+  const busy = controller.getSnapshot(); const saved = storage.getItem(recoveryKey(SLUG));
+  assert.equal(controller.startNewOrder(), busy); assert.equal(storage.getItem(recoveryKey(SLUG)), saved);
+  release(); await flight; blockClear = true;
+  const denied = controller.startNewOrder();
+  assert.equal(denied.error, 'storage_unavailable'); assert.equal(denied.result.status, 'accepted');
+  assert.equal(storage.getItem(recoveryKey(SLUG)), saved);
+});

@@ -86,4 +86,6 @@ export interface OrderController {
   submit(order: WebOrder): Promise<OrderSnapshot>;
   refresh(): Promise<OrderSnapshot>;
   retry(): Promise<OrderSnapshot>;
+  /** Explicitly discard a confirmed terminal request before starting another order. */
+  startNewOrder(): OrderSnapshot;
 }

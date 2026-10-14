@@ -9,7 +9,8 @@ export function orderFromCart(cart: CartState, customer: { readonly name: string
     if (!line || !line.selections || typeof line.selections !== 'object' || Array.isArray(line.selections)) invalid();
     const quantities = new Map<string, number>();
     for (const selected of Object.values(line.selections)) {
-      if (!Array.isArray(selected) || selected.length > 20) invalid();
+      // The cart repeats IDs for quantity: 20 distinct options may each have 20 units.
+      if (!Array.isArray(selected) || selected.length > 400) invalid();
       for (const id of selected) {
         if (typeof id !== 'string') invalid();
         const canonical = id.toLowerCase();

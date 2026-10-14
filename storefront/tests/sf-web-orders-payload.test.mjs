@@ -59,3 +59,11 @@ test('malformed cart selections never disappear silently from checkout', () => {
   const cart = (selections) => ({ schema: 1, slug: SLUG, menuVersion: 'v1', lines: [{ itemId: ITEM_ID, qty: 1, selections, note: '' }] });
   for (const selections of [null, [], { group: 'id' }, { group: [1] }, { group: Array(21).fill(OPTION_ID) }]) assert.throws(() => orderFromCart(cart(selections), order().customer), WebOrderValidationError);
 });
+test('cart quantity encoding admits more than twenty selected units while preserving per-option limits', () => {
+  const other = '44444444-4444-4444-8444-444444444444';
+  const cart = (selected) => ({ schema: 1, slug: SLUG, menuVersion: 'v1', lines: [{ itemId: ITEM_ID, qty: 1, selections: { extras: selected }, note: '' }] });
+  const value = orderFromCart(cart([...Array(11).fill(OPTION_ID), ...Array(11).fill(other)]), order().customer);
+  assert.deepEqual(value.items[0].modifiers, [{ modifier_option_id: OPTION_ID, quantity: 11 }, { modifier_option_id: other, quantity: 11 }]);
+  assert.throws(() => orderFromCart(cart([...Array(21).fill(OPTION_ID), other]), order().customer), WebOrderValidationError);
+  assert.throws(() => orderFromCart(cart(Array(401).fill(OPTION_ID)), order().customer), WebOrderValidationError);
+});

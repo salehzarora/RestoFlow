@@ -145,5 +145,11 @@ export function createOrderController(options: OrderControllerOptions): OrderCon
       await check();
       return snapshot.phase === 'not_found' && snapshot.canRetry ? write() : snapshot;
     }),
+    startNewOrder: () => {
+      if (inFlight || !snapshot.result || snapshot.result.status === 'pending') return snapshot;
+      if (!clearRecovery(storage(), slug)) return fail('storage_unavailable');
+      record = null; original = null;
+      return update({ phase: 'idle', result: null, error: null, canRetry: false, recovered: false });
+    },
   });
 }
