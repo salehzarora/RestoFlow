@@ -108,6 +108,51 @@ test("omitted optional fields normalize and repeated submissions keep identical 
   });
 });
 
+test("item notes remain per-line and independent of order notes through exact retries", async () => {
+  const { handler, calls } = harness();
+  const body = submission();
+  body.order.items[0].notes = " \u00a0بدون بصل\nבלי בצל 🍽\u3000 ";
+  body.order.items.push({ ...body.order.items[0], notes: "Extra onion" });
+  await result(handler, body);
+  await result(handler, body);
+  assert.deepEqual(calls[0].args, calls[1].args);
+  assert.equal(calls[0].args.p_order.items.length, 2);
+  assert.equal(calls[0].args.p_order.items[0].notes, "بدون بصل\nבלי בצל 🍽");
+  assert.equal(calls[0].args.p_order.items[1].notes, "Extra onion");
+  assert.equal(calls[0].args.p_order.notes, body.order.notes);
+  assert.deepEqual(calls[0].args.p_order.items[0].modifiers, body.order.items[0].modifiers);
+});
+
+test("absent and empty item notes preserve the old note-free normalized identity", async () => {
+  const { handler, calls } = harness();
+  for (const notes of [undefined, "", " \n\u00a0\u3000 "]) {
+    const body = submission();
+    if (notes !== undefined) body.order.items[0].notes = notes;
+    assert.equal((await result(handler, body)).response.status, 200);
+  }
+  assert.deepEqual(calls[0].args, calls[1].args);
+  assert.deepEqual(calls[0].args, calls[2].args);
+  assert.equal(Object.hasOwn(calls[0].args.p_order.items[0], "notes"), false);
+});
+
+test("item notes count Unicode scalars and reject invalid or oversized raw input without truncation", async () => {
+  const { handler, calls } = harness();
+  for (const notes of [null, 1, false, [], {}, "a".repeat(141), "🍽".repeat(141), " ".repeat(141), "a\tb", "a\rb", "a\0b", "a\u007fb", "a\u0085b", "a\u009fb", "a\ud800b", "a\udfffb"]) {
+    const body = submission();
+    body.order.items[0].notes = notes;
+    const output = await result(handler, body);
+    assert.equal(output.response.status, 400, JSON.stringify(notes));
+    assert.deepEqual(output.body, { ok: false, error: "invalid_request" });
+  }
+  assert.equal(calls.length, 0);
+  const body = submission();
+  body.order.items[0].notes = "🍽".repeat(140);
+  assert.equal((await result(handler, body)).response.status, 200);
+  assert.equal(calls[0].args.p_order.items[0].notes, body.order.items[0].notes);
+  const duplicate = JSON.stringify(submission()).replace('"quantity":2,', '"quantity":2,"notes":"one","notes":"two",');
+  assert.equal((await result(handler, duplicate)).response.status, 400);
+});
+
 test("default and non-exact submit gates stop before reading server credentials or fetching", async () => {
   for (const enabled of [undefined, "false", "TRUE", "1", "true ", ""]) {
     const { handler, calls, envReads } = harness({ env: { WEB_ORDERS_ENABLED: enabled } });

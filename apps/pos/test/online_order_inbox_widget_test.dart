@@ -163,6 +163,35 @@ Future<_Controller> pumpInbox(
 
 void main() {
   for (final locale in ['en', 'ar', 'he']) {
+    testWidgets('$locale displays each item note beside its own line', (
+      tester,
+    ) async {
+      final json = requestJson();
+      json['items'][0]['notes'] = 'بدون بصل\nבלי בצל 🍽';
+      json['items'] = [
+        json['items'][0],
+        {...json['items'][0], 'notes': 'Extra onion'},
+      ];
+      json['totals']['subtotal_minor'] = 5600;
+      json['totals']['tax_total_minor'] = 280;
+      json['totals']['grand_total_minor'] = 5880;
+      await pumpInbox(
+        tester,
+        locale: locale,
+        state: OnlineOrderInboxState(
+          requests: [OnlineOrderRequest.fromJson(json)],
+          serverTime: inboxNow,
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('online-request-$requestId')));
+      await tester.pump();
+      expect(find.text('بدون بصل\nבלי בצל 🍽'), findsOneWidget);
+      expect(find.text('Extra onion'), findsOneWidget);
+      expect(find.text('بدون بصل / בלי בצל'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  for (final locale in ['en', 'ar', 'he']) {
     for (final width in [
       320.0,
       360.0,
