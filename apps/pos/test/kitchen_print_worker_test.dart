@@ -303,6 +303,35 @@ void main() {
 
   group('web initial send fencing', () {
     const targetId = 'web-initial:request-1';
+    test(
+      'many abandoned fenced imports cannot starve ordinary FIFO work',
+      () async {
+        for (var i = 0; i < 25; i++) {
+          await seedRunnable('fenced-$i', localJobId: 'web-initial:request-$i');
+        }
+        final ordinary = await seedRunnable('ordinary');
+        sends.outcomes.add(
+          const KitchenTransportOutcome(
+            KitchenTransportOutcomeKind.accepted,
+            'flushed',
+          ),
+        );
+        transport.enqueue({'ok': true, 'completed': true});
+        final report = await worker(maxJobsPerRun: 2).run();
+        expect(report.accepted, 1);
+        expect(sends.networkCalls, hasLength(1));
+        expect(
+          (await store.getByLocalJobId(ordinary.localJobId))!.status,
+          KitchenSpoolJobStatus.transportAccepted,
+        );
+        for (var i = 0; i < 25; i++) {
+          expect(
+            (await store.getByLocalJobId('web-initial:request-$i'))!.status,
+            KitchenSpoolJobStatus.imported,
+          );
+        }
+      },
+    );
     test('ordinary startup worker never claims a targeted row', () async {
       await seedRunnable('target', localJobId: targetId);
       final report = await worker().run();

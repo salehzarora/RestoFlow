@@ -298,6 +298,48 @@ final class PosKitchenSpoolRuntime
   void cancelPendingWebPrint() => _webPrintGeneration++;
 
   @override
+  Future<WebOrderPrintOutcome?> readWebPrintRecovery() async {
+    if (_disposed || !_canPrintWebOrder() || !_platform.supportsSecureSpool)
+      return null;
+    final context = _deviceContext();
+    if (context?.deviceId == null || context?.restaurantId == null) return null;
+    try {
+      final factory = _databaseFactoryBuilder();
+      if (_db == null && !await factory.spoolFileExists()) return null;
+      final db = await _openDatabase(factory);
+      if (_disposed || !_canPrintWebOrder()) return null;
+      final rows =
+          (await DriftKitchenSpoolStore(db).listUnresolved(
+                deviceId: context!.deviceId!,
+                branchId: context.branchId,
+              ))
+              .where(
+                (row) =>
+                    row.organizationId == context.organizationId &&
+                    row.restaurantId == context.restaurantId &&
+                    isTargetedWebPrintJob(row),
+              )
+              .toList();
+      if (rows.isEmpty) return null;
+      if (rows.any(
+        (row) =>
+            row.status == KitchenSpoolJobStatus.printing ||
+            row.status == KitchenSpoolJobStatus.possiblyPrinted,
+      )) {
+        return WebOrderPrintOutcome.reconciliationRequired;
+      }
+      if (rows.any(
+        (row) => row.status == KitchenSpoolJobStatus.blockedConfiguration,
+      )) {
+        return WebOrderPrintOutcome.failed;
+      }
+      return WebOrderPrintOutcome.attention;
+    } catch (_) {
+      return WebOrderPrintOutcome.reconciliationRequired;
+    }
+  }
+
+  @override
   Future<WebOrderPrintOutcome> onAcceptedWebOrder(
     String requestId,
     String orderId,

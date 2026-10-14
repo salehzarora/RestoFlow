@@ -374,6 +374,9 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
         clearCursor: page.nextCursor == null,
         clearFailure: true,
       );
+      // Reuse discovery's existing cadence for a READ-ONLY local recovery
+      // projection; no new polling, claim, server request or print is started.
+      ref.invalidate(onlineInboxPrintRecoveryProvider);
     } on OnlineInboxException catch (error) {
       if (!_current(gen) || rev != _revision) return;
       _fail(error.failure);

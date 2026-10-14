@@ -133,6 +133,7 @@ Future<_Controller> pumpInbox(
   bool button = false,
   PosMenuData? menu,
   bool menuUnavailable = false,
+  WebOrderPrintOutcome? recovery,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -145,6 +146,7 @@ Future<_Controller> pumpInbox(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        onlineInboxPrintRecoveryProvider.overrideWith((ref) async => recovery),
         onlineOrderInboxControllerProvider.overrideWith(() => controller),
         onlineOrderInboxIdentityProvider.overrideWithValue('test-authority'),
         posMenuProvider.overrideWith((_) async {
@@ -176,6 +178,20 @@ Future<_Controller> pumpInbox(
 }
 
 void main() {
+  testWidgets(
+    'restart recovery projects durable hold without a retry control',
+    (tester) async {
+      await pumpInbox(
+        tester,
+        state: const OnlineOrderInboxState(),
+        recovery: WebOrderPrintOutcome.reconciliationRequired,
+      );
+      final status = find.byKey(const Key('online-inbox-print-status'));
+      final l10n = AppLocalizations.of(tester.element(status));
+      expect(tester.widget<Text>(status).data, l10n.kioskKitchenLastPossibly);
+      expect(find.text(l10n.kioskKitchenRetry), findsNothing);
+    },
+  );
   for (final locale in ['ar', 'he', 'en']) {
     testWidgets(
       '$locale targeted print status is honest and has no automatic retry action',

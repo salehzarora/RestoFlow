@@ -7,6 +7,7 @@ enum WebOrderPrintOutcome {
   sent,
   reconciliationRequired,
   blocked,
+  attention,
   failed,
   busy,
   kds,
@@ -14,12 +15,23 @@ enum WebOrderPrintOutcome {
 }
 
 abstract interface class PosWebOrderPrintHooks {
+  Future<WebOrderPrintOutcome?> readWebPrintRecovery();
   void cancelPendingWebPrint();
   Future<WebOrderPrintOutcome> onAcceptedWebOrder(
     String requestId,
     String orderId,
   );
 }
+
+/// Read-only durable recovery projection. No claim, begin, retry, or send.
+final onlineInboxPrintRecoveryProvider = FutureProvider<WebOrderPrintOutcome?>((
+  ref,
+) async {
+  final hooks = ref.watch(posKitchenSpoolRuntimeProvider);
+  return hooks is PosWebOrderPrintHooks
+      ? (hooks as PosWebOrderPrintHooks).readWebPrintRecovery()
+      : null;
+});
 
 final onlineInboxAcceptedPrintProvider =
     Provider<Future<WebOrderPrintOutcome> Function(String, String)>((ref) {

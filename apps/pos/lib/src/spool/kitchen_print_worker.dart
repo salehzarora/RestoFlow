@@ -169,12 +169,7 @@ final class KitchenPrintWorker {
         : await _store.getByLocalJobId(targetId);
     final runnable = targetId != null
         ? (target == null ? <KitchenSpoolJobRow>[] : [target])
-        : await _store.listRunnable(
-            deviceId: _scope.deviceId,
-            branchId: _scope.branchId,
-            now: _now(),
-            limit: _maxJobsPerRun + 1,
-          );
+        : await _ordinaryRunnable();
     var processed = 0;
     for (final candidate in runnable) {
       final targeted = isTargetedWebPrintJob(candidate);
@@ -340,6 +335,27 @@ final class KitchenPrintWorker {
       ackRetriesScheduled: ackRetries,
       ackTerminal: ackTerminal,
     );
+  }
+
+  Future<List<KitchenSpoolJobRow>> _ordinaryRunnable() async {
+    // Abandoned fenced imports must not occupy the bounded FIFO snapshot and
+    // starve unrelated POS jobs. Count safe metadata only, expand the read by
+    // that upper bound, then restore the ordinary bounded FIFO before work.
+    final unresolved = await _store.listUnresolved(
+      deviceId: _scope.deviceId,
+      branchId: _scope.branchId,
+    );
+    final fences = unresolved.where(isTargetedWebPrintJob).length;
+    final rows = await _store.listRunnable(
+      deviceId: _scope.deviceId,
+      branchId: _scope.branchId,
+      now: _now(),
+      limit: _maxJobsPerRun + 1 + fences,
+    );
+    return rows
+        .where((row) => !isTargetedWebPrintJob(row))
+        .take(_maxJobsPerRun + 1)
+        .toList();
   }
 
   /// Flushes the job's freshly-written pending acknowledgement OUTSIDE the

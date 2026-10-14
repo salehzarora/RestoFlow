@@ -752,6 +752,10 @@ final class _CapabilityReportingHooks
   void cancelPendingWebPrint() => _runtime.cancelPendingWebPrint();
 
   @override
+  Future<WebOrderPrintOutcome?> readWebPrintRecovery() =>
+      _runtime.readWebPrintRecovery();
+
+  @override
   Future<WebOrderPrintOutcome> onAcceptedWebOrder(
     String requestId,
     String orderId,

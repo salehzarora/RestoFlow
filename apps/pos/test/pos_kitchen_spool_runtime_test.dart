@@ -202,29 +202,30 @@ class _WebPrintRepository implements OnlineOrderPrintRepository {
   Future<OnlineOrderPrintResult> status(String requestId) async => result();
 }
 
-NewKitchenSpoolJob _job(String n, {DateTime? createdAt}) => NewKitchenSpoolJob(
-  localJobId: 'job-$n',
-  dispatchId: 'd-$n',
-  organizationId: 'org-1',
-  restaurantId: 'rest-1',
-  branchId: 'branch-1',
-  deviceId: 'dev-1',
-  orderId: 'order-$n',
-  serviceRoundId: null,
-  dispatchType: KitchenSpoolDispatchType.initialOrder,
-  initialStatus: KitchenSpoolJobStatus.imported,
-  encryptedPayloadBlob: Uint8List.fromList([1, 2, 3, n.hashCode & 0xff]),
-  encryptionVersion: 1,
-  destinationFingerprint: 'fp-1',
-  destinationDisplayLabel: 'Kitchen',
-  transportKind: 'network',
-  paperWidth: '80mm',
-  payloadVersion: 1,
-  documentVersion: 1,
-  rasterVersion: 1,
-  serverClaimExpiresAt: null,
-  createdAt: createdAt ?? DateTime.utc(2026, 7, 20, 9),
-);
+NewKitchenSpoolJob _job(String n, {DateTime? createdAt, String? localJobId}) =>
+    NewKitchenSpoolJob(
+      localJobId: localJobId ?? 'job-$n',
+      dispatchId: 'd-$n',
+      organizationId: 'org-1',
+      restaurantId: 'rest-1',
+      branchId: 'branch-1',
+      deviceId: 'dev-1',
+      orderId: 'order-$n',
+      serviceRoundId: null,
+      dispatchType: KitchenSpoolDispatchType.initialOrder,
+      initialStatus: KitchenSpoolJobStatus.imported,
+      encryptedPayloadBlob: Uint8List.fromList([1, 2, 3, n.hashCode & 0xff]),
+      encryptionVersion: 1,
+      destinationFingerprint: 'fp-1',
+      destinationDisplayLabel: 'Kitchen',
+      transportKind: 'network',
+      paperWidth: '80mm',
+      payloadVersion: 1,
+      documentVersion: 1,
+      rasterVersion: 1,
+      serverClaimExpiresAt: null,
+      createdAt: createdAt ?? DateTime.utc(2026, 7, 20, 9),
+    );
 
 void main() {
   const native = PosKitchenSpoolPlatform(isWeb: false);
@@ -396,6 +397,11 @@ void main() {
         );
         expect((repo.claims, repo.begins, repo.finishes), (1, 1, 1));
         expect(workerNetworkCalls, hasLength(1));
+        expect(
+          await rt.readWebPrintRecovery(),
+          isNull,
+          reason: 'ordinary unresolved history is not a web-print warning',
+        );
         expect(transport.calls.map((c) => c.$1), [
           'acknowledge_kitchen_print_dispatch',
         ]);
@@ -405,6 +411,36 @@ void main() {
         );
         expect(repo.begins, 1);
         expect(workerNetworkCalls, hasLength(1));
+      },
+    );
+    test(
+      'unsent recovery is read-only, scope isolated, and does not claim or send',
+      () async {
+        final db = await factory().open();
+        await DriftKitchenSpoolStore(
+          db,
+        ).insertImportedJob(_job('web', localJobId: 'web-initial:request-web'));
+        await db.close();
+        final repo = _WebPrintRepository();
+        final rt = target(repo);
+        expect(await rt.readWebPrintRecovery(), WebOrderPrintOutcome.attention);
+        expect((repo.claims, repo.begins, repo.finishes), (0, 0, 0));
+        expect(workerNetworkCalls, isEmpty);
+        await rt.dispose();
+        final foreign = runtime(
+          wireDrain: true,
+          webRepository: repo,
+          canWebPrint: () => true,
+          deviceContext: () => const DeviceContext(
+            organizationId: 'another-org',
+            restaurantId: 'rest-1',
+            branchId: 'branch-1',
+            deviceId: 'dev-1',
+          ),
+        );
+        addTearDown(foreign.dispose);
+        expect(await foreign.readWebPrintRecovery(), isNull);
+        expect((repo.claims, repo.begins), (0, 0));
       },
     );
     test(
@@ -467,6 +503,10 @@ void main() {
         repo.state = OnlineOrderPrintState.reconciliationRequired;
         final restarted = target(repo);
         addTearDown(restarted.dispose);
+        expect(
+          await restarted.readWebPrintRecovery(),
+          WebOrderPrintOutcome.reconciliationRequired,
+        );
         expect(
           await restarted.onAcceptedWebOrder('request-web', 'order-web'),
           WebOrderPrintOutcome.reconciliationRequired,
