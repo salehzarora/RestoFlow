@@ -255,6 +255,18 @@
   gap: 8px;
 }
 
+/* The existing option row gains a bounded quantity stepper where allowed. */
+.quantityOption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.quantityOption > .option {
+  flex: 1;
+  min-width: 0;
+}
+
 .groupHead {
   display: flex;
   align-items: center;

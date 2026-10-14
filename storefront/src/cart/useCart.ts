@@ -25,7 +25,8 @@
  */
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { addLine, removeLine, summarise, updateLine, type CartSummary } from './cartModel';
-import { emptyCart, loadCart, saveCart } from './cartStorage';
+import { clearPersistedCart, emptyCart, loadCart, saveCart } from './cartStorage';
+import { useMemoryCart } from './CartMemoryProvider';
 import type { CartState, MenuItem, ModifierGroup, ModifierSelections } from '@/source/types';
 
 export interface CartDraft {
@@ -57,7 +58,9 @@ export function useCart(
   menuVersion: string,
   items: readonly MenuItem[],
   groups: readonly ModifierGroup[],
+  persist = true,
 ): CartApi {
+  const memory = useMemoryCart();
   const [state, setState] = useState<CartState>(() => emptyCart(slug, menuVersion));
   const [ready, setReady] = useState(false);
 
@@ -82,7 +85,8 @@ export function useCart(
   useLayoutEffect(() => {
     loaded.current = false;
     setReady(false);
-    const stored = loadCart(slug, menuVersion);
+    if (!persist) clearPersistedCart(slug);
+    const stored = persist ? loadCart(slug, menuVersion) : memory?.get(slug, menuVersion) ?? emptyCart(slug, menuVersion);
     // PRUNE ON LOAD. A line naming an item the menu no longer has is skipped at
     // render time, so it would otherwise sit in storage forever: invisible,
     // uncountable and - with no cart screen in this phase - impossible for the
@@ -95,19 +99,22 @@ export function useCart(
         : { ...stored, lines: usable.lines.map((l) => l.line) };
     setState(pruned);
     loaded.current = true;
-    if (pruned !== stored) saveCart(pruned);
+    if (persist && pruned !== stored) saveCart(pruned);
     setReady(true);
-  }, [slug, menuVersion]);
+  }, [slug, menuVersion, persist, memory]);
 
   const commit = useCallback((next: CartState) => {
     setState((current) => {
       // An unknown line id makes the model return the identical object. Nothing
       // changed, so nothing is written.
       if (next === current) return current;
-      if (loaded.current) saveCart(next);
+      if (loaded.current) {
+        if (persist) saveCart(next);
+        else memory?.set(next);
+      }
       return next;
     });
-  }, []);
+  }, [persist, memory]);
 
   const add = useCallback((draft: CartDraft) => commit(addLine(stateRef.current, draft)), [
     commit,

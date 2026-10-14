@@ -177,6 +177,8 @@ export function CartScreen({
   pending,
   onDismissNotice,
   onCheckout,
+  checkoutBlock,
+  estimateCopy,
 }: {
   m: StorefrontMessages;
   cart: CartApi;
@@ -192,12 +194,14 @@ export function CartScreen({
   pending: boolean;
   onDismissNotice: () => void;
   onCheckout: () => void;
+  checkoutBlock?: string | null;
+  estimateCopy?: string;
 }) {
   const [announcement, setAnnouncement] = useState('');
   const lines = cart.summary.lines;
   // The one shared reason: browse-only first, then exactly 'open' proceeds,
   // anything else states why.
-  const reason = orderingReason(orderingBlocker(state, orderingEnabled), m, opensAt);
+  const reason = orderingReason(orderingBlocker(state, orderingEnabled), m, opensAt) ?? checkoutBlock ?? null;
 
   const setQty = useCallback(
     (line: ResolvedCartLine, next: number) => {
@@ -289,6 +293,8 @@ export function CartScreen({
             </ul>
 
             <Totals quote={quote} m={m} />
+            {estimateCopy ? <p className={s.help} data-sf-estimate="">{estimateCopy}</p> : null}
+            {checkoutBlock ? <Banner tone="warn" icon={<InfoIcon />} title={checkoutBlock} alert={false} testId="checkout-block" /> : null}
           </>
         )}
 

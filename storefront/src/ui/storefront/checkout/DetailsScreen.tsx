@@ -33,6 +33,7 @@ import {
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import type { Quote } from '@/money/quote';
 import type { DeliveryZone, MotionMode } from '@/source/types';
+import type { OrderMessages } from '@/i18n/orders';
 import { CheckIcon, ChevronIcon, DeliveryIcon, PinIcon, StoreIcon } from '../icons';
 import { Banner, Bidi, FooterCta, Interpolate, Money, StepHeader } from './flowParts';
 import s from './flow.module.css';
@@ -46,6 +47,7 @@ const ID = {
 } as const;
 
 export interface FlowTenant {
+  readonly logo?: string | null;
   readonly name: string;
   readonly city: string;
   readonly address: string;
@@ -119,6 +121,7 @@ export function DetailsScreen({
   blockedReason = null,
   onContinue,
   onAddItems,
+  pickupCopy,
 }: {
   m: StorefrontMessages;
   draft: CheckoutDraft;
@@ -140,13 +143,15 @@ export function DetailsScreen({
   onContinue: () => void;
   /** "add items" leaves the step for the menu; the draft survives the move. */
   onAddItems: () => void;
+  /** Present only for the real pickup checkout; it has no payment step. */
+  pickupCopy?: OrderMessages;
 }) {
   const [touched, setTouched] = useState(false);
   const [focusTick, setFocusTick] = useState(0);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const available = { pickup: tenant.pickupEnabled, delivery: tenant.deliveryEnabled };
-  const v: CheckoutValidation = validateCheckout(draft, quote, available);
+  const v: CheckoutValidation = validateCheckout(draft, quote, available, pickupCopy !== undefined);
   // Nothing is red before the first blocked tap, even on a wholly empty form.
   const bad = (field: CheckoutField) => touched && v.invalid.includes(field);
   const isDelivery = draft.service === 'delivery';
@@ -204,8 +209,9 @@ export function DetailsScreen({
     <div
       className={`${s.screen} ${motion === 'calm' ? '' : s.motionFull}`}
       data-sf-screen="checkout"
+      data-sf-web-order={pickupCopy ? 'details' : undefined}
     >
-      <StepHeader m={m} title={m.checkout} backHref={backHref} step={0} />
+      <StepHeader m={m} title={m.checkout} backHref={backHref} step={0} pickupOnly={pickupCopy !== undefined} />
 
       <div className={`${s.body} ${s.bodySteps}`} ref={bodyRef}>
         {/* ------------------------------------------------ fulfilment */}
@@ -227,7 +233,7 @@ export function DetailsScreen({
               onPick={() => set({ service: 'pickup' })}
               testId="pickup"
             />
-            <ServiceCard
+            {pickupCopy === undefined ? <ServiceCard
               on={draft.service === 'delivery'}
               off={deliveryOff}
               icon={<DeliveryIcon />}
@@ -236,7 +242,7 @@ export function DetailsScreen({
               bad={bad('service')}
               onPick={() => set({ service: 'delivery' })}
               testId="delivery"
-            />
+            /> : null}
           </div>
           {/*
             The approved message for an unanswerable service question is the
@@ -261,7 +267,7 @@ export function DetailsScreen({
             <input
               className={`${s.input} ${bad('fullName') ? s.inputBad : ''}`}
               value={draft.fullName}
-              onChange={(e) => set({ fullName: e.target.value.slice(0, FIELD_LIMITS.fullName) })}
+              onChange={(e) => set({ fullName: pickupCopy ? e.target.value : e.target.value.slice(0, FIELD_LIMITS.fullName) })}
               autoComplete="name"
               aria-invalid={bad('fullName') ? 'true' : undefined}
               aria-describedby={bad('fullName') ? ID.nameError : undefined}
@@ -280,13 +286,13 @@ export function DetailsScreen({
             <input
               className={`${s.input} ${s.phone} ${bad('phone') ? s.inputBad : ''}`}
               value={draft.phone}
-              onChange={(e) => set({ phone: e.target.value.slice(0, FIELD_LIMITS.phone) })}
+              onChange={(e) => set({ phone: pickupCopy ? e.target.value : e.target.value.slice(0, FIELD_LIMITS.phone) })}
               dir="ltr"
               /* inputmode, NOT type="tel": the pack specifies the keypad hint
                  and nothing else (CONTENT_AND_LOCALIZATION.md:225). */
               inputMode="tel"
               autoComplete="tel"
-              placeholder={m.phoneHint}
+              placeholder={pickupCopy?.phoneHint ?? m.phoneHint}
               aria-invalid={bad('phone') ? 'true' : undefined}
               aria-describedby={ID.phoneHelp}
               data-sf-field="phone"
@@ -299,9 +305,21 @@ export function DetailsScreen({
             id={ID.phoneHelp}
             data-sf-phone-help=""
           >
-            {bad('phone') ? m.phoneHint : m.phoneHelp}
+            {pickupCopy ? (bad('phone') ? pickupCopy.phoneHint : pickupCopy.phoneHelp) : bad('phone') ? m.phoneHint : m.phoneHelp}
           </span>
         </section>
+
+        {pickupCopy ? <section className={s.section}>
+          <label className={s.field}>
+            <span className={s.label}>{pickupCopy.orderNotes} · {m.optional}</span>
+            <textarea className={s.textarea} rows={3} value={draft.orderNotes}
+              onChange={(e) => set({ orderNotes: e.target.value })}
+              aria-invalid={bad('orderNotes') ? 'true' : undefined}
+              aria-describedby="sf-order-notes-help" data-sf-field="orderNotes" />
+          </label>
+          <span className={`${s.help} ${bad('orderNotes') ? s.helpBad : ''}`} id="sf-order-notes-help">{pickupCopy.notesLimit}</span>
+          <p className={s.help}>{pickupCopy.payAtPickup}</p>
+        </section> : null}
 
         {/* --------------------------------------------------- delivery */}
         {isDelivery ? (
@@ -477,7 +495,7 @@ export function DetailsScreen({
         label={
           blockedReason ?? (
             <>
-              {m.stepPayment}
+              {pickupCopy ? m.stepReview : m.stepPayment}
               <ChevronIcon />
             </>
           )
@@ -497,7 +515,7 @@ export function DetailsScreen({
         totalMinor={quote.totalMinor}
         blocked={blockedReason !== null || !v.ok || pending}
         dim={blockedReason !== null || (touched && !v.ok)}
-        testId="to-payment"
+        testId={pickupCopy ? 'to-review' : 'to-payment'}
       />
     </div>
   );

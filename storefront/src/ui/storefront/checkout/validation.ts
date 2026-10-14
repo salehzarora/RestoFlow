@@ -22,6 +22,7 @@
  */
 import type { Quote } from '@/money/quote';
 import type { CheckoutDraft } from './draft';
+import { validCustomerName, validCustomerPhone, validOrderNotes } from '@/orders/validation';
 
 /**
  * The prototype's phone shape: a local number beginning 0, then 1-2 digits, an
@@ -35,6 +36,7 @@ export type CheckoutField =
   | 'service'
   | 'fullName'
   | 'phone'
+  | 'orderNotes'
   | 'zoneId'
   | 'street'
   | 'building';
@@ -76,6 +78,7 @@ const FIELD_ORDER: readonly CheckoutField[] = [
   'service',
   'fullName',
   'phone',
+  'orderNotes',
   'zoneId',
   'street',
   'building',
@@ -85,6 +88,7 @@ export function validateCheckout(
   draft: CheckoutDraft,
   quote: Quote,
   available: ServiceAvailability,
+  livePickup = false,
 ): CheckoutValidation {
   const invalid = new Set<CheckoutField>();
   const blockers: CheckoutBlocker[] = [];
@@ -104,8 +108,10 @@ export function validateCheckout(
    * before this can fire; this is what remains when NEITHER is available.
    */
   if (!isServiceAvailable(draft.service, available)) blockers.push('service-unavailable');
-  if (draft.fullName.trim() === '') invalid.add('fullName');
-  if (!PHONE.test(draft.phone.trim())) invalid.add('phone');
+  if (livePickup ? !validCustomerName(draft.fullName) : draft.fullName.trim() === '') invalid.add('fullName');
+  if (livePickup ? !validCustomerPhone(draft.phone) : !PHONE.test(draft.phone.trim())) invalid.add('phone');
+  if (livePickup && !validOrderNotes(draft.orderNotes)) invalid.add('orderNotes');
+  if (livePickup && draft.service !== 'pickup') invalid.add('service');
 
   if (draft.service === 'delivery') {
     if (quote.blockers.includes('no-zone')) invalid.add('zoneId');
@@ -137,4 +143,5 @@ export const FIELD_LIMITS: Readonly<Record<keyof CheckoutDraft, number>> = {
   building: 16,
   apartment: 16,
   deliveryNotes: 140,
+  orderNotes: 500,
 };

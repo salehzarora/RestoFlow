@@ -16,7 +16,7 @@ const { sourceMode, isLiveMode, isProviderContext, fixtureStorefrontSource, stor
 const { buildQuote } = await import('../src/money/quote.ts');
 const { summarise, addLine } = await import('../src/cart/cartModel.ts');
 
-const ORIGIN = 'https://example-project.supabase.co';
+const ORIGIN = 'https://oqmevrndtivqxgyvcmwy.supabase.co';
 const CONFIG = { url: ORIGIN, anonKey: 'sb_publishable_SYNTHETIC_not_a_real_key_0000' };
 
 // ------------------------------------------------------------------ decoder
@@ -32,7 +32,7 @@ test('a contract-shaped envelope decodes, and every key set is checked by EQUALI
     (e) => ({ ...e, restaurant: { ...e.restaurant, organization_id: 'x' } }),
     (e) => ({ ...e, items: [{ ...e.items[0], sku: 'SECRET' }, ...e.items.slice(1)] }),
     (e) => ({ ...e, items: [{ ...e.items[0], image_path: 'private/key.jpg' }, ...e.items.slice(1)] }),
-    (e) => ({ ...e, modifiers: [{ ...e.modifiers[0], allow_quantity: true }, ...e.modifiers.slice(1)] }),
+    (e) => ({ ...e, modifiers: [{ ...e.modifiers[0], private_field: true }, ...e.modifiers.slice(1)] }),
     (e) => ({ ...e, modifier_options: [{ ...e.modifier_options[0], kitchen_meat: null }, ...e.modifier_options.slice(1)] }),
   ]) {
     assert.throws(() => decodeStorefrontMenu(mutate(syntheticEnvelope())), EnvelopeError);
@@ -57,8 +57,10 @@ test('money and rates must be SAFE INTEGERS; a negative delta or a float is a co
   }
 });
 
-test('the browse-only contract is ASSERTED by the decoder: ordering or delivery on is rejected', () => {
-  assert.throws(() => decodeStorefrontMenu(syntheticEnvelope({ service: { ordering_enabled: true } })), EnvelopeError);
+test('ordering admission decodes for future rollout, but the independent release gate remains off', () => {
+  const decoded = decodeStorefrontMenu(syntheticEnvelope({ service: { ordering_enabled: true } }));
+  assert.equal(decoded.service.ordering_enabled, true);
+  assert.equal(adaptStorefront(decoded, ORIGIN).view.tenant.service.orderingEnabled, false);
   assert.throws(() => decodeStorefrontMenu(syntheticEnvelope({ service: { delivery_enabled: true } })), EnvelopeError);
 });
 
@@ -126,9 +128,9 @@ test('min_select / max_select accept the STORAGE domain (0 .. int4 max), not a m
   assert.equal(big.groups.find((g) => g.id === SYNTH_IDS.extras).max, 5000);
   // an unsatisfiable pair (min above a bounded max) drops THAT group only - bounded, never the whole storefront
   const impossible = adaptStorefront(decodeStorefrontMenu(withBounds(3, 2)), ORIGIN);
-  assert.equal(impossible.groups.some((g) => g.id === SYNTH_IDS.extras), false, 'the impossible group is dropped');
+  assert.equal(impossible.groups.find((g) => g.id === SYNTH_IDS.extras).min, 3, 'an impossible required group stays visible and cannot silently disappear from checkout');
   assert.equal(impossible.view.items.length, 3, 'the items still render');
-  assert.deepEqual(impossible.view.items[0].groupIds, [SYNTH_IDS.weight], 'the burger keeps its satisfiable group');
+  assert.deepEqual(impossible.view.items[0].groupIds, [SYNTH_IDS.weight, SYNTH_IDS.extras]);
   // min <= max (min 2, max 3) is a normal multi group; single ignores any max
   const normal = adaptStorefront(decodeStorefrontMenu(withBounds(2, 3)), ORIGIN);
   assert.deepEqual([normal.groups.find((g) => g.id === SYNTH_IDS.extras).max, normal.groups.find((g) => g.id === SYNTH_IDS.extras).required], [3, true]);
@@ -136,7 +138,8 @@ test('min_select / max_select accept the STORAGE domain (0 .. int4 max), not a m
   singleEnvelope.modifiers[0] = { ...singleEnvelope.modifiers[0], max_select: 5000, min_select: 7 };
   const single = adaptStorefront(decodeStorefrontMenu(singleEnvelope), ORIGIN).groups.find((g) => g.id === SYNTH_IDS.weight);
   assert.equal(single.single, true);
-  assert.equal(Object.hasOwn(single, 'max'), false, 'a single-choice group never carries a max');
+  assert.equal(single.max, 1);
+  assert.equal(single.min, 1);
 });
 
 test('nextOpenParts expresses the next opening instant on the restaurant wall clock, or null when it cannot', () => {
@@ -194,11 +197,11 @@ test('the adapter maps the envelope onto the fixture shape with the packet §3 r
   const weight = r.groups[0];
   assert.equal(weight.required, true);
   assert.equal(weight.single, true);
-  assert.equal(weight.max, undefined);
+  assert.equal(weight.max, 1);
   const extras = r.groups[1];
   assert.equal(extras.single, false);
   assert.equal(extras.required, false);
-  assert.equal(Object.hasOwn(extras, 'max'), false, 'max_select 0 -> no max (the sheet would refuse every selection)');
+  assert.equal(Object.hasOwn(extras, 'max'), false, 'max_select null -> no maximum');
   assert.equal(extras.removal, undefined);
   assert.deepEqual(weight.options.map((o) => [o.name, o.priceDeltaMinor]), [['Synth Classic', 0], ['Synth Double', 1500]]);
   // modules: campaign falls back to the tagline with an EMPTY subline; everything else off
@@ -215,7 +218,7 @@ test('required is is_required OR min_select >= 1; a group without options is dro
   const r = adaptStorefront(decodeStorefrontMenu(syntheticEnvelope({
     restaurant: { tagline: null },
     modifiers: [
-      { id: SYNTH_IDS.weight, item_id: SYNTH_IDS.burger, name: 'Min1', selection_type: 'multiple', min_select: 1, max_select: 3, is_required: false, display_order: 0 },
+      { id: SYNTH_IDS.weight, item_id: SYNTH_IDS.burger, name: 'Min1', selection_type: 'multiple', min_select: 1, max_select: 3, is_required: false, allow_quantity: false, max_quantity: null, display_order: 0 },
     ],
     modifier_options: [
       { id: SYNTH_IDS.classic, modifier_id: SYNTH_IDS.weight, name: 'A', price_delta_minor: 0, display_order: 0 },

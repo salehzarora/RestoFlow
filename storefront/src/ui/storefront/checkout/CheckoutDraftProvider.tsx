@@ -14,6 +14,8 @@
  */
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { EMPTY_DRAFT, type CheckoutDraft } from './draft';
+import { CartMemoryProvider } from '@/cart/CartMemoryProvider';
+import { LiveOrderProvider } from './LiveOrderProvider';
 
 // The SHAPE lives in draft.ts so validation, the submit contract and the tests
 // can read it without importing React. This file owns the INSTANCE and the
@@ -46,7 +48,7 @@ export function CheckoutDraftProvider({ slug, children }: { slug: string; childr
   const reset = useCallback(() => setDraft(EMPTY_DRAFT), []);
   const api = useMemo(() => ({ draft, set, reset }), [draft, set, reset]);
 
-  return <DraftContext.Provider value={api}>{children}</DraftContext.Provider>;
+  return <CartMemoryProvider slug={slug}><LiveOrderProvider slug={slug}><DraftContext.Provider value={api}>{children}</DraftContext.Provider></LiveOrderProvider></CartMemoryProvider>;
 }
 
 /** Null outside the provider, so a stray consumer cannot invent a draft. */

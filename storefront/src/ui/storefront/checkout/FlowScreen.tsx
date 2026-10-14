@@ -57,7 +57,9 @@ export function FlowScreen({
         zones={resolution.zones}
         taxRateBp={resolution.taxRateBp}
         menuVersion={resolution.menuVersion}
+        orderEndpointOrigin={resolution.orderEndpointOrigin}
         tenant={{
+          logo: tenant.brand.logo,
           name: tenant.displayName,
           city: tenant.city,
           address: tenant.address,

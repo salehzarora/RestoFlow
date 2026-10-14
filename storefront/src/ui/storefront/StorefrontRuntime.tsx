@@ -32,6 +32,7 @@ import type { BasisPoints, DeliveryZone, MenuItem, ModifierGroup, MotionMode, Se
 import { CartScope, type MenuData } from './cart/CartRuntime';
 import { ProductSheet, type SheetDraft } from './product/ProductSheet';
 import product from './product/product.module.css';
+import { orderMessages } from '@/i18n/orders';
 
 /** How long a toast stays up, matching the prototype (Storefront.dc.html:703). */
 const TOAST_MS = 2200;
@@ -116,7 +117,7 @@ export function StorefrontRuntime({
   children?: ReactNode;
 }) {
   const m = storefrontMessages(locale);
-  const cart = useCart(slug, menuVersion, items, groups);
+  const cart = useCart(slug, menuVersion, items, groups, source === 'fixture');
   const menu: MenuData = { source, items, groups, zones, taxRateBp, menuVersion, orderingEnabled };
   const [target, setTarget] = useState<SheetTarget | null>(null);
   const [toast, setToast] = useState<{ text: string; nonce: number } | null>(null);
@@ -295,6 +296,9 @@ export function StorefrontRuntime({
           onClose={close}
           onSubmit={submit}
           onToast={showToast}
+          live={source === 'live'}
+          noteHelp={orderMessages(locale).itemNotesLimit}
+          minimumChoice={orderMessages(locale).atLeast}
         />
       ) : null}
 

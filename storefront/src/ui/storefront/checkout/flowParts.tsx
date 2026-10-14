@@ -218,13 +218,16 @@ export function StepHeader({
   title,
   backHref,
   step,
+  pickupOnly = false,
 }: {
   m: StorefrontMessages;
   title: string;
   backHref: string;
   step: StepIndex;
+  pickupOnly?: boolean;
 }) {
-  const labels = [m.stepDetails, m.stepPayment, m.stepReview];
+  const labels = pickupOnly ? [m.stepDetails, m.stepReview] : [m.stepDetails, m.stepPayment, m.stepReview];
+  const current = pickupOnly && step === 2 ? 1 : step;
   return (
     <header className={s.head}>
       <div className={`${s.headRow} ${s.headRowSteps}`}>
@@ -237,14 +240,14 @@ export function StepHeader({
         (:420); the dictionary has no key for it, so the name is composed from
         keys that DO exist rather than by inventing copy.
       */}
-      <nav className={s.steps} aria-label={labels.join(' · ')} data-sf-steps={step}>
+      <nav className={s.steps} aria-label={labels.join(' · ')} data-sf-steps={current}>
         {labels.map((label, index) => (
           <span
-            className={`${s.step} ${index <= step ? s.stepFilled : ''} ${
-              index === step ? s.stepNow : ''
+            className={`${s.step} ${index <= current ? s.stepFilled : ''} ${
+              index === current ? s.stepNow : ''
             }`}
             key={label}
-            aria-current={index === step ? 'step' : undefined}
+            aria-current={index === current ? 'step' : undefined}
           >
             <span className={s.stepBar} aria-hidden="true" />
             {label}
@@ -361,4 +364,54 @@ export function Interpolate({
 /** A tenant-authored or visitor-authored run, isolated inside a sentence. */
 export function Bidi({ children }: { children: ReactNode }) {
   return <bdi>{children}</bdi>;
+}
+
+export function ReviewBlock({
+  icon,
+  label,
+  value,
+  sub,
+  foot,
+  editLabel,
+  editName,
+  onEdit,
+  testId,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: ReactNode;
+  sub?: ReactNode;
+  foot?: string;
+  /** The one approved word. */
+  editLabel: string;
+  /** The same word plus the step it returns to, for the accessible name. */
+  editName: string;
+  onEdit: () => void;
+  testId: string;
+}) {
+  return (
+    <div className={s.block} data-sf-block={testId}>
+      <span className={s.blockTile} aria-hidden="true">
+        {icon}
+      </span>
+      <div className={s.blockText}>
+        <div className={s.blockLabel}>{label}</div>
+        <div className={s.blockValue}>{value}</div>
+        {sub === undefined ? null : <div className={s.blockSub}>{sub}</div>}
+        {foot === undefined ? null : <div className={s.blockFoot}>{foot}</div>}
+      </div>
+      {/* The Edit control NAMES its destination, so "Edit" heard three times
+          in a row is still three distinct actions. */}
+      <button
+        className={s.blockEdit}
+        type="button"
+        onClick={onEdit}
+        aria-label={editName}
+        data-sf-edit={testId}
+      >
+        {/* The VISIBLE label stays the approved single word. */}
+        <span aria-hidden="true">{editLabel}</span>
+      </button>
+    </div>
+  );
 }

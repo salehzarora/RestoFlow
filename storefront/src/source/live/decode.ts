@@ -80,6 +80,8 @@ export interface WireModifier {
   readonly min_select: number;
   readonly max_select: number | null;
   readonly is_required: boolean;
+  readonly allow_quantity: boolean;
+  readonly max_quantity: number | null;
   readonly display_order: number;
 }
 
@@ -244,9 +246,9 @@ export function decodeStorefrontMenu(raw: unknown): StorefrontMenuEnvelope {
     pickup_enabled: bool(s.pickup_enabled, 'service.pickup_enabled'),
     delivery_enabled: bool(s.delivery_enabled, 'service.delivery_enabled'),
   };
-  // The browse-only contract is asserted, not assumed: a server that ever
-  // answered ordering_enabled=true would not be the contract this build ships.
-  if (service.ordering_enabled || service.delivery_enabled) fail('service: ordering/delivery must be off in this slice');
+  // The independent release gate in the adapter keeps ordering off. A future
+  // owner-approved activation can use this same decoded admission flag.
+  if (service.delivery_enabled) fail('service: delivery must be off in this slice');
   const tax: WireTax = {
     enabled: bool(t.enabled, 'tax.enabled'),
     rate_bp: int(t.rate_bp, 'tax.rate_bp', 0, 10000),
@@ -278,7 +280,10 @@ export function decodeStorefrontMenu(raw: unknown): StorefrontMenuEnvelope {
     } satisfies WireItem;
   });
   const modifiers = list(e.modifiers, 'modifiers', CAPS.modifiers, (item, at) => {
-    const m = exactKeys(item, MODIFIER_KEYS, at);
+    // Hosted rollout is separate: old browse-only menus remain readable until
+    // both additive fields arrive. A half-present extension fails closed.
+    const hasQuantities = isRecord(item) && (Object.hasOwn(item, 'allow_quantity') || Object.hasOwn(item, 'max_quantity'));
+    const m = exactKeys(item, hasQuantities ? [...MODIFIER_KEYS, 'allow_quantity', 'max_quantity'] : MODIFIER_KEYS, at);
     return {
       id: id(m.id, `${at}.id`),
       item_id: id(m.item_id, `${at}.item_id`),
@@ -290,6 +295,8 @@ export function decodeStorefrontMenu(raw: unknown): StorefrontMenuEnvelope {
       min_select: int(m.min_select, `${at}.min_select`, 0, 2147483647),
       max_select: m.max_select === null ? null : int(m.max_select, `${at}.max_select`, 0, 2147483647),
       is_required: bool(m.is_required, `${at}.is_required`),
+      allow_quantity: hasQuantities ? bool(m.allow_quantity, `${at}.allow_quantity`) : false,
+      max_quantity: !hasQuantities || m.max_quantity === null ? null : int(m.max_quantity, `${at}.max_quantity`, 1, 2147483647),
       display_order: int(m.display_order, `${at}.display_order`, -2147483648, 2147483647),
     } satisfies WireModifier;
   });

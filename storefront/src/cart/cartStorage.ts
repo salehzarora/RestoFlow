@@ -227,6 +227,13 @@ export function loadCart(slug: string, menuVersion: string): CartState {
   }
 }
 
+/** Remove only this live tenant's legacy cart; never read its old contents. */
+export function clearPersistedCart(slug: string): void {
+  const key = cartKey(slug);
+  if (key === null) return;
+  try { store()?.removeItem(key); } catch { /* Refused storage is harmless. */ }
+}
+
 /** Serialise exactly the CartState shape - never a wider object. */
 export function serialiseCart(state: CartState): string {
   return JSON.stringify({
