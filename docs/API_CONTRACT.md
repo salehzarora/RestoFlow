@@ -1486,6 +1486,36 @@ Note-free frozen requests remain compatible. All hosted admission controls and t
 Storefront release gate remain disabled pending a separate rollout authorization.
 See [execution/evidence packet](WEB_ORDERS_CHECKOUT_001.md).
 
+### 4.51 Private controlled-test admission (STOREFRONT-ROLLOUT-001C-PREP)
+
+Preparation only; no hosted activation or real test is performed by this packet.
+The existing anonymous Edge endpoint can authorize exactly one configured
+Maps Burger request while general `WEB_ORDERS_ENABLED` remains OFF. The separate
+`WEB_ORDERS_TEST_ENABLED` gate defaults OFF. Its short-lived server permit binds
+the full organization/restaurant/branch scope, UUIDv4, private 256-bit bearer,
+customer capability and normalized order hashes. Missing, invalid or expired
+permits fail closed. Both general and test gates ON is also a closed state.
+No credential enters client bundles, URLs, logs, upstream requests or responses.
+Existing customer request/status shapes and exact CORS behavior are unchanged.
+
+The only new RPC is service-only
+`public.submit_web_order_test_request(text,uuid,text,jsonb,uuid,uuid,uuid,uuid,timestamptz,timestamptz)`.
+Its arguments are the existing `p_slug,p_client_request_id,p_status_token_hash,p_order`
+plus `p_test_organization_id,p_test_restaurant_id,p_test_branch_id,p_test_request_id,
+p_test_not_before,p_test_expires_at`. The public wrapper is SECURITY INVOKER; its
+private `app` body is postgres-owned, SECURITY DEFINER and pins empty search_path.
+PUBLIC, anon and authenticated have no EXECUTE; no table grants are added.
+The guard locks and checks the authoritative expected scope and the 15-minute
+maximum window, delegates unchanged submission/pricing/quotas/idempotency, and
+rolls back delegated effects if the window closes. It creates no canonical order.
+Existing real POS acceptance remains the sole path to canonical creation/dispatch.
+
+An owner-authorized test must separately admit only the exact SQL branch channel.
+Public checkout release, profile CHECKs, service eligibility and actual opening
+hours remain unchanged. Capability status survives closing test admission.
+See the [Edge permit contract](../supabase/functions/web-order-submit/CONTRACT.md)
+and [operator/switch-off runbook](STOREFRONT_ROLLOUT_001C_PREP.md).
+
 ## 5. Cross-References
 - Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034, D-037, D-039, D-040, D-041, D-042, D-043, D-044, D-045, D-046, D-047).
 - Open questions: [OPEN_QUESTIONS](OPEN_QUESTIONS.md) (Q-004, Q-007, Q-008, Q-009, Q-010, Q-011, Q-012, Q-014, Q-015, Q-017, Q-028, Q-029, Q-030, Q-031, Q-032, Q-033, Q-034, Q-035, Q-036, Q-039, Q-040, Q-041, Q-042, Q-043, Q-044, Q-045, Q-046).

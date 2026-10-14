@@ -168,8 +168,11 @@ select is(
     select identity from sec001_allowlist
     union all select 'submit_web_order_request(text,uuid,text,jsonb)'
     union all select 'get_web_order_request_status(text,uuid,text)'
+    union all select regexp_replace(
+      'public.submit_web_order_test_request(text,uuid,text,jsonb,uuid,uuid,uuid,uuid,timestamptz,timestamptz)'::regprocedure::text,
+      '^public.', '')
   ) denied),
-  'D1. authenticated excludes the anon-only read and the two service-only web-request wrappers');
+  'D1. authenticated excludes the anon-only read and the three service-only web-request wrappers');
 
 -- device / pairing
 select ok(has_function_privilege('authenticated', 'public.redeem_device_pairing(text, text)', 'EXECUTE'),
