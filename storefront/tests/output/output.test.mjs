@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { auditOutput, walk } from '../../scripts/audit-output.mjs';
 import { checkBudgets, cssAcceptance, cssRawLimitFor, measure } from '../../scripts/measure-firstload.mjs';
-import { BUDGETS, MEDIA_PATH_PREFIX } from '../../scripts/budgets.mjs';
+import { BUDGETS, MEDIA_PATH_PREFIX, ORDER_ORIGIN, ORDER_ENDPOINT } from '../../scripts/budgets.mjs';
 import { CSS_RAW_EXCEPTION, PERF_LCP_ACCEPTANCE } from '../../scripts/acceptance-exceptions.mjs';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -94,10 +94,10 @@ test('no emitted client chunk, document or flight payload carries a database cre
     for (const [label, shape] of CREDENTIAL_SHAPES) {
       assert.ok(!shape.test(text), `${file}: carries ${label}`);
     }
-    // The ONLY permitted appearance of the database origin is a published
-    // derivative <img src> under the public storefront-media path.
+    // D-047 also permits the exact public customer Edge origin/endpoint string;
+    // no credentials, other database paths or arbitrary origin paths are allowed.
     for (const m of text.matchAll(/https?:\/\/[a-z0-9-]+\.supabase\.co[^"'\s<>)]*/gi)) {
-      assert.ok(m[0].startsWith(MEDIA_PATH_PREFIX), `${file}: the database origin appears outside the public media path: ${m[0].slice(0, 80)}`);
+      assert.ok(m[0].startsWith(MEDIA_PATH_PREFIX) || m[0] === ORDER_ORIGIN || m[0] === ORDER_ENDPOINT, `${file}: the database origin appears outside the public media path: ${m[0].slice(0, 80)}`);
     }
   }
 });

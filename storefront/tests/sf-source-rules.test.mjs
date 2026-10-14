@@ -53,6 +53,9 @@ const CSS = ALL.filter((f) => f.endsWith('.css'));
  * emitted-chunk scan (tests/output) are the other two layers.
  */
 const LIVE_CLIENT_MODULE = 'src/source/live/client.ts';
+// D-047: the only customer network boundary and capability recovery store.
+const ORDER_TRANSPORT_MODULE = 'src/orders/transport.ts';
+const ORDER_RECOVERY_MODULE = 'src/orders/recovery.ts';
 
 // The demo tenant's data legitimately contains its own brand colours.
 const FIXTURE_LAYER = [
@@ -257,9 +260,10 @@ test('the live client guards against a browser at runtime and names the two serv
   assert.ok(src.includes("typeof window !== 'undefined'"), 'the runtime guard must exist');
   assert.ok(src.includes('STOREFRONT_SUPABASE_URL') && src.includes('STOREFRONT_SUPABASE_ANON_KEY'));
   assert.ok(src.includes('AbortSignal.timeout('), 'the read must be bounded by a timeout');
-  // Exactly one fetch( call site in the whole tree, and it is here.
+  // Catalog read and D-047 customer POST are separate exact boundaries.
   const sites = TSX.filter((f) => code(f).includes('fetch(')).map(rel);
-  assert.deepEqual(sites, [LIVE_CLIENT_MODULE]);
+  assert.ok(sites.includes(LIVE_CLIENT_MODULE));
+  assert.ok(sites.every((site) => [LIVE_CLIENT_MODULE, ORDER_TRANSPORT_MODULE].includes(site)), 'only catalog read and customer POST boundaries may fetch');
 });
 
 test('the category icon path never comes from tenant data: the adapter resolves it from the registry', () => {
@@ -335,12 +339,12 @@ const CLIPBOARD_MODULE = 'src/ui/storefront/request/clipboard.ts';
 
 /** The store each module owns. Every other file may touch neither. */
 const STORE_OWNERS = [
-  ['sessionStorage', UI_SESSION_MODULE],
-  ['localStorage', CART_STORAGE_MODULE],
-  ['fetch(', LIVE_CLIENT_MODULE],
+  ['sessionStorage', [UI_SESSION_MODULE, ORDER_RECOVERY_MODULE]],
+  ['localStorage', [CART_STORAGE_MODULE]],
+  ['fetch(', [LIVE_CLIENT_MODULE, ORDER_TRANSPORT_MODULE]],
   // Any spelling of the clipboard object - navigator.clipboard, a local alias,
   // window.navigator.clipboard - contains this member access.
-  ['.clipboard', CLIPBOARD_MODULE],
+  ['.clipboard', [CLIPBOARD_MODULE]],
 ];
 
 /** Banned in EVERY app/ and src/ file, the allowlisted modules included. */
@@ -363,10 +367,13 @@ function storageOffence(relPath, source) {
   for (const api of BANNED_EVERYWHERE) {
     if (src.includes(api)) return `${relPath}: ${api} is not permitted anywhere`;
   }
-  for (const [api, owner] of STORE_OWNERS) {
-    if (relPath !== owner && src.includes(api)) {
-      return `${relPath}: ${api} is allowed ONLY in ${owner}`;
+  for (const [api, owners] of STORE_OWNERS) {
+    if (!owners.includes(relPath) && src.includes(api)) {
+      return `${relPath}: ${api} is allowed ONLY in ${owners.join(', ')}`;
     }
+  }
+  if (/\bfetch\b/.test(src.replace(/\btypeof\s+fetch\b/g, '')) && ![LIVE_CLIENT_MODULE, ORDER_TRANSPORT_MODULE].includes(relPath)) {
+    return `${relPath}: fetch( is allowed ONLY in ${LIVE_CLIENT_MODULE}, ${ORDER_TRANSPORT_MODULE}`;
   }
   return null;
 }
@@ -377,10 +384,12 @@ test('each browser store is confined to its own allowlisted module', () => {
   }
   // Non-vacuity: each allowlisted file must exist AND must actually use the API
   // it is allowlisted for, or that allowlist entry is guarding nothing.
-  for (const [api, owner] of STORE_OWNERS) {
-    const helper = TSX.find((f) => rel(f) === owner);
-    assert.ok(helper, `${owner} must exist`);
-    assert.ok(code(helper).includes(api), `${owner} must actually use ${api}`);
+  for (const [api, owners] of STORE_OWNERS) {
+    for (const owner of owners) {
+      const helper = TSX.find((f) => rel(f) === owner);
+      assert.ok(helper, `${owner} must exist`);
+      assert.ok(code(helper).includes(api === 'fetch(' ? 'fetch' : api), `${owner} must actually use ${api}`);
+    }
   }
 });
 

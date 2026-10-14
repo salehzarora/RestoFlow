@@ -11,9 +11,9 @@
  *     always false (no storage); `deal` is never produced
  *   - a category without a live item is not shown; an item whose category is
  *     not served is dropped; a group without a live option is dropped
- *   - `max` is omitted when max_select is NULL or 0 (the sheet would otherwise
- *     refuse every selection); quantity groups are plain multi-select (D10)
- *   - `required` = is_required OR min_select >= 1 (the UI's "at least one")
+ *   - min/max count distinct choices; per-option quantities retain their own
+ *     published bounds. Impossible required groups remain visible and block.
+ *   - old catalog envelopes have quantity selection off until rollout
  *   - the campaign hero falls back to the tagline, else the display name, with
  *     an EMPTY subline the hero omits (D11); every other optional module is off
  *   - ordering is OFF, delivery is OFF, zones are empty: the flow is browse-only
@@ -36,6 +36,7 @@ import { isValidSlug } from '@/theme/sanitize';
 import { fetchStorefrontMenu, liveConfig, type LiveConfig } from './client';
 import { decodeStorefrontMenu, type StorefrontMenuOk } from './decode';
 import { iconPathFor } from './icons';
+import { LIVE_ORDERING_RELEASED, orderEndpointOrigin } from './ordering';
 
 const MEDIA_PATH = /^\/storage\/v1\/object\/public\/storefront-media\/[0-9a-f]{32}\/[0-9a-f]{64}\.webp$/;
 
@@ -97,13 +98,13 @@ export function adaptStorefront(envelope: StorefrontMenuOk, origin: string): Sto
       pickupEnabled: envelope.service.pickup_enabled,
       deliveryEnabled: false,
       deliveryFromMinor: 0,
-      orderingEnabled: false,
+      orderingEnabled: LIVE_ORDERING_RELEASED && envelope.service.ordering_enabled,
     },
     heroImage: mediaUrl(r.hero_url, origin),
     currency: 'ILS',
   };
 
-  // groups with at least one live option, in display order
+  // Published groups in display order; keep unsatisfied required groups visible.
   const optionsByGroup = new Map<string, ModifierOption[]>();
   for (const o of envelope.modifier_options) {
     const bucket = optionsByGroup.get(o.modifier_id) ?? [];
@@ -113,22 +114,22 @@ export function adaptStorefront(envelope: StorefrontMenuOk, origin: string): Sto
   const groupsByItem = new Map<string, string[]>();
   const groups: ModifierGroup[] = [];
   for (const m of envelope.modifiers) {
-    const options = optionsByGroup.get(m.id);
-    if (options === undefined || options.length === 0) continue;
+    const options = optionsByGroup.get(m.id) ?? [];
     const single = m.selection_type === 'single';
-    // Relational bounds (independent review, C2): the database stores any
-    // non-negative integer pair, so the wire decoder accepts the storage domain
-    // and the RELATION is judged here. A `single` group offers exactly one
-    // choice whatever its max; a multi group whose minimum exceeds its bounded
-    // maximum can never be satisfied and is dropped (bounded), never rendered
-    // as a trap and never a reason to fail the whole storefront.
-    const max = !single && m.max_select !== null && m.max_select > 0 ? m.max_select : undefined;
-    if (max !== undefined && m.min_select > max) continue;
+    // Match the authoritative quote: singles require one distinct option,
+    // multiples preserve the published minimum and maximum (including zero).
+    // A required group cannot disappear and make an invalid cart seem valid.
+    const min = single ? 1 : Math.max(m.is_required ? 1 : 0, m.min_select);
+    const max = single ? 1 : m.max_select ?? undefined;
+    if (options.length === 0 && min === 0) continue;
     groups.push({
       id: m.id,
       name: m.name,
-      required: m.is_required || m.min_select >= 1,
+      required: min > 0,
       single,
+      min,
+      allowQuantity: m.allow_quantity,
+      maxQuantity: Math.min(m.max_quantity ?? 20, 20),
       ...(max === undefined ? {} : { max }),
       options,
     });
@@ -181,7 +182,7 @@ export function adaptStorefront(envelope: StorefrontMenuOk, origin: string): Sto
     cart: { lines: [], itemCount: 0, subtotalMinor: 0, taxMinor: 0, totalMinor: 0, taxRateBp },
   };
   const preset: Preset = r.visual_preset;
-  return { source: 'live', view, preset, groups, zones: [], taxRateBp, menuVersion: envelope.menu_version };
+  return { source: 'live', view, preset, groups, zones: [], taxRateBp, menuVersion: envelope.menu_version, orderEndpointOrigin: orderEndpointOrigin(origin) };
 }
 
 /**

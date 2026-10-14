@@ -56,14 +56,17 @@ export function resolveLine(
   const groups = groupsFor(item.groupIds, allGroups);
   const optionNames: string[] = [];
   for (const group of groups) {
-    for (const optionId of boundedSelection(group, line.selections[group.id] ?? [])) {
+    const selected = boundedSelection(group, line.selections[group.id] ?? []);
+    for (const optionId of new Set(selected)) {
       const option = group.options.find((o) => o.id === optionId);
       if (option === undefined) continue;
       // A REMOVAL reads as an addition without its marker: "onion" instead of
       // "no onion" is the opposite instruction to a kitchen.
       // COMPONENT_INVENTORY.md:124 prefixes removals with the multiplication
       // sign, and DESIGN_HANDOFF.md:114 repeats it.
-      optionNames.push(group.removal === true ? `${REMOVAL_PREFIX} ${option.name}` : option.name);
+      const count = selected.filter((id) => id === optionId).length;
+      const name = count > 1 ? `${count}× ${option.name}` : option.name;
+      optionNames.push(group.removal === true ? `${REMOVAL_PREFIX} ${name}` : name);
     }
   }
   return {

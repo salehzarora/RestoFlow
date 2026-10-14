@@ -15,6 +15,9 @@
  * from is named here once, for the CSP test and the output audit alike.
  */
 export const MEDIA_ORIGIN = 'https://oqmevrndtivqxgyvcmwy.supabase.co';
+// D-047: customer API origin and path only; never a credential or REST endpoint.
+export const ORDER_ORIGIN = MEDIA_ORIGIN;
+export const ORDER_ENDPOINT = `${ORDER_ORIGIN}/functions/v1/web-order-submit`;
 export const MEDIA_PATH_PREFIX = `${MEDIA_ORIGIN}/storage/v1/object/public/storefront-media/`;
 
 export const BUDGETS = {

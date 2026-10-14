@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { rubikPreloadArabic } from '@/fonts/rubik-preload-arabic';
-import { CheckoutDraftProvider } from '@/ui/storefront/checkout/CheckoutDraftProvider';
+import { CheckoutEntry } from '@/ui/storefront/checkout/CheckoutEntry';
+import { sourceMode } from '@/source/mode';
 
 /**
  * Shared segment layout for one tenant's storefront.
@@ -27,8 +28,8 @@ export default async function SlugLayout({
 }) {
   const { slug } = await params;
   return (
-    <CheckoutDraftProvider slug={slug}>
+    <CheckoutEntry source={sourceMode()} slug={slug}>
       <div className={rubikPreloadArabic.className} data-sf-fonts="">{children}</div>
-    </CheckoutDraftProvider>
+    </CheckoutEntry>
   );
 }

@@ -29,13 +29,14 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
-import { MAX_NOTE, MAX_QTY, MIN_QTY, clampQty, unitPriceMinor } from '@/money/pricing';
+import { MAX_NOTE, MAX_QTY, MIN_QTY, clampQty, modifierSelectionValid, unitPriceMinor } from '@/money/pricing';
 import { sanitizeText } from '@/theme/sanitize';
 import type { MenuItem, ModifierGroup, ModifierSelections, MotionMode } from '@/source/types';
 import { AlertIcon, CheckIcon, CloseIcon, MinusIcon, PlusIcon } from '../icons';
 import { TenantText } from '../TenantText';
 import shell from '../storefront.module.css';
 import styles from './product.module.css';
+import { validOrderNotes } from '@/orders/notes';
 
 export interface SheetDraft {
   readonly qty: number;
@@ -48,11 +49,12 @@ function unmetGroups(
   groups: readonly ModifierGroup[],
   selections: ModifierSelections,
 ): readonly ModifierGroup[] {
-  return groups.filter((g) => g.required && (selections[g.id] ?? []).length === 0);
+  return groups.filter((g) => !modifierSelectionValid(g, selections[g.id] ?? []));
 }
 
-function badgeText(group: ModifierGroup, m: StorefrontMessages): string {
+function badgeText(group: ModifierGroup, m: StorefrontMessages, minimumChoice?: string): string {
   const limit = group.max === undefined ? '' : ` · ${fill(m.upTo, { n: String(group.max) })}`;
+  if (group.min !== undefined && group.min > 1 && minimumChoice) return `${fill(minimumChoice, { n: String(group.min) })}${limit}`;
   if (group.required) return group.single ? `${m.required} · ${m.chooseOne}` : `${m.required}${limit}`;
   return `${m.optional}${limit}`;
 }
@@ -76,6 +78,9 @@ export function ProductSheet({
   onClose,
   onSubmit,
   onToast,
+  live = false,
+  noteHelp,
+  minimumChoice,
 }: {
   item: MenuItem;
   groups: readonly ModifierGroup[];
@@ -87,6 +92,9 @@ export function ProductSheet({
   onClose: () => void;
   onSubmit: (draft: SheetDraft) => void;
   onToast: (text: string) => void;
+  live?: boolean;
+  noteHelp?: string;
+  minimumChoice?: string;
 }) {
   const [selections, setSelections] = useState<ModifierSelections>(initial?.selections ?? {});
   const [qty, setQty] = useState(initial === undefined ? MIN_QTY : clampQty(initial.qty));
@@ -95,10 +103,12 @@ export function ProductSheet({
 
   const titleId = useId();
   const sheetRef = useRef<HTMLDivElement | null>(null);
+  const noteRef = useRef<HTMLTextAreaElement | null>(null);
   const groupRefs = useRef(new Map<string, HTMLElement>());
 
   const unmet = useMemo(() => unmetGroups(groups, selections), [groups, selections]);
-  const blocked = unmet.length > 0;
+  const invalidNote = live && (!validOrderNotes(note, MAX_NOTE) || /[\x7f-\x9f]/u.test(note));
+  const blocked = unmet.length > 0 || invalidNote;
   const unitMinor = unitPriceMinor(item, groups, selections);
   const totalMinor = unitMinor * qty;
 
@@ -163,7 +173,7 @@ export function ProductSheet({
     (group: ModifierGroup, optionId: string) => {
       const chosen = selections[group.id] ?? [];
       if (!group.single && !chosen.includes(optionId)) {
-        if (group.max !== undefined && chosen.length >= group.max) {
+        if (group.max !== undefined && new Set(chosen).size >= group.max) {
           // At the cap the tap is REFUSED and answered with the approved toast.
           // The option stays operable on purpose: a disabled control would give
           // the visitor no explanation at all.
@@ -177,17 +187,27 @@ export function ProductSheet({
         if (now.includes(optionId)) {
           return { ...current, [group.id]: now.filter((id) => id !== optionId) };
         }
-        if (group.max !== undefined && now.length >= group.max) return current;
+        if (group.max !== undefined && new Set(now).size >= group.max) return current;
         return { ...current, [group.id]: [...now, optionId] };
       });
     },
     [m.maxReached, onToast, selections],
   );
 
+  const changeOptionQuantity = (group: ModifierGroup, optionId: string, amount: number) => {
+    setSelections((current) => {
+      const now = current[group.id] ?? [];
+      const count = now.filter((id) => id === optionId).length;
+      const next = count + amount;
+      if (next < 1 || next > Math.min(group.maxQuantity ?? 20, 20)) return current;
+      return { ...current, [group.id]: [...now.filter((id) => id !== optionId), ...Array.from({ length: next }, () => optionId)] };
+    });
+  };
+
   const submit = useCallback(() => {
     if (blocked) {
       setShowError(true);
-      const target = groupRefs.current.get(unmet[0].id);
+      const target = unmet[0] ? groupRefs.current.get(unmet[0].id) : noteRef.current;
       // 'auto', never 'instant': pre-2023 engines throw a TypeError on
       // 'instant', and 'auto' defers to the element's computed scroll-behavior,
       // which this module deliberately leaves at the initial value.
@@ -200,11 +220,11 @@ export function ProductSheet({
       target?.focus();
       return;
     }
-    onSubmit({ qty, selections, note: sanitizeText(note, MAX_NOTE) });
-  }, [blocked, note, onSubmit, qty, selections, unmet]);
+    onSubmit({ qty, selections, note: live ? note : sanitizeText(note, MAX_NOTE) });
+  }, [blocked, live, note, onSubmit, qty, selections, unmet]);
 
   const ctaLabel = blocked
-    ? fill(m.chooseToContinue, { g: unmet[0].name })
+    ? unmet[0] ? fill(m.chooseToContinue, { g: unmet[0].name }) : m.notes
     : editing
       ? m.updateItem
       : m.addToCart;
@@ -259,8 +279,8 @@ export function ProductSheet({
 
           {groups.map((group) => {
             const chosen = selections[group.id] ?? [];
-            const failed = showError && group.required && chosen.length === 0;
-            const full = group.max !== undefined && chosen.length >= group.max;
+            const failed = showError && unmet.some((g) => g.id === group.id);
+            const full = group.max !== undefined && new Set(chosen).size >= group.max;
             const headId = `${titleId}-g-${group.id}`;
             return (
               <section
@@ -284,7 +304,7 @@ export function ProductSheet({
                       failed ? styles.badgeBad : group.required ? styles.badgeReq : styles.badgeOpt
                     }`}
                   >
-                    {badgeText(group, m)}
+                    {badgeText(group, m, minimumChoice)}
                   </span>
                 </div>
 
@@ -304,11 +324,11 @@ export function ProductSheet({
                     const on = chosen.includes(option.id);
                     const delta = deltaText(group, option.priceDeltaMinor, m);
                     return (
+                      <div key={option.id} className={styles.quantityOption}>
                       <button
                         className={`${styles.option} ${on ? styles.optionOn : ''} ${
                           !on && full ? styles.optionFull : ''
                         }`}
-                        key={option.id}
                         type="button"
                         role={group.single ? 'radio' : 'checkbox'}
                         aria-checked={on}
@@ -339,6 +359,12 @@ export function ProductSheet({
                           <span className={`${styles.delta} ${styles.deltaFree}`}>{delta}</span>
                         )}
                       </button>
+                      {on && group.allowQuantity ? <span className={styles.stepper} data-sf-modifier-quantity={option.id}>
+                        <button className={styles.step} type="button" aria-label={`${m.decrease} · ${option.name}`} disabled={chosen.filter((id) => id === option.id).length <= 1} onClick={() => changeOptionQuantity(group, option.id, -1)}><MinusIcon /></button>
+                        <span className={`${styles.stepValue} ${shell.ltr}`} dir="ltr" aria-live="polite">{chosen.filter((id) => id === option.id).length}</span>
+                        <button className={styles.step} type="button" aria-label={`${m.increase} · ${option.name}`} disabled={chosen.filter((id) => id === option.id).length >= Math.min(group.maxQuantity ?? 20, 20)} onClick={() => changeOptionQuantity(group, option.id, 1)}><PlusIcon /></button>
+                      </span> : null}
+                      </div>
                     );
                   })}
                 </div>
@@ -355,11 +381,15 @@ export function ProductSheet({
               className={styles.noteField}
               id={`${titleId}-note`}
               rows={2}
-              maxLength={MAX_NOTE}
+              maxLength={live ? undefined : MAX_NOTE}
+              ref={noteRef}
+              aria-invalid={showError && invalidNote ? 'true' : undefined}
+              aria-describedby={live ? `${titleId}-note-help` : undefined}
               placeholder={m.notesHint}
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
+            {live ? <span id={`${titleId}-note-help`} className={styles.noteOptional} role={showError && invalidNote ? 'alert' : undefined}>{noteHelp}</span> : null}
           </div>
         </div>
 

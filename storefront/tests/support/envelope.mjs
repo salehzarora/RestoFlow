@@ -58,9 +58,9 @@ export function syntheticEnvelope(over = {}) {
       { id: SYNTH_IDS.orphan, category_id: '00000000-0000-0000-0000-00ad0000c1ff', name: 'Synth Orphan', description: '', base_price_minor: 100, display_order: 3, tags: [], image_url: null, availability: 'available' },
     ],
     modifiers: [
-      { id: SYNTH_IDS.weight, item_id: SYNTH_IDS.burger, name: 'Synth Weight', selection_type: 'single', min_select: 1, max_select: 1, is_required: true, display_order: 0 },
-      { id: SYNTH_IDS.extras, item_id: SYNTH_IDS.burger, name: 'Synth Extras', selection_type: 'multiple', min_select: 0, max_select: 0, is_required: false, display_order: 1 },
-      { id: SYNTH_IDS.emptyGroup, item_id: SYNTH_IDS.burger, name: 'Synth Empty Group', selection_type: 'multiple', min_select: 0, max_select: null, is_required: false, display_order: 2 },
+      { id: SYNTH_IDS.weight, item_id: SYNTH_IDS.burger, name: 'Synth Weight', selection_type: 'single', min_select: 1, max_select: 1, is_required: true, allow_quantity: false, max_quantity: null, display_order: 0 },
+      { id: SYNTH_IDS.extras, item_id: SYNTH_IDS.burger, name: 'Synth Extras', selection_type: 'multiple', min_select: 0, max_select: null, is_required: false, allow_quantity: false, max_quantity: null, display_order: 1 },
+      { id: SYNTH_IDS.emptyGroup, item_id: SYNTH_IDS.burger, name: 'Synth Empty Group', selection_type: 'multiple', min_select: 0, max_select: null, is_required: false, allow_quantity: false, max_quantity: null, display_order: 2 },
     ],
     modifier_options: [
       { id: SYNTH_IDS.classic, modifier_id: SYNTH_IDS.weight, name: 'Synth Classic', price_delta_minor: 0, display_order: 0 },

@@ -477,16 +477,16 @@ select ok(
   (select r::text from _sf where label = 'alpha') !~ '(00ad00000a00|00ad00000a10|00ad00000a1a|00ad00000a1b)',
   'C15. no organization / restaurant / branch UUID appears anywhere in the payload text');
 select ok(
-  (select r::text from _sf where label = 'alpha') !~ '(SKU-SECRET|kitchen_note|internal kitchen|prep_minutes|prep_components|"attributes"|item_type|image_path|kitchen_meat|allow_quantity|max_quantity|default_station|"sku")',
-  'C16. no internal field or value (sku / kitchen_note / attributes / prep / item_type / kitchen_meat / quantity rules) appears in the payload text');
+  (select r::text from _sf where label = 'alpha') !~ '(SKU-SECRET|kitchen_note|internal kitchen|prep_minutes|prep_components|"attributes"|item_type|image_path|kitchen_meat|default_station|"sku")',
+  'C16. no internal field or value (sku / kitchen_note / attributes / prep / item_type / kitchen_meat) appears in the payload text');
 select is(
   (select string_agg(m ->> 'name' || ':' || (m ->> 'selection_type') || ':' || coalesce(m ->> 'max_select', 'null'), ',' order by (m ->> 'display_order')::int, m ->> 'name') from jsonb_array_elements((select r -> 'modifiers' from _sf where label = 'alpha')) m),
   'Extras:multiple:0,Weight:single:1',
   'C17. modifiers: live groups only (DeadMod / SiblingMod excluded); max_select 0 served as-is (the UI omits max)');
 select is(
   (select string_agg(k, ',' order by k) from jsonb_object_keys((select r -> 'modifiers' -> 0 from _sf where label = 'alpha')) k),
-  'display_order,id,is_required,item_id,max_select,min_select,name,selection_type',
-  'C18. modifier key set is EXACTLY the contract (no allow_quantity / max_quantity)');
+  'allow_quantity,display_order,id,is_required,item_id,max_quantity,max_select,min_select,name,selection_type',
+  'C18. modifier key set is EXACTLY the checkout contract including quantity constraints');
 select is(
   (select string_agg(o ->> 'name' || '=' || (o ->> 'price_delta_minor'), ',' order by o ->> 'name') from jsonb_array_elements((select r -> 'modifier_options' from _sf where label = 'alpha')) o),
   'Cheese=600,Classic=0,Double=1500',

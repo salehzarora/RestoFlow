@@ -110,6 +110,8 @@ export interface DeliveryZone {
  * importing the fixture (packet §4.5, exact import sites).
  */
 export interface StorefrontResolution {
+  /** Public, exact HTTPS project origin for the private web-order transport. */
+  readonly orderEndpointOrigin?: string;
   /**
    * Which source produced this resolution. The client runtimes honour the
    * `?fx=` demo scenario tokens ONLY for `fixture`; a live tenant's pages
@@ -216,6 +218,10 @@ export interface ModifierGroup {
   readonly name: string;
   readonly required: boolean;
   readonly single: boolean;
+  /** Minimum DISTINCT choices; independent of each option's quantity. */
+  readonly min?: number;
+  readonly allowQuantity?: boolean;
+  readonly maxQuantity?: number;
   /** Only meaningful for a multi group. Absent means unbounded. */
   readonly max?: number;
   readonly removal?: boolean;

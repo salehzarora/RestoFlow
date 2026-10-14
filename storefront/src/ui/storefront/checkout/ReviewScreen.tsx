@@ -26,7 +26,7 @@
  * the service the restaurant offers", and a pending quote still blocks. A
  * send against a total that no longer matches this cart never happens.
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CartApi } from '@/cart/useCart';
 import { optionSummary } from '@/cart/cartModel';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
@@ -55,7 +55,7 @@ import {
   SendIcon,
 } from '../icons';
 import { TenantText } from '../TenantText';
-import { Banner, Bidi, FooterCta, Interpolate, StepHeader, Totals } from './flowParts';
+import { Banner, Bidi, FooterCta, Interpolate, ReviewBlock, StepHeader, Totals } from './flowParts';
 import s from './flow.module.css';
 
 /**
@@ -76,56 +76,6 @@ function addressOf(draft: CheckoutDraft, zoneName: string, locale: Locale): stri
     .map((part) => part.trim())
     .filter((part) => part !== '')
     .join(commaFor(locale));
-}
-
-function ReviewBlock({
-  icon,
-  label,
-  value,
-  sub,
-  foot,
-  editLabel,
-  editName,
-  onEdit,
-  testId,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: ReactNode;
-  sub?: ReactNode;
-  foot?: string;
-  /** The one approved word. */
-  editLabel: string;
-  /** The same word plus the step it returns to, for the accessible name. */
-  editName: string;
-  onEdit: () => void;
-  testId: string;
-}) {
-  return (
-    <div className={s.block} data-sf-block={testId}>
-      <span className={s.blockTile} aria-hidden="true">
-        {icon}
-      </span>
-      <div className={s.blockText}>
-        <div className={s.blockLabel}>{label}</div>
-        <div className={s.blockValue}>{value}</div>
-        {sub === undefined ? null : <div className={s.blockSub}>{sub}</div>}
-        {foot === undefined ? null : <div className={s.blockFoot}>{foot}</div>}
-      </div>
-      {/* The Edit control NAMES its destination, so "Edit" heard three times
-          in a row is still three distinct actions. */}
-      <button
-        className={s.blockEdit}
-        type="button"
-        onClick={onEdit}
-        aria-label={editName}
-        data-sf-edit={testId}
-      >
-        {/* The VISIBLE label stays the approved single word. */}
-        <span aria-hidden="true">{editLabel}</span>
-      </button>
-    </div>
-  );
 }
 
 export function ReviewScreen({

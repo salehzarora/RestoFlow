@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkoutLiteralImports } from '../../tools/vercel/ignore-build.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => JSON.parse(readFileSync(path.join(ROOT, rel), 'utf8'));
@@ -91,7 +92,7 @@ test('application source imports nothing outside the allowlist', () => {
   for (const file of files) {
     const source = readFileSync(file, 'utf8');
     const where = path.relative(ROOT, file);
-    assert.ok(!/\b(?:import|require)\s*\(/.test(source), `${where}: dynamic import()/require()`);
+    assert.notEqual(checkoutLiteralImports(`storefront/${where.split(path.sep).join('/')}`, source), null, `${where}: unapproved dynamic loader`);
     assert.ok(!/\bprocess\s*(?:\?\.|\.|\[\s*["'])\s*(?:getBuiltinModule|mainModule|binding|_linkedBinding)\b/.test(source),
       `${where}: direct Node built-in handle`);
     for (const m of source.matchAll(/(?:\bfrom\s*|\bimport\s*)["']([^"']+)["']/g)) {

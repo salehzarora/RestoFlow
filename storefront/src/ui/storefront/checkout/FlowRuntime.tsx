@@ -1,41 +1,16 @@
 'use client';
 
 /**
- * THE PHASE D RUNTIME - one client island shared by all four flow routes.
- *
- * WHERE THE MENU COMES FROM. STOREFRONT-READ-001: the items, the groups, the
- * zones, the tax rate and the cart key are PROPS from the server half
- * (FlowScreen), resolved by the route's source. Phase D imported the fixture
- * here to keep sixteen static documents small; a live tenant's menu exists
- * only in its own document, so it now travels in the RSC payload by design
- * and the output lane reports that cost per document. The dictionaries are
- * still resolved client-side from the locale.
- *
- * BROWSE-ONLY (tenant.orderingEnabled = false, every live tenant in this
- * slice): the eligibility answer is 'ordering-off' before anything else, the
- * checkout / payment / review URLs bounce to the cart, and NO gateway is
- * constructed - there is nothing a send could reach.
- *
- * WHY ALL FOUR SCREENS SHARE ONE RUNTIME. They share one cart, one quote and
- * one draft. Splitting them would mean four copies of that wiring and four
- * chances for them to disagree about the total.
- *
- * WHAT IS DELIBERATELY ABSENT: no storage of any customer field, no network
- * call, no analytics, no WhatsApp.
- *
- * THE HANDOFF (Phase E). An accepted send records the NONCONTACT summary of
- * what was sent in the in-memory handoff and navigates to `/r/:ref`; the
- * duplicate banner's "view status" carries the same summary, marked seen and
- * without a send instant, so the same route opens the status view directly.
- * The cart is NOT cleared by a send, a failure or a duplicate (the prototype
- * keeps it, :728); only the status screen's "order again" clears it.
+ * The fixture flow entry. FlowScreen selects the separate live entry on the
+ * server, so fixture documents do not download the real transport/status UI.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCartApi } from '../cart/CartRuntime';
+import { useCartApi } from '../cart/CartContext';
 import { StorefrontRuntime } from '../StorefrontRuntime';
 import { storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
+import type { OrderMessages } from '@/i18n/orders';
 import { buildQuote, type Quote, type QuoteInput } from '@/money/quote';
 import { raceQuoteSource, useQuote, type QuoteSource } from '@/money/useQuote';
 import { zoneFor } from '@/source/lookup';
@@ -65,6 +40,8 @@ import s from './flow.module.css';
 export type FlowScreenName = 'cart' | 'checkout' | 'payment' | 'review';
 
 export interface FlowProps {
+  readonly orderCopy?: OrderMessages;
+  readonly orderEndpointOrigin?: string;
   /**
    * Which source rendered the route. The `?fx=` demo scenario tokens (cart
    * notices, readiness, send outcomes, the quote race) are honoured for
@@ -346,10 +323,10 @@ function FlowBody({
   // test seam. A send has nothing to reach (packet §4.6).
   const activeGateway = useMemo(
     () =>
-      tenant.orderingEnabled
+      resolutionSource === 'fixture' && tenant.orderingEnabled
         ? (gateway ?? fixtureGateway({ outcome, delayMs: 900, readiness: () => liveStateRef.current }))
         : null,
-    [gateway, outcome, tenant.orderingEnabled],
+    [gateway, outcome, resolutionSource, tenant.orderingEnabled],
   );
 
   /* Before the visitor's own cart has been read there is nothing truthful to

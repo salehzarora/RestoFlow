@@ -451,6 +451,11 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
                   '${option.quantity} × ${option.name} · ${money(option.priceMinor)}',
                 ),
               ),
+            if (item.notes?.isNotEmpty == true)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 16, top: 4),
+                child: SelectableText(item.notes!),
+              ),
             const SizedBox(height: 16),
           ],
           if (request.notes?.isNotEmpty == true) ...[

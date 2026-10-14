@@ -17,7 +17,9 @@ import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
 import type { MotionMode, ServiceState, StorefrontResolution } from '@/source/types';
 import { ThemeScope } from '../ThemeScope';
 import shell from '../storefront.module.css';
-import { FlowRuntime, type FlowScreenName } from './FlowRuntime';
+import type { FlowScreenName } from './FlowRuntime';
+import { FlowEntry } from './FlowEntry';
+import { orderMessages } from '@/i18n/orders';
 
 export function FlowScreen({
   resolution,
@@ -45,8 +47,9 @@ export function FlowScreen({
       className={`${shell.root}`}
       dir={dirOf(locale)}
     >
-      <FlowRuntime
+      <FlowEntry
         source={resolution.source}
+        orderCopy={resolution.source === 'live' ? orderMessages(locale) : undefined}
         locale={locale}
         slug={slug}
         screen={screen}
@@ -57,7 +60,9 @@ export function FlowScreen({
         zones={resolution.zones}
         taxRateBp={resolution.taxRateBp}
         menuVersion={resolution.menuVersion}
+        orderEndpointOrigin={resolution.orderEndpointOrigin}
         tenant={{
+          logo: tenant.brand.logo,
           name: tenant.displayName,
           city: tenant.city,
           address: tenant.address,

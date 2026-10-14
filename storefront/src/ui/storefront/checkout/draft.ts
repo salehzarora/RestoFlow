@@ -21,6 +21,7 @@ export interface CheckoutDraft {
   readonly building: string;
   readonly apartment: string;
   readonly deliveryNotes: string;
+  readonly orderNotes: string;
 }
 
 export const EMPTY_DRAFT: CheckoutDraft = {
@@ -33,4 +34,5 @@ export const EMPTY_DRAFT: CheckoutDraft = {
   building: '',
   apartment: '',
   deliveryNotes: '',
+  orderNotes: '',
 };

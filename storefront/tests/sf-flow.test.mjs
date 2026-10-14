@@ -310,7 +310,7 @@ test('a quote blocker is NOT a field error', () => {
 
 test('every draft field is bounded, so a paste cannot create an unbounded draft', () => {
   for (const [field, limit] of Object.entries(FIELD_LIMITS)) {
-    assert.ok(Number.isInteger(limit) && limit > 0 && limit <= 140, `${field} bound looks wrong`);
+    assert.ok(Number.isInteger(limit) && limit > 0 && limit <= (field === 'orderNotes' ? 500 : 140), `${field} bound looks wrong`);
   }
   assert.deepEqual(Object.keys(FIELD_LIMITS).sort(), Object.keys(EMPTY_DRAFT).sort());
 });

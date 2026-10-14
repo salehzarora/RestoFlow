@@ -37,7 +37,10 @@ function normalizeOrder(order) {
   if (!Array.isArray(order.items) || order.items.length < 1 || order.items.length > 20) invalid();
   let totalUnits = 0;
   const items = order.items.map((item) => {
-    exactObject(item, ["menu_item_id", "quantity"], ["modifiers"]);
+    exactObject(item, ["menu_item_id", "quantity"], ["modifiers", "notes"]);
+    const rawNotes = Object.hasOwn(item, "notes") ? item.notes : "";
+    if (typeof rawNotes !== "string" || [...rawNotes].length > 140 || /[\x00-\x09\x0b-\x1f\x7f-\x9f\p{Cs}]/u.test(rawNotes)) invalid();
+    const itemNotes = rawNotes.trim();
     const menuItemId = uuid(item.menu_item_id);
     const itemQuantity = quantity(item.quantity);
     totalUnits += itemQuantity;
@@ -52,7 +55,7 @@ function normalizeOrder(order) {
       optionIds.add(optionId);
       return { modifier_option_id: optionId, quantity: quantity(modifier.quantity) };
     });
-    return { menu_item_id: menuItemId, quantity: itemQuantity, modifiers };
+    return { menu_item_id: menuItemId, quantity: itemQuantity, modifiers, ...(itemNotes ? { notes: itemNotes } : {}) };
   });
   return { order_type: "takeaway", customer: { name, phone: order.customer.phone }, items, notes };
 }

@@ -12,7 +12,7 @@ digest to PostgREST. The raw token must remain private and is never returned or
 logged. An ID alone does not authorize a status read.
 
 `order` contains only `order_type: "takeaway"`, `customer: {name, phone}`,
-`items: [{menu_item_id, quantity, modifiers: [{modifier_option_id, quantity}]}]`,
+`items: [{menu_item_id, quantity, modifiers: [{modifier_option_id, quantity}], notes?}]`,
 and `notes`. Omitted `notes` and `modifiers` normalize to `""` and `[]`. Names trim
 to 1–80 Unicode characters without controls; phone numbers contain `+` followed
 by 8–15 digits with a nonzero first digit. Notes allow at most 500 Unicode
@@ -20,6 +20,19 @@ characters, LF, and no other C0 controls. Item and modifier quantities are
 integers 1–20; an order has 1–20 lines and at most 50 item units; each line has at
 most 20 distinct modifier options. Money, currency, tax and tenant/branch IDs
 are never client authority.
+
+Each optional item `notes` must be a string of at most 140 Unicode scalar values
+before trimming. LF is allowed; all other C0/C1 controls and unpaired surrogates
+are rejected. Boundary whitespace uses JavaScript `trim`; interior whitespace
+and LF are preserved. Empty or omitted item notes normalize to an absent key,
+preserving compatibility with old note-free payloads and frozen quotes. Invalid
+or oversized notes fail; they are never truncated. Item notes participate in the
+normalized idempotency identity and immutable server-priced snapshot, but never
+change authoritative pricing. Lines remain distinct, including equal products
+and modifiers with different notes. Order-level `order.notes` stays independent.
+Trusted POS acceptance revalidates the frozen notes with the current quote and
+passes them to the existing canonical `order_items.notes` field, which existing
+KDS and kitchen dispatch readers consume.
 
 The server uses `SUPABASE_URL` and the platform-injected
 `SUPABASE_SERVICE_ROLE_KEY` for exactly one of these public-schema RPC calls:
@@ -75,5 +88,12 @@ drops only its generated disposable clone. The optional native mode is restricte
 to the task's portable PostgreSQL runtime under `build/local-pg17`, loopback port
 55437 and the matching data directory. Neither test mode can target hosted data.
 
-This ticket creates the backend foundation only. It does not apply migrations,
-deploy the function, enable ordering, or create canonical POS/kitchen orders.
+`supabase/tests/web_orders_checkout_001_item_notes_test.sql` verifies item notes
+from submission through immutable pricing, POS inbox, acceptance, canonical rows,
+KDS reads and kitchen dispatch, plus note-free compatibility. The additive checkout
+migration also exposes existing modifier `allow_quantity` and `max_quantity`
+constraints through `storefront_menu`; the pricing RPC remains authoritative.
+
+Hosted migrations, function deployment, and ordering activation remain separate
+owner-controlled rollout steps. Pending submissions create no canonical orders;
+only the existing trusted POS acceptance invokes the canonical order path.

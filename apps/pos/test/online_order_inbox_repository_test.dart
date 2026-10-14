@@ -48,6 +48,33 @@ class _GatedStore extends InMemoryDeviceSessionSecretStore {
 }
 
 void main() {
+  test('optional item notes preserve old snapshots and remain per-line', () {
+    final old = OnlineOrderRequest.fromJson(requestJson());
+    expect(old.items.single.notes, isNull);
+    final json = requestJson();
+    json['items'][0]['notes'] = 'بدون بصل\nבלי בצל 🍽';
+    json['items'] = [
+      json['items'][0],
+      {...json['items'][0], 'notes': 'Extra onion'},
+    ];
+    json['totals']['subtotal_minor'] = 5600;
+    json['totals']['tax_total_minor'] = 280;
+    json['totals']['grand_total_minor'] = 5880;
+    final request = OnlineOrderRequest.fromJson(json);
+    expect(request.items.map((i) => i.notes), [
+      'بدون بصل\nבלי בצל 🍽',
+      'Extra onion',
+    ]);
+    expect(request.notes, 'بدون بصل / בלי בצל');
+    for (final notes in [7, 'n' * 141, 'a\tb', 'a\u0085b']) {
+      final invalid = requestJson();
+      invalid['items'][0]['notes'] = notes;
+      expect(
+        () => OnlineOrderRequest.fromJson(invalid),
+        throwsA(isA<OnlineInboxException>()),
+      );
+    }
+  });
   test(
     'branch change during secret read prevents sending prior-scope RPC',
     () async {

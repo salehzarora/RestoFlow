@@ -144,3 +144,22 @@ owner-approved, scoped acceptance exceptions the output validators apply
 (CSS-UI001-01, PERF-UI001-01) are the frozen table in
 `scripts/acceptance-exceptions.mjs`, recorded in
 `docs/UI-001/PHASE_EF_COMPLETION.md` §7.
+
+
+## WEB-ORDERS-CHECKOUT-001 (D-047): disabled real pickup checkout
+
+The owner-approved implementation adds a real customer submit/status adapter,
+separate from fixture/demo outcomes. Live ordering remains OFF behind the explicit
+release gate and backend admission controls; this source change performs no hosted
+activation. No Next API routes/BFF or dependencies were added. CSP permits customer
+POST only to the exact Supabase project origin already used for published media.
+
+The narrow new sessionStorage exception stores only tenant slug, request UUIDv4,
+256-bit capability and bounded creation/expiry metadata for at most 24 hours.
+Live cart, customer fields, notes, modifiers and frozen retry payload are memory
+only. Recovery after reload can read status but cannot reconstruct a submission.
+No capability enters URLs/logs/analytics. Existing fixture-only cart/UI storage
+rules remain otherwise unchanged. HTTP/SQL note validation and trusted acceptance
+preserve per-line notes; canonical order creation and kitchen dispatch still occur
+only after the authenticated POS accepts. See the owning
+[execution/verification packet](../docs/WEB_ORDERS_CHECKOUT_001.md).

@@ -1,0 +1,241 @@
+/* Existing status layout, limited to the real four-state view. */
+.screen {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  animation: sfFade 250ms both;
+}
+
+.logoInner {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg);
+  display: grid;
+  place-items: center;
+}
+
+.logoInner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.logoInitial {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--cta);
+  color: var(--onacc);
+  font: 900 17px / 1 var(--font);
+}
+
+.lineRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 0;
+  border-block-end: 1px solid var(--hair);
+}
+
+.totalRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  font: 800 15px / 1.3 var(--font);
+}
+
+.head {
+  flex: none;
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px 8px;
+  background: var(--sf);
+  border-block-end: 1px solid var(--hair);
+}
+
+.headLogo {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  padding: 1.5px;
+  background: var(--acc);
+}
+
+.headLogo .logoInitial {
+  font-size: 15px;
+}
+
+.headText {
+  flex: 1;
+  min-width: 0;
+}
+
+.headCode {
+  font: 800 16px / 1.25 var(--font);
+  color: var(--tx);
+}
+
+.headSub {
+  font: 400 12.5px / 1.3 var(--font);
+  color: var(--tx3);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 16px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card {
+  padding: 16px;
+  border-radius: 18px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  border: 1px solid transparent;
+}
+
+.cardIcon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+}
+
+.cardIcon svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cardText {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardTitle {
+  margin: 0;
+  font: 800 18px / 1.2 var(--font);
+}
+
+.cardBody {
+  margin: 4px 0 0;
+  font: 400 13.5px / 1.45 var(--font);
+  /* The prototype dims the body to .92 (:556). The danger ink is walked to
+     AA at full opacity (PX-3a); composited at .92 it drops below 4.5:1 in the
+     shipped dark preset, so the body stays at 1 and keeps the walked pair. */
+}
+
+.toneInfo {
+  background: var(--infobg);
+  color: var(--info);
+}
+
+.toneInfo .cardIcon {
+  background: var(--info);
+  color: var(--infobg);
+}
+
+.toneOk {
+  background: var(--okbg);
+  color: var(--ok);
+}
+
+.toneOk .cardIcon {
+  background: var(--ok);
+  color: var(--okbg);
+}
+
+.toneBad {
+  background: var(--badbg);
+  color: var(--badText);
+}
+
+.toneBad .cardIcon {
+  background: var(--bad);
+  color: var(--badbg);
+}
+
+.toneNeutral {
+  background: var(--sf2);
+  color: var(--tx);
+}
+
+.toneNeutral .cardIcon {
+  background: var(--sf);
+  color: var(--tx2);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chatOutline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  height: 48px;
+  border-radius: 14px;
+  border: 1.5px solid var(--hair2);
+  background: transparent;
+  color: inherit;
+  font: 700 15px / 1 var(--font);
+  cursor: pointer;
+  transition:
+    background 200ms,
+    transform 120ms;
+}
+
+.chatOutline:hover {
+  background: var(--sf2);
+}
+
+.chatOutline:active {
+  transform: scale(0.985);
+}
+
+.statusSummary {
+  padding: 4px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--hair);
+  background: var(--sf);
+  font-size: 13.5px;
+}
+
+.screen *,
+  .screen *::before,
+  .screen *::after {
+    animation-delay: 0s !important;
+  }
+
+@keyframes sfFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

@@ -47,6 +47,21 @@ String _id(Object? value) =>
     value is String && _uuid.hasMatch(value) ? value : _malformed();
 String _text(Object? value) => value is String ? value : _malformed();
 String? _optionalText(Object? value) => value == null ? null : _text(value);
+String? _itemNotes(Object? value) {
+  final notes = _optionalText(value);
+  if (notes != null &&
+      (notes.runes.length > 140 ||
+          notes.runes.any(
+            (c) =>
+                (c < 32 && c != 10) ||
+                (c >= 127 && c <= 159) ||
+                (c >= 0xd800 && c <= 0xdfff),
+          ))) {
+    _malformed();
+  }
+  return notes;
+}
+
 int _integer(Object? value, {int minimum = 0}) =>
     value is int && value >= minimum ? value : _malformed();
 DateTime _time(Object? value) => value is String
@@ -84,12 +99,14 @@ class OnlineOrderItem {
     required this.unitPriceMinor,
     required this.lineTotalMinor,
     required this.modifiers,
+    this.notes,
   });
   final String name;
   final int quantity;
   final int unitPriceMinor;
   final int lineTotalMinor;
   final List<OnlineOrderModifier> modifiers;
+  final String? notes;
 
   factory OnlineOrderItem.fromJson(Object? raw) {
     final json = _object(raw);
@@ -102,6 +119,7 @@ class OnlineOrderItem {
       modifiers: List.unmodifiable(
         _array(json['modifiers']).map(OnlineOrderModifier.fromJson),
       ),
+      notes: _itemNotes(json['notes']),
     );
     final options = item.modifiers.fold<int>(
       0,

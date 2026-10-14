@@ -125,25 +125,14 @@ export function auditOutput(outDir = OUT) {
     for (const m of readFileSync(f.path, 'utf8').matchAll(/https?:\/\/([a-z0-9.-]{4,})/gi)) docHosts.add(m[1].toLowerCase());
   }
 
-  // First-load client JS on / - sum of <script src> bytes, uncompressed.
-  let firstLoadJs = 0;
-  let firstLoadJsBrotli = 0;
-  const indexFile = path.join(outDir, 'index.html');
-  const scripts = [];
-  if (existsSync(indexFile)) {
-    const html = readFileSync(indexFile, 'utf8');
-    for (const m of html.matchAll(/<script[^>]+src="([^"]+)"/g)) {
-      const asset = path.join(outDir, m[1].replace(/^\//, ''));
-      scripts.push(m[1]);
-      if (existsSync(asset)) {
-        const bytes = readFileSync(asset);
-        firstLoadJs += bytes.length;
-        firstLoadJsBrotli += brotliCompressSync(bytes).length;
-      }
-    }
-    if (firstLoadJs > BUDGETS.firstLoadJsBytes) {
-      problems.push(`first-load JS on / is ${firstLoadJs} bytes, budget ${BUDGETS.firstLoadJsBytes}`);
-    }
+  // First-load client JS on /: unique scripts and script preloads, uncompressed.
+  const perRoute = measure(outDir);
+  const rootLoad = perRoute.find((row) => row.route === '/');
+  const firstLoadJs = rootLoad?.firstLoadUncompressed ?? 0;
+  const firstLoadJsBrotli = rootLoad?.firstLoadBrotli ?? 0;
+  const scripts = rootLoad?.assets.map((asset) => asset.url) ?? [];
+  if (firstLoadJs > BUDGETS.firstLoadJsBytes) {
+    problems.push(`first-load JS on / is ${firstLoadJs} bytes, budget ${BUDGETS.firstLoadJsBytes}`);
   }
 
   // Per-route CSS and font-preload limits (budgets.mjs), the same measurement
@@ -153,7 +142,6 @@ export function auditOutput(outDir = OUT) {
   // (acceptance-exceptions.mjs); the original limit's compliance is carried
   // in `stats.cssAcceptance`, so a retained FAIL stays visible, and the
   // aggregate is marked WITH_APPROVED_EXCEPTIONS whenever the exception is used.
-  const perRoute = measure(outDir);
   for (const p of checkBudgets(perRoute)) if (/CSS|font preload|stylesheet|preloaded font|no stylesheet|zero coverage/.test(p)) problems.push(p);
   const acceptance = cssAcceptance(perRoute);
   if (acceptance.status === 'FAIL') for (const row of acceptance.rows) if (row.problem) problems.push(`${row.route}: ${row.problem}`);

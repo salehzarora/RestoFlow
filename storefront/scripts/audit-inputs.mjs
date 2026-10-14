@@ -9,6 +9,7 @@
 import { readFileSync, readdirSync, statSync, existsSync, lstatSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkoutLiteralImports } from '../../tools/vercel/ignore-build.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -63,7 +64,7 @@ export function auditInputs(root = ROOT) {
         }
       }
       // 2. dynamic import()/require()
-      if (/\b(?:import|require)\s*\(/.test(text)) problems.push(`${where}: dynamic import()/require() is forbidden`);
+      if (checkoutLiteralImports(`storefront/${where}`, text) === null) problems.push(`${where}: unapproved dynamic loader`);
       // 3. direct Node builtin handles
       if (/\bprocess\s*(?:\?\.|\.|\[\s*["'])\s*(?:getBuiltinModule|mainModule|binding|_linkedBinding)\b/.test(text)) {
         problems.push(`${where}: direct Node built-in acquisition via process.*`);

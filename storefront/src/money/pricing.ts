@@ -52,8 +52,22 @@ export function boundedSelection(
 ): readonly string[] {
   const known = selected.filter((id) => group.options.some((o) => o.id === id));
   const unique = [...new Set(known)];
-  if (group.single) return unique.slice(0, 1);
-  return group.max === undefined ? unique : unique.slice(0, group.max);
+  const choices = group.single ? unique.slice(0, 1) : group.max === undefined ? unique : unique.slice(0, group.max);
+  if (!group.allowQuantity) return choices;
+  return choices.flatMap((id) => Array.from({ length: Math.min(group.maxQuantity ?? 20, 20, known.filter((chosen) => chosen === id).length) }, () => id));
+}
+
+/** Match server bounds: min/max count distinct options, quantities are per option. */
+export function modifierSelectionValid(group: ModifierGroup, selected: readonly string[]): boolean {
+  const distinct = new Set(selected);
+  const min = group.min ?? (group.required ? 1 : 0);
+  const max = group.single ? 1 : group.max;
+  if (distinct.size < min || (max !== undefined && distinct.size > max)) return false;
+  for (const id of distinct) {
+    const count = selected.filter((value) => value === id).length;
+    if (!group.options.some((option) => option.id === id) || count > (group.allowQuantity ? Math.min(group.maxQuantity ?? 20, 20) : 1)) return false;
+  }
+  return true;
 }
 
 /**
@@ -62,12 +76,8 @@ export function boundedSelection(
  * Unknown option ids contribute nothing rather than throwing: a stale persisted
  * cart must degrade, not crash.
  *
- * Each option is priced AT MOST ONCE. The approved modifier model has no
- * per-option quantity - an option is selected or it is not - so a repeated id
- * is malformed input, never "two of these". cartStorage.parseLine already
- * REJECTS a payload containing one, so this is defence in depth: it keeps the
- * money correct for any future caller that reaches this function without going
- * through the storage parser.
+ * Fixture options are selected once. Live quantity-enabled options contribute
+ * their bounded quantity; distinct-choice limits remain independent.
  */
 export function groupDeltaMinor(group: ModifierGroup, selected: readonly string[]): Minor {
   let delta = 0;
