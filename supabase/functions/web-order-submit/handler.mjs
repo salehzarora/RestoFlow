@@ -1,6 +1,7 @@
 import { RequestError } from "./errors.mjs";
 import { readRequestJson, readStrictJson } from "./json.mjs";
 import { hashStatusToken, validateRequest } from "./validation.mjs";
+import { authorizeTestSubmission } from "./test-admission.mjs";
 
 const DEFAULT_ORIGIN = "https://menu.bizbot.systems";
 const PUBLIC_STATUSES = new Set(["pending", "expired", "accepted", "rejected"]);
@@ -67,10 +68,15 @@ function publicResult(result, requestId) {
   };
 }
 
-async function callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash }) {
-  const rpc = input.action === "submit" ? "submit_web_order_request" : "get_web_order_request_status";
+async function callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit }) {
+  const rpc = input.action === "submit" ? (testPermit ? "submit_web_order_test_request" : "submit_web_order_request") : "get_web_order_request_status";
   const args = { p_slug: input.slug, p_client_request_id: input.request_id, p_status_token_hash: tokenHash };
   if (input.action === "submit") args.p_order = input.order;
+  if (testPermit) Object.assign(args, {
+    p_test_organization_id: testPermit.organizationId, p_test_restaurant_id: testPermit.restaurantId,
+    p_test_branch_id: testPermit.branchId, p_test_request_id: testPermit.requestId,
+    p_test_not_before: testPermit.notBefore, p_test_expires_at: testPermit.expiresAt,
+  });
   const controller = new AbortController();
   let timer;
   const deadline = new Promise((_, reject) => {
@@ -110,7 +116,7 @@ async function callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash }
 }
 
 /** Dependency injection is only for offline tests; production uses built-in fetch/WebCrypto. */
-export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl = globalThis.crypto, timeoutMs = 10_000 } = {}) {
+export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl = globalThis.crypto, timeoutMs = 10_000, now = Date.now } = {}) {
   if (typeof getEnv !== "function") throw new TypeError("getEnv is required");
   return async function handler(request) {
     let origin;
@@ -138,13 +144,18 @@ export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl
         return response;
       }
       const input = validateRequest(await readRequestJson(request));
-      if (input.action === "submit" && getEnv("WEB_ORDERS_ENABLED") !== "true") {
+      let testPermit = null;
+      if (input.action === "submit" && getEnv("WEB_ORDERS_ENABLED") === "true" && getEnv("WEB_ORDERS_TEST_ENABLED") === "true") {
         return json({ ok: false, error: "ordering_unavailable" }, 503, origin);
+      }
+      if (input.action === "submit" && getEnv("WEB_ORDERS_ENABLED") !== "true") {
+        testPermit = await authorizeTestSubmission({ input, request, getEnv, cryptoImpl, now });
+        if (!testPermit) return json({ ok: false, error: "ordering_unavailable" }, 503, origin);
       }
       const configuration = credentials(getEnv);
       if (!configuration) return json({ ok: false, error: input.action === "submit" ? "ordering_unavailable" : "status_unavailable", uncertain: false }, 503, origin);
       const tokenHash = await hashStatusToken(input.status_token, cryptoImpl);
-      const result = await callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash });
+      const result = await callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit });
       if (result.failed) {
         return json({ ok: false, error: input.action === "submit" ? "submission_outcome_unknown" : "status_unavailable", request_id: input.request_id, uncertain: input.action === "submit" }, result.status, origin);
       }

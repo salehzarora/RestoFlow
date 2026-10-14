@@ -35,12 +35,16 @@ passes them to the existing canonical `order_items.notes` field, which existing
 KDS and kitchen dispatch readers consume.
 
 The server uses `SUPABASE_URL` and the platform-injected
-`SUPABASE_SERVICE_ROLE_KEY` for exactly one of these public-schema RPC calls:
+`SUPABASE_SERVICE_ROLE_KEY` for exactly one public-schema RPC call per request:
 
 - `submit_web_order_request(p_slug, p_client_request_id, p_status_token_hash, p_order)`
 - `get_web_order_request_status(p_slug, p_client_request_id, p_status_token_hash)`
+- `submit_web_order_test_request(...)` only for the separately authorized,
+  disabled-by-default controlled-test permit described below.
 
-Customer authorization and API key headers are ignored. Fetch disables redirects
+Ordinary customer authorization and API key headers are ignored. A controlled
+test uses the private Authorization credential described below; it is never
+forwarded to PostgREST. Fetch disables redirects
 and has a 10 second timeout. There are no automatic RPC retries. `submit` is
 disabled unless `WEB_ORDERS_ENABLED` is exactly `true`; the independent database
 channel gate is also disabled by default. `status` remains available while the
@@ -97,3 +101,57 @@ constraints through `storefront_menu`; the pricing RPC remains authoritative.
 Hosted migrations, function deployment, and ordering activation remain separate
 owner-controlled rollout steps. Pending submissions create no canonical orders;
 only the existing trusted POS acceptance invokes the canonical order path.
+
+## STOREFRONT-ROLLOUT-001C-PREP — private single-request permit
+
+Preparation adds no hosted activation. Normal `WEB_ORDERS_ENABLED` admission is
+unchanged. While it is OFF, a submit can enter the controlled-test path only when
+`WEB_ORDERS_TEST_ENABLED` is exactly `true` and `WEB_ORDERS_TEST_PERMIT` is a
+complete JSON object with exactly these keys:
+
+```text
+slug, organization_id, restaurant_id, branch_id, request_id,
+not_before, expires_at, authorization_sha256, status_token_sha256, order_sha256
+```
+
+If both the general and controlled-test gates are `true`, all submissions fail
+closed. A test permit must never silently coexist with unrestricted admission.
+
+The slug must be `mapsburger`; scope UUIDs must be non-nil; the request UUID must
+be v4. Dates are canonical UTC ISO instants with milliseconds and `Z`, with a
+positive window of at most 15 minutes. Every digest is lowercase SHA-256 hex.
+`Authorization: Bearer <credential>` carries 32 CSPRNG bytes in canonical
+unpadded base64url. Its digest must match `authorization_sha256`; the separate
+customer capability must match `status_token_sha256`. The credential and customer
+capability must be distinct. `order_sha256` hashes the UTF-8 bytes of
+`JSON.stringify(validateRequest(requestBody).order)`, including normalized item
+notes, quantities, modifiers and owner-approved test contact details. Do not hash
+the raw JSON file: the existing validator supplies defaults and trims item notes.
+
+Missing, invalid, mismatched, not-yet-valid or expired permits all return the
+existing opaque `503 ordering_unavailable` without accessing server credentials
+or invoking an RPC. CORS/Origin never authorizes a test; existing exact-origin
+checks still apply. There is no new route, browser control, client secret, log or
+response field. The private bearer is consumed only by the Edge guard.
+
+The private path invokes the service-only `public.submit_web_order_test_request`
+with the existing four submit arguments plus `p_test_organization_id`,
+`p_test_restaurant_id`, `p_test_branch_id`, `p_test_request_id`,
+`p_test_not_before`, and `p_test_expires_at`, all from server configuration.
+Its private SQL body checks the full authoritative profile scope under a lock,
+the exact UUID and the deadline after waiting for locks; it delegates to the
+existing submit implementation. Expiry after delegation rolls back its effects.
+The ordinary submit/status RPC signatures, pricing, quotas, private table ACLs,
+POS authorization and canonical order/dispatch writer remain unchanged.
+
+The existing SQL channel must separately admit this branch for a new request.
+No code creates or enables a channel. Public profile CHECKs, public ordering
+advertisement and `LIVE_ORDERING_RELEASED=false` remain unchanged. The database
+unique identity and existing payload/capability checks make exact replays durable
+across Edge instances; no worker-memory counter is used. A different UUID, slug,
+payload or capability cannot use the permit. After permit expiry or removal,
+ordinary capability status remains available; no new UUID may be generated to
+recover an uncertain response.
+
+The operator procedure and switch-off instructions are in
+[`docs/STOREFRONT_ROLLOUT_001C_PREP.md`](../../../docs/STOREFRONT_ROLLOUT_001C_PREP.md).
