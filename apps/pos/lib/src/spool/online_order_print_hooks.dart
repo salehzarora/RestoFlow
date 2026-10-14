@@ -47,6 +47,9 @@ final onlineInboxAcceptedPrintProvider =
     });
 final onlineInboxCancelPrintProvider = Provider<void Function()>(
   (ref) => () {
+    // Pause/security cleanup must not instantiate a native runtime when no
+    // print operation or recovery view ever used one.
+    if (!ref.exists(posKitchenSpoolRuntimeProvider)) return;
     final hooks = ref.read(posKitchenSpoolRuntimeProvider);
     if (hooks is PosWebOrderPrintHooks)
       (hooks as PosWebOrderPrintHooks).cancelPendingWebPrint();

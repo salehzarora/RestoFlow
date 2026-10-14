@@ -13,6 +13,9 @@ import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
 import 'package:restoflow_pos/src/state/pos_offline_state.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
+import 'package:restoflow_pos/src/spool/online_order_print_hooks.dart';
+import 'package:restoflow_pos/src/spool/pos_kitchen_spool_composition.dart'
+    show posKitchenSpoolRuntimeProvider;
 
 import 'online_order_inbox_fixtures.dart';
 
@@ -195,6 +198,8 @@ void main() {
     final repo = FakeInboxRepository()..onFetch = (_, _) => firstRead.future;
     await _withInbox(tester, (c, controller, audio, repo) async {
       expect(audio.plays, 0);
+      expect(c.exists(onlineInboxPrintRecoveryProvider), isFalse);
+      expect(c.exists(posKitchenSpoolRuntimeProvider), isFalse);
       c.read(_session.notifier).state = null;
       expect(c.read(onlineOrderInboxControllerProvider).requests, isEmpty);
       firstRead.complete(inboxPage());
@@ -372,6 +377,8 @@ void main() {
       controller.onResume();
       await tester.pump();
       expect(audio.plays, 1);
+      expect(c.exists(onlineInboxPrintRecoveryProvider), isFalse);
+      expect(c.exists(posKitchenSpoolRuntimeProvider), isFalse);
     }, repository: repo);
   });
 

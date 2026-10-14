@@ -376,7 +376,12 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
       );
       // Reuse discovery's existing cadence for a READ-ONLY local recovery
       // projection; no new polling, claim, server request or print is started.
-      ref.invalidate(onlineInboxPrintRecoveryProvider);
+      // Do not create a presentation-only recovery reader just to invalidate
+      // it. Riverpod's debug dependency check eagerly initializes an unread
+      // target and schedules deferred work even with no UI observer.
+      if (ref.exists(onlineInboxPrintRecoveryProvider)) {
+        ref.invalidate(onlineInboxPrintRecoveryProvider);
+      }
     } on OnlineInboxException catch (error) {
       if (!_current(gen) || rev != _revision) return;
       _fail(error.failure);

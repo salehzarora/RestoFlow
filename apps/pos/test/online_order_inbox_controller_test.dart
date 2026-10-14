@@ -35,6 +35,7 @@ ProviderContainer harness(
   DateTime Function()? clock,
   List<(String, String)>? printed,
   Future<WebOrderPrintOutcome> Function(String, String)? print,
+  Future<WebOrderPrintOutcome?> Function()? readRecovery,
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -52,6 +53,8 @@ ProviderContainer harness(
         refreshed?.add(id);
       }),
       onlineInboxCancelPrintProvider.overrideWithValue(() {}),
+      if (readRecovery != null)
+        onlineInboxPrintRecoveryProvider.overrideWith((ref) => readRecovery()),
       onlineInboxAcceptedPrintProvider.overrideWithValue(
         print ??
             (request, order) async {
@@ -75,6 +78,42 @@ Future<OnlineOrderInboxController> ready(ProviderContainer container) async {
 }
 
 void main() {
+  test(
+    'an observed durable recovery view refreshes on existing discovery and resume cadence',
+    () async {
+      var reads = 0;
+      var outcome = WebOrderPrintOutcome.attention;
+      final c = harness(
+        FakeInboxRepository(),
+        readRecovery: () async {
+          reads++;
+          return outcome;
+        },
+      );
+      final listener = c.listen(onlineInboxPrintRecoveryProvider, (_, _) {});
+      addTearDown(listener.close);
+      await c.read(onlineInboxPrintRecoveryProvider.future);
+      final controller = await ready(c);
+      await c.read(onlineInboxPrintRecoveryProvider.future);
+      final beforeRefresh = reads;
+      outcome = WebOrderPrintOutcome.failed;
+      await controller.refresh();
+      expect(
+        await c.read(onlineInboxPrintRecoveryProvider.future),
+        WebOrderPrintOutcome.failed,
+      );
+      expect(reads, beforeRefresh + 1);
+      controller.onPaused();
+      final beforeResume = reads;
+      controller.onResume();
+      await pumpEventQueue(times: 10);
+      expect(
+        await c.read(onlineInboxPrintRecoveryProvider.future),
+        WebOrderPrintOutcome.failed,
+      );
+      expect(reads, beforeResume + 1);
+    },
+  );
   test(
     'confirmed Accept invokes exact target once; duplicate UI callback does not',
     () async {
