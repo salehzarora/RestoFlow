@@ -515,3 +515,15 @@ Billing attaches to the **Organization** (the tenant, **D-003**). RF-093 ships *
 **Open questions touching this model** (a subset of the **Q-001..Q-024** register; see [OPEN_QUESTIONS](OPEN_QUESTIONS.md) for the full set and status): Q-001 (jurisdiction -> tax/fiscal fields), Q-007 (currency single/multi), Q-008 (MFA roles — including platform-admin MFA for `platform_admin_grants`, §3.7, D-026), Q-009 (offline auth validity), Q-010 (conflict policy per entity), Q-011 (tips — DEFERRED), Q-012 (service charge), Q-015 (printing encoding), Q-017 (accountant role in MVP). See [OPEN_QUESTIONS](OPEN_QUESTIONS.md).
 
 **Risks touching this model:** R-002 (sync duplicates), R-003 (RLS cross-tenant leak — CRITICAL), R-007 (offline auth staleness), R-001/R-006 (printing). See [DECISIONS](DECISIONS.md) and the risk register.
+
+
+### WEB-ORDERS-CHECKOUT-001 line-note extension (D-047)
+
+Each immutable web request priced_items entry may additionally contain normalized
+nonempty notes, independently bounded to 140 Unicode characters at ingress. Empty
+notes are omitted for backward compatibility. Line position and modifiers remain
+associated with that note; lines with different notes never coalesce. Notes affect
+normalized request identity and frozen quote comparison, never price arithmetic.
+Trusted POS acceptance carries the note into the existing order_items.notes field;
+order-level web_order_requests.notes remains independent. No new canonical entity,
+customer identity, order state, payment, delivery or kitchen writer is introduced.

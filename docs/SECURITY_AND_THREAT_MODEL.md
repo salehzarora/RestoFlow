@@ -289,3 +289,21 @@ Additional security tests (e.g. IDOR by guessed UUID, PIN lockout after N failur
 - **DEFERRED** — payment refunds are out of MVP and deferred pending the payment-model freeze (see [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md) §12.3 and Q-002/Q-003/Q-004); their authorization requirements will be added when scoped. Tips remain tracked under **OPEN QUESTION Q-011**.
 
 Full context for every D-xxx and Q-xxx lives in [DECISIONS](DECISIONS.md) and [OPEN_QUESTIONS](OPEN_QUESTIONS.md); this document cites them and must not invent parallel IDs.
+
+
+### T-022 — Customer checkout capabilities and note preservation (D-047)
+
+WEB-ORDERS-CHECKOUT-001 confines direct browser network access to one configured
+HTTPS Edge endpoint, without credentials, redirects or caching; public database
+RPC/table privileges are unchanged. Only canonical slug, UUIDv4, a random 256-bit
+status capability and bounded creation/expiry metadata may enter tab-session
+storage, for at most 24 hours. Live cart/contact/modifiers/notes and retry payloads
+remain memory-only. Capabilities never enter URL, logging, analytics or rendered
+markup. Invalid/expired records are cleared. A lost response reconciles status
+before any explicit same-identity retry; after reload no payload is reconstructed.
+Tests cover cross-tenant/capability denial, unknown responses, reload, terminal
+states, no duplicate canonical/dispatch effects, note-preserving acceptance,
+strict quantities/notes/price authority, and narrow source/CSP/storage exceptions.
+The existing real POS device/PIN authority and atomic transaction remain unchanged.
+Live ordering remains OFF; migration/deployment/activation require separate owner
+approval. See [WEB_ORDERS_CHECKOUT_001](WEB_ORDERS_CHECKOUT_001.md).

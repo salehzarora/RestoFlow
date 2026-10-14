@@ -49,7 +49,7 @@ test('the CSP is restrictive where it can be, with only the recorded exceptions'
   assert.deepEqual(directives['media-src'], ["'none'"]);
   assert.deepEqual(directives['base-uri'], ["'self'"]);
   assert.deepEqual(directives['form-action'], ["'self'"]);
-  assert.deepEqual(directives['connect-src'], ["'self'"]);
+  assert.deepEqual(directives['connect-src'], ["'self'", MEDIA_ORIGIN]);
   assert.deepEqual(directives['font-src'], ["'self'"]);
   // STOREFRONT-READ-001: images load from EXACTLY ONE additional origin - the
   // Supabase project's public storage (published WebP derivatives only).
@@ -71,13 +71,13 @@ test('the CSP is restrictive where it can be, with only the recorded exceptions'
 
   // No unsafe-eval anywhere in the served policy.
   assert.ok(!csp.includes("'unsafe-eval'"), 'unsafe-eval must never appear');
-  // No wildcard, and the ONE remote origin appears exactly once, in img-src only:
-  // connect-src stays 'self' (the browser never talks to the database origin).
+  // D-047: one exact project origin for images and direct customer Edge POST.
+  // No wildcard or unrelated network destination is permitted.
   assert.ok(!csp.includes('*'), 'no wildcard in the CSP');
   const remote = csp.match(/https?:\/\/[^\s;]+/g) ?? [];
-  assert.deepEqual(remote, [MEDIA_ORIGIN], 'the media origin is the only remote origin in the CSP');
+  assert.deepEqual(remote, [MEDIA_ORIGIN, MEDIA_ORIGIN], 'only the exact project origin may serve images and customer POST');
   for (const [name, values] of Object.entries(directives)) {
-    if (name === 'img-src') continue;
+    if (name === 'img-src' || name === 'connect-src') continue;
     assert.ok(!values.includes(MEDIA_ORIGIN), `${name} must not carry the media origin`);
   }
 });

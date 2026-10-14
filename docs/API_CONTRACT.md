@@ -1393,6 +1393,11 @@ delivery, canonical-order insertion or kitchen dispatch.
   name/E.164 phone, notes, item IDs/quantities and option IDs/quantities). No client
   money, scope, variant, discount or dispatch field is accepted. Duplicate JSON
   keys and malformed UTF-8 fail closed; body is at most 32 KiB.
+- WEB-ORDERS-CHECKOUT-001 adds optional per-item `notes`: at most 140 Unicode
+  characters before trimming, LF allowed, other controls and invalid Unicode
+  rejected. Empty/omitted notes retain the old note-free shape. Nonempty notes
+  enter immutable identity/snapshots but never price arithmetic. Distinct lines
+  remain distinct; order-level notes retain their independent 500-character cap.
 - Status: exactly `action=status`, `slug`, `request_id`, `status_token` in the POST
   body. Only its SHA-256 hash reaches SQL. Never place the token in URLs/logs.
 - SQL: `public.submit_web_order_request(text,uuid,text,jsonb)` and
@@ -1449,8 +1454,40 @@ reject/expiry never submit. Catalog deadlock/serialization failures abort the wh
 transaction and require reconciliation with the same decision identity. No inbox
 operation is queued in the offline outbox. No activation/deployment is implied.
 
+### 4.50 Customer pickup checkout (WEB-ORDERS-CHECKOUT-001; D-047)
+
+The existing Edge submit/status contract in §4.48 is the only customer transport.
+The browser sends direct HTTPS POST to the exact configured project origin and
+`/functions/v1/web-order-submit`, with credentials omitted, redirects refused,
+bounded requests/responses and no-store caching. No API key, staff authentication,
+service credential, generic proxy or Next.js API route is introduced. The exact
+project origin is the only new CSP connect-src exception; CORS/origin checks remain.
+
+The browser freezes UUIDv4, a 256-bit Web Crypto capability and normalized payload
+before sending. Double activation is single-flight. Ambiguous write results first
+query status; only an explicit retry can repeat the same ID/token/body. A reload
+may recover status but cannot reconstruct or resubmit the lost customer payload.
+Only canonical slug, request ID, capability and creation/expiry metadata enter
+sessionStorage, tab/tenant-scoped for at most 24 hours. This retention is independent
+of the request's 15-minute pending expiry. Tokens never enter URLs/logs/analytics.
+Live cart/customer details, modifier selections and notes are memory-only.
+
+UI states are only server-confirmed pending/accepted/rejected/expired. Pending is
+not restaurant acceptance. Unknown/unavailable outcomes remain visibly uncertain;
+there are no fabricated kitchen, completion, cancellation or online-payment states.
+Name/E.164 phone and all item/modifier quantities/notes are validated and preserved.
+Server integer totals are authoritative. Pickup is pay at pickup, without delivery.
+
+The published catalog additionally exposes modifier `allow_quantity` and
+`max_quantity`, so client selection follows existing authoritative quantity rules.
+Trusted POS acceptance carries each frozen item note to canonical order_items.notes
+without changing the canonical writer, preparation snapshot authority or dispatch.
+Note-free frozen requests remain compatible. All hosted admission controls and the
+Storefront release gate remain disabled pending a separate rollout authorization.
+See [execution/evidence packet](WEB_ORDERS_CHECKOUT_001.md).
+
 ## 5. Cross-References
-- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034, D-037, D-039, D-040, D-041, D-042, D-043, D-044, D-045, D-046).
+- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034, D-037, D-039, D-040, D-041, D-042, D-043, D-044, D-045, D-046, D-047).
 - Open questions: [OPEN_QUESTIONS](OPEN_QUESTIONS.md) (Q-004, Q-007, Q-008, Q-009, Q-010, Q-011, Q-012, Q-014, Q-015, Q-017, Q-028, Q-029, Q-030, Q-031, Q-032, Q-033, Q-034, Q-035, Q-036, Q-039, Q-040, Q-041, Q-042, Q-043, Q-044, Q-045, Q-046).
 - State transitions: [STATE_MACHINES](STATE_MACHINES.md).
 - Authorization, RLS, isolation tests, audit: [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md).

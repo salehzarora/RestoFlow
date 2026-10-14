@@ -40,7 +40,10 @@ discount, tax, currency, tenant, branch, size/variant, dispatch or payment field
 accepted. The API normalizes omitted notes/modifiers to empty values; SQL validates
 the normalized shape independently. Caps: 32 KiB HTTP body, 20 lines, 50 total
 units, 20 options per line, quantity 1–20, name 80 characters, notes 500 characters,
-E.164 phone. Duplicate option rows are refused instead of permitting quantity-cap
+E.164 phone. WEB-ORDERS-CHECKOUT-001 adds optional per-line `notes` (140 Unicode
+characters before trimming, LF allowed, no other controls/invalid Unicode). Empty
+notes preserve the old shape; nonempty notes remain separate from prices and
+order-level notes. Distinct lines are not coalesced. Duplicate option rows are refused instead of permitting quantity-cap
 bypass. JSON duplicate keys and invalid UTF-8 are rejected at HTTP ingress.
 
 Status uses POST with exactly `action` (`status`), `slug`, `request_id`, and
@@ -118,3 +121,7 @@ concurrent retry proof and the affected anonymous-surface/isolation guards.
 One independent review and normal GitHub CI precede owner merge approval.
 Hosted migration, function deployment, channel enablement and live ordering each
 remain separately controlled. No actual customer orders are used in local tests.
+
+Checkout/client transport and line-note extensions are defined by D-047 and
+[WEB_ORDERS_CHECKOUT_001](WEB_ORDERS_CHECKOUT_001.md); the original foundation and
+its default-OFF admission, private status and canonical-order boundary remain.
