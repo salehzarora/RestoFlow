@@ -5,8 +5,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.AudioAttributes
 import android.media.AudioManager
-import android.media.ToneGenerator
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -15,10 +16,10 @@ import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * One bounded double chime for the foreground POS inbox. Dart owns the single
+ * One bundled, bounded clip for the foreground POS inbox. Dart owns the single
  * repeating cadence; this transport cannot run a background notification loop.
  * Uses notification volume, never changes volume/ringer/DND or requests policy
- * access. Any DND mode (including priority/unknown) suppresses this chime.
+ * access. Any DND mode (including priority/unknown) suppresses this alert.
  */
 internal class OnlineOrderAlertAudioChannel(
     private val context: Context,
@@ -26,21 +27,29 @@ internal class OnlineOrderAlertAudioChannel(
 ) {
     private val channel = MethodChannel(messenger, "restoflow.pos/online_order_alert")
     private val handler = Handler(Looper.getMainLooper())
-    private var generator: ToneGenerator? = null
-    private var foreground = false
     private var detached = false
     private var receiverRegistered = false
+    private val playback = OnlineOrderAlertPlayback(
+        createClip = { BundledAlertClip(context) },
+        policyAllowsPlayback = { policyAllowsPlayback() },
+        scheduleTimeout = { delay, action ->
+            val task = Runnable { action() }
+            handler.postDelayed(task, delay)
+            val cancel: () -> Unit = { handler.removeCallbacks(task) }
+            cancel
+        },
+    )
 
     private val policyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (!mayPlay()) stop()
+            playback.policyChanged()
         }
     }
 
     init {
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
-                "play" -> play()
+                "play" -> playback.play()
                 "stop", "dispose" -> stop()
                 else -> {
                     result.notImplemented()
@@ -67,12 +76,10 @@ internal class OnlineOrderAlertAudioChannel(
     }
 
     fun setForeground(value: Boolean) {
-        foreground = value
-        if (!value) stop()
+        playback.setForeground(value)
     }
 
-    private fun mayPlay(): Boolean {
-        if (detached || !foreground) return false
+    private fun policyAllowsPlayback(): Boolean {
         return try {
             val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
                 ?: return false
@@ -93,53 +100,14 @@ internal class OnlineOrderAlertAudioChannel(
         }
     }
 
-    private fun play() {
-        if (generator != null || !mayPlay()) return
-        try {
-            val tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80)
-            generator = tone
-            if (!tone.startTone(ToneGenerator.TONE_PROP_BEEP, 160)) {
-                stop()
-                return
-            }
-            handler.postDelayed({
-                if (generator !== tone || !mayPlay()) {
-                    stop()
-                } else {
-                    try {
-                        if (!tone.startTone(ToneGenerator.TONE_PROP_BEEP, 160)) stop()
-                    } catch (_: Exception) {
-                        stop()
-                    }
-                }
-            }, 240L)
-            handler.postDelayed({ stop() }, 450L)
-        } catch (_: Exception) {
-            stop()
-        }
-    }
-
     fun stop() {
-        handler.removeCallbacksAndMessages(null)
-        val tone = generator
-        generator = null
-        try {
-            tone?.stopTone()
-        } catch (_: Exception) {
-            // Cleanup is best-effort even if Android already invalidated audio.
-        }
-        try {
-            tone?.release()
-        } catch (_: Exception) {
-            // No native error may escape the channel or Activity lifecycle.
-        }
+        playback.stop()
     }
 
     fun detach() {
         if (detached) return
         detached = true
-        foreground = false
-        stop()
+        playback.detach()
         channel.setMethodCallHandler(null)
         if (receiverRegistered) {
             receiverRegistered = false
@@ -150,4 +118,41 @@ internal class OnlineOrderAlertAudioChannel(
             }
         }
     }
+}
+
+/** Android decoder adapter; no network, looping, volume changes or audio focus. */
+private class BundledAlertClip(context: Context) : OnlineOrderAlertPlayback.Clip {
+    private val player = MediaPlayer()
+
+    init {
+        try {
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build(),
+            )
+            player.isLooping = false
+            context.resources.openRawResourceFd(R.raw.bizbot_online_order_alert).use { asset ->
+                player.setDataSource(asset.fileDescriptor, asset.startOffset, asset.length)
+            }
+        } catch (error: Exception) {
+            player.release()
+            throw error
+        }
+    }
+
+    override fun prepare(onReady: () -> Unit, onFinished: () -> Unit, onError: () -> Unit) {
+        player.setOnPreparedListener { onReady() }
+        player.setOnCompletionListener { onFinished() }
+        player.setOnErrorListener { _, _, _ ->
+            onError()
+            true // Handled, including release; no second completion cleanup.
+        }
+        player.prepareAsync()
+    }
+
+    override fun start() = player.start()
+    override fun stop() = player.stop()
+    override fun release() = player.release()
 }
