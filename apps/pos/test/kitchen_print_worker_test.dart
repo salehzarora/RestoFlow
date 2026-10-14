@@ -122,6 +122,20 @@ class _SendScript {
   }
 }
 
+class _HeldRenderer implements KitchenDispatchBytesRenderer {
+  final entered = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<Uint8List> renderToBytes(
+    KitchenDispatchDocument dispatch, {
+    String? customerPhoneOverride,
+  }) async {
+    entered.complete();
+    await release.future;
+    return Uint8List.fromList([1, 2, 3]);
+  }
+}
+
 String _fp(String canonical) =>
     sha256.convert(utf8.encode(canonical)).toString();
 
@@ -186,11 +200,12 @@ void main() {
     String? onlyLocalJobId,
     Future<bool> Function(KitchenSpoolJobRow)? beforeTargetSend,
     Future<bool> Function(KitchenSpoolJobRow)? finishTargetSend,
+    KitchenDispatchBytesRenderer? renderer,
   }) => KitchenPrintWorker(
     store: store,
     cipher: cipher,
     key: key,
-    renderer: const KitchenTicketRenderer(),
+    renderer: renderer ?? const KitchenTicketRenderer(),
     networkSend: sends.network,
     bluetoothSend: sends.bluetooth,
     sendGate: gate,
@@ -303,6 +318,132 @@ void main() {
 
   group('web initial send fencing', () {
     const targetId = 'web-initial:request-1';
+    test(
+      'restart retires abandoned queued target and unblocks ordinary same-printer work',
+      () async {
+        await seedRunnable('target', localJobId: targetId);
+        await store.claimRunnableForQueued(
+          targetId,
+          organizationId: scope.organizationId,
+          restaurantId: scope.restaurantId,
+          branchId: scope.branchId,
+          deviceId: scope.deviceId,
+          now: now,
+        );
+        final ordinary = await seedRunnable('ordinary');
+        sends.outcomes.add(
+          const KitchenTransportOutcome(
+            KitchenTransportOutcomeKind.accepted,
+            'flushed',
+          ),
+        );
+        transport.enqueue({'ok': true, 'completed': true});
+        expect((await worker().run()).accepted, 1);
+        final held = (await store.getByLocalJobId(targetId))!;
+        expect(held.status, KitchenSpoolJobStatus.blockedConfiguration);
+        expect(held.lastErrorCode, 'target_abandoned_before_send');
+        expect(
+          held.pendingServerAckStatus,
+          KitchenServerAckStatus.blockedConfiguration,
+        );
+        expect(
+          (await store.getByLocalJobId(ordinary.localJobId))!.status,
+          KitchenSpoolJobStatus.transportAccepted,
+        );
+        expect(await store.markPrinting(targetId, now), isFalse);
+        await worker(
+          onlyLocalJobId: targetId,
+          beforeTargetSend: (_) async {
+            fail('retired row must never reserve');
+          },
+          finishTargetSend: (_) async => false,
+        ).run();
+        expect(sends.networkCalls, hasLength(1));
+      },
+    );
+    test(
+      'pause while waiting for printer gate releases queued target into zero-write hold',
+      () async {
+        await seedRunnable('target', localJobId: targetId);
+        var paused = false;
+        final entered = Completer<void>(), release = Completer<void>();
+        final receipt = gate.withDestination(
+          PrinterDestinationSendGate.networkKey('10.0.0.5', 9100),
+          () async {
+            entered.complete();
+            await release.future;
+          },
+        );
+        await entered.future;
+        final targetRun = worker(
+          onlyLocalJobId: targetId,
+          isDisposed: () => paused,
+          beforeTargetSend: (_) async {
+            fail('pause precedes begin');
+          },
+          finishTargetSend: (_) async => false,
+        ).run();
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(
+          (await store.getByLocalJobId(targetId))!.status,
+          KitchenSpoolJobStatus.queued,
+        );
+        paused = true;
+        release.complete();
+        await receipt;
+        await targetRun;
+        expect(
+          (await store.getByLocalJobId(targetId))!.status,
+          KitchenSpoolJobStatus.blockedConfiguration,
+        );
+        await seedRunnable('ordinary-after-pause');
+        sends.outcomes.add(
+          const KitchenTransportOutcome(
+            KitchenTransportOutcomeKind.accepted,
+            'flushed',
+          ),
+        );
+        transport.enqueue({'ok': true, 'completed': true});
+        expect((await worker().run()).accepted, 1);
+        expect(sends.networkCalls, hasLength(1));
+      },
+    );
+    test(
+      'abandoned render waiter cannot send after restart retires its queued row',
+      () async {
+        await seedRunnable('target', localJobId: targetId);
+        final renderer = _HeldRenderer();
+        final targetRun = worker(
+          onlyLocalJobId: targetId,
+          renderer: renderer,
+          beforeTargetSend: (_) async {
+            fail('retired late awaiter must never reserve');
+          },
+          finishTargetSend: (_) async => false,
+        ).run();
+        await renderer.entered.future;
+        expect(
+          (await store.getByLocalJobId(targetId))!.status,
+          KitchenSpoolJobStatus.queued,
+        );
+        await seedRunnable('ordinary-after-render-crash');
+        sends.outcomes.add(
+          const KitchenTransportOutcome(
+            KitchenTransportOutcomeKind.accepted,
+            'flushed',
+          ),
+        );
+        transport.enqueue({'ok': true, 'completed': true});
+        expect((await worker().run()).accepted, 1);
+        renderer.release.complete();
+        await targetRun;
+        expect(
+          (await store.getByLocalJobId(targetId))!.status,
+          KitchenSpoolJobStatus.blockedConfiguration,
+        );
+        expect(sends.networkCalls, hasLength(1));
+      },
+    );
     test(
       'many abandoned fenced imports cannot starve ordinary FIFO work',
       () async {

@@ -156,6 +156,23 @@ final class KitchenPrintWorker {
   final Future<bool> Function(KitchenSpoolJobRow)? _finishTargetSend;
 
   Future<KitchenWorkerRunReport> run() async {
+    try {
+      return await _runOnce();
+    } finally {
+      final target = _onlyLocalJobId;
+      if (target != null) {
+        try {
+          final row = await _store.getByLocalJobId(target);
+          if (row != null) await _retireQueuedTarget(row);
+        } catch (_) {
+          // Disposal may already have closed the database. The next ordinary
+          // worker performs the same conditional recovery before selection.
+        }
+      }
+    }
+  }
+
+  Future<KitchenWorkerRunReport> _runOnce() async {
     var claimed = 0, accepted = 0, failed = 0, unavailable = 0;
     var possibly = 0, blocked = 0, skips = 0;
     var acked = 0, ackRetries = 0, ackTerminal = 0;
@@ -260,7 +277,9 @@ final class KitchenPrintWorker {
       );
       if (outcome == null) {
         // Supersession/disposal/state change while waiting: nothing was
-        // sent, the durable row is preserved exactly as the store left it.
+        // sent. A targeted queued row must release its destination lock into
+        // an honest zero-write operator hold, never back into retryable work.
+        if (targeted && await _retireQueuedTarget(job)) blocked++;
         skips++;
         continue;
       }
@@ -345,6 +364,13 @@ final class KitchenPrintWorker {
       deviceId: _scope.deviceId,
       branchId: _scope.branchId,
     );
+    // A process can die during render/gate wait BEFORE markPrinting/begin.
+    // Such a queued target otherwise owns the printer forever, because this
+    // worker intentionally excludes fenced rows. Retire ONLY queued targets
+    // in this exact scope. A late old awaiter cannot markPrinting afterward.
+    for (final row in unresolved) {
+      await _retireQueuedTarget(row);
+    }
     final fences = unresolved.where(isTargetedWebPrintJob).length;
     final rows = await _store.listRunnable(
       deviceId: _scope.deviceId,
@@ -356,6 +382,23 @@ final class KitchenPrintWorker {
         .where((row) => !isTargetedWebPrintJob(row))
         .take(_maxJobsPerRun + 1)
         .toList();
+  }
+
+  Future<bool> _retireQueuedTarget(KitchenSpoolJobRow row) async {
+    if (!isTargetedWebPrintJob(row) ||
+        row.status != KitchenSpoolJobStatus.queued ||
+        row.organizationId != _scope.organizationId ||
+        row.restaurantId != _scope.restaurantId ||
+        row.branchId != _scope.branchId ||
+        row.deviceId != _scope.deviceId)
+      return false;
+    // queued proves the durable markPrinting-before-begin boundary was never
+    // crossed. The existing SQL transition is conditional on STILL queued.
+    return _store.markBlockedConfigurationWithAck(
+      row.localJobId,
+      errorCode: 'target_abandoned_before_send',
+      now: _now(),
+    );
   }
 
   /// Flushes the job's freshly-written pending acknowledgement OUTSIDE the
