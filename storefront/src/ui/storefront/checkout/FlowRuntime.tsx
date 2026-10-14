@@ -1,10 +1,8 @@
 'use client';
 
 /**
- * The shared flow frame. Live tenants enter LiveFlowBody, which uses the real
- * pickup contract and private recovery. The legacy fixture branch below stays
- * isolated for the approved demo and its scenarios. Neither branch can submit
- * while the tenant's ordering gate is off.
+ * The fixture flow entry. FlowScreen selects the separate live entry on the
+ * server, so fixture documents do not download the real transport/status UI.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -37,7 +35,6 @@ import { orderingBlocker, orderingReason, submitEligibility } from './eligibilit
 import { fixtureGateway, type CompletionObserver, type RequestGateway } from './submit';
 import { CartHeader, StepHeader } from './flowParts';
 import s from './flow.module.css';
-import { LiveFlowBody } from './LiveFlowBody';
 
 export type FlowScreenName = 'cart' | 'checkout' | 'payment' | 'review';
 
@@ -85,7 +82,7 @@ export function FlowRuntime(props: FlowProps) {
       state={props.state}
       opensAt={props.tenant.opensAt}
     >
-      {props.source === 'live' ? <LiveFlowBody {...props} /> : <FlowBody {...props} />}
+      <FlowBody {...props} />
     </StorefrontRuntime>
   );
 }

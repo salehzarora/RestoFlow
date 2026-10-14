@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { rubikPreloadHebrew } from '@/fonts/rubik-preload-hebrew';
 import { CheckoutDraftProvider } from '@/ui/storefront/checkout/CheckoutDraftProvider';
+import { LiveCheckoutProvider } from '@/ui/storefront/checkout/LiveCheckoutProvider';
+import { sourceMode } from '@/source/mode';
 
 /**
  * Shared segment layout for one tenant's storefront.
@@ -26,9 +28,10 @@ export default async function SlugLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const Provider = sourceMode() === 'live' ? LiveCheckoutProvider : CheckoutDraftProvider;
   return (
-    <CheckoutDraftProvider slug={slug}>
+    <Provider slug={slug}>
       <div className={rubikPreloadHebrew.className} data-sf-fonts="">{children}</div>
-    </CheckoutDraftProvider>
+    </Provider>
   );
 }

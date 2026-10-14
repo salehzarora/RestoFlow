@@ -18,6 +18,7 @@ import type { MotionMode, ServiceState, StorefrontResolution } from '@/source/ty
 import { ThemeScope } from '../ThemeScope';
 import shell from '../storefront.module.css';
 import { FlowRuntime, type FlowScreenName } from './FlowRuntime';
+import { LiveFlowRuntime } from './LiveFlowRuntime';
 
 export function FlowScreen({
   resolution,
@@ -38,6 +39,7 @@ export function FlowScreen({
     accent: sanitizeAccent(tenant.brand.accent, preset),
   });
   const state: ServiceState = tenant.service.state;
+  const Runtime = resolution.source === 'live' ? LiveFlowRuntime : FlowRuntime;
 
   return (
     <ThemeScope
@@ -45,7 +47,7 @@ export function FlowScreen({
       className={`${shell.root}`}
       dir={dirOf(locale)}
     >
-      <FlowRuntime
+      <Runtime
         source={resolution.source}
         locale={locale}
         slug={slug}

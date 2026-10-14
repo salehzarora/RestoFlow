@@ -153,3 +153,20 @@ test('storage failures after an uncertain write or confirmed acceptance never cl
     for (const error of ['storage_unavailable', 'configuration_invalid', 'crypto_unavailable']) assert.doesNotMatch(orderErrorCopy(error, m), unsent[locale]);
   }
 });
+
+test('the server selects separate fixture/live entries and live-only recovery providers', () => {
+  const server = read('ui/storefront/checkout/FlowScreen.tsx');
+  const fixture = read('ui/storefront/checkout/FlowRuntime.tsx');
+  const live = read('ui/storefront/checkout/LiveFlowRuntime.tsx');
+  const draft = read('ui/storefront/checkout/CheckoutDraftProvider.tsx');
+  const provider = read('ui/storefront/checkout/LiveCheckoutProvider.tsx');
+  assert.ok(server.includes("resolution.source === 'live' ? LiveFlowRuntime : FlowRuntime"));
+  assert.ok(!fixture.includes('LiveFlowBody') && !fixture.includes('LiveFlowRuntime'));
+  assert.ok(live.includes('<LiveFlowBody') && !live.includes('fixtureGateway'));
+  assert.ok(!draft.includes('LiveOrderProvider'), 'fixture layout must not download the live transport through its draft provider');
+  assert.ok(provider.includes('<CartMemoryProvider') && provider.includes('<LiveOrderProvider') && provider.includes('<CheckoutDraftProvider'));
+  for (const locale of ['(root)', 'ar', 'he', 'en']) {
+    const layout = readFileSync(new URL(`../app/${locale}/s/[slug]/layout.tsx`, import.meta.url), 'utf8');
+    assert.ok(layout.includes("sourceMode() === 'live' ? LiveCheckoutProvider : CheckoutDraftProvider"));
+  }
+});
