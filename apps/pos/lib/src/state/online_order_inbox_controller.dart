@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/ids.dart';
 import '../data/online_order_inbox.dart';
+import '../media/online_order_alert_audio.dart';
 import 'order_sync_controller.dart';
 import 'pos_device_context.dart';
 import 'pos_offline_state.dart';
@@ -106,6 +107,14 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
   DateTime? _serverSampleAt;
   DateTime? _serverTime;
   bool _securityBlocked = false;
+  Timer? _alertTimer;
+  DateTime? _alertWakeAt;
+  DateTime? _nextAlertAt;
+  final _alertedRequestIds = <String>{};
+  final _confirmedExpiredAlertIds = <String>{};
+  OnlineOrderAlertAudio? _audio;
+  bool _alertsActive = false;
+  bool _audioBusy = false;
 
   @override
   OnlineOrderInboxState build() {
@@ -115,8 +124,18 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
       _generation++;
       _timer?.cancel();
       _timer = null;
+      _stopAlerts();
     });
     ref.watch(onlineOrderInboxRepositoryProvider);
+    _stopAlerts();
+    _audio = ref.watch(onlineOrderAlertAudioProvider);
+    ref.watch(onlineOrderInboxAlertIntervalProvider);
+    ref.listen(posOfflineModeProvider.select((value) => value.phase), (_, _) {
+      _syncAlerts();
+    });
+    // Presentation follows confirmed controller state, including locking
+    // recovery. A local Accept/Reject tap never removes a pending alert.
+    listenSelf((_, _) => _syncAlerts());
     _generation++;
     _revision++;
     _disposed = false;
@@ -124,12 +143,14 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
     _serverSampleAt = null;
     _serverTime = null;
     _securityBlocked = false;
+    _confirmedExpiredAlertIds.clear();
     _timer?.cancel();
     _timer = null;
     ref.onDispose(() {
       _disposed = true;
       _timer?.cancel();
       _timer = null;
+      _stopAlerts();
     });
     final gen = _generation;
     Future.microtask(() {
@@ -163,6 +184,7 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
   void onResume() {
     _foreground = true;
     _armTimer();
+    _syncAlerts();
     unawaited(refresh());
   }
 
@@ -170,6 +192,105 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
     _foreground = false;
     _timer?.cancel();
     _timer = null;
+    _stopAlerts();
+  }
+
+  void _stopAlerts() {
+    _alertTimer?.cancel();
+    _alertTimer = null;
+    _alertWakeAt = null;
+    _nextAlertAt = null;
+    _alertedRequestIds.clear();
+    final wasActive = _alertsActive;
+    _alertsActive = false;
+    final audio = _audio;
+    if (audio != null && (wasActive || _audioBusy)) {
+      unawaited(_ignoreAudioFailure(audio.stop));
+    }
+  }
+
+  static Future<void> _ignoreAudioFailure(
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } catch (_) {
+      // Notification availability cannot affect an order or its decision.
+    }
+  }
+
+  Future<void> _playAlert() async {
+    final audio = _audio;
+    if (audio == null || _audioBusy || !_alertsActive) return;
+    _audioBusy = true;
+    try {
+      await _ignoreAudioFailure(audio.play);
+    } finally {
+      _audioBusy = false;
+    }
+  }
+
+  /// One foreground-only sound schedule, owned by the existing poll/identity
+  /// coordinator. Its next wake is the earlier of the cadence and expiry, so
+  /// the final pending request stops immediately at its server-time deadline
+  /// even when a discovery read is slow, failed or awaiting reconciliation.
+  void _syncAlerts() {
+    if (_disposed || !_foreground || _identity == null || _securityBlocked) {
+      _stopAlerts();
+      return;
+    }
+    final interval = ref.read(onlineOrderInboxAlertIntervalProvider);
+    if (interval == null ||
+        interval <= Duration.zero ||
+        ref.read(posOfflineModeProvider).phase != PosOfflinePhase.online ||
+        ref.read(onlineOrderInboxIdentityProvider) != _identity) {
+      _stopAlerts();
+      return;
+    }
+    final currentTime = now();
+    _confirmedExpiredAlertIds.retainAll(state.requests.map((r) => r.id));
+    final pending = state.requests
+        .where(
+          (r) =>
+              r.status == OnlineOrderStatus.pending &&
+              !_confirmedExpiredAlertIds.contains(r.id) &&
+              !r.expiredAt(currentTime),
+        )
+        .toList();
+    if (pending.isEmpty) {
+      _stopAlerts();
+      return;
+    }
+    _alertsActive = true;
+    final pendingIds = pending.map((r) => r.id).toSet();
+    final newArrival = pendingIds.difference(_alertedRequestIds).isNotEmpty;
+    _alertedRequestIds
+      ..retainAll(pendingIds)
+      ..addAll(pendingIds);
+    if (newArrival ||
+        _nextAlertAt == null ||
+        !currentTime.isBefore(_nextAlertAt!)) {
+      _nextAlertAt = currentTime.add(interval);
+      unawaited(_playAlert());
+    }
+    final firstExpiry = pending
+        .map((r) => r.expiresAt)
+        .reduce((a, b) => a.isBefore(b) ? a : b);
+    final wakeAt = firstExpiry.isBefore(_nextAlertAt!)
+        ? firstExpiry
+        : _nextAlertAt!;
+    if (_alertTimer != null && _alertWakeAt == wakeAt) return;
+    _alertTimer?.cancel();
+    _alertWakeAt = wakeAt;
+    final gen = _generation;
+    _alertTimer = Timer(wakeAt.difference(currentTime), () {
+      _alertTimer = null;
+      _alertWakeAt = null;
+      if (!_current(gen)) return;
+      // Re-evaluate expiry and update the existing badge/detail clock. This
+      // timer never performs another RPC or starts another polling loop.
+      state = state.copyWith(serverTime: now());
+    });
   }
 
   void _armTimer() {
@@ -354,6 +475,12 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
           );
         }
       } else {
+        if (error.failure == OnlineInboxFailure.requestExpired) {
+          // A trusted expiry refusal is already terminal for this request,
+          // even if the last sampled clock has not reached its deadline yet.
+          // Suppress only its presentation alert; decision recovery is unchanged.
+          _confirmedExpiredAlertIds.add(intent.requestId);
+        }
         state = state.copyWith(
           clearIntent: true,
           deciding: false,
@@ -470,6 +597,14 @@ final onlineOrderInboxControllerProvider =
       OnlineOrderInboxController.new,
     );
 final onlineOrderInboxPollIntervalProvider = Provider<Duration?>((ref) => null);
+// Reuse the production periodic-work seam. Existing timer-free widget tests
+// and browser roots that disable polling keep notification scheduling off;
+// focused alert tests can inject a cadence independently of discovery polling.
+final onlineOrderInboxAlertIntervalProvider = Provider<Duration?>(
+  (ref) => ref.watch(onlineOrderInboxPollIntervalProvider) == null
+      ? null
+      : const Duration(seconds: 10),
+);
 final onlineInboxCanonicalRefreshProvider =
     Provider<Future<void> Function(String)>(
       (ref) =>
