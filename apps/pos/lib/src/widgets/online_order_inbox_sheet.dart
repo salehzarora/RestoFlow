@@ -11,6 +11,22 @@ import '../media/pos_media_image.dart';
 import '../state/online_order_inbox_controller.dart';
 import '../state/pos_menu_provider.dart';
 import '../state/pos_offline_state.dart';
+import '../spool/online_order_print_hooks.dart' show WebOrderPrintOutcome;
+
+// Existing localized kitchen-printer vocabulary; sent is transport evidence,
+// never a claim that paper physically printed. No automatic-retry control.
+String? _printOutcomeText(
+  AppLocalizations l10n,
+  WebOrderPrintOutcome outcome,
+) => switch (outcome) {
+  WebOrderPrintOutcome.sent => l10n.posKitchenTicketPrintedSnack,
+  WebOrderPrintOutcome.reconciliationRequired ||
+  WebOrderPrintOutcome.busy => l10n.kioskKitchenLastPossibly,
+  WebOrderPrintOutcome.blocked => l10n.posKitchenPrinterNotConfiguredSnack,
+  WebOrderPrintOutcome.failed => l10n.kioskKitchenLastFailed,
+  WebOrderPrintOutcome.unavailable => l10n.posKitchenTicketPrintFailedSnack,
+  WebOrderPrintOutcome.kds => null,
+};
 
 /// One visible entry owns lifecycle signals; polling itself lives only in the
 /// singleton controller. The compact variant shares the existing navbar row.
@@ -75,6 +91,17 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(onlineOrderInboxControllerProvider);
+    ref.listen(
+      onlineOrderInboxControllerProvider.select((s) => s.printOutcome),
+      (previous, next) {
+        if (next == null || next == previous) return;
+        final message = _printOutcomeText(l10n, next);
+        if (message != null)
+          ScaffoldMessenger.maybeOf(
+            context,
+          )?.showSnackBar(SnackBar(content: Text(message)));
+      },
+    );
     final count = state.pendingCountAt(
       ref.read(onlineOrderInboxControllerProvider.notifier).now(),
     );
@@ -208,6 +235,15 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
                           semanticsLabel: state.deciding
                               ? l10n.posOnlineInboxChecking
                               : l10n.posOnlineInboxLoading,
+                        ),
+                      if (state.printOutcome != null &&
+                          _printOutcomeText(l10n, state.printOutcome!) != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            _printOutcomeText(l10n, state.printOutcome!)!,
+                            key: const Key('online-inbox-print-status'),
+                          ),
                         ),
                       if (state.uncertain)
                         Padding(

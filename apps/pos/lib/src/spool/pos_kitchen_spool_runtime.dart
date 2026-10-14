@@ -1,3 +1,4 @@
+import 'dart:async' show Completer;
 import 'package:crypto/crypto.dart' show sha256;
 import 'dart:convert' show utf8;
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -21,6 +22,7 @@ import 'package:restoflow_printing/restoflow_printing.dart'
 
 import '../data/outbox_repository.dart' show OrderSubmitPhoneLookupKey;
 import '../data/round_print_claim_store.dart' show PosRoundPrintClaimState;
+import '../data/online_order_print_repository.dart';
 import 'flutter_secure_kitchen_spool_key_store.dart';
 import 'kitchen_destination_resolver.dart';
 import 'kitchen_dispatch_drain_coordinator.dart';
@@ -29,6 +31,7 @@ import 'kitchen_print_worker.dart';
 import 'kitchen_void_reconciliation.dart';
 import 'pending_kitchen_ack_coordinator.dart';
 import 'pos_kitchen_spool_hooks.dart';
+import 'online_order_print_hooks.dart';
 import 'pos_kitchen_spool_key_flow.dart';
 import 'pos_kitchen_spool_platform.dart';
 import 'pos_secure_kitchen_mode_cache.dart';
@@ -149,7 +152,8 @@ final class KitchenSpoolDestinationUnresolvableException implements Exception {
   const KitchenSpoolDestinationUnresolvableException();
 }
 
-final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
+final class PosKitchenSpoolRuntime
+    implements PosKitchenSpoolLifecycleHooks, PosWebOrderPrintHooks {
   PosKitchenSpoolRuntime({
     required PosKitchenSpoolPlatform platform,
     required DeviceContext? Function() deviceContext,
@@ -181,6 +185,10 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     Future<void> Function(String dispatchId)? onOrderEditImported,
     Future<List<KitchenEditSupersessionEvidence>> Function()?
     readLocalOrderEditEvidence,
+    OnlineOrderPrintRepository? webOrderPrintRepository,
+    Future<KitchenDestinationResolution> Function(String assignmentId)?
+    webOrderDestinationResolver,
+    bool Function()? canPrintWebOrder,
   }) : _platform = platform,
        _deviceContext = deviceContext,
        _secretStore = secretStore,
@@ -206,6 +214,9 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
        _reserveOrderEditSlip = reserveOrderEditSlip,
        _releaseOrderEditSlip = releaseOrderEditSlip,
        _onOrderEditImported = onOrderEditImported,
+       _webOrderPrintRepository = webOrderPrintRepository,
+       _webOrderDestinationResolver = webOrderDestinationResolver,
+       _canPrintWebOrder = canPrintWebOrder ?? (() => false),
        _readLocalOrderEditEvidence = readLocalOrderEditEvidence;
 
   final PosKitchenSpoolPlatform _platform;
@@ -260,6 +271,10 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   _readOrderEditPrintClaim;
   final bool Function(String dispatchId)? _isOrderEditSlipInFlight;
   final bool Function(String dispatchId)? _reserveOrderEditSlip;
+  final OnlineOrderPrintRepository? _webOrderPrintRepository;
+  final Future<KitchenDestinationResolution> Function(String)?
+  _webOrderDestinationResolver;
+  final bool Function() _canPrintWebOrder;
   final void Function(String dispatchId)? _releaseOrderEditSlip;
   final Future<void> Function(String dispatchId)? _onOrderEditImported;
 
@@ -275,7 +290,189 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   /// get ONE handle, never two connections to the same file.
   Future<KitchenSpoolDatabase>? _opening;
   bool _running = false;
+  Completer<void>? _runCompletion;
   bool _disposed = false;
+  int _webPrintGeneration = 0;
+
+  @override
+  void cancelPendingWebPrint() => _webPrintGeneration++;
+
+  @override
+  Future<WebOrderPrintOutcome> onAcceptedWebOrder(
+    String requestId,
+    String orderId,
+  ) async {
+    final generation = _webPrintGeneration;
+    // Serialize exact callbacks with an already-running lifecycle operation.
+    // Waiting never invokes a drain and never loses a second accepted request.
+    while (_running) {
+      final completion = _runCompletion;
+      if (completion == null) return WebOrderPrintOutcome.busy;
+      await completion.future;
+    }
+    if (_disposed || !_canPrintWebOrder() || !_platform.supportsSecureSpool) {
+      return WebOrderPrintOutcome.unavailable;
+    }
+    if (generation != _webPrintGeneration)
+      return WebOrderPrintOutcome.unavailable;
+    _running = true;
+    final completion = _runCompletion = Completer<void>();
+    bool active() =>
+        !_disposed && generation == _webPrintGeneration && _canPrintWebOrder();
+    try {
+      final context = _deviceContext();
+      final restaurant = context?.restaurantId;
+      final device = context?.deviceId;
+      final repo = _webOrderPrintRepository;
+      final ack = _ackRepository;
+      final resolve = _webOrderDestinationResolver;
+      final renderer = _renderer;
+      final network = _networkSend;
+      final bluetooth = _bluetoothSend;
+      final gate = _sendGate;
+      final newId = _localJobIdGenerator;
+      if (context == null ||
+          restaurant == null ||
+          device == null ||
+          repo == null ||
+          ack == null ||
+          resolve == null ||
+          renderer == null ||
+          network == null ||
+          bluetooth == null ||
+          gate == null ||
+          newId == null) {
+        return WebOrderPrintOutcome.unavailable;
+      }
+      final mode = await (_fetchModeOverride ?? _modeRepository!.fetchMode)();
+      if (mode is KitchenModeVerifiedKds) return WebOrderPrintOutcome.kds;
+      if (mode is! KitchenModePrinterOnlyWithRevision || !active())
+        return WebOrderPrintOutcome.unavailable;
+
+      // Exact accepted request only: the server derives dispatch, decision,
+      // canonical order and printer assignment, and excludes it from pullers.
+      final claim = await repo.claim(requestId);
+      if (claim.requestId != requestId || claim.orderId != orderId) {
+        return WebOrderPrintOutcome.reconciliationRequired;
+      }
+      if (claim.state == OnlineOrderPrintState.transportAccepted)
+        return WebOrderPrintOutcome.sent;
+      if (claim.state == OnlineOrderPrintState.busy)
+        return WebOrderPrintOutcome.busy;
+      final dispatch = claim.dispatch;
+      if (claim.state != OnlineOrderPrintState.claimed || dispatch == null) {
+        return WebOrderPrintOutcome.reconciliationRequired;
+      }
+      final destination = await resolve(claim.printerAssignmentId);
+      if (!active()) return WebOrderPrintOutcome.unavailable;
+      final db = await _openDatabase(_databaseFactoryBuilder());
+      final store = DriftKitchenSpoolStore(db);
+      final manager = KitchenSpoolKeyManager(
+        _keyStore ?? FlutterSecureKitchenSpoolKeyStore(platform: _platform),
+      );
+      final flow = PosKitchenSpoolKeyFlow(keyManager: manager, store: store);
+      var capability = await flow.evaluate();
+      if (capability is KitchenSpoolKeyMissingProvisionable)
+        capability = await flow.provisionIfEligible();
+      if (capability is! KitchenSpoolKeyReady)
+        return WebOrderPrintOutcome.blocked;
+      final key = await manager.readKey();
+      if (key == null) return WebOrderPrintOutcome.blocked;
+      final scope = KitchenImportScope(
+        organizationId: context.organizationId,
+        restaurantId: restaurant,
+        branchId: context.branchId,
+        deviceId: device,
+      );
+      final localId = '$webInitialPrintJobPrefix$requestId';
+      await KitchenDispatchImportCoordinator(
+        store: store,
+        cipher: AesGcmKitchenSpoolCipher(),
+        key: key,
+        scope: scope,
+        destination: destination,
+        ackRepository: ack,
+        localJobIdGenerator: () => localId,
+        now: _now,
+        resolveCustomerPhone: _resolveCustomerPhone,
+      ).importDispatches([dispatch]);
+      final row = await store.findByDispatchId(dispatch.dispatchId);
+      if (row == null || row.localJobId != localId || row.orderId != orderId) {
+        return WebOrderPrintOutcome.reconciliationRequired;
+      }
+      if (row.status == KitchenSpoolJobStatus.transportAccepted)
+        return WebOrderPrintOutcome.sent;
+      if (row.status == KitchenSpoolJobStatus.printing ||
+          row.status == KitchenSpoolJobStatus.possiblyPrinted) {
+        return WebOrderPrintOutcome.reconciliationRequired;
+      }
+      if (row.status == KitchenSpoolJobStatus.blockedConfiguration)
+        return WebOrderPrintOutcome.blocked;
+      final attempt = newId();
+      var began = false;
+      final report = await KitchenPrintWorker(
+        store: store,
+        cipher: AesGcmKitchenSpoolCipher(),
+        key: key,
+        renderer: renderer,
+        networkSend: network,
+        bluetoothSend: bluetooth,
+        sendGate: gate,
+        ackRepository: ack,
+        scope: scope,
+        now: _now,
+        onlyLocalJobId: localId,
+        isDisposed: () => !active(),
+        beforeTargetSend: (job) async {
+          if (!active()) return false;
+          final result = await repo.begin(requestId, attempt);
+          began = result.sendAuthorized;
+          return began &&
+              result.requestId == requestId &&
+              result.orderId == orderId &&
+              result.dispatchId == job.dispatchId &&
+              result.decisionId == claim.decisionId &&
+              result.printerAssignmentId == claim.printerAssignmentId &&
+              result.attemptId == attempt;
+        },
+        finishTargetSend: (job) async {
+          if (!began || !active()) return false;
+          final status = job.status == KitchenSpoolJobStatus.transportAccepted
+              ? 'transport_accepted'
+              : job.status == KitchenSpoolJobStatus.blockedConfiguration
+              ? 'blocked_configuration'
+              : 'possibly_printed';
+          final result = await repo.finish(
+            requestId,
+            attempt,
+            status,
+            errorCode: status == 'transport_accepted'
+                ? null
+                : 'web_print_reconciliation_required',
+          );
+          return result.requestId == requestId &&
+              result.orderId == orderId &&
+              result.dispatchId == job.dispatchId &&
+              result.attemptId == attempt &&
+              result.decisionId == claim.decisionId &&
+              result.printerAssignmentId == claim.printerAssignmentId &&
+              result.state ==
+                  (status == 'transport_accepted'
+                      ? OnlineOrderPrintState.transportAccepted
+                      : OnlineOrderPrintState.reconciliationRequired);
+        },
+      ).run();
+      if (report.accepted == 1 && report.acked == 1)
+        return WebOrderPrintOutcome.sent;
+      if (report.blockedConfiguration > 0) return WebOrderPrintOutcome.failed;
+      return WebOrderPrintOutcome.reconciliationRequired;
+    } catch (_) {
+      return WebOrderPrintOutcome.reconciliationRequired;
+    } finally {
+      _running = false;
+      completion.complete();
+    }
+  }
 
   /// Startup post-frame hook (D4).
   @override
@@ -288,6 +485,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   Future<PosKitchenSpoolRunReport> _run() async {
     if (_running) return const KitchenSpoolRunSkipped('already_running');
     _running = true;
+    final completion = _runCompletion = Completer<void>();
     try {
       return await _runOnce();
     } on Object {
@@ -298,6 +496,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       return const KitchenSpoolRunBlocked('unexpected_failure');
     } finally {
       _running = false;
+      completion.complete();
     }
   }
 

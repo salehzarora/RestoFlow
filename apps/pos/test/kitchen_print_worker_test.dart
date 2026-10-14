@@ -183,6 +183,9 @@ void main() {
   KitchenPrintWorker worker({
     int maxJobsPerRun = 20,
     bool Function()? isDisposed,
+    String? onlyLocalJobId,
+    Future<bool> Function(KitchenSpoolJobRow)? beforeTargetSend,
+    Future<bool> Function(KitchenSpoolJobRow)? finishTargetSend,
   }) => KitchenPrintWorker(
     store: store,
     cipher: cipher,
@@ -196,6 +199,9 @@ void main() {
     now: () => now,
     maxJobsPerRun: maxJobsPerRun,
     isDisposed: isDisposed,
+    onlyLocalJobId: onlyLocalJobId,
+    beforeTargetSend: beforeTargetSend,
+    finishTargetSend: finishTargetSend,
   );
 
   KitchenDispatchDocument doc(
@@ -231,6 +237,7 @@ void main() {
     String? fingerprintOverride,
     KitchenSpoolDispatchType? rowKindOverride,
     void Function(Uint8List envelope)? tamper,
+    String? localJobId,
   }) async {
     seedSeq++;
     final destination = bluetoothAddress != null
@@ -263,7 +270,7 @@ void main() {
             : _fp('network|${host.trim().toLowerCase()}|$port'));
     final row = await store.insertImportedJob(
       NewKitchenSpoolJob(
-        localJobId: 'w-$seedSeq',
+        localJobId: localJobId ?? 'w-$seedSeq',
         dispatchId: dispatchId,
         organizationId: scope.organizationId,
         restaurantId: scope.restaurantId,
@@ -293,6 +300,181 @@ void main() {
     await store.markServerAcked(row.localJobId, now);
     return (await store.getByLocalJobId(row.localJobId))!;
   }
+
+  group('web initial send fencing', () {
+    const targetId = 'web-initial:request-1';
+    test('ordinary startup worker never claims a targeted row', () async {
+      await seedRunnable('target', localJobId: targetId);
+      final report = await worker().run();
+      expect(report.claimed, 0);
+      expect(sends.networkCalls, isEmpty);
+      expect(transport.calls, isEmpty);
+      expect(
+        (await store.getByLocalJobId(targetId))!.status,
+        KitchenSpoolJobStatus.imported,
+      );
+    });
+    test(
+      'exact target leaves older historical row untouched and needs fresh grant',
+      () async {
+        final old = await seedRunnable('historical');
+        await seedRunnable('target', localJobId: targetId);
+        var begins = 0;
+        sends.outcomes.add(
+          const KitchenTransportOutcome(
+            KitchenTransportOutcomeKind.accepted,
+            'flushed',
+          ),
+        );
+        final report = await worker(
+          onlyLocalJobId: targetId,
+          beforeTargetSend: (row) async {
+            begins++;
+            expect(
+              (await store.getByLocalJobId(row.localJobId))!.status,
+              KitchenSpoolJobStatus.printing,
+            );
+            return true;
+          },
+          finishTargetSend: (_) async => true,
+        ).run();
+        expect((report.accepted, report.acked, begins), (1, 1, 1));
+        expect(sends.networkCalls, hasLength(1));
+        expect(
+          transport.calls,
+          isEmpty,
+          reason: 'target finish never uses broad ACK',
+        );
+        expect(
+          (await store.getByLocalJobId(old.localJobId))!.status,
+          KitchenSpoolJobStatus.imported,
+        );
+        await worker(
+          onlyLocalJobId: targetId,
+          beforeTargetSend: (_) async {
+            fail('terminal target must not begin again');
+          },
+          finishTargetSend: (_) async => true,
+        ).run();
+        expect(sends.networkCalls, hasLength(1));
+      },
+    );
+    for (final kind in [
+      KitchenTransportOutcomeKind.definitelyNotSent,
+      KitchenTransportOutcomeKind.timeoutBeforeWrite,
+      KitchenTransportOutcomeKind.unavailable,
+      KitchenTransportOutcomeKind.ambiguous,
+      KitchenTransportOutcomeKind.timeoutAfterPossibleWrite,
+    ]) {
+      test('reserved $kind never auto retries across worker restart', () async {
+        await seedRunnable('target', localJobId: targetId);
+        sends.outcomes.add(KitchenTransportOutcome(kind, 'test_failure'));
+        await worker(
+          onlyLocalJobId: targetId,
+          beforeTargetSend: (_) async => true,
+          finishTargetSend: (_) async => false,
+        ).run();
+        expect(
+          (await store.getByLocalJobId(targetId))!.status,
+          (kind == KitchenTransportOutcomeKind.ambiguous ||
+                  kind == KitchenTransportOutcomeKind.timeoutAfterPossibleWrite)
+              ? KitchenSpoolJobStatus.possiblyPrinted
+              : KitchenSpoolJobStatus.blockedConfiguration,
+        );
+        await worker(
+          onlyLocalJobId: targetId,
+          beforeTargetSend: (_) async {
+            fail('reserved target must not begin again');
+          },
+          finishTargetSend: (_) async => true,
+        ).run();
+        expect(sends.networkCalls, hasLength(1));
+      });
+    }
+    test(
+      'lost begin reply consumes local attempt without physical send',
+      () async {
+        await seedRunnable('target', localJobId: targetId);
+        await worker(
+          onlyLocalJobId: targetId,
+          beforeTargetSend: (_) async => throw StateError('lost reply'),
+          finishTargetSend: (_) async => false,
+        ).run();
+        expect(sends.networkCalls, isEmpty);
+        expect(
+          (await store.getByLocalJobId(targetId))!.status,
+          KitchenSpoolJobStatus.possiblyPrinted,
+        );
+        await worker().run();
+        expect(sends.networkCalls, isEmpty);
+      },
+    );
+    test(
+      'pause after reservation refuses transport and preserves reconciliation',
+      () async {
+        await seedRunnable('target', localJobId: targetId);
+        var paused = false;
+        await worker(
+          onlyLocalJobId: targetId,
+          isDisposed: () => paused,
+          beforeTargetSend: (_) async {
+            paused = true;
+            return true;
+          },
+          finishTargetSend: (_) async => false,
+        ).run();
+        expect(sends.networkCalls, isEmpty);
+        expect(
+          (await store.getByLocalJobId(targetId))!.status,
+          KitchenSpoolJobStatus.possiblyPrinted,
+        );
+      },
+    );
+    test('lost finish ACK after accepted send never sends again', () async {
+      await seedRunnable('target', localJobId: targetId);
+      sends.outcomes.add(
+        const KitchenTransportOutcome(
+          KitchenTransportOutcomeKind.accepted,
+          'flushed',
+        ),
+      );
+      final report = await worker(
+        onlyLocalJobId: targetId,
+        beforeTargetSend: (_) async => true,
+        finishTargetSend: (_) async => throw StateError('lost ACK'),
+      ).run();
+      expect((report.accepted, report.acked), (1, 0));
+      await worker().run();
+      expect(sends.networkCalls, hasLength(1));
+      expect(
+        (await store.getByLocalJobId(targetId))!.status,
+        KitchenSpoolJobStatus.transportAccepted,
+      );
+    });
+    test(
+      'permanent native no-write failure blocks rather than retries',
+      () async {
+        await seedRunnable('target', localJobId: targetId);
+        sends.outcomes.add(
+          const KitchenTransportOutcome(
+            KitchenTransportOutcomeKind.unsupported,
+            'unbonded',
+          ),
+        );
+        await worker(
+          onlyLocalJobId: targetId,
+          beforeTargetSend: (_) async => true,
+          finishTargetSend: (_) async => true,
+        ).run();
+        expect(
+          (await store.getByLocalJobId(targetId))!.status,
+          KitchenSpoolJobStatus.blockedConfiguration,
+        );
+        await worker().run();
+        expect(sends.networkCalls, hasLength(1));
+      },
+    );
+  });
 
   group('bounded loop', () {
     test('no runnable jobs -> complete, zero footprint', () async {

@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 import 'dart:ui' as ui show PlatformDispatcher;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding, AppLifecycleState;
 import 'package:path_provider/path_provider.dart'
     show getApplicationDocumentsDirectory;
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -38,6 +39,7 @@ import 'package:restoflow_printing/restoflow_printing.dart'
         sendKitchenBytesOverTcp;
 
 import '../data/customer_phone.dart' show normalizeCustomerPhone;
+import '../data/online_order_print_repository.dart';
 import '../data/ids.dart' show clientIdGeneratorProvider;
 import '../data/order_edit_slip_store.dart' show OrderEditSlipEvidence;
 import '../data/round_print_claim_store.dart'
@@ -72,7 +74,10 @@ import '../state/pos_network_printer_config.dart'
     show posKitchenNetworkPrinterConfigProvider;
 import '../state/pos_printer_transport.dart'
     show posKitchenSelectedPrinterTransportProvider;
-import '../state/pos_session.dart' show posAuthTransportProvider;
+import '../state/pos_session.dart'
+    show posAuthTransportProvider, posSyncSessionProvider;
+import '../state/pos_offline_state.dart'
+    show posOfflineModeProvider, PosOfflinePhase;
 import 'flutter_secure_kitchen_spool_key_store.dart';
 import 'kitchen_destination_resolver.dart';
 import 'kitchen_readiness_coordinator.dart';
@@ -84,6 +89,7 @@ import 'pos_kitchen_spool_capability.dart';
 import 'pos_kitchen_spool_composition.dart'
     show posKitchenSpoolCapabilityProvider, posKitchenSpoolRuntimeProvider;
 import 'pos_kitchen_spool_hooks.dart';
+import 'online_order_print_hooks.dart';
 import 'pos_kitchen_spool_platform.dart';
 import 'pos_kitchen_spool_runtime.dart';
 import 'pos_secure_kitchen_mode_cache.dart';
@@ -110,8 +116,11 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
   if (transport == null) return null;
   // A pairing/scope transition is a DIFFERENT world: rebuild (and thereby
   // dispose) the runtime whenever the device context changes.
-  ref.watch(posDeviceContextProvider);
+  final deviceContext = ref.watch(posDeviceContextProvider);
   final secretStore = FlutterSecureDeviceSessionStoreProvider.of();
+  final pinSession = ref.watch(posSyncSessionProvider);
+  var current = true;
+  ref.onDispose(() => current = false);
   final connector = ref.watch(bluetoothPrinterConnectorProvider);
   final runtime = PosKitchenSpoolRuntime(
     platform: platform,
@@ -128,6 +137,65 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
     databaseFactoryBuilder: () => KitchenSpoolDatabaseFactory(
       documentsDirectoryProvider: getApplicationDocumentsDirectory,
     ),
+    webOrderPrintRepository: pinSession == null
+        ? null
+        : RealOnlineOrderPrintRepository(
+            transport: transport,
+            session: pinSession,
+            secretStore: secretStore,
+            isCurrent: () => current,
+          ),
+    canPrintWebOrder: () =>
+        current &&
+        pinSession != null &&
+        ref.read(posOfflineModeProvider).phase == PosOfflinePhase.online &&
+        (WidgetsBinding.instance.lifecycleState == null ||
+            WidgetsBinding.instance.lifecycleState ==
+                AppLifecycleState.resumed),
+    webOrderDestinationResolver: (assignmentId) async {
+      final assignments = await SupabaseDevicePrinterAssignmentsRepository(
+        transport: transport,
+        secretStore: secretStore,
+      ).load();
+      final snapshot = assignments.fold<DevicePrinterAssignments?>(
+        (value) => value,
+        (_) => null,
+      );
+      if (!current || snapshot == null)
+        throw const KitchenSpoolDestinationUnresolvableException();
+      final selected = await ref.read(
+        posKitchenSelectedPrinterTransportProvider.future,
+      );
+      final network = await ref.read(
+        posKitchenNetworkPrinterConfigProvider.future,
+      );
+      final bluetooth = await ref.read(
+        posKitchenBluetoothPrinterConfigProvider.future,
+      );
+      // D2 still binds local endpoint by transport attributes, not endpoint ID.
+      // Refuse ambiguous multi-printer mappings; require the exact server
+      // assignment chosen by the targeted authorization contract.
+      final matches = snapshot.printers
+          .where(
+            (p) =>
+                p.isEnabled &&
+                p.servesKitchenTickets &&
+                p.paperWidth == '80mm' &&
+                p.connectionType == selected.name,
+          )
+          .toList();
+      if (matches.length != 1 || matches.single.id != assignmentId) {
+        return const BlockedKitchenDestination(
+          'kitchen_printer_assignment_mismatch',
+        );
+      }
+      return const KitchenDestinationResolver().resolve(
+        selectedTransport: selected,
+        networkConfig: network,
+        bluetoothConfig: bluetooth,
+        assignments: snapshot,
+      );
+    },
     // CORRECTION-001 / Pass C: the drain is FULLY wired AND production-
     // reachable. It runs for a trusted printer-only-with-revision mode
     // result — which `SupabaseDeviceKitchenModeRepository.fetchMode` DOES
@@ -341,6 +409,23 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
       }
     },
   );
+  ref.listen(posOfflineModeProvider.select((s) => s.phase), (_, next) {
+    if (next != PosOfflinePhase.online) runtime.cancelPendingWebPrint();
+  });
+  // Eager invalidation also covers the interval before a watched provider's
+  // replacement is built/disposed. An in-flight old proof must never send.
+  ref.listen(posSyncSessionProvider, (_, next) {
+    if (next != pinSession) {
+      current = false;
+      runtime.cancelPendingWebPrint();
+    }
+  });
+  ref.listen(posDeviceContextProvider, (_, next) {
+    if (next != deviceContext) {
+      current = false;
+      runtime.cancelPendingWebPrint();
+    }
+  });
   // ORDER-EDIT-001F: the spool database's own answer to "do you hold this
   // order_edit dispatch?", attached for the till's slip controller, which
   // asks it (the source of truth) before every direct slip print and at its
@@ -650,7 +735,8 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
 
 /// Wraps the runtime so every lifecycle run's typed report also updates the
 /// web-safe operational capability provider (safe scalars only).
-final class _CapabilityReportingHooks implements PosKitchenSpoolLifecycleHooks {
+final class _CapabilityReportingHooks
+    implements PosKitchenSpoolLifecycleHooks, PosWebOrderPrintHooks {
   _CapabilityReportingHooks(this._runtime, this._update);
 
   final PosKitchenSpoolRuntime _runtime;
@@ -661,6 +747,15 @@ final class _CapabilityReportingHooks implements PosKitchenSpoolLifecycleHooks {
 
   @override
   Future<Object?> onResume() => _report(_runtime.onResume);
+
+  @override
+  void cancelPendingWebPrint() => _runtime.cancelPendingWebPrint();
+
+  @override
+  Future<WebOrderPrintOutcome> onAcceptedWebOrder(
+    String requestId,
+    String orderId,
+  ) => _runtime.onAcceptedWebOrder(requestId, orderId);
 
   Future<Object?> _report(
     Future<PosKitchenSpoolRunReport> Function() run,

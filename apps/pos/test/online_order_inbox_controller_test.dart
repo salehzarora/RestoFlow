@@ -12,6 +12,7 @@ import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
 import 'package:restoflow_pos/src/state/pos_offline_state.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
+import 'package:restoflow_pos/src/spool/online_order_print_hooks.dart';
 
 import 'online_order_inbox_fixtures.dart';
 
@@ -32,6 +33,8 @@ ProviderContainer harness(
   List<String>? refreshed,
   Duration? interval,
   DateTime Function()? clock,
+  List<(String, String)>? printed,
+  Future<WebOrderPrintOutcome> Function(String, String)? print,
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -48,6 +51,14 @@ ProviderContainer harness(
       onlineInboxCanonicalRefreshProvider.overrideWithValue((id) async {
         refreshed?.add(id);
       }),
+      onlineInboxCancelPrintProvider.overrideWithValue(() {}),
+      onlineInboxAcceptedPrintProvider.overrideWithValue(
+        print ??
+            (request, order) async {
+              printed?.add((request, order));
+              return WebOrderPrintOutcome.sent;
+            },
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -64,6 +75,69 @@ Future<OnlineOrderInboxController> ready(ProviderContainer container) async {
 }
 
 void main() {
+  test(
+    'confirmed Accept invokes exact target once; duplicate UI callback does not',
+    () async {
+      final printed = <(String, String)>[];
+      final repo = FakeInboxRepository();
+      final c = harness(repo, printed: printed);
+      final controller = await ready(c);
+      await controller.decide(requestId, OnlineOrderDecision.accept);
+      await controller.decide(requestId, OnlineOrderDecision.accept);
+      expect(printed, [(requestId, canonicalId)]);
+      expect(repo.decisions, hasLength(1));
+      expect(
+        c.read(onlineOrderInboxControllerProvider).printOutcome,
+        WebOrderPrintOutcome.sent,
+      );
+    },
+  );
+  test('uncertain Accept prints only after locked accepted recovery', () async {
+    final printed = <(String, String)>[];
+    final repo = FakeInboxRepository();
+    repo.onDecide = (_) async =>
+        throw const OnlineInboxException(OnlineInboxFailure.transport);
+    repo.onFetch = (id, _) async {
+      if (id != null)
+        throw const OnlineInboxException(OnlineInboxFailure.transport);
+      return inboxPage();
+    };
+    final c = harness(repo, printed: printed);
+    final controller = await ready(c);
+    await controller.decide(requestId, OnlineOrderDecision.accept);
+    expect(printed, isEmpty);
+    repo.onFetch = (_, _) async =>
+        inboxPage(requests: [inboxRequest(status: 'accepted')]);
+    await controller.recoverDecision();
+    await controller.recoverDecision();
+    expect(printed, [(requestId, canonicalId)]);
+  });
+  test('Reject and expired never invoke targeted printing', () async {
+    final printed = <(String, String)>[];
+    final repo = FakeInboxRepository();
+    final c = harness(repo, printed: printed);
+    await (await ready(
+      c,
+    )).decide(requestId, OnlineOrderDecision.reject, reason: 'Unavailable');
+    expect(printed, isEmpty);
+  });
+  test(
+    'print failure cannot undo confirmed acceptance or recreate order',
+    () async {
+      final repo = FakeInboxRepository();
+      final c = harness(
+        repo,
+        print: (_, _) async => throw StateError('lost reply'),
+      );
+      await (await ready(c)).decide(requestId, OnlineOrderDecision.accept);
+      final state = c.read(onlineOrderInboxControllerProvider);
+      expect(state.requests, isEmpty);
+      expect(state.intent, isNull);
+      expect(state.uncertain, isFalse);
+      expect(state.printOutcome, WebOrderPrintOutcome.reconciliationRequired);
+      expect(repo.decisions, hasLength(1));
+    },
+  );
   test(
     'expiry advances after successful fetch even when later polls fail',
     () async {

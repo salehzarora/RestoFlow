@@ -21,6 +21,7 @@ import 'package:restoflow_pos/src/widgets/online_order_inbox_sheet.dart';
 import 'package:restoflow_pos/src/widgets/outbox_status_indicator.dart';
 import 'package:restoflow_pos/src/widgets/ready_notification_bell.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
+import 'package:restoflow_pos/src/spool/online_order_print_hooks.dart';
 
 import 'online_order_inbox_fixtures.dart';
 
@@ -175,6 +176,42 @@ Future<_Controller> pumpInbox(
 }
 
 void main() {
+  for (final locale in ['ar', 'he', 'en']) {
+    testWidgets(
+      '$locale targeted print status is honest and has no automatic retry action',
+      (tester) async {
+        await pumpInbox(
+          tester,
+          locale: locale,
+          state: const OnlineOrderInboxState(
+            printOutcome: WebOrderPrintOutcome.reconciliationRequired,
+          ),
+        );
+        final status = find.byKey(const Key('online-inbox-print-status'));
+        final l10n = AppLocalizations.of(tester.element(status));
+        expect(tester.widget<Text>(status).data, l10n.kioskKitchenLastPossibly);
+        expect(find.text(l10n.kioskKitchenRetry), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+    testWidgets(
+      '$locale known no-write failure does not claim possible printing',
+      (tester) async {
+        await pumpInbox(
+          tester,
+          locale: locale,
+          state: const OnlineOrderInboxState(
+            printOutcome: WebOrderPrintOutcome.failed,
+          ),
+        );
+        final status = find.byKey(const Key('online-inbox-print-status'));
+        final l10n = AppLocalizations.of(tester.element(status));
+        expect(tester.widget<Text>(status).data, l10n.kioskKitchenLastFailed);
+        expect(find.text(l10n.kioskKitchenLastPossibly), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   const menuId = '60000000-0000-4000-8000-000000000001';
   const correctUrl = 'https://example.invalid/exact-id.png';
   const wrongUrl = 'https://example.invalid/same-name-wrong-id.png';
