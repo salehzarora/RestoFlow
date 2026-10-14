@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/ids.dart';
 import '../data/online_order_inbox.dart';
 import '../media/online_order_alert_audio.dart';
+import '../spool/online_order_print_hooks.dart';
+export '../spool/online_order_print_hooks.dart'
+    show onlineInboxAcceptedPrintProvider, onlineInboxCancelPrintProvider;
 import 'order_sync_controller.dart';
 import 'pos_device_context.dart';
 import 'pos_offline_state.dart';
@@ -52,6 +55,7 @@ class OnlineOrderInboxState {
     this.serverTime,
     this.hasMore = false,
     this.cursor,
+    this.printOutcome,
   });
   final List<OnlineOrderRequest> requests;
   final bool loading;
@@ -62,6 +66,7 @@ class OnlineOrderInboxState {
   final DateTime? serverTime;
   final bool hasMore;
   final OnlineInboxCursor? cursor;
+  final WebOrderPrintOutcome? printOutcome;
   int pendingCountAt(DateTime now) => requests
       .where((r) => r.status == OnlineOrderStatus.pending && !r.expiredAt(now))
       .length;
@@ -79,6 +84,7 @@ class OnlineOrderInboxState {
     bool? hasMore,
     OnlineInboxCursor? cursor,
     bool clearCursor = false,
+    WebOrderPrintOutcome? printOutcome,
   }) => OnlineOrderInboxState(
     requests: requests ?? this.requests,
     loading: loading ?? this.loading,
@@ -89,6 +95,7 @@ class OnlineOrderInboxState {
     serverTime: serverTime ?? this.serverTime,
     hasMore: hasMore ?? this.hasMore,
     cursor: clearCursor ? null : (cursor ?? this.cursor),
+    printOutcome: printOutcome ?? this.printOutcome,
   );
 }
 
@@ -193,6 +200,15 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
     _timer?.cancel();
     _timer = null;
     _stopAlerts();
+    _cancelPendingPrint();
+  }
+
+  void _cancelPendingPrint() {
+    try {
+      ref.read(onlineInboxCancelPrintProvider)();
+    } catch (_) {
+      /* Disposal already removes authority. */
+    }
   }
 
   void _stopAlerts() {
@@ -358,6 +374,14 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
         clearCursor: page.nextCursor == null,
         clearFailure: true,
       );
+      // Reuse discovery's existing cadence for a READ-ONLY local recovery
+      // projection; no new polling, claim, server request or print is started.
+      // Do not create a presentation-only recovery reader just to invalidate
+      // it. Riverpod's debug dependency check eagerly initializes an unread
+      // target and schedules deferred work even with no UI observer.
+      if (ref.exists(onlineInboxPrintRecoveryProvider)) {
+        ref.invalidate(onlineInboxPrintRecoveryProvider);
+      }
     } on OnlineInboxException catch (error) {
       if (!_current(gen) || rev != _revision) return;
       _fail(error.failure);
@@ -371,6 +395,7 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
     if (failure == OnlineInboxFailure.invalidSession ||
         failure == OnlineInboxFailure.permissionDenied) {
       _securityBlocked = true;
+      _cancelPendingPrint();
       _timer?.cancel();
       _timer = null;
       // A terminal authority refusal removes customer data immediately.
@@ -587,6 +612,25 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
       } catch (_) {
         // Acceptance is already confirmed. A snapshot-refresh failure must
         // never turn it back into an uncertain write or submit it again.
+      }
+      if (!_current(gen) ||
+          !_foreground ||
+          _securityBlocked ||
+          ref.read(posOfflineModeProvider).phase != PosOfflinePhase.online)
+        return;
+      try {
+        final outcome = await ref.read(onlineInboxAcceptedPrintProvider)(
+          requestId,
+          canonicalOrderId,
+        );
+        if (_current(gen) && _foreground && !_securityBlocked) {
+          state = state.copyWith(printOutcome: outcome);
+        }
+      } catch (_) {
+        if (_current(gen))
+          state = state.copyWith(
+            printOutcome: WebOrderPrintOutcome.reconciliationRequired,
+          );
       }
     }
   }

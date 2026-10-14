@@ -23,6 +23,8 @@ import 'package:restoflow_feature_kitchen/kitchen_print.dart'
         kitchenTicketPrintLabelsForLanguageCode;
 import 'package:restoflow_pos/src/data/round_print_claim_store.dart'
     show PosRoundPrintClaimState;
+import 'package:restoflow_pos/src/data/online_order_print_repository.dart';
+import 'package:restoflow_pos/src/spool/online_order_print_hooks.dart';
 import 'package:restoflow_pos/src/spool/flutter_secure_kitchen_spool_key_store.dart';
 import 'package:restoflow_pos/src/spool/kitchen_destination_resolver.dart';
 import 'package:restoflow_pos/src/spool/kitchen_dispatch_drain_coordinator.dart';
@@ -118,30 +120,116 @@ const _context = DeviceContext(
   restaurantId: 'rest-1',
   deviceId: 'dev-1',
 );
+const _printerAssignment = 'a0000000-0000-4000-8000-000000000001';
+const _otherPrinterAssignment = 'c0000000-0000-4000-8000-000000000001';
 
-NewKitchenSpoolJob _job(String n, {DateTime? createdAt}) => NewKitchenSpoolJob(
-  localJobId: 'job-$n',
-  dispatchId: 'd-$n',
-  organizationId: 'org-1',
-  restaurantId: 'rest-1',
-  branchId: 'branch-1',
-  deviceId: 'dev-1',
-  orderId: 'order-$n',
-  serviceRoundId: null,
-  dispatchType: KitchenSpoolDispatchType.initialOrder,
-  initialStatus: KitchenSpoolJobStatus.imported,
-  encryptedPayloadBlob: Uint8List.fromList([1, 2, 3, n.hashCode & 0xff]),
-  encryptionVersion: 1,
-  destinationFingerprint: 'fp-1',
-  destinationDisplayLabel: 'Kitchen',
-  transportKind: 'network',
-  paperWidth: '80mm',
-  payloadVersion: 1,
-  documentVersion: 1,
-  rasterVersion: 1,
-  serverClaimExpiresAt: null,
-  createdAt: createdAt ?? DateTime.utc(2026, 7, 20, 9),
-);
+class _WebPrintRepository implements OnlineOrderPrintRepository {
+  var claims = 0, begins = 0, finishes = 0;
+  var state = OnlineOrderPrintState.claimed;
+  var loseBeginReply = false, loseFinishReply = false;
+  String? attempt;
+  String? claimedAssignment = _printerAssignment;
+  String? beginAssignment = _printerAssignment;
+  Future<void> Function()? afterBegin;
+  OnlineOrderPrintResult result({bool grant = false}) => OnlineOrderPrintResult(
+    requestId: 'request-web',
+    orderId: 'order-web',
+    dispatchId: 'dispatch-web',
+    decisionId: 'decision-web',
+    printerAssignmentId: grant ? beginAssignment : claimedAssignment,
+    state: state,
+    attemptId: attempt,
+    sendAuthorized: grant,
+    dispatch: state == OnlineOrderPrintState.claimed
+        ? PulledKitchenDispatch(
+            dispatchId: 'dispatch-web',
+            dispatchType: 'initial_order',
+            orderId: 'order-web',
+            payloadVersion: 1,
+            moneyFreePayload: const {
+              'v': 1,
+              'kind': 'initial_order',
+              'order_code': '#000042',
+              'order_type': 'takeaway',
+              'items': [
+                {
+                  'qty': 1,
+                  'name': 'Burger',
+                  'modifiers': <Object?>[],
+                  'note': 'Item note',
+                },
+              ],
+            },
+            createdAt: '2026-07-20T10:00:00Z',
+          )
+        : null,
+  );
+  @override
+  Future<OnlineOrderPrintResult> claim(String requestId) async {
+    claims++;
+    return result();
+  }
+
+  @override
+  Future<OnlineOrderPrintResult> begin(
+    String requestId,
+    String attemptId,
+  ) async {
+    begins++;
+    if (attempt != null) {
+      state = OnlineOrderPrintState.reconciliationRequired;
+      return result();
+    }
+    attempt = attemptId;
+    state = OnlineOrderPrintState.sendReserved;
+    await afterBegin?.call();
+    if (loseBeginReply) throw StateError('lost begin reply');
+    return result(grant: true);
+  }
+
+  @override
+  Future<OnlineOrderPrintResult> finish(
+    String requestId,
+    String attemptId,
+    String clientStatus, {
+    String? errorCode,
+  }) async {
+    finishes++;
+    state = clientStatus == 'transport_accepted'
+        ? OnlineOrderPrintState.transportAccepted
+        : OnlineOrderPrintState.reconciliationRequired;
+    if (loseFinishReply) throw StateError('lost finish reply');
+    return result();
+  }
+
+  @override
+  Future<OnlineOrderPrintResult> status(String requestId) async => result();
+}
+
+NewKitchenSpoolJob _job(String n, {DateTime? createdAt, String? localJobId}) =>
+    NewKitchenSpoolJob(
+      localJobId: localJobId ?? 'job-$n',
+      dispatchId: 'd-$n',
+      organizationId: 'org-1',
+      restaurantId: 'rest-1',
+      branchId: 'branch-1',
+      deviceId: 'dev-1',
+      orderId: 'order-$n',
+      serviceRoundId: null,
+      dispatchType: KitchenSpoolDispatchType.initialOrder,
+      initialStatus: KitchenSpoolJobStatus.imported,
+      encryptedPayloadBlob: Uint8List.fromList([1, 2, 3, n.hashCode & 0xff]),
+      encryptionVersion: 1,
+      destinationFingerprint: 'fp-1',
+      destinationDisplayLabel: 'Kitchen',
+      transportKind: 'network',
+      paperWidth: '80mm',
+      payloadVersion: 1,
+      documentVersion: 1,
+      rasterVersion: 1,
+      serverClaimExpiresAt: null,
+      createdAt: createdAt ?? DateTime.utc(2026, 7, 20, 9),
+    );
 
 void main() {
   const native = PosKitchenSpoolPlatform(isWeb: false);
@@ -198,6 +286,9 @@ void main() {
     Future<void> Function(String dispatchId)? onOrderEditImported,
     Future<List<KitchenEditSupersessionEvidence>> Function()?
     readLocalOrderEditEvidence,
+    OnlineOrderPrintRepository? webRepository,
+    Future<KitchenDestinationResolution> Function(String)? webDestination,
+    bool Function()? canWebPrint,
   }) => PosKitchenSpoolRuntime(
     platform: platform,
     deviceContext: deviceContext ?? () => _context,
@@ -253,11 +344,336 @@ void main() {
     releaseOrderEditSlip: releaseOrderEditSlip,
     onOrderEditImported: onOrderEditImported,
     readLocalOrderEditEvidence: readLocalOrderEditEvidence,
+    webOrderPrintRepository: webRepository,
+    webOrderDestinationResolver: webDestination,
+    canPrintWebOrder: canWebPrint,
   );
 
   Future<void> provisionKey() => KitchenSpoolKeyManager(
     FlutterSecureKitchenSpoolKeyStore(storage: secureStorage, platform: native),
   ).provisionKey();
+
+  group('targeted accepted web request', () {
+    Future<KitchenModeResult> printerMode() async =>
+        KitchenModePrinterOnlyWithRevision(revision: 3, verifiedAt: now);
+    final resolved = ResolvedKitchenDestination(
+      destination: const NetworkKitchenDestination(
+        host: '10.0.0.9',
+        port: 9100,
+      ),
+      fingerprint: sha256
+          .convert(utf8.encode('network|10.0.0.9|9100'))
+          .toString(),
+      displayLabel: 'Kitchen',
+      transportKind: 'network',
+      paperWidth: '80mm',
+    );
+    PosKitchenSpoolRuntime target(
+      _WebPrintRepository repo, {
+      Future<KitchenModeResult> Function()? mode,
+      bool Function()? active,
+      KitchenDestinationResolution? destination,
+    }) => runtime(
+      wireDrain: true,
+      fetchMode: mode ?? printerMode,
+      webRepository: repo,
+      canWebPrint: active ?? () => true,
+      webDestination: (id) async {
+        expect(id, _printerAssignment);
+        return destination ?? resolved;
+      },
+    );
+    test(
+      'imports encrypted exact dispatch; older unacknowledged history untouched',
+      () async {
+        await provisionKey();
+        final db = await factory().open();
+        final store = DriftKitchenSpoolStore(db);
+        await store.insertImportedJob(_job('historical'));
+        await db.close();
+        final repo = _WebPrintRepository();
+        final rt = target(repo);
+        addTearDown(rt.dispose);
+        transport.enqueue({'ok': true}); // targeted import ACK only
+        expect(
+          await rt.onAcceptedWebOrder('request-web', 'order-web'),
+          WebOrderPrintOutcome.sent,
+        );
+        expect((repo.claims, repo.begins, repo.finishes), (1, 1, 1));
+        expect(workerNetworkCalls, hasLength(1));
+        expect(
+          await rt.readWebPrintRecovery(),
+          isNull,
+          reason: 'ordinary unresolved history is not a web-print warning',
+        );
+        expect(transport.calls.map((c) => c.$1), [
+          'acknowledge_kitchen_print_dispatch',
+        ]);
+        expect(
+          await rt.onAcceptedWebOrder('request-web', 'order-web'),
+          WebOrderPrintOutcome.sent,
+        );
+        expect(repo.begins, 1);
+        expect(workerNetworkCalls, hasLength(1));
+      },
+    );
+    test(
+      'claimed response without assignment cannot resolve or begin transmission',
+      () async {
+        final repo = _WebPrintRepository()..claimedAssignment = null;
+        final rt = target(repo);
+        addTearDown(rt.dispose);
+        expect(
+          await rt.onAcceptedWebOrder('request-web', 'order-web'),
+          WebOrderPrintOutcome.reconciliationRequired,
+        );
+        expect(repo.begins, 0);
+        expect(workerNetworkCalls, isEmpty);
+        expect(await factory().spoolFileExists(), isFalse);
+      },
+    );
+    test(
+      'claim selecting another printer is refused by exact-assignment resolver',
+      () async {
+        final repo = _WebPrintRepository()
+          ..claimedAssignment = _otherPrinterAssignment;
+        final rt = runtime(
+          wireDrain: true,
+          fetchMode: printerMode,
+          webRepository: repo,
+          canWebPrint: () => true,
+          webDestination: (assignment) async => assignment == _printerAssignment
+              ? resolved
+              : const BlockedKitchenDestination(
+                  'kitchen_printer_assignment_mismatch',
+                ),
+        );
+        addTearDown(rt.dispose);
+        transport.enqueue({'ok': true});
+        expect(
+          await rt.onAcceptedWebOrder('request-web', 'order-web'),
+          WebOrderPrintOutcome.blocked,
+        );
+        expect(repo.begins, 0);
+        expect(workerNetworkCalls, isEmpty);
+      },
+    );
+    for (final assignment in [null, _otherPrinterAssignment]) {
+      test(
+        'begin assignment $assignment cannot authorize physical transmission',
+        () async {
+          final repo = _WebPrintRepository()..beginAssignment = assignment;
+          final rt = target(repo);
+          addTearDown(rt.dispose);
+          transport.enqueue({'ok': true});
+          expect(
+            await rt.onAcceptedWebOrder('request-web', 'order-web'),
+            WebOrderPrintOutcome.reconciliationRequired,
+          );
+          expect(repo.begins, 1);
+          expect(workerNetworkCalls, isEmpty);
+        },
+      );
+    }
+    test(
+      'unsent recovery is read-only, scope isolated, and does not claim or send',
+      () async {
+        final db = await factory().open();
+        await DriftKitchenSpoolStore(
+          db,
+        ).insertImportedJob(_job('web', localJobId: 'web-initial:request-web'));
+        await db.close();
+        final repo = _WebPrintRepository();
+        final rt = target(repo);
+        expect(await rt.readWebPrintRecovery(), WebOrderPrintOutcome.attention);
+        expect((repo.claims, repo.begins, repo.finishes), (0, 0, 0));
+        expect(workerNetworkCalls, isEmpty);
+        await rt.dispose();
+        final foreign = runtime(
+          wireDrain: true,
+          webRepository: repo,
+          canWebPrint: () => true,
+          deviceContext: () => const DeviceContext(
+            organizationId: 'another-org',
+            restaurantId: 'rest-1',
+            branchId: 'branch-1',
+            deviceId: 'dev-1',
+          ),
+        );
+        addTearDown(foreign.dispose);
+        expect(await foreign.readWebPrintRecovery(), isNull);
+        expect((repo.claims, repo.begins), (0, 0));
+      },
+    );
+    test(
+      'KDS and unresolved mode do not claim, create spool or send',
+      () async {
+        for (final mode in <KitchenModeResult>[
+          KitchenModeVerifiedKds(verifiedAt: now),
+          const KitchenModeRevisionUnavailable(),
+        ]) {
+          final repo = _WebPrintRepository();
+          final rt = target(repo, mode: () async => mode);
+          final outcome = await rt.onAcceptedWebOrder(
+            'request-web',
+            'order-web',
+          );
+          expect(
+            outcome,
+            mode is KitchenModeVerifiedKds
+                ? WebOrderPrintOutcome.kds
+                : WebOrderPrintOutcome.unavailable,
+          );
+          expect(repo.claims, 0);
+          expect(await factory().spoolFileExists(), isFalse);
+          await rt.dispose();
+        }
+        expect(workerNetworkCalls, isEmpty);
+      },
+    );
+    test(
+      'missing assigned printer records blocked encrypted job without begin',
+      () async {
+        final repo = _WebPrintRepository();
+        final rt = target(
+          repo,
+          destination: const BlockedKitchenDestination(
+            'kitchen_printer_assignment_missing',
+          ),
+        );
+        addTearDown(rt.dispose);
+        transport.enqueue({'ok': true});
+        expect(
+          await rt.onAcceptedWebOrder('request-web', 'order-web'),
+          WebOrderPrintOutcome.blocked,
+        );
+        expect(repo.begins, 0);
+        expect(workerNetworkCalls, isEmpty);
+      },
+    );
+    test(
+      'lost begin reply stays reconciliation across callbacks and restart',
+      () async {
+        final repo = _WebPrintRepository()..loseBeginReply = true;
+        final rt = target(repo);
+        transport.enqueue({'ok': true});
+        expect(
+          await rt.onAcceptedWebOrder('request-web', 'order-web'),
+          WebOrderPrintOutcome.reconciliationRequired,
+        );
+        await rt.dispose();
+        repo.state = OnlineOrderPrintState.reconciliationRequired;
+        final restarted = target(repo);
+        addTearDown(restarted.dispose);
+        expect(
+          await restarted.readWebPrintRecovery(),
+          WebOrderPrintOutcome.reconciliationRequired,
+        );
+        expect(
+          await restarted.onAcceptedWebOrder('request-web', 'order-web'),
+          WebOrderPrintOutcome.reconciliationRequired,
+        );
+        expect(repo.begins, 1);
+        expect(workerNetworkCalls, isEmpty);
+      },
+    );
+    test('lost finish reply never repeats transmission', () async {
+      final repo = _WebPrintRepository()..loseFinishReply = true;
+      final rt = target(repo);
+      addTearDown(rt.dispose);
+      transport.enqueue({'ok': true});
+      expect(
+        await rt.onAcceptedWebOrder('request-web', 'order-web'),
+        WebOrderPrintOutcome.reconciliationRequired,
+      );
+      expect(
+        await rt.onAcceptedWebOrder('request-web', 'order-web'),
+        WebOrderPrintOutcome.sent,
+      );
+      expect(workerNetworkCalls, hasLength(1));
+      expect(repo.begins, 1);
+    });
+    test(
+      'overlapping callbacks serialize without duplicate begin or send',
+      () async {
+        final repo = _WebPrintRepository();
+        final entered = Completer<void>();
+        final release = Completer<void>();
+        repo.afterBegin = () async {
+          entered.complete();
+          await release.future;
+        };
+        final rt = target(repo);
+        addTearDown(rt.dispose);
+        transport.enqueue({'ok': true});
+        final first = rt.onAcceptedWebOrder('request-web', 'order-web');
+        await entered.future;
+        final duplicate = rt.onAcceptedWebOrder('request-web', 'order-web');
+        expect(repo.begins, 1);
+        release.complete();
+        expect(await first, WebOrderPrintOutcome.sent);
+        expect(await duplicate, WebOrderPrintOutcome.sent);
+        expect(repo.begins, 1);
+        expect(workerNetworkCalls, hasLength(1));
+      },
+    );
+    for (final kind in [
+      KitchenTransportOutcomeKind.definitelyNotSent,
+      KitchenTransportOutcomeKind.timeoutBeforeWrite,
+      KitchenTransportOutcomeKind.unavailable,
+    ]) {
+      test(
+        'reserved $kind is a known failure with no automatic retry',
+        () async {
+          final repo = _WebPrintRepository();
+          final rt = target(repo);
+          addTearDown(rt.dispose);
+          workerOutcomes.add(KitchenTransportOutcome(kind, 'known_no_write'));
+          transport.enqueue({'ok': true});
+          expect(
+            await rt.onAcceptedWebOrder('request-web', 'order-web'),
+            WebOrderPrintOutcome.failed,
+          );
+          expect(
+            await rt.onAcceptedWebOrder('request-web', 'order-web'),
+            WebOrderPrintOutcome.reconciliationRequired,
+          );
+          expect(workerNetworkCalls, hasLength(1));
+          expect(repo.begins, 1);
+        },
+      );
+    }
+    test(
+      'pause after reservation cancels physical send, even after resume',
+      () async {
+        final repo = _WebPrintRepository();
+        final rt = target(repo);
+        addTearDown(rt.dispose);
+        repo.afterBegin = () async => rt.cancelPendingWebPrint();
+        transport.enqueue({'ok': true});
+        expect(
+          await rt.onAcceptedWebOrder('request-web', 'order-web'),
+          WebOrderPrintOutcome.reconciliationRequired,
+        );
+        expect(workerNetworkCalls, isEmpty);
+        expect(repo.begins, 1);
+      },
+    );
+    test(
+      'offline/security guard does not claim or create local spool',
+      () async {
+        final repo = _WebPrintRepository();
+        final rt = target(repo, active: () => false);
+        addTearDown(rt.dispose);
+        expect(
+          await rt.onAcceptedWebOrder('request-web', 'order-web'),
+          WebOrderPrintOutcome.unavailable,
+        );
+        expect(repo.claims, 0);
+        expect(await factory().spoolFileExists(), isFalse);
+      },
+    );
+  });
 
   group('PendingKitchenAckCoordinator', () {
     late KitchenSpoolDatabase db;
@@ -1082,7 +1498,7 @@ void main() {
             'spool',
             'pos_kitchen_spool_composition_native.dart',
           ),
-        ).readAsStringSync();
+        ).readAsStringSync().replaceAll('\r\n', '\n');
         expect(
           source,
           contains(

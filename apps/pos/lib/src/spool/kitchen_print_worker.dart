@@ -94,6 +94,12 @@ typedef KitchenBluetoothSend =
       required Uint8List bytes,
     });
 
+/// Opaque durable IDs distinguish targeted web jobs from ordinary spool jobs.
+/// Every worker, including lifecycle workers without a fence, fails closed.
+const webInitialPrintJobPrefix = 'web-initial:';
+bool isTargetedWebPrintJob(KitchenSpoolJobRow job) =>
+    job.localJobId.startsWith(webInitialPrintJobPrefix);
+
 final class KitchenPrintWorker {
   KitchenPrintWorker({
     required KitchenSpoolStore store,
@@ -108,6 +114,9 @@ final class KitchenPrintWorker {
     DateTime Function()? now,
     int maxJobsPerRun = 20,
     bool Function()? isDisposed,
+    String? onlyLocalJobId,
+    Future<bool> Function(KitchenSpoolJobRow)? beforeTargetSend,
+    Future<bool> Function(KitchenSpoolJobRow)? finishTargetSend,
   }) : _store = store,
        _cipher = cipher,
        _key = key,
@@ -119,6 +128,9 @@ final class KitchenPrintWorker {
        _scope = scope,
        _now = now ?? DateTime.now,
        _maxJobsPerRun = maxJobsPerRun.clamp(1, 50),
+       _onlyLocalJobId = onlyLocalJobId,
+       _beforeTargetSend = beforeTargetSend,
+       _finishTargetSend = finishTargetSend,
        _isDisposed = isDisposed ?? (() => false);
 
   static const Duration _ackBackoffBase = Duration(seconds: 2);
@@ -139,8 +151,28 @@ final class KitchenPrintWorker {
   final DateTime Function() _now;
   final int _maxJobsPerRun;
   final bool Function() _isDisposed;
+  final String? _onlyLocalJobId;
+  final Future<bool> Function(KitchenSpoolJobRow)? _beforeTargetSend;
+  final Future<bool> Function(KitchenSpoolJobRow)? _finishTargetSend;
 
   Future<KitchenWorkerRunReport> run() async {
+    try {
+      return await _runOnce();
+    } finally {
+      final target = _onlyLocalJobId;
+      if (target != null) {
+        try {
+          final row = await _store.getByLocalJobId(target);
+          if (row != null) await _retireQueuedTarget(row);
+        } catch (_) {
+          // Disposal may already have closed the database. The next ordinary
+          // worker performs the same conditional recovery before selection.
+        }
+      }
+    }
+  }
+
+  Future<KitchenWorkerRunReport> _runOnce() async {
     var claimed = 0, accepted = 0, failed = 0, unavailable = 0;
     var possibly = 0, blocked = 0, skips = 0;
     var acked = 0, ackRetries = 0, ackTerminal = 0;
@@ -148,14 +180,24 @@ final class KitchenPrintWorker {
 
     // FIFO snapshot bounded to the run limit; fatal store/DB errors
     // deliberately propagate to the runtime boundary.
-    final runnable = await _store.listRunnable(
-      deviceId: _scope.deviceId,
-      branchId: _scope.branchId,
-      now: _now(),
-      limit: _maxJobsPerRun + 1,
-    );
+    final targetId = _onlyLocalJobId;
+    final target = targetId == null
+        ? null
+        : await _store.getByLocalJobId(targetId);
+    final runnable = targetId != null
+        ? (target == null ? <KitchenSpoolJobRow>[] : [target])
+        : await _ordinaryRunnable();
     var processed = 0;
     for (final candidate in runnable) {
+      final targeted = isTargetedWebPrintJob(candidate);
+      // No lifecycle drain may pick up a fenced job left by a crash. Only the
+      // exact-target path with both callbacks can even queue this durable row.
+      if (targeted &&
+          (targetId != candidate.localJobId ||
+              _beforeTargetSend == null ||
+              _finishTargetSend == null))
+        continue;
+      if (targetId != null && !targeted) continue;
       if (_isDisposed()) {
         stop = KitchenWorkerStopReason.disposed;
         break;
@@ -214,12 +256,30 @@ final class KitchenPrintWorker {
           final fresh = await _store.getByLocalJobId(job.localJobId);
           if (!_stillSendable(fresh, job)) return null;
           if (!await _store.markPrinting(job.localJobId, _now())) return null;
+          if (targeted) {
+            // Durable local printing precedes the server reservation. A crash
+            // on either side is reconciliation, never automatic resend.
+            var authorized = false;
+            try {
+              authorized = await _beforeTargetSend!(job);
+            } catch (_) {
+              authorized = false;
+            }
+            if (!authorized || _isDisposed()) {
+              return const KitchenTransportOutcome(
+                KitchenTransportOutcomeKind.ambiguous,
+                'web_print_reconciliation_required',
+              );
+            }
+          }
           return prepared.send();
         },
       );
       if (outcome == null) {
         // Supersession/disposal/state change while waiting: nothing was
-        // sent, the durable row is preserved exactly as the store left it.
+        // sent. A targeted queued row must release its destination lock into
+        // an honest zero-write operator hold, never back into retryable work.
+        if (targeted && await _retireQueuedTarget(job)) blocked++;
         skips++;
         continue;
       }
@@ -232,6 +292,17 @@ final class KitchenPrintWorker {
         case KitchenTransportOutcomeKind.definitelyNotSent:
         case KitchenTransportOutcomeKind.timeoutBeforeWrite:
         case KitchenTransportOutcomeKind.unavailable:
+          if (targeted) {
+            // The durable reservation is consumed even for a proven no-write
+            // failure. This workstream prioritizes at-most-once transmission.
+            await _store.markBlockedConfigurationAfterConfirmedNoWriteWithAck(
+              job.localJobId,
+              errorCode: outcome.reasonCode,
+              now: _now(),
+            );
+            blocked++;
+            break;
+          }
           final delay = kitchenPrintRetryPolicy.backoffFor(job.attemptCount);
           await _store.markFailedRetryableWithAck(
             job.localJobId,
@@ -285,11 +356,70 @@ final class KitchenPrintWorker {
     );
   }
 
+  Future<List<KitchenSpoolJobRow>> _ordinaryRunnable() async {
+    // Abandoned fenced imports must not occupy the bounded FIFO snapshot and
+    // starve unrelated POS jobs. Count safe metadata only, expand the read by
+    // that upper bound, then restore the ordinary bounded FIFO before work.
+    final unresolved = await _store.listUnresolved(
+      deviceId: _scope.deviceId,
+      branchId: _scope.branchId,
+    );
+    // A process can die during render/gate wait BEFORE markPrinting/begin.
+    // Such a queued target otherwise owns the printer forever, because this
+    // worker intentionally excludes fenced rows. Retire ONLY queued targets
+    // in this exact scope. A late old awaiter cannot markPrinting afterward.
+    for (final row in unresolved) {
+      await _retireQueuedTarget(row);
+    }
+    final fences = unresolved.where(isTargetedWebPrintJob).length;
+    final rows = await _store.listRunnable(
+      deviceId: _scope.deviceId,
+      branchId: _scope.branchId,
+      now: _now(),
+      limit: _maxJobsPerRun + 1 + fences,
+    );
+    return rows
+        .where((row) => !isTargetedWebPrintJob(row))
+        .take(_maxJobsPerRun + 1)
+        .toList();
+  }
+
+  Future<bool> _retireQueuedTarget(KitchenSpoolJobRow row) async {
+    if (!isTargetedWebPrintJob(row) ||
+        row.status != KitchenSpoolJobStatus.queued ||
+        row.organizationId != _scope.organizationId ||
+        row.restaurantId != _scope.restaurantId ||
+        row.branchId != _scope.branchId ||
+        row.deviceId != _scope.deviceId)
+      return false;
+    // queued proves the durable markPrinting-before-begin boundary was never
+    // crossed. The existing SQL transition is conditional on STILL queued.
+    return _store.markBlockedConfigurationWithAck(
+      row.localJobId,
+      errorCode: 'target_abandoned_before_send',
+      now: _now(),
+    );
+  }
+
   /// Flushes the job's freshly-written pending acknowledgement OUTSIDE the
   /// gate; the wire status derives ONLY from the durable pending marker.
   Future<KitchenAckFlushOutcome> _flushJob(String localJobId) async {
     final row = await _store.getByLocalJobId(localJobId);
     if (row == null) return KitchenAckFlushOutcome.skipped;
+    if (isTargetedWebPrintJob(row)) {
+      final finish = _finishTargetSend;
+      if (finish == null) return KitchenAckFlushOutcome.skipped;
+      try {
+        if (await finish(row)) {
+          await _store.markServerAcked(localJobId, _now());
+          return KitchenAckFlushOutcome.acked;
+        }
+      } catch (_) {
+        // Lost finish reply preserves local truth and the permanent server
+        // fence. It is not a reason to call begin or transport again.
+      }
+      return KitchenAckFlushOutcome.skipped;
+    }
     return flushAck(
       _store,
       _ackRepository,

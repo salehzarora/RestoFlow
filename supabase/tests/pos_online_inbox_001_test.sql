@@ -334,7 +334,10 @@ select ok((select employee_profile_id=pg_temp.pi_id('employee-1') and device_id=
  'append-only decision attributes real staff/device/PIN and stores no customer PII');
 select throws_ok($$update web_order_decisions set decision_id=decision_id$$,'42501',null,'decision ledger cannot be updated');
 select throws_ok($$delete from web_order_decisions$$,'42501',null,'decision ledger cannot be deleted');
-select throws_ok($$truncate web_order_decisions$$,'42501',null,'decision ledger cannot be truncated');
+-- PRINT-003 adds a private referencing fence: PostgreSQL refuses the plain
+-- TRUNCATE at the FK boundary before the existing append-only trigger runs.
+select throws_ok($$truncate web_order_decisions$$,'0A000',null,'decision ledger cannot be truncated past print fence FK');
+select throws_ok($$truncate web_order_decisions cascade$$,'42501',null,'CASCADE still reaches immutable history guard');
 
 insert into _pi_results values('before_reject',pg_temp.pi_counts());
 set local role authenticated;

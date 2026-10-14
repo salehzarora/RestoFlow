@@ -11,6 +11,37 @@ import '../media/pos_media_image.dart';
 import '../state/online_order_inbox_controller.dart';
 import '../state/pos_menu_provider.dart';
 import '../state/pos_offline_state.dart';
+import '../spool/online_order_print_hooks.dart'
+    show WebOrderPrintOutcome, onlineInboxPrintRecoveryProvider;
+
+// Existing localized kitchen-printer vocabulary; sent is transport evidence,
+// never a claim that paper physically printed. No automatic-retry control.
+String? _printOutcomeText(
+  AppLocalizations l10n,
+  WebOrderPrintOutcome outcome,
+) => switch (outcome) {
+  WebOrderPrintOutcome.sent => l10n.posKitchenTicketPrintedSnack,
+  WebOrderPrintOutcome.reconciliationRequired ||
+  WebOrderPrintOutcome.busy => l10n.kioskKitchenLastPossibly,
+  WebOrderPrintOutcome.blocked => l10n.posKitchenPrinterNotConfiguredSnack,
+  WebOrderPrintOutcome.failed => l10n.kioskKitchenLastFailed,
+  WebOrderPrintOutcome.attention => l10n.posKitchenTicketPrintFailedSnack,
+  WebOrderPrintOutcome.unavailable => l10n.posKitchenTicketPrintFailedSnack,
+  WebOrderPrintOutcome.kds => null,
+};
+
+WebOrderPrintOutcome? _printAttention(
+  WebOrderPrintOutcome? current,
+  WebOrderPrintOutcome? recovered,
+) {
+  if (current == WebOrderPrintOutcome.reconciliationRequired ||
+      recovered == WebOrderPrintOutcome.reconciliationRequired)
+    return WebOrderPrintOutcome.reconciliationRequired;
+  if (current == WebOrderPrintOutcome.failed ||
+      recovered == WebOrderPrintOutcome.failed)
+    return WebOrderPrintOutcome.failed;
+  return recovered ?? current;
+}
 
 /// One visible entry owns lifecycle signals; polling itself lives only in the
 /// singleton controller. The compact variant shares the existing navbar row.
@@ -75,6 +106,26 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(onlineOrderInboxControllerProvider);
+    ref.listen(
+      onlineOrderInboxControllerProvider.select((s) => s.printOutcome),
+      (previous, next) {
+        if (next == null || next == previous) return;
+        final message = _printOutcomeText(l10n, next);
+        if (message != null)
+          ScaffoldMessenger.maybeOf(
+            context,
+          )?.showSnackBar(SnackBar(content: Text(message)));
+      },
+    );
+    ref.listen(onlineInboxPrintRecoveryProvider, (_, next) {
+      final outcome = next.valueOrNull;
+      if (outcome == null) return;
+      final message = _printOutcomeText(l10n, outcome);
+      if (message != null)
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(SnackBar(content: Text(message)));
+    });
     final count = state.pendingCountAt(
       ref.read(onlineOrderInboxControllerProvider.notifier).now(),
     );
@@ -152,6 +203,8 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(onlineOrderInboxControllerProvider);
+    final recovery = ref.watch(onlineInboxPrintRecoveryProvider).valueOrNull;
+    final printOutcome = _printAttention(state.printOutcome, recovery);
     final controller = ref.read(onlineOrderInboxControllerProvider.notifier);
     final selected = state.requests
         .where((r) => r.id == _selectedId)
@@ -208,6 +261,15 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
                           semanticsLabel: state.deciding
                               ? l10n.posOnlineInboxChecking
                               : l10n.posOnlineInboxLoading,
+                        ),
+                      if (printOutcome != null &&
+                          _printOutcomeText(l10n, printOutcome) != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            _printOutcomeText(l10n, printOutcome)!,
+                            key: const Key('online-inbox-print-status'),
+                          ),
                         ),
                       if (state.uncertain)
                         Padding(
