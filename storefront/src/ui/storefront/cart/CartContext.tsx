@@ -47,4 +47,3 @@ export function useCartApi(): CartApi | null {
 export function useMenuData(): MenuData {
   return useContext(MenuContext);
 }
-
