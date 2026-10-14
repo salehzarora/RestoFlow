@@ -255,9 +255,36 @@ never installs, uploads, pushes, releases or deploys.
 | 0.0.57 / 57 | `restoflow-production` | `556136f` (PR #319 source-refresh merge) | built 2026-10-13 with build_official_pair.ps1 — editing an order after it reached the kitchen (ORDER-EDIT-001A..001G) + fail-closed kitchen dispatch (PR #304) + order-detail ids (PR #305) + the cash-drawer button (PR #297); verify_official_apk.ps1 PASS for both against the production pin; not installed at record time; never uploaded. Output: dist/official-v57. Code 57 stays consumed |
 | 0.0.58 / 58 | `restoflow-production` | `a739e6c2be6cecd3e668ed80623f5db2c70bd15d` (PR #325 normal merge; application inputs unchanged from approved `de292a6`) | built and verified 2026-10-14 with the unchanged official pair runner — Online Orders Inbox / Accept/Reject (PR #322), item notes and modifier quantities (PR #323), existing POS/offline/printing functionality. Both APKs pass production certificate, version, zipalign, apksigner, AOT and hosted/demo-disabled checks. POS 70525195 bytes; KDS 57922358 bytes. Output dist/official-v58 with SHA256SUMS.txt and BUILD-METADATA.txt. PR #314/#315 excluded. NOT installed, NOT uploaded; no hardware acceptance claimed. Code 58 stays consumed |
 | 0.0.59 / 59 | `restoflow-production` | `4889760af75c10c8642ad7f39bdc786b791d415c` (PR #328 normal merge; application inputs unchanged from approved PR #327 merge `3186081`) | built and verified 2026-10-14 with the unchanged official pair runner — richer Online Orders Inbox, authenticated menu-ID photos and Android foreground pending-order double chimes/repeating alerts; existing decision recovery, notes, modifiers, offline and printing preserved. Both APKs pass production certificate, version, zipalign, apksigner, AOT and hosted/demo-disabled checks. POS 70607115 bytes; KDS 57922358 bytes. Output dist/official-v59 with verified SHA256SUMS.txt and BUILD-METADATA.txt. PR #314/#315 excluded; KDS implementation unchanged. NOT installed, NOT uploaded; physical audio/volume/DND/photo acceptance remains separately authorized, with no background/screen-off claim. Code 59 stays consumed |
-| **0.0.60 / 60** | **`restoflow-production`** | to be decided in a future preparation PR | **reserved for the next synchronized POS/KDS pair; NOT planned, NOT built, NOT installed, NOT uploaded** |
+| **0.0.60 / 60** | **`restoflow-production`** | approved application source `50bd8fb0779c999840dffbfcdf18fb80f6509eff` (PR #330/#331 normal merges); exact preparation-merge build SHA requires separate approval | **BIZBOT-ANDROID-RELEASE-V60-PREP planned: louder bundled foreground notification and safe targeted kitchen printing after confirmed online acceptance, retaining v59 functionality. Synchronized POS/KDS pair; KDS implementation unchanged. PR #314/#315 excluded. Unchanged official runner and production pin; real hosted backend/demo-disabled configuration preserved. Expected output dist/official-v60. Preparation/merge only; build and installation need separate authorization. NOT built, NOT installed, NOT uploaded** |
 | Kiosk 0.2.23 / 25 | `restoflow-production` | `28a9b422` (same source as the v53 pair) | built 2026-09-06 — official candidate; Production-signed, NOT installed, NOT uploaded; existing facts moved unchanged to kioskReleases |
 | Kiosk 0.2.24 / 26 | `restoflow-production` | `40aeb18` (same source as the v55 pair) | built 2026-10-06 — BIZBOT device-session heartbeat (PR #295), pair runner's flags; verify_official_apk.ps1 PASS (production pin, portrait setting); never uploaded. No kiosk build is planned with v56 or v57 (no kiosk change) |
+
+**v59 owner-reported acceptance supplement — recorded 2026-10-15.** The v59 row
+and `previousOfficialReleases` entry above preserve their earlier build-time
+NOT INSTALLED/no-acceptance facts. The owner subsequently reported successful
+POS v59 installation and acceptance under BIZBOT-POS-V59-ACCEPTANCE-001:
+foreground chime/repeats without overlap while the Inbox was closed, correct
+photos/quantities/totals/notes, confirmed acceptance with badge/alert clearance
+and at least 20 seconds of silence, and exactly one correct physical kitchen
+ticket. `ownerReportedAcceptanceRecords` appends this evidence without changing
+historical artifacts, hashes or `currentOfficialRelease`. This is owner testimony,
+not Codex ADB, current-device certificate or hardware verification; no installation
+date, DND/background capability or KDS installation is inferred.
+
+**v60 rollout sequence — handoff only.** After preparation approval/merge, audit
+and separately authorize the exact merged build SHA. Build/verify the official
+POS/KDS pair; record real artifact metadata and reserve v61 in a release-record
+PR. With separate device authorization, reconcile synchronization/uncertain
+operations, record pairing/printer settings and update POS in place over v59
+without uninstalling or clearing data. Verify device/PIN/pairing/printer health
+before separately applying only
+`20261014184409_bizbot_pos_audio_print_003_targeted_print`. Verify its private
+attempt ledger, four authorized RPCs and existing printing compatibility, then
+obtain separate authorization for one real acceptance/physical-print test.
+Keep `WEB_ORDERS_ENABLED=false`, `WEB_ORDERS_TEST_ENABLED=false`, the test permit
+unset and all channels disabled until Android and backend installations are
+independently verified. Uncertain sends require operator reconciliation, never
+automatic resend; at-most-once transmission is not guaranteed exactly-once paper.
 
 **v21 was the first RestoFlow artifact ever signed with the production identity**
 (verified production-signed, non-debuggable, `demo=false`, AOT, zipaligned,
