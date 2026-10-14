@@ -5,7 +5,8 @@ import type { CartApi } from '@/cart/useCart';
 import { optionSummary } from '@/cart/cartModel';
 import type { OrderController, OrderSnapshot } from '@/orders';
 import { orderFromCart } from '@/orders';
-import { orderSnapshotCopy, type OrderMessages } from '@/i18n/orders';
+import type { OrderMessages } from '@/i18n/orders';
+import { orderSnapshotCopy } from '@/i18n/orderCopy';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
 import type { Quote } from '@/money/quote';
@@ -45,7 +46,7 @@ export function LiveReviewScreen({ m, copy, cart, draft, quote, tenant, motion, 
       <div className={s.summary}>
         <ul className={s.summaryList}>{cart.summary.lines.map((line) => <li className={s.summaryLine} key={line.line.lineId}>
           <span className={`${s.qtyChip} ${s.ltr}`} dir="ltr">{line.line.qty}×</span>
-          <span className={s.summaryText}><span className={s.summaryName}><TenantText>{line.item.name}</TenantText></span>
+          <span className={`${s.summaryText} ${s.liveSummaryText}`}><span className={s.summaryName}><TenantText>{line.item.name}</TenantText></span>
             <span className={s.summaryMods}><TenantText>{optionSummary(line)}</TenantText></span>
             {line.line.note ? <span className={s.summaryNote} data-sf-item-note=""><TenantText>{line.line.note}</TenantText></span> : null}
           </span><span className={`${s.summaryPrice} ${s.ltr}`} dir="ltr">{formatMoney(line.totalMinor)}</span>

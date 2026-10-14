@@ -29,10 +29,10 @@ import { storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
 import { groupsFor } from '@/source/lookup';
 import type { BasisPoints, DeliveryZone, MenuItem, ModifierGroup, MotionMode, ServiceState } from '@/source/types';
-import { CartScope, type MenuData } from './cart/CartRuntime';
+import { CartScope, type MenuData } from './cart/CartContext';
 import { ProductSheet, type SheetDraft } from './product/ProductSheet';
 import product from './product/product.module.css';
-import { orderMessages } from '@/i18n/orders';
+import { productNoteMessages } from '@/i18n/productNotes';
 
 /** How long a toast stays up, matching the prototype (Storefront.dc.html:703). */
 const TOAST_MS = 2200;
@@ -297,8 +297,8 @@ export function StorefrontRuntime({
           onSubmit={submit}
           onToast={showToast}
           live={source === 'live'}
-          noteHelp={orderMessages(locale).itemNotesLimit}
-          minimumChoice={orderMessages(locale).atLeast}
+          noteHelp={productNoteMessages(locale).itemNotesLimit}
+          minimumChoice={productNoteMessages(locale).atLeast}
         />
       ) : null}
 

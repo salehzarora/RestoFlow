@@ -36,7 +36,7 @@ import { AlertIcon, CheckIcon, CloseIcon, MinusIcon, PlusIcon } from '../icons';
 import { TenantText } from '../TenantText';
 import shell from '../storefront.module.css';
 import styles from './product.module.css';
-import { validOrderNotes } from '@/orders/validation';
+import { validOrderNotes } from '@/orders/notes';
 
 export interface SheetDraft {
   readonly qty: number;

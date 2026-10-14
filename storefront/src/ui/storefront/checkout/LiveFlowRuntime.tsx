@@ -6,6 +6,7 @@ import type { FlowProps } from './FlowRuntime';
 
 /** Selected by the server for live menus; fixture machinery stays outside. */
 export function LiveFlowRuntime(props: FlowProps) {
+  if (!props.orderCopy) throw new Error('Live checkout messages are missing');
   return (
     <StorefrontRuntime
       source="live"
@@ -21,7 +22,7 @@ export function LiveFlowRuntime(props: FlowProps) {
       state={props.state}
       opensAt={props.tenant.opensAt}
     >
-      <LiveFlowBody {...props} />
+      <LiveFlowBody {...props} orderCopy={props.orderCopy} />
     </StorefrontRuntime>
   );
 }

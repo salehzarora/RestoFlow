@@ -20,18 +20,17 @@
  * because 360px of layout appearing after hydration would reflow the page.
  */
 import {
-  createContext,
-  useContext,
   useLayoutEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from 'react';
-import type { CartApi } from '@/cart/useCart';
 import { storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
-import type { BasisPoints, DeliveryZone, MenuItem, ModifierGroup, MotionMode, ServiceState } from '@/source/types';
+import type { MotionMode, ServiceState } from '@/source/types';
 import { LiveCartDock } from './LiveCartDock';
+import { useCartApi, useMenuData } from './CartContext';
+export { CartScope, useCartApi, useMenuData } from './CartContext';
+export type { MenuData } from './CartContext';
 import { LiveCartAside } from './LiveCartAside';
 import { EMPTY_DRAFT, useCheckoutDraft } from '../checkout/CheckoutDraftProvider';
 import { raceQuoteSource, useQuote } from '@/money/useQuote';
@@ -42,50 +41,6 @@ import type { CartState } from '@/source/types';
 
 /** A stable identity, so the quote key does not churn on every render. */
 const EMPTY_CART: CartState = { schema: 1, slug: '', menuVersion: '', lines: [] };
-
-/**
- * THE MENU THE SCOPE WAS RENDERED WITH (STOREFRONT-READ-001). Items, groups,
- * zones, the tax rate, the cart key and the browse-only flag come from the
- * route's source through StorefrontRuntime; the aside reads them here instead
- * of importing a fixture, so a live tenant's quote is priced on ITS menu.
- */
-export interface MenuData {
-  /**
-   * Which source produced the menu. The `?fx=` demo scenario tokens are
-   * honoured for `fixture` ONLY; a live tenant's cart ignores every URL token
-   * (STOREFRONT-READ-001 review finding C5).
-   */
-  readonly source: 'fixture' | 'live';
-  readonly items: readonly MenuItem[];
-  readonly groups: readonly ModifierGroup[];
-  readonly zones: readonly DeliveryZone[];
-  readonly taxRateBp: BasisPoints;
-  readonly menuVersion: string;
-  readonly orderingEnabled: boolean;
-}
-
-const EMPTY_MENU: MenuData = { source: 'live', items: [], groups: [], zones: [], taxRateBp: 0, menuVersion: '', orderingEnabled: false };
-
-const CartContext = createContext<CartApi | null>(null);
-const MenuContext = createContext<MenuData>(EMPTY_MENU);
-
-export function CartScope({ cart, menu, children }: { cart: CartApi; menu: MenuData; children: ReactNode }) {
-  return (
-    <MenuContext.Provider value={menu}>
-      <CartContext.Provider value={cart}>{children}</CartContext.Provider>
-    </MenuContext.Provider>
-  );
-}
-
-/** Null outside a CartScope, so a slot rendered by mistake shows the fallback. */
-export function useCartApi(): CartApi | null {
-  return useContext(CartContext);
-}
-
-/** The menu of the enclosing scope; an empty, browse-only menu outside one. */
-export function useMenuData(): MenuData {
-  return useContext(MenuContext);
-}
 
 export function DockSlot({
   locale,

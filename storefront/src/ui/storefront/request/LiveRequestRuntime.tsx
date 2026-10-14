@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect } from 'react';
-import { orderMessages, orderSnapshotCopy, orderStatusCopy } from '@/i18n/orders';
+import type { OrderMessages } from '@/i18n/orders';
+import { orderSnapshotCopy, orderStatusCopy } from '@/i18n/orderCopy';
 import { storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
 import { menuPath } from '@/routes/routes';
@@ -14,9 +15,8 @@ import type { RequestTenant } from './requestParts';
 import s from './liveRequest.module.css';
 
 /** Private status reads only; no cancellation, kitchen timeline or demo state. */
-export function LiveRequestRuntime({ locale, slug, origin, tenant, onOrderAgain }: { locale: Locale; slug: string; origin?: string; tenant: RequestTenant; onOrderAgain: () => void }) {
+export function LiveRequestRuntime({ locale, copy, slug, origin, tenant, onOrderAgain }: { locale: Locale; copy: OrderMessages; slug: string; origin?: string; tenant: RequestTenant; onOrderAgain: () => void }) {
   const m = storefrontMessages(locale);
-  const copy = orderMessages(locale);
   const { controller, snapshot } = useLiveOrder(origin);
   const result = snapshot.result;
   const status = result?.status;

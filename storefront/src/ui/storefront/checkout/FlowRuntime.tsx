@@ -6,10 +6,11 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCartApi } from '../cart/CartRuntime';
+import { useCartApi } from '../cart/CartContext';
 import { StorefrontRuntime } from '../StorefrontRuntime';
 import { storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
+import type { OrderMessages } from '@/i18n/orders';
 import { buildQuote, type Quote, type QuoteInput } from '@/money/quote';
 import { raceQuoteSource, useQuote, type QuoteSource } from '@/money/useQuote';
 import { zoneFor } from '@/source/lookup';
@@ -39,6 +40,7 @@ import s from './flow.module.css';
 export type FlowScreenName = 'cart' | 'checkout' | 'payment' | 'review';
 
 export interface FlowProps {
+  readonly orderCopy?: OrderMessages;
   readonly orderEndpointOrigin?: string;
   /**
    * Which source rendered the route. The `?fx=` demo scenario tokens (cart

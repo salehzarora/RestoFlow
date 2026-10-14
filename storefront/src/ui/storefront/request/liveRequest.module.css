@@ -193,6 +193,10 @@
 }
 
 .chatOutline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
   height: 48px;
   border-radius: 14px;
   border: 1.5px solid var(--hair2);

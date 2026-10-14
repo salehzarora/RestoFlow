@@ -22,7 +22,8 @@
  */
 import type { Quote } from '@/money/quote';
 import type { CheckoutDraft } from './draft';
-import { validCustomerName, validCustomerPhone, validOrderNotes } from '@/orders/validation';
+import { validCustomerName, validCustomerPhone } from '@/orders/customer';
+import { validOrderNotes } from '@/orders/notes';
 
 /**
  * The prototype's phone shape: a local number beginning 0, then 1-2 digits, an

@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildQuote } from '@/money/quote';
 import { storefrontMessages } from '@/i18n/storefront';
-import { orderMessages } from '@/i18n/orders';
+import type { OrderMessages } from '@/i18n/orders';
 import { cartPath, checkoutPath, menuPath, reviewPath } from '@/routes/routes';
-import { useCartApi } from '../cart/CartRuntime';
+import { useCartApi } from '../cart/CartContext';
 import { useCheckoutDraft, EMPTY_DRAFT } from './CheckoutDraftProvider';
 import { CartScreen } from './CartScreen';
 import { DetailsScreen } from './DetailsScreen';
@@ -20,10 +20,10 @@ import { LiveRequestRuntime } from '../request/LiveRequestRuntime';
 import s from './flow.module.css';
 
 /** Live checkout never reads demo tokens or constructs the fixture gateway. */
-export function LiveFlowBody(props: FlowProps) {
+export function LiveFlowBody(props: FlowProps & { orderCopy: OrderMessages }) {
   const { locale, slug, screen, tenant, state, motion, items, groups, taxRateBp, orderEndpointOrigin } = props;
   const m = storefrontMessages(locale);
-  const copy = orderMessages(locale);
+  const copy = props.orderCopy;
   const router = useRouter();
   const cart = useCartApi();
   const draftApi = useCheckoutDraft();
@@ -55,7 +55,7 @@ export function LiveFlowBody(props: FlowProps) {
   }, [controller, snapshot, draftApi?.reset, ready, screen, tenant.orderingEnabled, withinLimits, quote, details?.ok, router, locale, slug]);
 
   if (screen === 'review' && (snapshot.result !== null || snapshot.recovered || ['unknown', 'not_found', 'unavailable'].includes(snapshot.phase))) {
-    return <LiveRequestRuntime locale={locale} slug={slug} origin={orderEndpointOrigin} tenant={{ name: tenant.name, logo: tenant.logo ?? null }} onOrderAgain={() => {
+    return <LiveRequestRuntime locale={locale} copy={copy} slug={slug} origin={orderEndpointOrigin} tenant={{ name: tenant.name, logo: tenant.logo ?? null }} onOrderAgain={() => {
       if (controller?.startNewOrder().phase !== 'idle') return;
       leaving.current = true;
       cart?.clear();

@@ -154,19 +154,38 @@ test('storage failures after an uncertain write or confirmed acceptance never cl
   }
 });
 
-test('the server selects separate fixture/live entries and live-only recovery providers', () => {
+test('bounded client choosers split fixture/live entries while preserving server rendering', () => {
   const server = read('ui/storefront/checkout/FlowScreen.tsx');
+  const entry = read('ui/storefront/checkout/FlowEntry.tsx');
+  const checkout = read('ui/storefront/checkout/CheckoutEntry.tsx');
   const fixture = read('ui/storefront/checkout/FlowRuntime.tsx');
   const live = read('ui/storefront/checkout/LiveFlowRuntime.tsx');
   const draft = read('ui/storefront/checkout/CheckoutDraftProvider.tsx');
   const provider = read('ui/storefront/checkout/LiveCheckoutProvider.tsx');
-  assert.ok(server.includes("resolution.source === 'live' ? LiveFlowRuntime : FlowRuntime"));
+  assert.ok(server.includes('<FlowEntry') && !server.includes('import { FlowRuntime') && !server.includes('import { LiveFlowRuntime'));
+  assert.ok(server.includes("orderCopy={resolution.source === 'live' ? orderMessages(locale) : undefined}"));
+  assert.ok(entry.includes("import('./FlowRuntime')") && entry.includes("import('./LiveFlowRuntime')"));
+  assert.ok(checkout.includes("import('./LiveCheckoutProvider')"));
+  for (const chooser of [entry, checkout]) {
+    assert.ok(chooser.includes("from 'next/dynamic'"));
+    assert.ok(chooser.includes('ssr: true') && !chooser.includes('ssr: false'));
+  }
+  assert.equal([...entry.matchAll(/import\(/g)].length, 2, 'flow chooser has exactly two literal targets');
+  assert.equal([...checkout.matchAll(/import\(/g)].length, 1, 'layout chooser has exactly one literal target');
   assert.ok(!fixture.includes('LiveFlowBody') && !fixture.includes('LiveFlowRuntime'));
   assert.ok(live.includes('<LiveFlowBody') && !live.includes('fixtureGateway'));
   assert.ok(!draft.includes('LiveOrderProvider'), 'fixture layout must not download the live transport through its draft provider');
+  assert.ok(!read('ui/storefront/checkout/validation.ts').includes("from '@/orders/validation'"), 'shared field validation must not pull in the full order parser');
+  assert.ok(!read('ui/storefront/StorefrontRuntime.tsx').includes("from '@/i18n/orders'"), 'shared product copy must not pull checkout/status messages into fixture first load');
+  assert.ok(read('ui/storefront/StorefrontRuntime.tsx').includes("from './cart/CartContext'"));
+  const context = read('ui/storefront/cart/CartContext.tsx');
+  assert.ok(!context.includes('LiveCartAside') && !context.includes('LiveCartDock'), 'checkout context must not preload unused menu dock/aside components');
+  for (const file of ['ui/storefront/checkout/LiveFlowBody.tsx', 'ui/storefront/checkout/LiveReviewScreen.tsx', 'ui/storefront/request/LiveRequestRuntime.tsx']) {
+    assert.ok(!read(file).includes('orderMessages('), `${file}: the server supplies one locale instead of bundling three dictionaries`);
+  }
   assert.ok(provider.includes('<CartMemoryProvider') && provider.includes('<LiveOrderProvider') && provider.includes('<CheckoutDraftProvider'));
   for (const locale of ['(root)', 'ar', 'he', 'en']) {
     const layout = readFileSync(new URL(`../app/${locale}/s/[slug]/layout.tsx`, import.meta.url), 'utf8');
-    assert.ok(layout.includes("sourceMode() === 'live' ? LiveCheckoutProvider : CheckoutDraftProvider"));
+    assert.ok(layout.includes('<CheckoutEntry source={sourceMode()}') && !layout.includes('LiveCheckoutProvider'));
   }
 });
