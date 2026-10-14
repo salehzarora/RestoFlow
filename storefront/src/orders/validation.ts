@@ -1,6 +1,8 @@
 import type { OrderIdentity, WebOrder } from './contract';
 import { validOrderNotes } from './notes';
+import { validCustomerName, validCustomerPhone } from './customer';
 export { validOrderNotes } from './notes';
+export { validCustomerName, validCustomerPhone } from './customer';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -36,12 +38,6 @@ function uuid(value: unknown): string {
 function quantity(value: unknown): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 20) invalid();
   return value;
-}
-export function validCustomerName(value: unknown): value is string {
-  return typeof value === 'string' && [...value.trim()].length >= 1 && [...value.trim()].length <= 80 && !/[\p{Cc}\p{Cs}]/u.test(value.trim());
-}
-export function validCustomerPhone(value: unknown): value is string {
-  return typeof value === 'string' && /^\+[1-9]\d{7,14}$/.test(value);
 }
 /** No pricing/tenant fields are accepted. Nothing is silently truncated or coalesced. */
 export function normalizeWebOrder(value: unknown): WebOrder {
