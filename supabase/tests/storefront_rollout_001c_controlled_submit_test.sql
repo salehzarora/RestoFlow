@@ -237,6 +237,30 @@ select is(public.get_web_order_request_status('mapsburger',pg_temp.wo_client(3),
 reset role;
 update web_order_channel_settings set submission_enabled=true where branch_id=pg_temp.wo_ref('branch_a');
 
+-- A normal request may have captured an older branch before the profile moved.
+-- Current profile proof alone must not allow replaying that older identity.
+update restaurant_storefront_profiles set storefront_branch_id=pg_temp.wo_ref('branch_sibling')
+ where restaurant_id=pg_temp.wo_ref('rest_a');
+set local role service_role;
+insert into _wo_results values('old_branch_request',public.submit_web_order_request(
+ 'mapsburger',pg_temp.wo_client(7),repeat('a',64),
+ jsonb_set(pg_temp.wo_order(),'{items,0,notes}','"Controlled item note"')));
+reset role;
+update restaurant_storefront_profiles set storefront_branch_id=pg_temp.wo_ref('branch_a')
+ where restaurant_id=pg_temp.wo_ref('rest_a');
+insert into _wo_results values('before_old_branch_replay',pg_temp.ct_counts());
+set local role service_role;
+insert into _wo_results values('old_branch_replay',pg_temp.ct_submit(7));
+reset role;
+select ok((select r->>'status'='pending' from _wo_results where label='old_branch_request')
+ and (select branch_id=pg_temp.wo_ref('branch_sibling') from web_order_requests
+      where restaurant_id=pg_temp.wo_ref('rest_a') and client_request_id=pg_temp.wo_client(7))
+ and (select storefront_branch_id=pg_temp.wo_ref('branch_a') from restaurant_storefront_profiles
+      where restaurant_id=pg_temp.wo_ref('rest_a'))
+ and (select r->>'error'='ordering_unavailable' from _wo_results where label='old_branch_replay')
+ and pg_temp.ct_counts()=(select r from _wo_results where label='before_old_branch_replay'),
+ 'captured old-branch replay is denied before any channel/request/event mutation despite matching current profile');
+
 -- Witness the unchanged real delegate reaching its received-event INSERT.
 -- nextval is nontransactional, so it proves execution even when guard rollback
 -- correctly removes the request/event and all admission-counter changes.

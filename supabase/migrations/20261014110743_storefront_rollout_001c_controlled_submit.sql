@@ -37,6 +37,20 @@ begin
   -- profile writer moving this slug/branch while pricing/submission executes.
   perform pg_advisory_xact_lock(hashtextextended(
     p_test_restaurant_id::text||':'||p_client_request_id::text,0));
+  -- Ordinary submit replays the request's CAPTURED branch even if the profile
+  -- now points elsewhere. Prove that immutable identity too before delegation
+  -- can charge its original channel. No row lock is needed: the request guard
+  -- forbids scope changes, and this shared identity lock serializes insertion
+  -- when no request exists yet against every normal/controlled submit.
+  if exists (
+    select 1 from public.web_order_requests w
+    where w.restaurant_id=p_test_restaurant_id and w.client_request_id=p_client_request_id
+      and (w.organization_id is distinct from p_test_organization_id
+        or w.restaurant_id is distinct from p_test_restaurant_id
+        or w.branch_id is distinct from p_test_branch_id)
+  ) then
+    return jsonb_build_object('ok',false,'error','ordering_unavailable');
+  end if;
   perform 1 from public.restaurant_storefront_profiles p
     where p.slug=p_slug and p.organization_id=p_test_organization_id
       and p.restaurant_id=p_test_restaurant_id
