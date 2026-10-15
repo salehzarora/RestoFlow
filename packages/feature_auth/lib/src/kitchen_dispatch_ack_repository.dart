@@ -91,6 +91,9 @@ final class KitchenAckMalformedResponse extends KitchenAckResult {
 /// Device-token repository (house pattern; token read per request; no raw
 /// exception text, endpoint, payload, or money ever leaves this boundary).
 class SupabaseKitchenDispatchAckRepository {
+  /// Canonical wire identity owned by this typed repository.
+  static const String rpcName = 'acknowledge_kitchen_print_dispatch';
+
   SupabaseKitchenDispatchAckRepository({
     required SyncRpcTransport transport,
     required DeviceSessionSecretStore secretStore,
@@ -115,7 +118,7 @@ class SupabaseKitchenDispatchAckRepository {
 
     final Object? raw;
     try {
-      raw = await _transport.invoke('acknowledge_kitchen_print_dispatch', {
+      raw = await _transport.invoke(rpcName, {
         'p_device_id': cred.deviceId,
         'p_session_token': cred.sessionToken,
         'p_dispatch_id': dispatchId,

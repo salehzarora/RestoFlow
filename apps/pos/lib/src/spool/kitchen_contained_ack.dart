@@ -112,7 +112,7 @@ class _AuthorizedAckTransport implements SyncRpcTransport {
   Future<Object?> invoke(String function, Map<String, dynamic> params) {
     final deviceId = params['p_device_id'];
     final token = params['p_session_token'];
-    if (function != 'acknowledge_kitchen_print_dispatch' ||
+    if (function != SupabaseKitchenDispatchAckRepository.rpcName ||
         params['p_dispatch_id'] != _dispatchId ||
         params['p_client_status'] != _status.wireName ||
         params['p_error_code'] != _errorCode ||
