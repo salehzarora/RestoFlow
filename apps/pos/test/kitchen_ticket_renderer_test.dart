@@ -153,7 +153,7 @@ void main() {
   });
 
   test(
-    'tickets route through the raster seam as ONE GS v 0 bitmap at 576 '
+    'tickets route through the raster seam as bounded GS v 0 bands at 576 '
     'dots (the ×/•/» markers are non-ASCII by design, exactly like the '
     'receipt path); without a rasterizer the text path still encodes',
     () async {
@@ -165,17 +165,32 @@ void main() {
       final bytes = await renderer.renderToBytes(_initialDoc());
       expect(fake.requests, hasLength(1));
       expect(fake.requests.single.widthDots, pp.kNativeRasterWidthDots);
-      // GS v 0 header present exactly once.
-      var count = 0;
-      for (var i = 0; i + 3 < bytes.length; i++) {
-        if (bytes[i] == 0x1d &&
-            bytes[i + 1] == 0x76 &&
-            bytes[i + 2] == 0x30 &&
-            bytes[i + 3] == 0x00) {
-          count++;
-        }
+      final source = await pp.FakeReceiptRasterizer().rasterize(
+        fake.requests.single,
+      );
+      expect(source.widthBytes, 72);
+      expect(source.heightDots, 432);
+      expect(bytes.take(5), [0x1b, 0x40, 0x1b, 0x74, 0]);
+      final pixels = <int>[];
+      var offset = 5;
+      // Skip each declared body, rather than scanning pixels for signatures.
+      for (final height in [256, 176]) {
+        expect(bytes.sublist(offset, offset + 8), [
+          0x1d,
+          0x76,
+          0x30,
+          0,
+          72,
+          0,
+          height & 0xff,
+          height >> 8,
+        ]);
+        final end = offset + 8 + 72 * height;
+        pixels.addAll(bytes.sublist(offset + 8, end));
+        offset = end;
       }
-      expect(count, 1, reason: 'one raster block per ticket');
+      expect(pixels, orderedEquals(source.data));
+      expect(bytes.sublist(offset), [0x1b, 0x64, 3, 0x1d, 0x56, 1]);
       // The AR frame labels reached the raster request (RTL content routed).
       expect(fake.requests.single.lines.join('\n'), contains('المطبخ'));
 

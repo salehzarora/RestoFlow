@@ -105,15 +105,71 @@ void main() {
     });
 
     test('rasterImage rejects mismatched dimensions', () {
+      final builder = EscPosCommandBuilder()..init();
+      final before = builder.bytes();
       expect(
-        () => EscPosCommandBuilder().rasterImage(
+        () => builder.rasterImage(
           data: Uint8List(3),
           widthBytes: 1,
           heightDots: 2,
         ),
         throwsArgumentError,
       );
+      expect(builder.bytes(), before);
     });
+
+    for (final dimensions in [
+      (0, 1),
+      (-1, 1),
+      (1, 0),
+      (1, -1),
+      (65536, 1),
+      (1, 65536),
+    ]) {
+      test('rasterImage rejects $dimensions before emitting any bytes', () {
+        final (width, height) = dimensions;
+        final builder = EscPosCommandBuilder()..init();
+        final before = builder.bytes();
+        expect(
+          () => builder.rasterImage(
+            data: Uint8List(width > 0 && height > 0 ? width * height : 0),
+            widthBytes: width,
+            heightDots: height,
+          ),
+          throwsArgumentError,
+        );
+        expect(builder.bytes(), before);
+      });
+    }
+
+    for (final dimensions in [(65535, 1), (1, 65535)]) {
+      test(
+        'rasterImage accepts maximum field in $dimensions without truncation',
+        () {
+          final (width, height) = dimensions;
+          final data = Uint8List(width * height)
+            ..fillRange(0, width * height, 0xa5);
+          final bytes =
+              (EscPosCommandBuilder()..rasterImage(
+                    data: data,
+                    widthBytes: width,
+                    heightDots: height,
+                  ))
+                  .bytes();
+          expect(bytes.take(8), [
+            0x1d,
+            0x76,
+            0x30,
+            0,
+            width & 0xff,
+            width >> 8,
+            height & 0xff,
+            height >> 8,
+          ]);
+          expect(bytes.sublist(8), data);
+        },
+      );
+    }
   });
 
   group('text() writes DATA bytes only (no command injection)', () {

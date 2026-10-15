@@ -117,8 +117,11 @@ class EscPosCommandBuilder {
     required int widthBytes,
     required int heightDots,
   }) {
-    if (widthBytes <= 0 || heightDots <= 0) {
-      throw ArgumentError('raster dimensions must be positive');
+    if (widthBytes < 1 || widthBytes > 0xFFFF) {
+      throw ArgumentError.value(widthBytes, 'widthBytes', 'must be 1..65535');
+    }
+    if (heightDots < 1 || heightDots > 0xFFFF) {
+      throw ArgumentError.value(heightDots, 'heightDots', 'must be 1..65535');
     }
     if (data.length != widthBytes * heightDots) {
       throw ArgumentError(

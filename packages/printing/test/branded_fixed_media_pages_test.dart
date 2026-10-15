@@ -330,7 +330,7 @@ void main() {
       () async {
         final doc = _brandedReceipt('ar', _locales['ar']!);
         final out = await _layout(doc, MediaProfile.continuous80);
-        // Roll (ar => raster path): the logo raster stays ABOVE the text raster
+        // Roll (ar => raster path): the logo stays ABOVE consecutive text bands
         // with exactly ONE cut — and that cut is the LAST line, so the paper is
         // never cut BETWEEN the logo and the receipt (no separate logo label).
         expect(
@@ -340,8 +340,24 @@ void main() {
         );
         expect(out.lines.last, isA<PrintCutLine>(), reason: 'the cut is last');
         final images = _images(out);
-        expect(images.length, 2, reason: 'logo raster + receipt raster');
-        // The first image is the whole logo (uncropped 0xFF); the second is text.
+        final texts = doc.lines
+            .whereType<PrintTextLine>()
+            .map((l) => l.text)
+            .toList();
+        final raw = await FakeReceiptRasterizer().rasterize(
+          ReceiptRasterRequest(
+            lines: [...texts, ''],
+            widthDots: 576,
+            direction: baseDirectionForLines(texts),
+            localeTag: 'ar',
+          ),
+        );
+        expect(images.length, 1 + (raw.heightDots + 255) ~/ 256);
+        expect(identical(images.first, doc.lines.first), isTrue);
+        final textBands = images.skip(1);
+        expect(textBands.every((b) => b.heightDots <= 256), isTrue);
+        expect(textBands.expand((b) => b.data), orderedEquals(raw.data));
+        // The first image remains the whole logo (uncropped 0xFF).
         expect(_rowAll(images.first, 0, _logoFill), isTrue);
         expect(images.first.heightDots, _logoHeightDots);
         expect(_rowAll(images.last, 0, _logoFill), isFalse);
