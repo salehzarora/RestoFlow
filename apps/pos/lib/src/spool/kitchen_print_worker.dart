@@ -15,6 +15,8 @@ import 'package:restoflow_printing/restoflow_printing.dart'
 
 import 'kitchen_dispatch_import_coordinator.dart'
     show KitchenAckFlushOutcome, KitchenImportScope, flushAck;
+import 'kitchen_print_permission.dart';
+import 'kitchen_contained_ack.dart';
 
 /// KITCHEN-MODE-001C2C — the crash-safe, bounded kitchen print worker.
 ///
@@ -114,6 +116,9 @@ final class KitchenPrintWorker {
     DateTime Function()? now,
     int maxJobsPerRun = 20,
     bool Function()? isDisposed,
+    Future<KitchenPrintPermission> Function(KitchenSpoolJobRow)? permission,
+    Future<bool> Function(KitchenSpoolJobRow)? mayRun,
+    KitchenAckInvoke? acknowledge,
     String? onlyLocalJobId,
     Future<bool> Function(KitchenSpoolJobRow)? beforeTargetSend,
     Future<bool> Function(KitchenSpoolJobRow)? finishTargetSend,
@@ -128,6 +133,9 @@ final class KitchenPrintWorker {
        _scope = scope,
        _now = now ?? DateTime.now,
        _maxJobsPerRun = maxJobsPerRun.clamp(1, 50),
+       _permission = permission,
+       _mayRun = mayRun,
+       _acknowledge = acknowledge,
        _onlyLocalJobId = onlyLocalJobId,
        _beforeTargetSend = beforeTargetSend,
        _finishTargetSend = finishTargetSend,
@@ -151,9 +159,14 @@ final class KitchenPrintWorker {
   final DateTime Function() _now;
   final int _maxJobsPerRun;
   final bool Function() _isDisposed;
+  final Future<KitchenPrintPermission> Function(KitchenSpoolJobRow)?
+  _permission;
+  final Future<bool> Function(KitchenSpoolJobRow)? _mayRun;
+  final KitchenAckInvoke? _acknowledge;
   final String? _onlyLocalJobId;
   final Future<bool> Function(KitchenSpoolJobRow)? _beforeTargetSend;
   final Future<bool> Function(KitchenSpoolJobRow)? _finishTargetSend;
+  final Set<String> _policyDeniedJobs = {};
 
   Future<KitchenWorkerRunReport> run() async {
     try {
@@ -206,8 +219,13 @@ final class KitchenPrintWorker {
         stop = KitchenWorkerStopReason.runLimitReached;
         break;
       }
+      // A hold is policy, not a print outcome. Refuse before the durable
+      // queued claim, without incrementing the attempt or owing an ACK.
+      if (!await _permitted(candidate)) continue;
       processed++;
 
+      final excludedQueued = await _excludedQueuedJobs();
+      if (!await _permitted(candidate)) continue;
       final job = await _store.claimRunnableForQueued(
         candidate.localJobId,
         organizationId: _scope.organizationId,
@@ -215,6 +233,7 @@ final class KitchenPrintWorker {
         branchId: _scope.branchId,
         deviceId: _scope.deviceId,
         now: _now(),
+        policyExcludedQueuedJobIds: excludedQueued,
       );
       if (job == null) continue; // destination busy / state changed — skip.
       claimed++;
@@ -223,7 +242,14 @@ final class KitchenPrintWorker {
       // becomes blockedConfiguration (queued source, zero paper risk) and
       // never poisons sibling jobs.
       final _Prepared prepared;
-      switch (await _prepare(job)) {
+      final preparation = await _prepare(job);
+      // Policy may change during asynchronous decryption/rendering. Do not
+      // turn that change into a configuration failure or transport evidence.
+      if (!await _permitted(job)) {
+        skips++;
+        continue;
+      }
+      switch (preparation) {
         case _PrepFailure(:final code):
           await _store.markBlockedConfigurationWithAck(
             job.localJobId,
@@ -255,7 +281,20 @@ final class KitchenPrintWorker {
           if (_isDisposed()) return null;
           final fresh = await _store.getByLocalJobId(job.localJobId);
           if (!_stillSendable(fresh, job)) return null;
-          if (!await _store.markPrinting(job.localJobId, _now())) return null;
+          // The shared destination gate may have been occupied by a receipt
+          // or another worker. Recheck INSIDE it using current policy, before
+          // markPrinting, reservation or either physical transport.
+          if (!await _permitted(fresh!)) return null;
+          final excludedQueued = await _excludedQueuedJobs();
+          if (!await _permitted(fresh)) return null;
+          if (_isDisposed()) return null;
+          if (!await _store.markPrinting(
+            job.localJobId,
+            _now(),
+            policyExcludedQueuedJobIds: excludedQueued,
+          )) {
+            return null;
+          }
           if (targeted) {
             // Durable local printing precedes the server reservation. A crash
             // on either side is reconciliation, never automatic resend.
@@ -368,20 +407,108 @@ final class KitchenPrintWorker {
     // Such a queued target otherwise owns the printer forever, because this
     // worker intentionally excludes fenced rows. Retire ONLY queued targets
     // in this exact scope. A late old awaiter cannot markPrinting afterward.
+    final retiredTargets = <String>{};
     for (final row in unresolved) {
-      await _retireQueuedTarget(row);
+      if (await _retireQueuedTarget(row)) {
+        retiredTargets.add(row.localJobId);
+      }
     }
-    final fences = unresolved.where(isTargetedWebPrintJob).length;
+    // A deferred owner also defers its destination's imported siblings. Do
+    // this before taking the bounded permitted window: otherwise many such
+    // siblings consume every slot and starve independently safe printers.
+    // This is only selection; the atomic claim and shared gate still recheck
+    // current durable ownership before any state transition or transport.
+    final destinationOwners = <String, Set<String>>{};
+    for (final row in unresolved) {
+      final fingerprint = row.destinationFingerprint;
+      if (fingerprint == null ||
+          retiredTargets.contains(row.localJobId) ||
+          (row.status != KitchenSpoolJobStatus.queued &&
+              row.status != KitchenSpoolJobStatus.printing)) {
+        continue;
+      }
+      if (row.status == KitchenSpoolJobStatus.queued &&
+          row.organizationId == _scope.organizationId &&
+          row.restaurantId == _scope.restaurantId &&
+          row.branchId == _scope.branchId &&
+          row.deviceId == _scope.deviceId &&
+          (await _permissionFor(row)).mayExcludeQueuedOwner) {
+        continue;
+      }
+      destinationOwners.putIfAbsent(fingerprint, () => {}).add(row.localJobId);
+    }
+    // Held rows must not fill the FIFO window and starve unheld jobs later
+    // in it. The existing unresolved metadata supplies a finite upper bound;
+    // only the ordinary bounded number of permitted rows proceeds to claims.
     final rows = await _store.listRunnable(
       deviceId: _scope.deviceId,
       branchId: _scope.branchId,
       now: _now(),
-      limit: _maxJobsPerRun + 1 + fences,
+      limit: _maxJobsPerRun + 1 + unresolved.length,
     );
-    return rows
-        .where((row) => !isTargetedWebPrintJob(row))
-        .take(_maxJobsPerRun + 1)
-        .toList();
+    final allowed = <KitchenSpoolJobRow>[];
+    for (final row in rows) {
+      final owners = destinationOwners[row.destinationFingerprint];
+      if (owners != null && owners.any((id) => id != row.localJobId)) {
+        continue;
+      }
+      if (isTargetedWebPrintJob(row) || !await _permitted(row)) continue;
+      allowed.add(row);
+      if (allowed.length > _maxJobsPerRun) break;
+    }
+    return allowed;
+  }
+
+  /// A failed read can refuse transmission, but it proves no authority to
+  /// ignore a queued destination owner. Production uses the typed policy;
+  /// the legacy boolean seam deliberately maps false to unknown, never held.
+  Future<KitchenPrintPermission> _permissionFor(KitchenSpoolJobRow row) async {
+    try {
+      final check = _permission;
+      final legacy = _mayRun;
+      final KitchenPrintPermission result;
+      if (check != null) {
+        result = await check(row);
+      } else if (legacy == null || await legacy(row)) {
+        result = KitchenPrintPermission.permitted;
+      } else {
+        result = KitchenPrintPermission.unknown;
+      }
+      if (!result.mayTransmit) _policyDeniedJobs.add(row.localJobId);
+      return result;
+    } on Object {
+      _policyDeniedJobs.add(row.localJobId);
+      return KitchenPrintPermission.unknown;
+    }
+  }
+
+  Future<bool> _permitted(KitchenSpoolJobRow row) async =>
+      (await _permissionFor(row)).mayTransmit;
+
+  /// A held queued row has never crossed markPrinting, and its policy guard
+  /// will refuse it at the shared gate too. It may therefore remain intact
+  /// without monopolizing its printer. The store independently requires the
+  /// exact scope and queued state; it NEVER ignores a printing row. Only an
+  /// immutable exact-dispatch hold permits exclusion. Branch blocking and
+  /// unknown/transient reads preserve the queued owner's exclusive claim.
+  Future<Set<String>> _excludedQueuedJobs() async {
+    if (_permission == null) return const {};
+    final unresolved = await _store.listUnresolved(
+      deviceId: _scope.deviceId,
+      branchId: _scope.branchId,
+    );
+    final denied = <String>{};
+    for (final row in unresolved) {
+      if (row.status == KitchenSpoolJobStatus.queued &&
+          row.organizationId == _scope.organizationId &&
+          row.restaurantId == _scope.restaurantId &&
+          row.branchId == _scope.branchId &&
+          row.deviceId == _scope.deviceId &&
+          (await _permissionFor(row)).mayExcludeQueuedOwner) {
+        denied.add(row.localJobId);
+      }
+    }
+    return denied;
   }
 
   Future<bool> _retireQueuedTarget(KitchenSpoolJobRow row) async {
@@ -390,7 +517,9 @@ final class KitchenPrintWorker {
         row.organizationId != _scope.organizationId ||
         row.restaurantId != _scope.restaurantId ||
         row.branchId != _scope.branchId ||
-        row.deviceId != _scope.deviceId)
+        row.deviceId != _scope.deviceId ||
+        _policyDeniedJobs.contains(row.localJobId) ||
+        !await _permitted(row))
       return false;
     // queued proves the durable markPrinting-before-begin boundary was never
     // crossed. The existing SQL transition is conditional on STILL queued.
@@ -427,6 +556,7 @@ final class KitchenPrintWorker {
       _now(),
       backoffBase: _ackBackoffBase,
       backoffCap: _ackBackoffCap,
+      acknowledge: _acknowledge,
     );
   }
 

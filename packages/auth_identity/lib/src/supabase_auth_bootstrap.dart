@@ -24,10 +24,13 @@ class SupabaseAuthBootstrap {
   SupabaseAuthBootstrap({
     required SupabaseBootstrapConfig config,
     SyncRpcTransport Function(SupabaseBootstrapConfig config)? transportBuilder,
+    bool guardKitchenAcknowledgements = false,
   }) : _config = config,
+       _guardKitchenAcknowledgements = guardKitchenAcknowledgements,
        _transportBuilder = transportBuilder ?? _defaultTransportBuilder;
 
   final SupabaseBootstrapConfig _config;
+  final bool _guardKitchenAcknowledgements;
   final SyncRpcTransport Function(SupabaseBootstrapConfig) _transportBuilder;
 
   /// Builds the anon-key RPC transport to inject into `AuthContextRepository`
@@ -71,10 +74,23 @@ class SupabaseAuthBootstrap {
     })
   >
   createAnonymousDeviceSession() async {
-    final client = SupabaseClient(_config.url, _config.anonKey);
-    await client.auth.signInAnonymously();
+    final guarded = _guardKitchenAcknowledgements
+        ? SupabaseSyncRpcTransport.createKitchenAckClient(
+            _config.url,
+            _config.anonKey,
+          )
+        : null;
+    final client =
+        guarded?.client ?? SupabaseClient(_config.url, _config.anonKey);
+    try {
+      await client.auth.signInAnonymously();
+    } catch (_) {
+      await client.dispose();
+      guarded?.boundary.close();
+      rethrow;
+    }
     return (
-      transport: SupabaseSyncRpcTransport(client),
+      transport: guarded?.transport ?? SupabaseSyncRpcTransport(client),
       imageUrlResolver: SupabaseDeviceImageUrlResolver(client),
       // PRINT-BRANDING-LOGO-001: the device's read-only restaurant-logo
       // downloader on the SAME anonymous session (server-gated by the

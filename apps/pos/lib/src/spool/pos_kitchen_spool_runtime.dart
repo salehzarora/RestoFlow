@@ -9,10 +9,13 @@ import 'package:restoflow_core/restoflow_core.dart'
 import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show
+        KitchenAckResult,
+        KitchenImportAckStatus,
         KitchenModePrinterOnlyWithRevision,
         KitchenModeRevisionUnavailable,
         KitchenModeResult,
         KitchenModeVerifiedKds,
+        KitchenSpoolCountState,
         SupabaseDeviceKitchenModeRepository,
         SupabaseKitchenDispatchAckRepository,
         SupabaseKitchenDispatchPullRepository;
@@ -24,10 +27,12 @@ import '../data/outbox_repository.dart' show OrderSubmitPhoneLookupKey;
 import '../data/round_print_claim_store.dart' show PosRoundPrintClaimState;
 import '../data/online_order_print_repository.dart';
 import 'flutter_secure_kitchen_spool_key_store.dart';
+import 'kitchen_contained_ack.dart';
 import 'kitchen_destination_resolver.dart';
 import 'kitchen_dispatch_drain_coordinator.dart';
 import 'kitchen_dispatch_import_coordinator.dart';
 import 'kitchen_print_worker.dart';
+import 'kitchen_print_permission.dart';
 import 'kitchen_void_reconciliation.dart';
 import 'pending_kitchen_ack_coordinator.dart';
 import 'pos_kitchen_spool_hooks.dart';
@@ -152,6 +157,22 @@ final class KitchenSpoolDestinationUnresolvableException implements Exception {
   const KitchenSpoolDestinationUnresolvableException();
 }
 
+/// Honest, non-secret evidence from the fixed-operation target initializer.
+/// Total rows, rather than unresolved rows, govern missing-key provisioning.
+final class KitchenTargetSpoolInitialization {
+  const KitchenTargetSpoolInitialization({
+    required this.countState,
+    required this.totalRows,
+    required this.blockerCode,
+  });
+
+  final KitchenSpoolCountState countState;
+  final int? totalRows;
+  final String? blockerCode;
+  bool get ready =>
+      countState == KitchenSpoolCountState.counted && blockerCode == null;
+}
+
 final class PosKitchenSpoolRuntime
     implements PosKitchenSpoolLifecycleHooks, PosWebOrderPrintHooks {
   PosKitchenSpoolRuntime({
@@ -189,6 +210,15 @@ final class PosKitchenSpoolRuntime
     Future<KitchenDestinationResolution> Function(String assignmentId)?
     webOrderDestinationResolver,
     bool Function()? canPrintWebOrder,
+    Future<bool> Function()? ordinaryRunAllowed,
+    Future<bool> Function(String requestId)? targetRunAllowed,
+    Future<KitchenPrintPermission> Function(KitchenSpoolJobRow job)?
+    jobPermission,
+    Future<bool> Function(KitchenSpoolJobRow job)? jobAllowed,
+    Future<bool> Function(String dispatchId)? dispatchAllowed,
+    KitchenPrintAuthorizer? authorizeOperation,
+    KitchenAckInvoke? acknowledge,
+    Future<void> Function()? onTargetSpoolInitialized,
   }) : _platform = platform,
        _deviceContext = deviceContext,
        _secretStore = secretStore,
@@ -217,6 +247,14 @@ final class PosKitchenSpoolRuntime
        _webOrderPrintRepository = webOrderPrintRepository,
        _webOrderDestinationResolver = webOrderDestinationResolver,
        _canPrintWebOrder = canPrintWebOrder ?? (() => false),
+       _ordinaryRunAllowed = ordinaryRunAllowed,
+       _targetRunAllowed = targetRunAllowed,
+       _jobPermission = jobPermission,
+       _jobAllowed = jobAllowed,
+       _dispatchAllowed = dispatchAllowed,
+       _authorizeOperation = authorizeOperation,
+       _acknowledge = acknowledge,
+       _onTargetSpoolInitialized = onTargetSpoolInitialized,
        _readLocalOrderEditEvidence = readLocalOrderEditEvidence;
 
   final PosKitchenSpoolPlatform _platform;
@@ -275,6 +313,15 @@ final class PosKitchenSpoolRuntime
   final Future<KitchenDestinationResolution> Function(String)?
   _webOrderDestinationResolver;
   final bool Function() _canPrintWebOrder;
+  final Future<bool> Function()? _ordinaryRunAllowed;
+  final Future<bool> Function(String requestId)? _targetRunAllowed;
+  final Future<KitchenPrintPermission> Function(KitchenSpoolJobRow job)?
+  _jobPermission;
+  final Future<bool> Function(KitchenSpoolJobRow job)? _jobAllowed;
+  final Future<bool> Function(String dispatchId)? _dispatchAllowed;
+  final KitchenPrintAuthorizer? _authorizeOperation;
+  final KitchenAckInvoke? _acknowledge;
+  final Future<void> Function()? _onTargetSpoolInitialized;
   final void Function(String dispatchId)? _releaseOrderEditSlip;
   final Future<void> Function(String dispatchId)? _onOrderEditImported;
 
@@ -293,6 +340,87 @@ final class PosKitchenSpoolRuntime
   Completer<void>? _runCompletion;
   bool _disposed = false;
   int _webPrintGeneration = 0;
+  KitchenTargetSpoolInitialization _lastTargetInitialization =
+      const KitchenTargetSpoolInitialization(
+        countState: KitchenSpoolCountState.unknown,
+        totalRows: null,
+        blockerCode: 'not_initialized',
+      );
+
+  KitchenTargetSpoolInitialization get targetSpoolInitialization =>
+      _lastTargetInitialization;
+
+  // A partially wired coherent runtime must not fall through to an unguarded
+  // legacy ACK repository. Native production always supplies both callbacks.
+  KitchenAckInvoke? get _operationAck =>
+      _acknowledge ?? (_authorizeOperation == null ? null : _deferAck);
+
+  static Future<KitchenAckResult?> _deferAck({
+    required String dispatchId,
+    required KitchenImportAckStatus status,
+    String? errorCode,
+    KitchenPrintTarget? target,
+  }) async => null;
+
+  Future<bool> _ordinaryAllowed() async {
+    if (_disposed) return false;
+    try {
+      return await _ordinaryRunAllowed?.call() ?? true;
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<bool> _targetAllowed(String requestId) async {
+    if (_disposed) return false;
+    try {
+      return await _targetRunAllowed?.call(requestId) ?? true;
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<bool> _mayFlushOrdinaryAck(
+    DeviceContext context,
+    KitchenSpoolJobRow job,
+  ) async {
+    // Target outcomes reconcile only through their request/attempt-bound
+    // finish/status contract, never through the ordinary dispatch ACK RPC.
+    if (isTargetedWebPrintJob(job) ||
+        !_sameScope(context, _deviceContext()) ||
+        job.organizationId != context.organizationId ||
+        job.restaurantId != context.restaurantId ||
+        job.branchId != context.branchId ||
+        job.deviceId != context.deviceId ||
+        _disposed) {
+      return false;
+    }
+    try {
+      final authorize = _authorizeOperation;
+      if (authorize != null) {
+        final permit = await authorize(
+          KitchenPrintOperation.ordinaryAck,
+          dispatchId: job.dispatchId,
+        );
+        return !_disposed &&
+            _sameScope(context, _deviceContext()) &&
+            permit?.isCurrent == true;
+      }
+      return await _ordinaryAllowed() &&
+          _sameScope(context, _deviceContext()) &&
+          (await _dispatchAllowed?.call(job.dispatchId) ?? true);
+    } on Object {
+      return false;
+    }
+  }
+
+  static bool _sameScope(DeviceContext? a, DeviceContext? b) =>
+      a != null &&
+      b != null &&
+      a.organizationId == b.organizationId &&
+      a.restaurantId == b.restaurantId &&
+      a.branchId == b.branchId &&
+      a.deviceId == b.deviceId;
 
   @override
   void cancelPendingWebPrint() => _webPrintGeneration++;
@@ -359,10 +487,16 @@ final class PosKitchenSpoolRuntime
       return WebOrderPrintOutcome.unavailable;
     _running = true;
     final completion = _runCompletion = Completer<void>();
+    final expectedContext = _deviceContext();
     bool active() =>
-        !_disposed && generation == _webPrintGeneration && _canPrintWebOrder();
+        !_disposed &&
+        generation == _webPrintGeneration &&
+        _canPrintWebOrder() &&
+        _sameScope(expectedContext, _deviceContext());
+    Future<bool> authorized() async =>
+        active() && await _targetAllowed(requestId) && active();
     try {
-      final context = _deviceContext();
+      final context = expectedContext;
       final restaurant = context?.restaurantId;
       final device = context?.deviceId;
       final repo = _webOrderPrintRepository;
@@ -386,10 +520,25 @@ final class PosKitchenSpoolRuntime
           newId == null) {
         return WebOrderPrintOutcome.unavailable;
       }
+      if (!await authorized()) return WebOrderPrintOutcome.blocked;
       final mode = await (_fetchModeOverride ?? _modeRepository!.fetchMode)();
       if (mode is KitchenModeVerifiedKds) return WebOrderPrintOutcome.kds;
-      if (mode is! KitchenModePrinterOnlyWithRevision || !active())
+      if (mode is! KitchenModePrinterOnlyWithRevision || !await authorized())
         return WebOrderPrintOutcome.unavailable;
+
+      // Establish genuine local readiness BEFORE the claim requires it. This
+      // path never drains, recovers, acknowledges or runs an ordinary job.
+      final initialized = await _initializeTargetSpool(authorized);
+      if (initialized == null) return WebOrderPrintOutcome.blocked;
+      final (store, key) = initialized;
+      if (!await authorized()) return WebOrderPrintOutcome.blocked;
+      try {
+        await _onTargetSpoolInitialized?.call();
+      } on Object {
+        _targetInitBlocked('target_readiness_unavailable');
+        return WebOrderPrintOutcome.blocked;
+      }
+      if (!await authorized()) return WebOrderPrintOutcome.blocked;
 
       // Exact accepted request only: the server derives dispatch, decision,
       // canonical order and printer assignment, and excludes it from pullers.
@@ -405,24 +554,55 @@ final class PosKitchenSpoolRuntime
       final assignmentId = claim.printerAssignmentId;
       if (claim.state != OnlineOrderPrintState.claimed ||
           dispatch == null ||
-          assignmentId == null) {
+          assignmentId == null ||
+          dispatch.dispatchId != claim.dispatchId ||
+          dispatch.orderId != claim.orderId ||
+          dispatch.dispatchType != 'initial_order' ||
+          dispatch.serviceRoundId != null) {
         return WebOrderPrintOutcome.reconciliationRequired;
       }
-      final destination = await resolve(assignmentId);
-      if (!active()) return WebOrderPrintOutcome.unavailable;
-      final db = await _openDatabase(_databaseFactoryBuilder());
-      final store = DriftKitchenSpoolStore(db);
-      final manager = KitchenSpoolKeyManager(
-        _keyStore ?? FlutterSecureKitchenSpoolKeyStore(platform: _platform),
+      // This tuple comes from the validated server claim. Request identity
+      // alone cannot authorize a different dispatch under target-only policy.
+      final printTarget = KitchenPrintTarget(
+        requestId: requestId,
+        orderId: orderId,
+        dispatchId: claim.dispatchId,
+        decisionId: claim.decisionId,
+        printerAssignmentId: assignmentId,
+        isCurrent: active,
       );
-      final flow = PosKitchenSpoolKeyFlow(keyManager: manager, store: store);
-      var capability = await flow.evaluate();
-      if (capability is KitchenSpoolKeyMissingProvisionable)
-        capability = await flow.provisionIfEligible();
-      if (capability is! KitchenSpoolKeyReady)
-        return WebOrderPrintOutcome.blocked;
-      final key = await manager.readKey();
-      if (key == null) return WebOrderPrintOutcome.blocked;
+      Future<bool> targetDispatchAllowed(KitchenSpoolJobRow job) async {
+        if (!active() ||
+            job.dispatchId != printTarget.dispatchId ||
+            job.orderId != printTarget.orderId ||
+            job.localJobId != '$webInitialPrintJobPrefix$requestId' ||
+            job.organizationId != context.organizationId ||
+            job.restaurantId != context.restaurantId ||
+            job.branchId != context.branchId ||
+            job.deviceId != context.deviceId) {
+          return false;
+        }
+        final authorize = _authorizeOperation;
+        if (authorize != null) {
+          try {
+            final permit = await authorize(
+              KitchenPrintOperation.targetImport,
+              dispatchId: job.dispatchId,
+              target: printTarget,
+            );
+            return active() && permit?.isCurrent == true;
+          } on Object {
+            return false;
+          }
+        }
+        return await authorized() &&
+            (await _dispatchAllowed?.call(job.dispatchId) ?? true) &&
+            active();
+      }
+
+      if (!await authorized()) return WebOrderPrintOutcome.blocked;
+      final destination = await resolve(assignmentId);
+      if (!await authorized()) return WebOrderPrintOutcome.unavailable;
       final scope = KitchenImportScope(
         organizationId: context.organizationId,
         restaurantId: restaurant,
@@ -440,7 +620,14 @@ final class PosKitchenSpoolRuntime
         localJobIdGenerator: () => localId,
         now: _now,
         resolveCustomerPhone: _resolveCustomerPhone,
+        canContinue: authorized,
+        canImport: (dispatch) async =>
+            await _dispatchAllowed?.call(dispatch.dispatchId) ?? true,
+        authorizeOperation: _authorizeOperation,
+        acknowledge: _operationAck,
+        target: printTarget,
       ).importDispatches([dispatch]);
+      if (!await authorized()) return WebOrderPrintOutcome.blocked;
       final row = await store.findByDispatchId(dispatch.dispatchId);
       if (row == null || row.localJobId != localId || row.orderId != orderId) {
         return WebOrderPrintOutcome.reconciliationRequired;
@@ -465,11 +652,16 @@ final class PosKitchenSpoolRuntime
         sendGate: gate,
         ackRepository: ack,
         scope: scope,
+        acknowledge: _operationAck,
         now: _now,
         onlyLocalJobId: localId,
         isDisposed: () => !active(),
+        permission: _jobPermission,
+        mayRun: _jobAllowed,
         beforeTargetSend: (job) async {
-          if (!active()) return false;
+          if (!await targetDispatchAllowed(job)) {
+            return false;
+          }
           final result = await repo.begin(requestId, attempt);
           began = result.sendAuthorized;
           return began &&
@@ -478,7 +670,8 @@ final class PosKitchenSpoolRuntime
               result.dispatchId == job.dispatchId &&
               result.decisionId == claim.decisionId &&
               result.printerAssignmentId == assignmentId &&
-              result.attemptId == attempt;
+              result.attemptId == attempt &&
+              await targetDispatchAllowed(job);
         },
         finishTargetSend: (job) async {
           if (!began || !active()) return false;
@@ -546,6 +739,11 @@ final class PosKitchenSpoolRuntime
   }
 
   Future<PosKitchenSpoolRunReport> _runOnce() async {
+    // Containment is established before startup/resume can fetch, open,
+    // reconcile, import or send. Unknown/expired policy is never an opt-in.
+    if (!await _ordinaryAllowed()) {
+      return const KitchenSpoolRunBlocked('ordinary_print_contained');
+    }
     // 1–2: platform + restored device scope (fail closed on anything less
     // than a complete tuple; the AAD requires every field).
     if (!_platform.supportsSecureSpool) {
@@ -571,6 +769,9 @@ final class PosKitchenSpoolRuntime
     final KitchenModeResult mode =
         await (_fetchModeOverride ?? modeRepository.fetchMode)();
     await _cacheMode(mode, context, restaurantId, deviceId, secretStore);
+    if (!await _ordinaryAllowed() || !_sameScope(context, _deviceContext())) {
+      return const KitchenSpoolRunBlocked('ordinary_print_contained');
+    }
 
     // CORRECTION-001 / Pass C: the TRUSTED printer-only path — the complete
     // drain. REACHABLE in production: `fetchMode` constructs this state from
@@ -632,6 +833,8 @@ final class PosKitchenSpoolRuntime
       store: store,
       ackRepository: ackRepository,
       now: _now,
+      mayFlush: (job) => _mayFlushOrdinaryAck(context, job),
+      acknowledge: _operationAck,
     );
     final (acked, retries, terminal) = await acks.flush(
       deviceId: deviceId,
@@ -664,6 +867,11 @@ final class PosKitchenSpoolRuntime
     String deviceId,
     SupabaseKitchenDispatchAckRepository ackRepository,
   ) async {
+    Future<bool> mayContinue() async =>
+        await _ordinaryAllowed() && _sameScope(context, _deviceContext());
+    if (!await mayContinue()) {
+      return const KitchenSpoolRunBlocked('ordinary_print_contained');
+    }
     final pullRepository = _pullRepository;
     final resolveDestination = _destinationResolver;
     final newLocalJobId = _localJobIdGenerator;
@@ -688,6 +896,9 @@ final class PosKitchenSpoolRuntime
       return KitchenSpoolRunBlocked(e.reason);
     }
     final store = DriftKitchenSpoolStore(db);
+    if (!await mayContinue()) {
+      return const KitchenSpoolRunBlocked('ordinary_print_contained');
+    }
     final keyManager = KitchenSpoolKeyManager(
       _keyStore ?? FlutterSecureKitchenSpoolKeyStore(platform: _platform),
     );
@@ -714,6 +925,9 @@ final class PosKitchenSpoolRuntime
     if (key == null) {
       return const KitchenSpoolRunBlocked('KitchenSpoolKeyUnavailable');
     }
+    if (!await mayContinue()) {
+      return const KitchenSpoolRunBlocked('ordinary_print_contained');
+    }
 
     // 3: stale-printing recovery BEFORE anything else — a crash mid-print
     // may have left paper; the row becomes possiblyPrinted with its owed
@@ -728,6 +942,8 @@ final class PosKitchenSpoolRuntime
       store: store,
       ackRepository: ackRepository,
       now: _now,
+      mayFlush: (job) => _mayFlushOrdinaryAck(context, job),
+      acknowledge: _operationAck,
     );
     // 4: acknowledgements owed from PREVIOUS runs (including the recovery
     // sweep's) flush before new work.
@@ -735,6 +951,9 @@ final class PosKitchenSpoolRuntime
       deviceId: deviceId,
       branchId: context.branchId,
     );
+    if (!await mayContinue()) {
+      return const KitchenSpoolRunBlocked('ordinary_print_contained');
+    }
 
     // 5: local VOID evidence applies BEFORE any new claim, then
     // (ORDER-EDIT-001F) the ORDERED order-edit evidence: imported edit rows
@@ -760,6 +979,9 @@ final class PosKitchenSpoolRuntime
     } on Exception {
       return const KitchenSpoolRunBlocked('kitchen_destination_unresolvable');
     }
+    if (!await mayContinue()) {
+      return const KitchenSpoolRunBlocked('ordinary_print_contained');
+    }
 
     final scope = KitchenImportScope(
       organizationId: context.organizationId,
@@ -770,6 +992,7 @@ final class PosKitchenSpoolRuntime
     // 6–7: drain/import (durable-before-ack, immediate import acks inside).
     final drainReport = await KitchenDispatchDrainCoordinator(
       pullRepository: pullRepository,
+      canContinue: mayContinue,
       importCoordinator: KitchenDispatchImportCoordinator(
         store: store,
         cipher: cipher,
@@ -791,8 +1014,16 @@ final class PosKitchenSpoolRuntime
         reserveOrderEditSlip: _reserveOrderEditSlip,
         releaseOrderEditSlip: _releaseOrderEditSlip,
         onOrderEditImported: _onOrderEditImported,
+        canContinue: mayContinue,
+        canImport: (dispatch) async =>
+            await _dispatchAllowed?.call(dispatch.dispatchId) ?? true,
+        authorizeOperation: _authorizeOperation,
+        acknowledge: _operationAck,
       ),
     ).drain();
+    if (!await mayContinue()) {
+      return const KitchenSpoolRunBlocked('ordinary_print_contained');
+    }
 
     // 8: VOID + order-edit evidence again — a void or an edit imported by
     // THIS drain (or a slip this till printed meanwhile) must stop its
@@ -806,6 +1037,9 @@ final class PosKitchenSpoolRuntime
       now: _now(),
       externalEdits: await _localOrderEditEvidence(),
     );
+    if (!await mayContinue()) {
+      return const KitchenSpoolRunBlocked('ordinary_print_contained');
+    }
 
     // 9: the bounded worker (claim → decrypt/render → gated single send →
     // atomic transition+ack). Disposal stops it before any further send.
@@ -819,9 +1053,12 @@ final class PosKitchenSpoolRuntime
       sendGate: sendGate,
       ackRepository: ackRepository,
       scope: scope,
+      acknowledge: _operationAck,
       now: _now,
       maxJobsPerRun: _maxWorkerJobsPerRun,
       isDisposed: () => _disposed,
+      mayRun: _jobAllowed,
+      permission: _jobPermission,
     ).run();
 
     // 10: anything newly pending that is already due flushes before
@@ -843,6 +1080,107 @@ final class PosKitchenSpoolRuntime
       retriesScheduled: preRetries + postRetries,
       terminal: preTerminal + postTerminal,
     );
+  }
+
+  void _targetInitBlocked(String blockerCode) {
+    _lastTargetInitialization = KitchenTargetSpoolInitialization(
+      countState: _lastTargetInitialization.countState,
+      totalRows: _lastTargetInitialization.totalRows,
+      blockerCode: blockerCode,
+    );
+  }
+
+  /// Fixed operation count: inspect presence, open/count, inspect/provision
+  /// under the existing total-zero rule, then read the existing key. No drain,
+  /// stale-job recovery, ordinary worker or acknowledgement runs here.
+  Future<(DriftKitchenSpoolStore, SecretValue)?> _initializeTargetSpool(
+    Future<bool> Function() authorized,
+  ) async {
+    _lastTargetInitialization = const KitchenTargetSpoolInitialization(
+      countState: KitchenSpoolCountState.unknown,
+      totalRows: null,
+      blockerCode: 'initializing',
+    );
+    final factory = _databaseFactoryBuilder();
+    final presence = await factory.inspectSpoolFilePresence();
+    if (presence == KitchenSpoolFilePresence.unknown) {
+      _targetInitBlocked('spool_presence_unknown');
+      return null;
+    }
+    _lastTargetInitialization = KitchenTargetSpoolInitialization(
+      countState: presence == KitchenSpoolFilePresence.absent
+          ? KitchenSpoolCountState.absent
+          : KitchenSpoolCountState.unknown,
+      totalRows: presence == KitchenSpoolFilePresence.absent ? 0 : null,
+      blockerCode: 'initializing',
+    );
+    if (!await authorized()) {
+      _targetInitBlocked('target_print_contained');
+      return null;
+    }
+    final DriftKitchenSpoolStore store;
+    try {
+      store = DriftKitchenSpoolStore(await _openDatabase(factory));
+      final total = await store.countTotalRows();
+      _lastTargetInitialization = KitchenTargetSpoolInitialization(
+        countState: KitchenSpoolCountState.counted,
+        totalRows: total,
+        blockerCode: 'initializing',
+      );
+    } on Object {
+      _lastTargetInitialization = const KitchenTargetSpoolInitialization(
+        countState: KitchenSpoolCountState.unknown,
+        totalRows: null,
+        blockerCode: 'spool_database_unavailable',
+      );
+      return null;
+    }
+    if (!await authorized()) {
+      _targetInitBlocked('target_print_contained');
+      return null;
+    }
+    final manager = KitchenSpoolKeyManager(
+      _keyStore ?? FlutterSecureKitchenSpoolKeyStore(platform: _platform),
+    );
+    final flow = PosKitchenSpoolKeyFlow(keyManager: manager, store: store);
+    try {
+      var capability = await flow.evaluate();
+      if (!await authorized()) {
+        _targetInitBlocked('target_print_contained');
+        return null;
+      }
+      if (capability is KitchenSpoolKeyMissingProvisionable) {
+        // provisionIfEligible re-counts ALL rows; zero unresolved is irrelevant.
+        capability = await flow.provisionIfEligible();
+      }
+      if (capability is! KitchenSpoolKeyReady) {
+        _targetInitBlocked(switch (capability) {
+          KitchenSpoolKeyMissingWithRows() =>
+            'kitchen_spool_key_missing_with_rows',
+          KitchenSpoolKeyCorrupted() => 'kitchen_spool_key_corrupted',
+          _ => 'secure_storage_unavailable',
+        });
+        return null;
+      }
+      final key = await manager.readKey();
+      if (key == null) {
+        _targetInitBlocked('kitchen_spool_key_unavailable');
+        return null;
+      }
+      if (!await authorized()) {
+        _targetInitBlocked('target_print_contained');
+        return null;
+      }
+      _lastTargetInitialization = KitchenTargetSpoolInitialization(
+        countState: KitchenSpoolCountState.counted,
+        totalRows: _lastTargetInitialization.totalRows,
+        blockerCode: null,
+      );
+      return (store, key);
+    } on Object {
+      _targetInitBlocked('secure_storage_unavailable');
+      return null;
+    }
   }
 
   /// This till's direct slip prints (ORDER-EDIT-001F); never throws.

@@ -7,6 +7,8 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import '../data/outbox_repository.dart' show OrderSubmitPhoneLookupKey;
 import '../data/round_print_claim_store.dart' show PosRoundPrintClaimState;
 import 'kitchen_destination_resolver.dart';
+import 'kitchen_contained_ack.dart';
+import 'kitchen_print_permission.dart';
 import 'kitchen_void_reconciliation.dart'
     show
         KitchenEditSupersessionEvidence,
@@ -139,6 +141,11 @@ final class KitchenDispatchImportCoordinator {
     bool Function(String dispatchId)? reserveOrderEditSlip,
     void Function(String dispatchId)? releaseOrderEditSlip,
     Future<void> Function(String dispatchId)? onOrderEditImported,
+    Future<bool> Function()? canContinue,
+    Future<bool> Function(PulledKitchenDispatch dispatch)? canImport,
+    KitchenPrintAuthorizer? authorizeOperation,
+    KitchenAckInvoke? acknowledge,
+    KitchenPrintTarget? target,
   }) : _store = store,
        _cipher = cipher,
        _key = key,
@@ -153,7 +160,12 @@ final class KitchenDispatchImportCoordinator {
        _isOrderEditSlipInFlight = isOrderEditSlipInFlight,
        _reserveOrderEditSlip = reserveOrderEditSlip,
        _releaseOrderEditSlip = releaseOrderEditSlip,
-       _onOrderEditImported = onOrderEditImported;
+       _onOrderEditImported = onOrderEditImported,
+       _canContinue = canContinue,
+       _canImport = canImport,
+       _authorizeOperation = authorizeOperation,
+       _acknowledge = acknowledge,
+       _target = target;
 
   static const Duration _ackBackoffBase = Duration(seconds: 2);
   static const Duration _ackBackoffCap = Duration(minutes: 5);
@@ -217,6 +229,48 @@ final class KitchenDispatchImportCoordinator {
   /// record (and banner) goes away, because the spool prints the server's
   /// slip from now on. Idempotent; best-effort (a failure keeps the row).
   final Future<void> Function(String dispatchId)? _onOrderEditImported;
+  final Future<bool> Function()? _canContinue;
+  final Future<bool> Function(PulledKitchenDispatch dispatch)? _canImport;
+  final KitchenPrintAuthorizer? _authorizeOperation;
+  final KitchenAckInvoke? _acknowledge;
+  final KitchenPrintTarget? _target;
+
+  bool _matchesTarget(PulledKitchenDispatch dispatch) {
+    final target = _target;
+    return target == null ||
+        (target.isCurrent &&
+            dispatch.dispatchId == target.dispatchId &&
+            dispatch.orderId == target.orderId &&
+            dispatch.dispatchType == 'initial_order' &&
+            dispatch.serviceRoundId == null);
+  }
+
+  Future<KitchenPrintAuthorization?> _authorize(
+    PulledKitchenDispatch dispatch,
+  ) async {
+    if (!_matchesTarget(dispatch)) return null;
+    return _authorizeOperation?.call(
+      _target == null
+          ? KitchenPrintOperation.ordinaryImport
+          : KitchenPrintOperation.targetImport,
+      dispatchId: dispatch.dispatchId,
+      target: _target,
+    );
+  }
+
+  Future<bool> _allowed([PulledKitchenDispatch? dispatch]) async {
+    try {
+      if (!(await _canContinue?.call() ?? true)) return false;
+      if (dispatch == null) return true;
+      if (!_matchesTarget(dispatch)) return false;
+      if (_authorizeOperation != null) {
+        return (await _authorize(dispatch))?.isCurrent ?? false;
+      }
+      return await _canImport?.call(dispatch) ?? true;
+    } on Object {
+      return false;
+    }
+  }
 
   /// The fully-scoped durable-phone lookup identity for [dispatch] in THIS run's
   /// import scope (organization/restaurant/branch/device from [_scope]). The
@@ -286,7 +340,9 @@ final class KitchenDispatchImportCoordinator {
       aad: aad,
       key: _key,
     );
-    await _store.updateEncryptedPayload(row.localJobId, envelope, now);
+    if (await _allowed(dispatch)) {
+      await _store.updateEncryptedPayload(row.localJobId, envelope, now);
+    }
   }
 
   Future<KitchenImportSummary> importDispatches(
@@ -322,6 +378,8 @@ final class KitchenDispatchImportCoordinator {
     var superseded = 0, links = 0, conflicts = 0;
     var alreadyPrinted = 0, deferredInFlight = 0, handedOver = 0;
     for (final dispatch in dispatches) {
+      if (!await _allowed()) break;
+      if (!await _allowed(dispatch)) continue;
       final now = _now();
 
       // ROW-LOCAL: only server payload contract v1 is supported by this
@@ -344,6 +402,7 @@ final class KitchenDispatchImportCoordinator {
               KitchenSpoolDispatchType.initialOrder.wireName &&
           _readInitialPrintClaim != null &&
           await _store.findByDispatchId(dispatch.dispatchId) == null) {
+        if (!await _allowed(dispatch)) continue;
         PosRoundPrintClaimState? claim;
         try {
           claim = _readInitialPrintClaim(dispatch.orderId);
@@ -387,6 +446,7 @@ final class KitchenDispatchImportCoordinator {
               _readOrderEditPrintClaim != null ||
               _reserveOrderEditSlip != null) &&
           await _store.findByDispatchId(dispatch.dispatchId) == null) {
+        if (!await _allowed(dispatch)) continue;
         bool inFlight;
         try {
           inFlight =
@@ -450,6 +510,7 @@ final class KitchenDispatchImportCoordinator {
       // error code all stay byte-identical.
       KitchenSpoolJobRow row;
       final existing = await _store.findByDispatchId(dispatch.dispatchId);
+      if (!await _allowed(dispatch)) continue;
       if (existing != null) {
         duplicates++;
         row = existing;
@@ -533,7 +594,19 @@ final class KitchenDispatchImportCoordinator {
 
         // 10–11: idempotent durable insert (a same-moment racer keeps the
         // EXISTING row untouched — no re-encryption, no rerouting).
+        KitchenPrintAuthorization? admission;
+        if (_authorizeOperation != null) {
+          if (!(await _canContinue?.call() ?? true)) continue;
+          admission = await _authorize(dispatch);
+          if (admission == null) continue;
+        } else if (!await _allowed(dispatch)) {
+          continue;
+        }
         final generatedId = _newLocalJobId();
+        // Last synchronous check before invoking the durable insert. If a
+        // restriction arrives during its transaction, the row remains unACKed
+        // and nonrunnable; the post-write checks and guarded ACK defer it.
+        if (admission != null && !admission.isCurrent) continue;
         row = await _store.insertImportedJob(
           NewKitchenSpoolJob(
             localJobId: generatedId,
@@ -592,6 +665,7 @@ final class KitchenDispatchImportCoordinator {
       // The row is durable: the spool owns the slip from here (the hand-over
       // below ends the reservation), so this pass never gives it back.
       reserved.remove(dispatch.dispatchId);
+      if (!await _allowed(dispatch)) continue;
 
       // Server-derived supersession reconciliation: a durably imported VOID
       // marks this order's unresolved prior local jobs (possiblyPrinted
@@ -604,6 +678,7 @@ final class KitchenDispatchImportCoordinator {
           branchId: _scope.branchId,
         );
         for (final prior in unresolved) {
+          if (!await _allowed(dispatch)) break;
           if (prior.orderId != dispatch.orderId) continue;
           if (prior.dispatchId == dispatch.dispatchId) continue;
           if (prior.status == KitchenSpoolJobStatus.possiblyPrinted) {
@@ -646,6 +721,7 @@ final class KitchenDispatchImportCoordinator {
           cipher: _cipher,
           key: _key,
         );
+        if (!await _allowed(dispatch)) continue;
         if (createdAt != null) {
           final swept = await reconcileOrderEditEvidence(
             _store,
@@ -683,6 +759,7 @@ final class KitchenDispatchImportCoordinator {
       }
       if (row.pendingServerAckStatus == null &&
           row.serverAcknowledgedAt == null) {
+        if (!await _allowed(dispatch)) continue;
         await _store.setPendingServerAck(
           row.localJobId,
           row.status == KitchenSpoolJobStatus.blockedConfiguration
@@ -691,13 +768,18 @@ final class KitchenDispatchImportCoordinator {
           now,
         );
       }
+      final stored = (await _store.getByLocalJobId(row.localJobId))!;
+      if (!await _allowed(dispatch)) continue;
+      if (_authorizeOperation != null && _acknowledge == null) continue;
       final outcome = await flushAck(
         _store,
         _ackRepository,
-        (await _store.getByLocalJobId(row.localJobId))!,
+        stored,
         _now(),
         backoffBase: _ackBackoffBase,
         backoffCap: _ackBackoffCap,
+        acknowledge: _acknowledge,
+        target: _target,
       );
       switch (outcome) {
         case KitchenAckFlushOutcome.acked:
@@ -739,14 +821,25 @@ final class KitchenDispatchImportCoordinator {
     PulledKitchenDispatch dispatch,
     PosRoundPrintClaimState claim,
   ) async {
-    final result = await _ackRepository.acknowledge(
-      dispatchId: dispatch.dispatchId,
-      // `sent` = the transport accepted the bytes; `claimed` = a crash window
-      // where paper MAY exist — the server's own vocabulary for those facts.
-      status: claim == PosRoundPrintClaimState.sent
-          ? KitchenImportAckStatus.transportAccepted
-          : KitchenImportAckStatus.possiblyPrinted,
-    );
+    if (!await _allowed(dispatch)) return KitchenAckFlushOutcome.skipped;
+    if (_authorizeOperation != null && _acknowledge == null) {
+      return KitchenAckFlushOutcome.skipped;
+    }
+    final status = claim == PosRoundPrintClaimState.sent
+        ? KitchenImportAckStatus.transportAccepted
+        : KitchenImportAckStatus.possiblyPrinted;
+    // These describe genuine prior transport/crash evidence, never paper.
+    final result = _acknowledge != null
+        ? await _acknowledge(
+            dispatchId: dispatch.dispatchId,
+            status: status,
+            target: _target,
+          )
+        : await _ackRepository.acknowledge(
+            dispatchId: dispatch.dispatchId,
+            status: status,
+          );
+    if (result == null) return KitchenAckFlushOutcome.skipped;
     return switch (result) {
       KitchenAckAccepted() => KitchenAckFlushOutcome.acked,
       KitchenAckTerminal() => KitchenAckFlushOutcome.terminal,
@@ -775,6 +868,8 @@ Future<KitchenAckFlushOutcome> flushAck(
   DateTime now, {
   required Duration backoffBase,
   required Duration backoffCap,
+  KitchenAckInvoke? acknowledge,
+  KitchenPrintTarget? target,
 }) async {
   final pending = job.pendingServerAckStatus;
   if (pending == null) return KitchenAckFlushOutcome.skipped;
@@ -800,11 +895,21 @@ Future<KitchenAckFlushOutcome> flushAck(
     KitchenImportAckStatus.transportAccepted => null,
   };
 
-  final result = await ackRepository.acknowledge(
-    dispatchId: job.dispatchId,
-    status: status,
-    errorCode: errorCode,
-  );
+  final result = acknowledge != null
+      ? await acknowledge(
+          dispatchId: job.dispatchId,
+          status: status,
+          errorCode: errorCode,
+          target: target,
+        )
+      : await ackRepository.acknowledge(
+          dispatchId: job.dispatchId,
+          status: status,
+          errorCode: errorCode,
+        );
+  // Local policy deferral is not a failed network request. Keep its pending
+  // marker and retry metadata exactly as recorded; no ACK was invoked.
+  if (result == null) return KitchenAckFlushOutcome.skipped;
   switch (result) {
     case KitchenAckAccepted():
       await store.markServerAcked(job.localJobId, now);

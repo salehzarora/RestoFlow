@@ -509,7 +509,10 @@ class PosBootCoordinator {
   static Future<PosAnonymousDeviceSession> _defaultCreateSession() async {
     // Throws SupabaseConfigException when unconfigured (mapped in bootstrap).
     final config = SupabaseBootstrapConfig.fromEnvironment();
-    return SupabaseAuthBootstrap(config: config).createAnonymousDeviceSession();
+    return SupabaseAuthBootstrap(
+      config: config,
+      guardKitchenAcknowledgements: true,
+    ).createAnonymousDeviceSession();
   }
 
   /// Runs one boot attempt. Called by [DeviceBootGate] at launch and again on

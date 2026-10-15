@@ -67,6 +67,9 @@ enum KitchenDrainStopReason {
   /// all (distinct from a DEFINITIVE blocked resolution, which imports as
   /// blockedConfiguration).
   destinationUnresolvable,
+
+  /// The startup-established containment policy changed or became unknown.
+  contained,
 }
 
 /// Closed, safe-scalar drain report. Never contains payloads, endpoints,
@@ -128,17 +131,28 @@ final class KitchenDispatchDrainCoordinator {
     required KitchenDispatchImportCoordinator importCoordinator,
     int pageLimit = 20,
     int maxPages = 50,
+    Future<bool> Function()? canContinue,
   }) : assert(pageLimit >= 1 && pageLimit <= 50),
        assert(maxPages >= 1 && maxPages <= 50),
        _pullRepository = pullRepository,
        _importCoordinator = importCoordinator,
        _pageLimit = pageLimit,
-       _maxPages = maxPages;
+       _maxPages = maxPages,
+       _canContinue = canContinue;
 
   final SupabaseKitchenDispatchPullRepository _pullRepository;
   final KitchenDispatchImportCoordinator _importCoordinator;
   final int _pageLimit;
   final int _maxPages;
+  final Future<bool> Function()? _canContinue;
+
+  Future<bool> _allowed() async {
+    try {
+      return await _canContinue?.call() ?? true;
+    } on Object {
+      return false;
+    }
+  }
 
   Future<KitchenDispatchDrainReport> drain() async {
     KitchenDispatchCursor? cursor;
@@ -168,11 +182,15 @@ final class KitchenDispatchDrainCoordinator {
         );
 
     while (true) {
+      if (!await _allowed()) return report(KitchenDrainStopReason.contained);
       // 1–2: pull with the current FULL cursor; every failure is typed.
       final result = await _pullRepository.pull(
         limit: _pageLimit,
         cursor: cursor,
       );
+      // A response captured before a target-only transition is not permission
+      // to import historical jobs after that transition.
+      if (!await _allowed()) return report(KitchenDrainStopReason.contained);
       final KitchenDispatchPullPage page;
       switch (result) {
         case KitchenDispatchPullSuccess(page: final successPage):
@@ -223,6 +241,7 @@ final class KitchenDispatchDrainCoordinator {
       acked += summary.acked;
       pending += summary.ackRetriesScheduled;
       terminal += summary.ackTerminal;
+      if (!await _allowed()) return report(KitchenDrainStopReason.contained);
 
       // 5–8: only now inspect pagination.
       if (!page.hasMore) return report(KitchenDrainStopReason.complete);

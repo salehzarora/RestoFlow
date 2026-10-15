@@ -3,12 +3,14 @@
 /// Owns (per docs/ARCHITECTURE.md section 3) the Supabase RPC call sites. RF-063
 /// adds the polling-first `app.sync_pull` wrapper: typed request/response
 /// models, a transport seam, and the Supabase-backed transport that accepts an
-/// INJECTED `SupabaseClient` (approved decision A2). This package holds NO URLs,
-/// keys, or secrets and never constructs a client (DECISION D-011); session
-/// establishment (login/pairing/PIN) is out of RF-063 scope.
+/// INJECTED `SupabaseClient` (approved decision A2). R4 also provides an opt-in
+/// SDK/client HTTP-boundary factory using public configuration only. Session
+/// establishment (login/pairing/PIN) remains in auth bootstrap (DECISION D-011).
 library;
 
 export 'src/invalidation_hint.dart';
+export 'src/guarded_kitchen_ack_transport.dart';
+export 'src/kitchen_ack_http_boundary.dart';
 export 'src/invalidation_source.dart';
 export 'src/realtime_invalidation_source.dart';
 export 'src/supabase_sync_rpc_transport.dart';
