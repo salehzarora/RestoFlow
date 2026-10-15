@@ -28,7 +28,6 @@ import 'package:restoflow_pos/src/spool/online_order_print_hooks.dart';
 import 'package:restoflow_pos/src/spool/flutter_secure_kitchen_spool_key_store.dart';
 import 'package:restoflow_pos/src/spool/kitchen_destination_resolver.dart';
 import 'package:restoflow_pos/src/spool/kitchen_dispatch_drain_coordinator.dart';
-import 'package:restoflow_pos/src/spool/kitchen_print_worker.dart';
 import 'package:restoflow_pos/src/spool/kitchen_void_reconciliation.dart'
     show KitchenEditSupersessionEvidence;
 import 'package:restoflow_pos/src/spool/pending_kitchen_ack_coordinator.dart';
@@ -429,7 +428,8 @@ void main() {
         );
         expect(repo.begins, 0);
         expect(workerNetworkCalls, isEmpty);
-        expect(await factory().spoolFileExists(), isFalse);
+        expect(await factory().spoolFileExists(), isTrue);
+        expect(rt.targetSpoolInitialization.ready, isTrue);
       },
     );
     test(
@@ -1154,12 +1154,11 @@ void main() {
       );
       await rt.dispose(); // disposed BEFORE the run: worker must not send.
       final report = await rt.onStartup();
-      expect(report, isA<KitchenSpoolRunWorked>());
-      final worked = report as KitchenSpoolRunWorked;
-      expect(worked.worker.stoppedReason, KitchenWorkerStopReason.disposed);
-      expect(worked.worker.claimed, 0);
+      expect(report, isA<KitchenSpoolRunBlocked>());
+      expect(report.detail, 'ordinary_print_contained');
+      expect(transport.calls, isEmpty, reason: 'no pull after disposal');
       expect(workerNetworkCalls, isEmpty, reason: 'no send after disposal');
-      // The run reopened the DB handle; release it for the tearDown delete.
+      expect(await factory().spoolFileExists(), isFalse);
       await rt.dispose();
     });
 

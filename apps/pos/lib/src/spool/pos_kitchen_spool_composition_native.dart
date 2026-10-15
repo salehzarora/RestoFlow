@@ -60,6 +60,8 @@ import '../data/operational_snapshot_store.dart'
     show PosOperationalSnapshotLoaded, posOperationalSnapshotStoreProvider;
 import '../state/pos_sync_scope_provider.dart' show posSyncScopeProvider;
 import 'kitchen_mode_cache_seed.dart' show readVerifiedCachedMode;
+import 'kitchen_contained_ack.dart';
+import 'kitchen_print_containment.dart';
 import '../print/native_print_bridges.dart'
     show kPosNativePrintTimeout, posPrinterDestinationSendGateProvider;
 import '../state/pos_bluetooth_printer_config.dart'
@@ -87,7 +89,10 @@ import 'kitchen_ticket_renderer.dart';
 import 'kitchen_void_reconciliation.dart' show KitchenEditSupersessionEvidence;
 import 'pos_kitchen_spool_capability.dart';
 import 'pos_kitchen_spool_composition.dart'
-    show posKitchenSpoolCapabilityProvider, posKitchenSpoolRuntimeProvider;
+    show
+        posKitchenSpoolCapabilityProvider,
+        posKitchenSpoolRuntimeProvider,
+        posKitchenReadinessHeartbeatProvider;
 import 'pos_kitchen_spool_hooks.dart';
 import 'online_order_print_hooks.dart';
 import 'pos_kitchen_spool_platform.dart';
@@ -117,12 +122,42 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
   // A pairing/scope transition is a DIFFERENT world: rebuild (and thereby
   // dispose) the runtime whenever the device context changes.
   final deviceContext = ref.watch(posDeviceContextProvider);
+  if (deviceContext == null ||
+      !deviceContext.isPaired ||
+      deviceContext.restaurantId == null)
+    return null;
   final secretStore = FlutterSecureDeviceSessionStoreProvider.of();
   final pinSession = ref.watch(posSyncSessionProvider);
   var current = true;
   ref.onDispose(() => current = false);
+  final containment = KitchenPrintContainment(
+    context: deviceContext,
+    secretStore: secretStore,
+    transport: transport,
+    isCurrent: () => current,
+    isOffline: () =>
+        ref.read(posOfflineModeProvider).phase == PosOfflinePhase.offlineCached,
+  );
+  final containedAck = KitchenContainedAck(
+    transport: transport,
+    secretStore: secretStore,
+    authorize: containment.authorizeOperation,
+  );
   final connector = ref.watch(bluetoothPrinterConnectorProvider);
   final runtime = PosKitchenSpoolRuntime(
+    ordinaryRunAllowed: containment.allowsOrdinary,
+    targetRunAllowed: containment.allowsTarget,
+    jobPermission: containment.permissionForJob,
+    dispatchAllowed: containment.allowsDispatch,
+    authorizeOperation: containment.authorizeOperation,
+    acknowledge: containedAck.acknowledge,
+    onTargetSpoolInitialized: () async {
+      if (!current) return;
+      final heartbeat = ref.read(posKitchenReadinessHeartbeatProvider);
+      if (heartbeat is KitchenReadinessHeartbeat) {
+        await reportFreshTargetSpoolReadiness(heartbeat);
+      }
+    },
     platform: platform,
     deviceContext: () => ref.read(posDeviceContextProvider),
     secretStore: secretStore,
@@ -448,6 +483,16 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
       // The provider container may already be disposed mid-run teardown.
     }
   });
+}
+
+/// The first bounded call drains a heartbeat that may already have sampled
+/// pre-initialization storage. The second must sample AFTER initialization.
+/// Neither call pulls dispatches or reaches a transport sender.
+Future<void> reportFreshTargetSpoolReadiness(
+  KitchenReadinessHeartbeat heartbeat,
+) async {
+  await heartbeat.reportNow(trigger: 'target_spool_wait_prior_report');
+  await heartbeat.reportNow(trigger: 'target_spool_initialized');
 }
 
 /// ORDER-EDIT-001F — whether the CURRENT spool runtime of [container] holds a

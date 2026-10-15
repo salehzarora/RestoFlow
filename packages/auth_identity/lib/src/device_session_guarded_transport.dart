@@ -3,7 +3,7 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 /// Stops NEW protected RPCs after an unproven or rejected device-session
 /// verdict. Recovery calls remain available. This is retryable transport
 /// evidence, never human-session rejection or POS AUTH_HOLD.
-class DeviceSessionGuardedTransport implements SyncRpcTransport {
+class DeviceSessionGuardedTransport implements GuardedKitchenAckTransport {
   DeviceSessionGuardedTransport(this._inner);
 
   final SyncRpcTransport _inner;
@@ -31,5 +31,20 @@ class DeviceSessionGuardedTransport implements SyncRpcTransport {
       );
     }
     return _inner.invoke(function, params);
+  }
+
+  @override
+  Future<Object?> invokeGuardedKitchenAck(
+    Map<String, dynamic> params, {
+    required bool Function() isCurrent,
+  }) {
+    final inner = _inner;
+    if (_blocked || inner is! GuardedKitchenAckTransport) {
+      return Future.error(const KitchenAckDispatchDeferred());
+    }
+    return inner.invokeGuardedKitchenAck(
+      params,
+      isCurrent: () => !_blocked && isCurrent(),
+    );
   }
 }

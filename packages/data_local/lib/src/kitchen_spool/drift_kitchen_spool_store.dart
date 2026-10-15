@@ -80,6 +80,12 @@ abstract interface class KitchenSpoolStore {
   /// winner), while a strictly LATER claim may re-adopt a stale `queued`
   /// row (restart recovery). There is deliberately NO direct claim into
   /// `printing`.
+  ///
+  /// The guarded POS worker may exclude exact policy-held QUEUED IDs from
+  /// destination ownership without changing those rows. The store verifies
+  /// each excluded row has the same full scope as this job and is still
+  /// queued. Printing rows are NEVER excludable. Omitted exclusions preserve
+  /// the original single-flight contract for all existing callers.
   Future<KitchenSpoolJobRow?> claimRunnableForQueued(
     String localJobId, {
     required String organizationId,
@@ -87,13 +93,18 @@ abstract interface class KitchenSpoolStore {
     required String branchId,
     required String deviceId,
     required DateTime now,
+    Set<String> policyExcludedQueuedJobIds = const {},
   });
 
   /// KITCHEN-MODE-001C2C (LOCKED DECISION 2): `queued` → `printing`,
   /// invoked IMMEDIATELY before the transport boundary. Source state is
   /// `queued` ONLY; re-verifies the ack-complete gate and destination
   /// single-flight (no other queued/printing row on the same fingerprint).
-  Future<bool> markPrinting(String localJobId, DateTime now);
+  Future<bool> markPrinting(
+    String localJobId,
+    DateTime now, {
+    Set<String> policyExcludedQueuedJobIds = const {},
+  });
 
   /// Atomic `printing` → `transportAccepted` + pending `transport_accepted`
   /// acknowledgement in ONE conditional UPDATE (no crash window between the
@@ -437,8 +448,15 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
   /// Destination single-flight predicate (LOCKED DECISION 1): another row
   /// with the SAME non-null fingerprint in `queued` OR `printing` blocks a
   /// claim/print for this destination. The old printing-only predicate was
-  /// insufficient — a second job could stage behind a queued holder.
-  Future<bool> _destinationBusy(String fingerprint, String localJobId) async {
+  /// insufficient — a second job could stage behind a queued holder. A
+  /// policy-held queued row may be ignored only by its exact ID and full
+  /// scope; its evidence remains unchanged and its worker's gate guard must
+  /// refuse it. A printing row always owns its destination.
+  Future<bool> _destinationBusy(
+    String fingerprint,
+    KitchenSpoolJobRow forJob,
+    Set<String> policyExcludedQueuedJobIds,
+  ) async {
     final busy =
         await (_db.select(_t)..where(
               (t) =>
@@ -447,10 +465,18 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
                     KitchenSpoolJobStatus.queued,
                     KitchenSpoolJobStatus.printing,
                   ]) &
-                  t.localJobId.equals(localJobId).not(),
+                  t.localJobId.equals(forJob.localJobId).not(),
             ))
             .get();
-    return busy.isNotEmpty;
+    return busy.any(
+      (row) =>
+          row.status != KitchenSpoolJobStatus.queued ||
+          !policyExcludedQueuedJobIds.contains(row.localJobId) ||
+          row.organizationId != forJob.organizationId ||
+          row.restaurantId != forJob.restaurantId ||
+          row.branchId != forJob.branchId ||
+          row.deviceId != forJob.deviceId,
+    );
   }
 
   @override
@@ -461,6 +487,7 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
     required String branchId,
     required String deviceId,
     required DateTime now,
+    Set<String> policyExcludedQueuedJobIds = const {},
   }) {
     // Same shape as the RF071-B1 print-spool claim: one conditional UPDATE
     // in a transaction is the atomic duplicate-claim guard — PLUS the
@@ -473,7 +500,13 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
       // Executable jobs REQUIRE a pinned destination fingerprint; a
       // blocked-shaped row (null fingerprint) is never claimable.
       if (fingerprint == null) return null;
-      if (await _destinationBusy(fingerprint, localJobId)) return null;
+      if (await _destinationBusy(
+        fingerprint,
+        row,
+        policyExcludedQueuedJobIds,
+      )) {
+        return null;
+      }
       final updated =
           await (_db.update(_t)..where(
                 (t) =>
@@ -509,7 +542,11 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
   }
 
   @override
-  Future<bool> markPrinting(String localJobId, DateTime now) {
+  Future<bool> markPrinting(
+    String localJobId,
+    DateTime now, {
+    Set<String> policyExcludedQueuedJobIds = const {},
+  }) {
     // LOCKED DECISION 2: `queued` ONLY, immediately before the transport
     // boundary — with the ack gate and the destination single-flight both
     // re-verified (a superseded/blocked row is no longer `queued`, so
@@ -519,7 +556,13 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
       if (row == null) return false;
       final fingerprint = row.destinationFingerprint;
       if (fingerprint == null) return false;
-      if (await _destinationBusy(fingerprint, localJobId)) return false;
+      if (await _destinationBusy(
+        fingerprint,
+        row,
+        policyExcludedQueuedJobIds,
+      )) {
+        return false;
+      }
       final updated =
           await (_db.update(_t)..where(
                 (t) =>

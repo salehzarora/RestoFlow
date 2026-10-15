@@ -19,10 +19,11 @@
 library;
 
 import 'sync_rpc_transport.dart';
+import 'guarded_kitchen_ack_transport.dart';
 
 /// A [SyncRpcTransport] that holds all calls offline until [upgrade]d with the
 /// real authenticated transport, then delegates permanently.
-class UpgradableSyncTransport implements SyncRpcTransport {
+class UpgradableSyncTransport implements GuardedKitchenAckTransport {
   SyncRpcTransport? _real;
   final List<void Function()> _onUpgrade = <void Function()>[];
   int _heldCallCount = 0;
@@ -66,5 +67,20 @@ class UpgradableSyncTransport implements SyncRpcTransport {
       );
     }
     return real.invoke(function, params);
+  }
+
+  @override
+  Future<Object?> invokeGuardedKitchenAck(
+    Map<String, dynamic> params, {
+    required bool Function() isCurrent,
+  }) {
+    final real = _real;
+    if (real is! GuardedKitchenAckTransport) {
+      return Future.error(const KitchenAckDispatchDeferred());
+    }
+    return real.invokeGuardedKitchenAck(
+      params,
+      isCurrent: () => identical(_real, real) && isCurrent(),
+    );
   }
 }
