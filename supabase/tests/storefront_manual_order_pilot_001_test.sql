@@ -58,7 +58,8 @@ create function pg_temp.mp_counts() returns jsonb language sql security definer 
   'dispatches',(select count(*) from public.kitchen_print_dispatches where organization_id=pg_temp.mp_org()),
   'attempts',(select count(*) from public.web_order_print_attempts where organization_id=pg_temp.mp_org()),
   'channel',(select to_jsonb(c) from public.web_order_channel_settings c where branch_id=pg_temp.mp_branch()),
-  'pilot',(select to_jsonb(p) from app.storefront_manual_order_pilots p where branch_id=pg_temp.mp_branch()))
+  'pilots',(select coalesce(jsonb_agg(to_jsonb(p) order by p.id),'[]'::jsonb)
+   from app.storefront_manual_order_pilots p where branch_id=pg_temp.mp_branch()))
 $$;
 create temp table _mp_results(label text primary key,r jsonb not null);
 grant all on _mp_results to service_role;
@@ -245,7 +246,28 @@ select ok((select r#>>'{first,status}'='pending' and r->>'expired'='true'
  and r->>'requests'='1' and r->>'events'='1' from _mp_results where label='expired_replay'),
  'same identity recovers after real pilot expiry without reopening admission or creating another request/event');
 
-select pg_temp.mp_insert_pilot();
+-- An expired, explicitly closed UNUSED window remains byte-identical when a
+-- new bounded window is installed. The branch still owns only one lifetime
+-- successful-request budget; a new row never resets that budget.
+create temp table _mp_prior_window as select pg_temp.mp_insert_pilot(false,
+ clock_timestamp()-interval '2 minutes',clock_timestamp()-interval '1 minute') id;
+update app.storefront_manual_order_pilots set closed_at=clock_timestamp()
+where id=(select id from _mp_prior_window);
+insert into _mp_results select 'prior_window_snapshot',to_jsonb(p)
+from app.storefront_manual_order_pilots p where id=(select id from _mp_prior_window);
+create temp table _mp_window_bounds as select clock_timestamp() t;
+create temp table _mp_current_window as select pg_temp.mp_insert_pilot(true,t,t+interval '15 minutes') id
+from _mp_window_bounds;
+select is((select count(*)::int from app.storefront_manual_order_pilots),2,
+ 'expired unused window permits one fresh bounded window without replacing history');
+select is((select to_jsonb(p) from app.storefront_manual_order_pilots p where id=(select id from _mp_prior_window)),
+ (select r from _mp_results where label='prior_window_snapshot'),
+ 'renewal leaves the full old window row byte-identical');
+select throws_ok($$select pg_temp.mp_insert_pilot()$$,'42501',null,
+ 'a second enabled window cannot coexist with the renewed window');
+select throws_ok($$update app.storefront_manual_order_pilots set enabled=true
+ where id=(select id from _mp_prior_window)$$,'42501',null,
+ 'renewal does not rearm the expired historical window');
 select is(public.storefront_menu('mapsburger')#>>'{service,ordering_enabled}','true',
  'exact open/pickup/BLOCKED scope with unconsumed active pilot advertises checkout');
 select is(public.storefront_menu('manual-pilot-foreign')#>>'{service,ordering_enabled}','false',
@@ -283,7 +305,8 @@ select is(pg_temp.mp_submit(4,jsonb_set(pg_temp.mp_order(),'{items,0,menu_item_i
  to_jsonb(pg_temp.mp_id('item_b')::text)))->>'error','item_unavailable','cross-tenant item cannot be purchased');
 reset role;
 select ok((select enabled and consumed_request_id is null and consumed_at is null
- from app.storefront_manual_order_pilots),'pricing/validation failures leave the one-request pilot budget unconsumed');
+ from app.storefront_manual_order_pilots where id=(select id from _mp_current_window)),
+ 'pricing/validation failures leave the one-request pilot budget unconsumed');
 select is((select count(*)::int from web_order_requests where organization_id=pg_temp.mp_org()),0,
  'failed pricing creates no pending request');
 
@@ -332,7 +355,8 @@ select is((select r#>>'{totals,grand_total_minor}' from _mp_results where label=
 reset role;
 select ok((select not enabled and consumed_client_request_id=pg_temp.mp_client(5)
  and consumed_request_id=(select id from web_order_requests where client_request_id=pg_temp.mp_client(5))
- and consumed_at is not null and closed_at=consumed_at from app.storefront_manual_order_pilots),
+ and consumed_at is not null and closed_at=consumed_at from app.storefront_manual_order_pilots
+ where id=(select id from _mp_current_window)),
  'success atomically consumes the exact request identity and permanently closes the pilot');
 select ok((select not submission_enabled from web_order_channel_settings where branch_id=pg_temp.mp_branch()),
  'same successful transaction disables the scoped channel');
@@ -357,9 +381,17 @@ select is((select count(*)::int from web_order_requests where organization_id=pg
  'replay/conflict/second-UUID attempts leave exactly one request');
 select is((select count(*)::int from web_order_request_events where organization_id=pg_temp.mp_org()),1,
  'recovery never creates a second received event');
+select is((select count(*)::int from app.storefront_manual_order_pilots where consumed_request_id is not null),1,
+ 'one successful request total is recorded across every historical and current window');
+select throws_ok($$select pg_temp.mp_insert_pilot()$$,'42501',null,
+ 'a consumed branch budget cannot be renewed even when every window is closed');
+select is((select to_jsonb(p) from app.storefront_manual_order_pilots p where id=(select id from _mp_prior_window)),
+ (select r from _mp_results where label='prior_window_snapshot'),
+ 'success, replay and refused renewal preserve the full expired historical row');
 select throws_ok($$update app.storefront_manual_order_pilots set enabled=true$$,'42501',null,
  'operator cannot reopen a disabled/consumed pilot slot');
-select throws_ok($$update app.storefront_manual_order_pilots set consumed_client_request_id=pg_temp.mp_client(99)$$,
+select throws_ok($$update app.storefront_manual_order_pilots set consumed_client_request_id=pg_temp.mp_client(99)
+ where id=(select id from _mp_current_window)$$,
  '42501',null,'consumed client identity is immutable');
 select throws_ok($$update app.storefront_manual_order_pilots set expires_at=expires_at+interval '1 minute'$$,
  '42501',null,'operator cannot silently extend an installed pilot window');

@@ -124,12 +124,18 @@ const snapshotSql = `select jsonb_build_object(
  'dispatches',(select count(*) from public.kitchen_print_dispatches where organization_id=${literal(org)}),
  'attempts',(select count(*) from public.web_order_print_attempts where organization_id=${literal(org)}),
  'channel',(select to_jsonb(c) from public.web_order_channel_settings c where branch_id=${literal(branch)}),
- 'pilot',(select to_jsonb(p) from app.storefront_manual_order_pilots p where branch_id=${literal(branch)}),
+ 'pilot',(select to_jsonb(p) from app.storefront_manual_order_pilots p where branch_id=${literal(branch)}
+   order by (consumed_request_id is not null) desc,created_at desc,id limit 1),
+ 'all_pilot_windows',(select jsonb_agg(to_jsonb(p) order by p.id)
+   from app.storefront_manual_order_pilots p where branch_id=${literal(branch)}),
  'mode',app.kitchen_print_containment_state(${literal(org)}::uuid,${literal(restaurant)}::uuid,${literal(branch)}::uuid)->>'mode')::text;`;
 const fixturePath = new URL("../storefront_manual_order_pilot_001_test.sql", import.meta.url);
 const fixture = (await readFile(fixturePath, "utf8")).split("-- MP_FIXTURE_END:")[0];
 assert.ok(fixture.startsWith(`-- ${WORK_ID}:`) && fixture.includes("begin;")
   && !fixture.includes("select ok("), "Use only this task's synthetic fixture prefix");
+const renewalMigration = await readFile(new URL(
+  "../../migrations/20261016184616_bizbot_storefront_manual_order_pilot_001_unused_window_renewal.sql", import.meta.url), "utf8");
+assert.ok(renewalMigration.startsWith(`-- ${WORK_ID}:`), "Use only the task's additive unused-window migration");
 
 async function makeClone(kind) {
   const db = `manual_pilot_001_${runId}_${kind}`;
@@ -142,6 +148,9 @@ async function makeClone(kind) {
   // an inspectable clone; cleanup refuses to drop without the matching marker.
   owned.set(db, tag);
   await command(`comment on database ${identifier(db)} is ${literal(tag)};`, "postgres");
+  // Apply only to this newly generated owned clone. The preserved template
+  // retains its original schema and is never migrated, seeded or reset.
+  await command(renewalMigration, db);
   await command(`${fixture}\ncommit;`, db);
   return db;
 }
@@ -153,6 +162,16 @@ async function insertPilot(db, seconds) {
    values(${literal(org)}::uuid,${literal(restaurant)}::uuid,${literal(branch)}::uuid,true,
    clock_timestamp()-interval '1 second',clock_timestamp()+interval '${seconds} seconds',
    ${literal(salt)},${literal(contactHash)},${literal(`${WORK_ID}:${runId}`)});`, db);
+}
+
+async function insertClosedUnusedWindow(db) {
+  return oneJson(await command(`insert into app.storefront_manual_order_pilots(
+   organization_id,restaurant_id,branch_id,enabled,starts_at,expires_at,closed_at,
+   contact_salt,contact_hash,operator_reference)
+   values(${literal(org)}::uuid,${literal(restaurant)}::uuid,${literal(branch)}::uuid,false,
+   clock_timestamp()-interval '2 minutes',clock_timestamp()-interval '1 minute',clock_timestamp(),
+   ${literal(salt)},${literal(contactHash)},${literal(`${WORK_ID}:${runId}:closed-unused`)})
+   returning to_jsonb(storefront_manual_order_pilots)::text;`, db));
 }
 
 async function waitFor(check, message, maxMs = 10_000) {
@@ -204,6 +223,7 @@ try {
 
   const budgetDb = await makeClone("budget");
   const budget = await group(budgetDb, "budget");
+  const oldBudgetWindow = await insertClosedUnusedWindow(budgetDb);
   await insertPilot(budgetDb, 120);
   const first = oneJson(await budget.holder.query(`begin; set local role service_role;
    set local statement_timeout='15s'; ${submit(101)}`));
@@ -221,33 +241,42 @@ try {
   assert.equal(state.pilot.consumed_client_request_id, client(101));
   assert.equal(state.channel.submission_enabled, false);
   assert.equal(state.mode, "blocked");
+  assert.equal(state.all_pilot_windows.length, 2);
+  assert.deepEqual(state.all_pilot_windows.find((p) => p.id === oldBudgetWindow.id), oldBudgetWindow,
+    "The closed unused window must remain byte-identical through concurrent consumption");
   const replay = oneJson(await budget.contender.query(submit(101)));
   assert.equal(replay.replayed, true);
   evidence.cases.push({ name: "distinct identities serialize on one pilot budget", passed: true,
     lockWaitObserved: true, newRequests: state.requests, events: state.events, secondRefused: true,
-    closedPilot: true, disabledChannel: true, originalReplay: true, canonicalOrders: 0, dispatches: 0, printAttempts: 0 });
+    closedPilot: true, disabledChannel: true, originalReplay: true, historicalWindows: 1,
+    priorWindowUnchanged: true, lifetimeConsumedWindows: state.all_pilot_windows.filter((p) => p.consumed_request_id !== null).length,
+    canonicalOrders: 0, dispatches: 0, printAttempts: 0 });
   for (const session of [budget.holder, budget.contender, budget.observer]) session.stop();
 
   const expiryDb = await makeClone("expiry");
   const expiry = await group(expiryDb, "expiry");
+  const oldExpiryWindow = await insertClosedUnusedWindow(expiryDb);
   await insertPilot(expiryDb, 5);
-  await expiry.holder.query("begin; select id from app.storefront_manual_order_pilots for update;");
+  await expiry.holder.query("begin; select id from app.storefront_manual_order_pilots where enabled for update;");
   const before = oneJson(await expiry.observer.query(snapshotSql));
   const latePending = expiry.contender.query(`set role service_role; set statement_timeout='15s'; ${submit(201)}`);
   latePending.catch(() => {});
   await witnessWait(expiry.observer, expiry.contenderPid, expiry.holderPid, latePending);
   // Poll the actual database deadline: no guessed delay substitutes for expiry.
   await waitFor(async () => oneJson(await expiry.observer.query(`select to_jsonb(clock_timestamp()>=expires_at)::text
-   from app.storefront_manual_order_pilots;`)) === true, "Pilot expiry was not observed", 10_000);
+   from app.storefront_manual_order_pilots where enabled;`)) === true, "Pilot expiry was not observed", 10_000);
   await expiry.holder.query("commit;");
   const late = oneJson(await latePending);
   assert.equal(late.error, "ordering_unavailable");
   const after = oneJson(await expiry.observer.query(snapshotSql));
   assert.deepEqual(after, before, "Expiry after actual pilot-lock wait must have no mutation effects");
+  assert.deepEqual(after.all_pilot_windows.find((p) => p.id === oldExpiryWindow.id), oldExpiryWindow,
+    "Expiry while waiting must not rewrite the previous unused window");
   assert.equal((await expiry.observer.query("select public.storefront_menu('mapsburger')#>>'{service,ordering_enabled}';"))[0], "false");
   evidence.cases.push({ name: "pilot expiry while waiting for row lock", passed: true,
     lockWaitObserved: true, serverDeadlineObserved: true, refused: true,
-    allStateUnchanged: true, requests: 0, events: 0, canonicalOrders: 0, dispatches: 0, printAttempts: 0 });
+    allStateUnchanged: true, priorWindowUnchanged: true, historicalWindows: 1,
+    requests: 0, events: 0, canonicalOrders: 0, dispatches: 0, printAttempts: 0 });
 } catch (error) {
   failure = error;
 } finally {

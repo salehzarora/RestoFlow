@@ -21,6 +21,10 @@ content is unchanged. No native application or APK changes.
 - First successful request atomically consumes the lifetime budget and disables
   the pilot/channel. Distinct UUIDs cannot create another request. Exact original
   SQL replay and independent customer status remain recoverable after closure.
+- A closed, unused window may be followed by a fresh window of at most 15
+  minutes. Every old row and deadline remain immutable. Only one window may be
+  enabled, and one successful request consumes the branch's budget across all
+  windows. A consumed window cannot be renewed.
 - Profile browse-only CHECK and stored ordering/delivery flags stay intact.
   The reader overrides only the existing public ordering bit while pilot/open/
   pickup/channel/BLOCKED predicates hold. No public JSON field is added.
@@ -56,18 +60,27 @@ Existing adapter/renderer tests cover aggregate counts and summary placement.
 3. Reconfirm owner HOME v62/PIN/open shift, saved reachable HOME printer with
    paper, all other capable clients stopped. Require 625 unchanged holds, including
    the original624 and the separately owner-approved exact additional dispatch.
-   Raw BLOCKED policy1258 / effective revision1260 is the updated baseline, with
-   no unheld candidates or pending request. Preserve
+   Raw BLOCKED policy1258 / effective revision1260 is the updated baseline.
+   One separately observed ordinary HOME dispatch remains untouched:
+   `6759a993-a2b2-4e4b-ba77-1cabaa527e78`, full-row MD5
+   `77820902516d988eced9db0e67d380b5`. Its physical outcome is UNKNOWN.
+   Exact target authorization excludes that row; independent direct/local POS
+   printing has separate authority. Require no other unheld candidate, no
+   pending request and HOME idle except the one Inbox acceptance. Preserve
    the failed v61 and already printed v62 request/order/dispatch/attempt unchanged.
 4. Privately hash only the approved retained contact. Enable only the pilot Edge
    gate (general/test=false, test permit absent). Under the exclusive branch
    containment lock, revalidate protection and insert the one bounded initially
    enabled pilot record plus enable only the existing exact branch channel.
-   Disabled records cannot be rearmed. Never relax the profile CHECK.
+   Disabled records cannot be rearmed. For renewal, apply only additive
+   migration 20261016184616 after its focused checks/review/CI; preserve the
+   expired row byte-identically, verify no consumed identity and insert a new
+   bounded row under the same lock. Never relax the profile CHECK.
 5. Verify public menu ordering=true, then allow existing ISR to refresh and verify
-   actual website cart/checkout availability without submitting. Do not tell the
+   actual nonempty website cart/checkout form availability without submitting.
+   Do not tell the
    owner to order based only on the database bit; require the rendered checkout
-   to be available with sufficient time remaining in the ten-minute window.
+   to be available with sufficient time remaining in the bounded window.
    Give owner https://menu.bizbot.systems/s/mapsburger/menu.
    Owner selects products, enters approved contact and submits manually once.
 6. Observe atomic pilot/channel closure, disable the Edge pilot gate and verify
