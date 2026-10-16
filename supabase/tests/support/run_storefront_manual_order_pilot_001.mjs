@@ -140,6 +140,9 @@ assert.ok(renewalMigration.startsWith(`-- ${WORK_ID}:`), "Use only the task's ad
 const extraAllowanceMigration = await readFile(new URL(
   "../../migrations/20261016202838_bizbot_storefront_manual_order_pilot_001_additional_expired_allowance.sql", import.meta.url), "utf8");
 assert.ok(extraAllowanceMigration.startsWith(`-- ${WORK_ID}:`), "Use only the task's additional-allowance migration");
+const unusedRetryMigration = await readFile(new URL(
+  "../../migrations/20261016215837_bizbot_storefront_manual_order_pilot_001_unused_extra_retry.sql", import.meta.url), "utf8");
+assert.ok(unusedRetryMigration.startsWith(`-- ${WORK_ID}:`), "Use only the task's unused-extra retry migration");
 
 async function makeClone(kind) {
   const db = `manual_pilot_001_${runId}_${kind}`;
@@ -156,6 +159,7 @@ async function makeClone(kind) {
   // retains its original schema and is never migrated, seeded or reset.
   await command(renewalMigration, db);
   await command(extraAllowanceMigration, db);
+  await command(unusedRetryMigration, db);
   await command(`${fixture}\ncommit;`, db);
   return db;
 }
@@ -223,6 +227,31 @@ async function installExtraFixture(db, seconds) {
     update public.web_order_channel_settings set submission_enabled=true where branch_id=${literal(branch)};
    end $$; commit;`, db);
   return { parent, extraId };
+}
+
+async function installUnusedRetryFixture(db, seconds) {
+  const extra = await installExtraFixture(db, 120);
+  const retryId = randomUUID();
+  const oldExtra = oneJson(await command(`begin;
+   update app.storefront_manual_order_pilots set enabled=false,closed_at=clock_timestamp()
+    where id=${literal(extra.extraId)};
+   select to_jsonb(p)::text from app.storefront_manual_order_pilots p where id=${literal(extra.extraId)};
+   commit;`, db));
+  await command(`begin;
+   select app.lock_kitchen_print_containment(${literal(branch)}::uuid,true);
+   do $$ declare t timestamptz:=clock_timestamp(); begin
+    insert into app.storefront_manual_order_pilot_unused_retry(
+     pilot_id,unused_extra_pilot_id,organization_id,restaurant_id,branch_id,
+     starts_at,expires_at,operator_reference)
+    values(${literal(retryId)},${literal(extra.extraId)},${literal(org)},${literal(restaurant)},
+     ${literal(branch)},t,t+interval '${seconds} seconds',${literal(`${WORK_ID}:${runId}:retry`)});
+    insert into app.storefront_manual_order_pilots(id,organization_id,restaurant_id,branch_id,
+     enabled,starts_at,expires_at,contact_salt,contact_hash,operator_reference)
+    values(${literal(retryId)},${literal(org)},${literal(restaurant)},${literal(branch)},true,
+     t,t+interval '${seconds} seconds',${literal(salt)},${literal(contactHash)},
+     ${literal(`${WORK_ID}:${runId}:retry`)});
+   end $$; commit;`, db);
+  return { ...extra, retryId, oldExtra };
 }
 
 async function waitFor(check, message, maxMs = 10_000) {
@@ -377,6 +406,70 @@ try {
   evidence.cases.push({ name: "extra authorization expiry during actual row-lock wait", passed: true,
     lockWaitObserved: true, serverDeadlineObserved: true, allStateUnchanged: true,
     requests: 1, receivedEvents: 1, canonicalOrders: 0, dispatches: 0, printAttempts: 0 });
+
+  const retryDb = await makeClone("retry");
+  const retryFixture = await installUnusedRetryFixture(retryDb, 120);
+  const retry = await group(retryDb, "retry");
+  const retryFirst = oneJson(await retry.holder.query(`begin; set local role service_role;
+   set local statement_timeout='15s'; ${submit(402)}`));
+  assert.equal(retryFirst.ok, true); assert.equal(retryFirst.replayed, false);
+  const retrySecondPending = retry.contender.query(`set role service_role; set statement_timeout='15s'; ${submit(403)}`);
+  retrySecondPending.catch(() => {});
+  await witnessWait(retry.observer, retry.contenderPid, retry.holderPid, retrySecondPending);
+  await retry.holder.query("commit;");
+  assert.equal(oneJson(await retrySecondPending).error, "ordering_unavailable");
+  const retryState = oneJson(await retry.observer.query(snapshotSql));
+  assert.deepEqual([retryState.requests,retryState.events,retryState.orders,retryState.decisions,
+    retryState.dispatches,retryState.attempts], [2,2,0,0,0,0]);
+  assert.equal(retryState.channel.submission_enabled, false);
+  assert.deepEqual(retryState.all_pilot_windows.find((p) => p.id === retryFixture.extraId), retryFixture.oldExtra,
+    "Replacement success must preserve the abandoned extra window byte-identically");
+  assert.deepEqual(retryState.all_pilot_windows.find((p) => p.id === retryFixture.parent.pilot.id), retryFixture.parent.pilot);
+  assert.equal(oneJson(await retry.contender.query(submit(301))).replayed, true);
+  assert.equal(oneJson(await retry.contender.query(submit(402))).replayed, true);
+  evidence.cases.push({ name: "unused retry shares ONE additional budget under concurrent identities", passed: true,
+    lockWaitObserved: true, totalRequests: 2, totalReceivedEvents: 2, thirdRefused: true,
+    abandonedExtraUnchanged: true, parentPilotUnchanged: true, oldReplay: true, newReplay: true,
+    disabledChannel: true, canonicalOrders: 0, dispatches: 0, printAttempts: 0 });
+  for (const session of [retry.holder,retry.contender,retry.observer]) session.stop();
+
+  const retryExpiryDb = await makeClone("retryexpiry");
+  await installUnusedRetryFixture(retryExpiryDb, 5);
+  const retryExpiry = await group(retryExpiryDb, "retryexpiry");
+  await retryExpiry.holder.query("begin; select id from app.storefront_manual_order_pilots where enabled for update;");
+  const retryExpiryBefore = oneJson(await retryExpiry.observer.query(snapshotSql));
+  const retryLatePending = retryExpiry.contender.query(`set role service_role; set statement_timeout='15s'; ${submit(404)}`);
+  retryLatePending.catch(() => {});
+  await witnessWait(retryExpiry.observer,retryExpiry.contenderPid,retryExpiry.holderPid,retryLatePending);
+  await waitFor(async () => oneJson(await retryExpiry.observer.query(`select to_jsonb(clock_timestamp()>=expires_at)::text
+   from app.storefront_manual_order_pilots where enabled;`)) === true,"Retry expiry was not observed",10_000);
+  await retryExpiry.holder.query("commit;");
+  assert.equal(oneJson(await retryLatePending).error,"ordering_unavailable");
+  assert.deepEqual(oneJson(await retryExpiry.observer.query(snapshotSql)),retryExpiryBefore,
+    "Retry expiry after actual lock wait must preserve every historical row and counter");
+  assert.equal((await retryExpiry.observer.query("select public.storefront_menu('mapsburger')#>>'{service,ordering_enabled}';"))[0],"false");
+  evidence.cases.push({ name: "unused retry expiry during actual row-lock wait", passed: true,
+    lockWaitObserved: true, serverDeadlineObserved: true, allStateUnchanged: true,
+    requests: 1, receivedEvents: 1, canonicalOrders: 0, dispatches: 0, printAttempts: 0 });
+
+  const retryCloseDb = await makeClone("retryclose");
+  await installUnusedRetryFixture(retryCloseDb, 120);
+  const retryClose = await group(retryCloseDb,"retryclose");
+  await retryClose.holder.query(`begin;
+   select app.lock_kitchen_print_containment(${literal(branch)}::uuid,true);
+   update app.storefront_manual_order_pilots set enabled=false,closed_at=clock_timestamp() where enabled;
+   update public.web_order_channel_settings set submission_enabled=false where branch_id=${literal(branch)};`);
+  const expectedClosed = oneJson(await retryClose.holder.query(snapshotSql));
+  const afterClosePending = retryClose.contender.query(`set role service_role; set statement_timeout='15s'; ${submit(405)}`);
+  afterClosePending.catch(() => {});
+  await witnessWait(retryClose.observer,retryClose.contenderPid,retryClose.holderPid,afterClosePending);
+  await retryClose.holder.query("commit;");
+  assert.equal(oneJson(await afterClosePending).error,"ordering_unavailable");
+  assert.deepEqual(oneJson(await retryClose.observer.query(snapshotSql)),expectedClosed,
+    "Submission waiting behind operator closure must create no request or mutation");
+  evidence.cases.push({ name: "explicit unused retry closure wins against waiting submission", passed: true,
+    lockWaitObserved: true, allClosedStateUnchanged: true, requests: 1, receivedEvents: 1,
+    canonicalOrders: 0, dispatches: 0, printAttempts: 0 });
 } catch (error) {
   failure = error;
 } finally {

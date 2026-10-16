@@ -152,3 +152,36 @@ Reconfirm owner/cart presence and remaining service time BEFORE opening this
 window. First successful browser submission atomically closes pilot/channel;
 then disable the Edge pilot flag and verify closure before target-only policy.
 An expired predecessor remains preserved and cannot be accepted or reused.
+
+## One replacement for the unused additional window
+
+The additional window was explicitly closed without creating a request after
+the owner reported a different contact spelling/phone. It remains immutable.
+Migration `20261016215837` installs only an EMPTY/default-OFF singleton retry
+authorization and extends the existing private allowance predicate. It does
+not activate checkout, modify the submit RPC or add a successful-order budget.
+
+The replacement must bind the exact closed, wholly unconsumed extra pilot and
+its original allowance, identical approved contact salt/hash, exact new pilot
+UUID, Maps Burger scope, operator reference and a new <=15-minute interval.
+Authorization and the future pilot commit together under the exclusive branch
+fence; BLOCKED and no active pending request are required. Old authorization,
+pilot deadlines, requests and audit rows remain unchanged. A consumed extra,
+orphan binding, changed contact, second retry or further successful request is
+denied. The parent plus the original-extra/replacement pair can create only
+two total requests: the expired predecessor and ONE additional request.
+
+Before opening this last replacement, require the owner to have the exact
+approved contact and cart ready. Use the existing new-order/recovery controls;
+never reset an uncertain browser request identity. Open only the short window,
+verify rendered checkout, and have the owner submit once. A rejected contact
+does not consume a request; preserve the same browser identity and reconcile.
+Server expiry, the one-success fence and explicit close remain authoritative.
+After a genuine pending request is identified, close all new intake before
+binding target-only authority. Any acceptance and paper observation remain
+manual owner actions. No automatic renewal or unrestricted ordering is added.
+
+Focused verification: new retry pgTAP plus unchanged pilot/additional-allowance
+regressions, actual concurrent writer/expiry/operator-close races, private ACL
+and history retention checks, one independent review and normal CI. No Inbox,
+audio, SQLite, Bluetooth or APK baseline test is repeated.
