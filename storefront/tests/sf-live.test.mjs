@@ -11,6 +11,7 @@ import { NOT_FOUND_ENVELOPE, PAYLOAD_LIMIT_ENVELOPE, SYNTH_IDS, SYNTH_MEDIA_PATH
 const { decodeStorefrontMenu, EnvelopeError, CAPS } = await import('../src/source/live/decode.ts');
 const { adaptStorefront, liveStorefrontSource, mediaUrl, nextOpenParts } = await import('../src/source/live/adapter.ts');
 const { liveConfig, storefrontMenuRequest, fetchStorefrontMenu } = await import('../src/source/live/client.ts');
+const { LIVE_ORDERING_RELEASED } = await import('../src/source/live/ordering.ts');
 const { CATEGORY_ICON_KEYS, iconPathFor, DEFAULT_ICON_KEY } = await import('../src/source/live/icons.ts');
 const { sourceMode, isLiveMode, isProviderContext, fixtureStorefrontSource, storefrontSource } = await import('../src/source/storefront.ts');
 const { buildQuote } = await import('../src/money/quote.ts');
@@ -57,11 +58,37 @@ test('money and rates must be SAFE INTEGERS; a negative delta or a float is a co
   }
 });
 
-test('ordering admission decodes for future rollout, but the independent release gate remains off', () => {
+test('general ordering admission stays off even when another tenant advertises ordering', () => {
+  assert.equal(LIVE_ORDERING_RELEASED, false);
   const decoded = decodeStorefrontMenu(syntheticEnvelope({ service: { ordering_enabled: true } }));
   assert.equal(decoded.service.ordering_enabled, true);
   assert.equal(adaptStorefront(decoded, ORIGIN).view.tenant.service.orderingEnabled, false);
   assert.throws(() => decodeStorefrontMenu(syntheticEnvelope({ service: { delivery_enabled: true } })), EnvelopeError);
+});
+
+test('only the exact open Pickup Maps Burger pilot follows the current server admission flag', () => {
+  const adapted = (slug, service = {}) => adaptStorefront(decodeStorefrontMenu(syntheticEnvelope({
+    restaurant: { slug },
+    service: { ordering_enabled: true, ...service },
+  })), ORIGIN);
+  const admitted = adapted('mapsburger');
+  assert.equal(admitted.view.tenant.service.orderingEnabled, true);
+  assert.equal(admitted.view.tenant.service.deliveryEnabled, false);
+  assert.deepEqual(admitted.zones, []);
+  for (const slug of ['sf-synth-a', 'maps-burger', 'mapsburger-other']) {
+    assert.equal(adapted(slug).view.tenant.service.orderingEnabled, false, slug);
+  }
+  for (const service of [
+    { ordering_enabled: false },
+    { state: 'closed' },
+    { state: 'paused' },
+    { pickup_enabled: false },
+  ]) {
+    assert.equal(adapted('mapsburger', service).view.tenant.service.orderingEnabled, false, JSON.stringify(service));
+  }
+  // Expiry, consumption and operator closure are all represented by the same
+  // existing server boolean; a prior enabled resolution confers no authority.
+  assert.equal(adapted('mapsburger', { ordering_enabled: false }).view.tenant.service.orderingEnabled, false);
 });
 
 test('closed enums, uuid ids, HH:MM hours and the tag vocabulary are enforced', () => {
@@ -374,6 +401,30 @@ test('the client builds exactly the PostgREST RPC request with the anon key on t
   assert.equal(init.headers.Authorization, `Bearer ${CONFIG.anonKey}`);
   assert.equal(init.body, JSON.stringify({ p_slug: 'sf-synth-a' }));
   assert.ok(init.signal instanceof AbortSignal, 'the read is bounded by a timeout');
+  assert.equal(Object.hasOwn(init, 'cache'), false, 'ordinary tenant caching is unchanged');
+});
+
+test('Maps Burger reads bypass ISR so pilot activation and closure use fresh server state', async () => {
+  assert.equal(storefrontMenuRequest(CONFIG, 'mapsburger').init.cache, 'no-store');
+  assert.equal(Object.hasOwn(storefrontMenuRequest(CONFIG, 'maps-burger').init, 'cache'), false);
+  const real = globalThis.fetch;
+  let reads = 0;
+  globalThis.fetch = async (_url, init) => {
+    assert.equal(init.cache, 'no-store');
+    reads++;
+    return { ok: true, status: 200, json: async () => syntheticEnvelope({
+      restaurant: { slug: 'mapsburger' },
+      service: { ordering_enabled: reads === 1 },
+    }) };
+  };
+  try {
+    const source = liveStorefrontSource(CONFIG);
+    assert.equal((await source.getStorefront('mapsburger')).view.tenant.service.orderingEnabled, true);
+    assert.equal((await source.getStorefront('mapsburger')).view.tenant.service.orderingEnabled, false);
+    assert.equal(reads, 2);
+  } finally {
+    globalThis.fetch = real;
+  }
 });
 
 test('misconfiguration throws - it never falls back to the fixture', () => {
