@@ -1485,44 +1485,46 @@ void main() {
       },
     );
 
-    test(
-      'the NATIVE composition wires the change-slip labels and all four '
-      'order-edit callbacks (source pin: the composition needs a device)',
-      () {
-        final source = File(
-          p.join(
-            locatePosPackageRoot().path,
-            'lib',
-            'src',
-            'spool',
-            'pos_kitchen_spool_composition_native.dart',
-          ),
-        ).readAsStringSync().replaceAll('\r\n', '\n');
-        expect(
-          source,
-          contains(
-            'changeLabels: kitchenChangeSlipLabelsForLanguageCode(\n'
-            '        ui.PlatformDispatcher.instance.locale.languageCode,',
-          ),
-        );
-        for (final wiring in [
-          'readOrderEditPrintClaim: (dispatchId)',
-          'posOrderEditDispatchClaimKey(dispatchId)',
-          'isOrderEditSlipInFlight: (dispatchId)',
-          '.isDispatchInFlight(dispatchId)',
-          'reserveOrderEditSlip: (dispatchId)',
-          '.reserveForSpool(dispatchId)',
-          'releaseOrderEditSlip: (dispatchId)',
-          '.releaseSpoolReservation(dispatchId)',
-          'onOrderEditImported: (dispatchId) async',
-          '.handOverToSpool(dispatchId)',
-          'readLocalOrderEditEvidence: () async',
-          'orderEditSupersessionEvidenceFrom(',
-        ]) {
-          expect(source, contains(wiring), reason: wiring);
-        }
-      },
-    );
+    test('the NATIVE composition wires the change-slip labels and all four '
+        'order-edit callbacks (source pin: the composition needs a device)', () {
+      final source = File(
+        p.join(
+          locatePosPackageRoot().path,
+          'lib',
+          'src',
+          'spool',
+          'pos_kitchen_spool_composition_native.dart',
+        ),
+      ).readAsStringSync().replaceAll('\r\n', '\n');
+      expect(
+        source,
+        contains('changeLabels: kitchenChangeSlipLabelsForLanguageCode(code)'),
+      );
+      expect(
+        source,
+        contains(
+          'languageCode: () => ref.read(localeControllerProvider).languageCode',
+        ),
+      );
+      expect(source, isNot(contains('ref.watch(localeControllerProvider)')));
+      expect(source, isNot(contains('PlatformDispatcher')));
+      for (final wiring in [
+        'readOrderEditPrintClaim: (dispatchId)',
+        'posOrderEditDispatchClaimKey(dispatchId)',
+        'isOrderEditSlipInFlight: (dispatchId)',
+        '.isDispatchInFlight(dispatchId)',
+        'reserveOrderEditSlip: (dispatchId)',
+        '.reserveForSpool(dispatchId)',
+        'releaseOrderEditSlip: (dispatchId)',
+        '.releaseSpoolReservation(dispatchId)',
+        'onOrderEditImported: (dispatchId) async',
+        '.handOverToSpool(dispatchId)',
+        'readLocalOrderEditEvidence: () async',
+        'orderEditSupersessionEvidenceFrom(',
+      ]) {
+        expect(source, contains(wiring), reason: wiring);
+      }
+    });
   });
 
   group('ORDER-EDIT-001F: the order-edit spool lookup', () {
