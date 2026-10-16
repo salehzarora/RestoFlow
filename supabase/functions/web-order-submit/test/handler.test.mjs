@@ -24,6 +24,36 @@ function submission() {
   };
 }
 
+test("manual pilot is default OFF and routes only Maps Burger through the service-only pilot guard", async () => {
+  const body = { ...submission(), slug: "mapsburger" };
+  const disabled = harness({ enabled: "false" });
+  assert.equal((await result(disabled.handler, body)).response.status, 503);
+  assert.equal(disabled.calls.length, 0);
+  const pilot = harness({ enabled: "false", env: { WEB_ORDERS_PILOT_ENABLED: "true" } });
+  assert.equal((await result(pilot.handler, body)).response.status, 200);
+  assert.equal(pilot.calls.length, 1);
+  assert.equal(pilot.calls[0].url, `${BASE}/rest/v1/rpc/submit_web_order_pilot_request`);
+  assert.equal(pilot.calls[0].args.p_slug, "mapsburger");
+  assert.deepEqual(Object.keys(pilot.calls[0].args), ["p_slug", "p_client_request_id", "p_status_token_hash", "p_order"]);
+  assert.equal((await result(pilot.handler, submission())).response.status, 503);
+  assert.equal(pilot.calls.length, 1, "other tenants never reach admission RPC");
+});
+
+test("manual pilot propagates database closure and rejects conflicting gates", async () => {
+  const body = { ...submission(), slug: "mapsburger" };
+  const closed = harness({ enabled: "false", env: { WEB_ORDERS_PILOT_ENABLED: "true" },
+    fetchImpl: async () => new Response(JSON.stringify({ ok: false, error: "ordering_unavailable" })) });
+  assert.deepEqual((await result(closed.handler, body)).body, { ok: false, error: "ordering_unavailable" });
+  for (const enabled of ["WEB_ORDERS_ENABLED", "WEB_ORDERS_TEST_ENABLED"]) {
+    const conflict = harness({ enabled: "false", env: { WEB_ORDERS_PILOT_ENABLED: "true", [enabled]: "true" } });
+    assert.equal((await result(conflict.handler, body)).response.status, 503);
+    assert.equal(conflict.calls.length, 0);
+  }
+  const status = harness({ enabled: "false", env: { WEB_ORDERS_PILOT_ENABLED: "false" } });
+  assert.equal((await result(status.handler, { ...body, action: "status", order: undefined })).response.status, 200);
+  assert.equal(status.calls[0].url, `${BASE}/rest/v1/rpc/get_web_order_request_status`);
+});
+
 function statusRequest() {
   const { order: _order, ...body } = submission();
   return { ...body, action: "status" };
