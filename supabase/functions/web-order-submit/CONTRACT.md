@@ -30,8 +30,9 @@ The public reader preserves all JSON keys and existing browse-only data. Its
 ordering bit becomes true only for this active unconsumed scoped pilot, open
 service, pickup and a live channel while printing policy is BLOCKED. The client
 allows that bit only for Maps Burger; general `LIVE_ORDERING_RELEASED=false`,
-delivery and online payments remain unchanged. Maps Burger reads bypass ISR so
-activation/closure are fresh. Even a stale browser cannot bypass the server kill.
+delivery and online payments remain unchanged. Menu pages retain the existing
+60-second ISR/360-second bounded-stale contract. Verify rendered checkout before
+the owner orders; a cached hint cannot bypass the server deadline or atomic kill.
 
 Kill: disable the private pilot and scoped channel, set the Edge pilot flag OFF;
 leave consumed identity/status evidence intact. Expiry and the one-request

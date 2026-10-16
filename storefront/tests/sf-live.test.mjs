@@ -404,26 +404,17 @@ test('the client builds exactly the PostgREST RPC request with the anon key on t
   assert.equal(Object.hasOwn(init, 'cache'), false, 'ordinary tenant caching is unchanged');
 });
 
-test('Maps Burger reads bypass ISR so pilot activation and closure use fresh server state', async () => {
-  assert.equal(storefrontMenuRequest(CONFIG, 'mapsburger').init.cache, 'no-store');
-  assert.equal(Object.hasOwn(storefrontMenuRequest(CONFIG, 'maps-burger').init, 'cache'), false);
-  const real = globalThis.fetch;
-  let reads = 0;
-  globalThis.fetch = async (_url, init) => {
-    assert.equal(init.cache, 'no-store');
-    reads++;
-    return { ok: true, status: 200, json: async () => syntheticEnvelope({
-      restaurant: { slug: 'mapsburger' },
-      service: { ordering_enabled: reads === 1 },
-    }) };
-  };
-  try {
-    const source = liveStorefrontSource(CONFIG);
-    assert.equal((await source.getStorefront('mapsburger')).view.tenant.service.orderingEnabled, true);
-    assert.equal((await source.getStorefront('mapsburger')).view.tenant.service.orderingEnabled, false);
-    assert.equal(reads, 2);
-  } finally {
-    globalThis.fetch = real;
+test('pilot and ordinary menu reads preserve the established ISR fetch contract', () => {
+  for (const slug of ['mapsburger', 'maps-burger', 'sf-synth-a']) {
+    const { url, init } = storefrontMenuRequest(CONFIG, slug);
+    assert.equal(url, `${ORIGIN}/rest/v1/rpc/storefront_menu`);
+    assert.equal(init.method, 'POST');
+    assert.equal(init.body, JSON.stringify({ p_slug: slug }));
+    assert.equal(init.headers.apikey, CONFIG.anonKey);
+    assert.equal(init.headers.Authorization, `Bearer ${CONFIG.anonKey}`);
+    assert.equal(Object.hasOwn(init, 'cache'), false, `${slug}: no request-time dynamic bailout`);
+    assert.equal(Object.hasOwn(init, 'next'), false, `${slug}: no fetch-level revalidation override`);
+    assert.ok(init.signal instanceof AbortSignal);
   }
 });
 

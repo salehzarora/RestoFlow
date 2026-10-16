@@ -206,8 +206,9 @@ export function liveStorefrontSource(config?: LiveConfig): StorefrontSource {
       return adaptStorefront(envelope, cfg.url);
     },
     staticSlugs(): readonly string[] {
-      // Nothing is pre-rendered in live mode. Ordinary tenants use per-URL
-      // ISR; the Maps Burger pilot's no-store read keeps admission current.
+      // Nothing is pre-rendered in live mode: all tenants retain per-URL ISR.
+      // The server enforces pilot expiry and the single-request budget even
+      // if a previously rendered document still displays checkout.
       return [];
     },
   };

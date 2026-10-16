@@ -22,8 +22,6 @@
  * fixture is never a substitute for a live tenant (packet §4.3 failure contract).
  */
 
-import { MANUAL_ORDER_PILOT_SLUG } from './ordering';
-
 const TIMEOUT_MS = 5000;
 
 export interface LiveConfig {
@@ -58,8 +56,6 @@ export function storefrontMenuRequest(config: LiveConfig, slug: string): { reado
       },
       body: JSON.stringify({ p_slug: slug }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      // Pilot activation/expiry must not wait for the ordinary tenant ISR.
-      ...(slug === MANUAL_ORDER_PILOT_SLUG ? { cache: 'no-store' as const } : {}),
     },
   };
 }
