@@ -99,6 +99,44 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.62",
+      "versionCode": 62,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / verified / NOT installed / NOT uploaded",
+      "applicationSourceSha": "a9ac17780c5adeaf6edde981c87a81159685787d",
+      "sourceSha": "f0a2628ecb874996a16426075c3fc88664576f97",
+      "buildDate": "2026-10-16",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v62-f0a2628.apk",
+          "packageId": "com.restoflow.pos",
+          "sizeBytes": 75568549,
+          "sha256": "c9b86ea80282aa06da41bdf5040883365252e7f1776f15e94a14c13aad854023"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v62-f0a2628.apk",
+          "packageId": "com.restoflow.kds",
+          "sizeBytes": 57938786,
+          "sha256": "9454df2926a39b87962aea7f16b52de0eee2b2105bce93e674c0ecb7b6ffd9e1"
+        }
+      },
+      "notes": [
+        "BIZBOT-ANDROID-OFFICIAL-V62-BUILD-001: both APKs built by unchanged tools/android_release/build_official_pair.ps1 from clean audited local f0a2628ecb874996a16426075c3fc88664576f97 using -SourceSha and -AllowNonMain.",
+        "Approved main CI 38897614692 completed successfully for application source a9ac17780c5adeaf6edde981c87a81159685787d before the official build. Only ledger/documentation differ from that application source.",
+        "Build started 2026-10-16T15:26:22 and completed 2026-10-16T15:30:13 Asia/Jerusalem. Actual artifacts, SHA256SUMS.txt and BUILD-METADATA.txt independently reconcile.",
+        "Both official APK verifiers PASS: version 0.0.62 / 62, pinned production certificate, non-debuggable AOT, demo=false, correct oqmevrndtivqxgyvcmwy backend and public client key only, signatures and ZIP alignment. POS additionally passes 16-KB ZIP alignment.",
+        "POS bundles libsqlite3.so for arm64-v8a, armeabi-v7a and x86_64. All three library hashes match the exact QA APK used in a fresh Android 16/API36 x86_64 loader-only PASS; SQLite 3.52.0 loaded without opening a database.",
+        "sqlite3_flutter_libs remains exact 0.5.42 and sqlite3 remains 2.9.4. No application logic, dependency, runner, signing, backend, migration or KDS implementation change during preparation/build.",
+        "Fresh focused spool/containment/readiness/key/target-print and data-local regressions: 258 passed. Release-output checks: 35 passed. Independent release-source audit: APPROVE, no actionable findings.",
+        "No physical-device installation, hosted access/write, ordering/admission/policy change, real order, claim, ACK or printing. BLOCKED revision 1254 and 624 holds were left unchanged. Preserve the prior failed accepted order and target enrollment.",
+        "PR #314/#315 excluded. v60/v61 artifacts and release records preserved; v61 remains owner-installed, Inbox/audio PASS, automatic print FAILED before claim, NOT fully accepted, adbVerified=false.",
+        "NOT installed, NOT uploaded, no GitHub Release or full physical-print acceptance. v62 needs separately authorized HOME update in place and later controlled acceptance. Cold-offline imported-spool limitation remains unapproved for commercial rollout.",
+        "Code 62 is consumed; reserve 0.0.63 / 63 next. Do not rebuild or silently replace this verified pair."
+      ]
+    },
+    {
       "versionName": "0.0.61",
       "versionCode": 61,
       "signing": "restoflow-production",
@@ -731,19 +769,15 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.62",
-    "versionCode": 62,
+    "versionName": "0.0.63",
+    "versionCode": 63,
     "signing": "restoflow-production",
-    "status": "planned / owner-authorized official synchronized build / NOT built / NOT installed / NOT uploaded",
-    "applicationSourceSha": "a9ac17780c5adeaf6edde981c87a81159685787d",
-    "intendedSource": "Clean local audited release-source commit based on approved PR#335 merge a9ac17780c5adeaf6edde981c87a81159685787d; only ledger/documentation differ.",
+    "status": "reserved - NOT planned / NOT built / NOT installed / NOT uploaded",
+    "intendedSource": "To be separately planned and approved after verified official v62; this reservation authorizes no build or rollout.",
     "notes": [
-      "BIZBOT-ANDROID-OFFICIAL-V62-BUILD-001 authorizes preparation, clean local audited source commit and unchanged official pair runner with -SourceSha and -AllowNonMain.",
-      "Build only after main CI38897614692 succeeds. Stop on CI failure or source drift.",
-      "POS includes exact merged sqlite3_flutter_libs0.5.42; sqlite3 2.9.4 unchanged. No application, dependency, runner, signing or backend input changes during preparation.",
-      "POS/KDS both0.0.62/62, pinned production identity, demo=false and production public client configuration. PR#314/#315 excluded; KDS implementation unchanged.",
-      "No installation/upload/hosted write/order/claim/ACK/print or admission/policy change. Preserve v60/v61, BLOCKED1254 and624 holds.",
-      "Record actual artifacts after both verifiers pass, then reserve next unused version. Cold-offline imported-spool commercial limitation remains unapproved."
+      "Reserved after verified official synchronized v62. Code 62 remains consumed; preserve its exact artifacts and source identity.",
+      "All prior release history and v59/v61 owner-reported evidence remain unchanged. v61 was not fully accepted; v62 is not installed.",
+      "Follow existing source authorization, signing, synchronized POS/KDS build and release-record governance. No physical device, hosted, admission, print or commercial offline-policy action is authorized."
     ]
   },
   "ownerReportedAcceptanceRecords": [
