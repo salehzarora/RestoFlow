@@ -11,6 +11,7 @@ import { NOT_FOUND_ENVELOPE, PAYLOAD_LIMIT_ENVELOPE, SYNTH_IDS, SYNTH_MEDIA_PATH
 const { decodeStorefrontMenu, EnvelopeError, CAPS } = await import('../src/source/live/decode.ts');
 const { adaptStorefront, liveStorefrontSource, mediaUrl, nextOpenParts } = await import('../src/source/live/adapter.ts');
 const { liveConfig, storefrontMenuRequest, fetchStorefrontMenu } = await import('../src/source/live/client.ts');
+const { LIVE_ORDERING_RELEASED } = await import('../src/source/live/ordering.ts');
 const { CATEGORY_ICON_KEYS, iconPathFor, DEFAULT_ICON_KEY } = await import('../src/source/live/icons.ts');
 const { sourceMode, isLiveMode, isProviderContext, fixtureStorefrontSource, storefrontSource } = await import('../src/source/storefront.ts');
 const { buildQuote } = await import('../src/money/quote.ts');
@@ -57,11 +58,37 @@ test('money and rates must be SAFE INTEGERS; a negative delta or a float is a co
   }
 });
 
-test('ordering admission decodes for future rollout, but the independent release gate remains off', () => {
+test('general ordering admission stays off even when another tenant advertises ordering', () => {
+  assert.equal(LIVE_ORDERING_RELEASED, false);
   const decoded = decodeStorefrontMenu(syntheticEnvelope({ service: { ordering_enabled: true } }));
   assert.equal(decoded.service.ordering_enabled, true);
   assert.equal(adaptStorefront(decoded, ORIGIN).view.tenant.service.orderingEnabled, false);
   assert.throws(() => decodeStorefrontMenu(syntheticEnvelope({ service: { delivery_enabled: true } })), EnvelopeError);
+});
+
+test('only the exact open Pickup Maps Burger pilot follows the current server admission flag', () => {
+  const adapted = (slug, service = {}) => adaptStorefront(decodeStorefrontMenu(syntheticEnvelope({
+    restaurant: { slug },
+    service: { ordering_enabled: true, ...service },
+  })), ORIGIN);
+  const admitted = adapted('mapsburger');
+  assert.equal(admitted.view.tenant.service.orderingEnabled, true);
+  assert.equal(admitted.view.tenant.service.deliveryEnabled, false);
+  assert.deepEqual(admitted.zones, []);
+  for (const slug of ['sf-synth-a', 'maps-burger', 'mapsburger-other']) {
+    assert.equal(adapted(slug).view.tenant.service.orderingEnabled, false, slug);
+  }
+  for (const service of [
+    { ordering_enabled: false },
+    { state: 'closed' },
+    { state: 'paused' },
+    { pickup_enabled: false },
+  ]) {
+    assert.equal(adapted('mapsburger', service).view.tenant.service.orderingEnabled, false, JSON.stringify(service));
+  }
+  // Expiry, consumption and operator closure are all represented by the same
+  // existing server boolean; a prior enabled resolution confers no authority.
+  assert.equal(adapted('mapsburger', { ordering_enabled: false }).view.tenant.service.orderingEnabled, false);
 });
 
 test('closed enums, uuid ids, HH:MM hours and the tag vocabulary are enforced', () => {
@@ -374,6 +401,21 @@ test('the client builds exactly the PostgREST RPC request with the anon key on t
   assert.equal(init.headers.Authorization, `Bearer ${CONFIG.anonKey}`);
   assert.equal(init.body, JSON.stringify({ p_slug: 'sf-synth-a' }));
   assert.ok(init.signal instanceof AbortSignal, 'the read is bounded by a timeout');
+  assert.equal(Object.hasOwn(init, 'cache'), false, 'ordinary tenant caching is unchanged');
+});
+
+test('pilot and ordinary menu reads preserve the established ISR fetch contract', () => {
+  for (const slug of ['mapsburger', 'maps-burger', 'sf-synth-a']) {
+    const { url, init } = storefrontMenuRequest(CONFIG, slug);
+    assert.equal(url, `${ORIGIN}/rest/v1/rpc/storefront_menu`);
+    assert.equal(init.method, 'POST');
+    assert.equal(init.body, JSON.stringify({ p_slug: slug }));
+    assert.equal(init.headers.apikey, CONFIG.anonKey);
+    assert.equal(init.headers.Authorization, `Bearer ${CONFIG.anonKey}`);
+    assert.equal(Object.hasOwn(init, 'cache'), false, `${slug}: no request-time dynamic bailout`);
+    assert.equal(Object.hasOwn(init, 'next'), false, `${slug}: no fetch-level revalidation override`);
+    assert.ok(init.signal instanceof AbortSignal);
+  }
 });
 
 test('misconfiguration throws - it never falls back to the fixture', () => {

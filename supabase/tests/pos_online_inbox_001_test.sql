@@ -393,5 +393,99 @@ select is((select m.meat_snapshot from order_item_modifiers m join order_items i
  join web_order_requests w on w.canonical_order_id=i.order_id where w.id=pg_temp.pi_id('request-17')),
  '{"quantity":2,"unit":"pc"}'::jsonb,'modifier preparation snapshot comes from trusted catalogue contribution');
 
+-- BIZBOT-STOREFRONT-MANUAL-ORDER-PILOT-001: real submission -> acceptance ->
+-- initial dispatch preserves PER-UNIT prep, including mixed cheese buckets.
+-- All authority and customer data below are synthetic and rolled back.
+insert into menu_items(id,organization_id,restaurant_id,menu_category_id,name,base_price_minor,currency_code,attributes)
+values(pg_temp.pi_id('smash'),pg_temp.pi_id('org'),pg_temp.pi_id('restaurant'),pg_temp.pi_id('category'),
+ 'PI001 Smash',1000,'ILS','{"prep_components":[{"name":"Bun","quantity":1,"unit":"pc"}]}'::jsonb);
+insert into modifiers(id,organization_id,restaurant_id,menu_item_id,name,selection_type,min_select,max_select,is_required)
+values
+ (pg_temp.pi_id('cheese-group'),pg_temp.pi_id('org'),pg_temp.pi_id('restaurant'),pg_temp.pi_id('paid'),'Cheese','multiple',0,1,false),
+ (pg_temp.pi_id('smash-group'),pg_temp.pi_id('org'),pg_temp.pi_id('restaurant'),pg_temp.pi_id('smash'),'Size','single',1,1,true),
+ (pg_temp.pi_id('smash-cheese-group'),pg_temp.pi_id('org'),pg_temp.pi_id('restaurant'),pg_temp.pi_id('smash'),'Cheese','multiple',0,1,false);
+insert into modifier_options(id,organization_id,restaurant_id,modifier_id,name,price_delta_minor)
+values
+ (pg_temp.pi_id('cheese'),pg_temp.pi_id('org'),pg_temp.pi_id('restaurant'),pg_temp.pi_id('cheese-group'),'Cheese',0),
+ (pg_temp.pi_id('smash-option'),pg_temp.pi_id('org'),pg_temp.pi_id('restaurant'),pg_temp.pi_id('smash-group'),'360g',0),
+ (pg_temp.pi_id('smash-cheese'),pg_temp.pi_id('org'),pg_temp.pi_id('restaurant'),pg_temp.pi_id('smash-cheese-group'),'Cheese',0);
+-- Repeated option units require a multiple-select group; min/max still count
+-- distinct options, so this synthetic group keeps its existing 1/1 bounds.
+update modifiers set selection_type='multiple',allow_quantity=true,max_quantity=2
+ where id=pg_temp.pi_id('group');
+update modifier_options set kitchen_meat=jsonb_build_object('quantity',2,'unit','Meat',
+ 'classifier_option_id',pg_temp.pi_id('cheese')) where id=pg_temp.pi_id('option');
+update modifier_options set kitchen_meat=jsonb_build_object('quantity',3,'unit','Smash meat',
+ 'classifier_option_id',pg_temp.pi_id('smash-cheese')) where id=pg_temp.pi_id('smash-option');
+grant all on _pi_results to service_role;
+set local role service_role;
+insert into _pi_results values('mixed_submit',public.submit_web_order_request('pi001-alpha',pg_temp.pi_uuid(900),repeat('c',64),
+ jsonb_build_object('order_type','takeaway','customer',jsonb_build_object('name','PI001 Prep Guest','phone','+972520001018'),
+ 'notes','Synthetic mixed preparation test','items',jsonb_build_array(
+ jsonb_build_object('menu_item_id',pg_temp.pi_id('paid'),'quantity',2,'modifiers',jsonb_build_array(
+   jsonb_build_object('modifier_option_id',pg_temp.pi_id('option'),'quantity',2),
+   jsonb_build_object('modifier_option_id',pg_temp.pi_id('cheese'),'quantity',1))),
+ jsonb_build_object('menu_item_id',pg_temp.pi_id('paid'),'quantity',1,'modifiers',jsonb_build_array(
+   jsonb_build_object('modifier_option_id',pg_temp.pi_id('option'),'quantity',1))),
+ jsonb_build_object('menu_item_id',pg_temp.pi_id('smash'),'quantity',2,'modifiers',jsonb_build_array(
+   jsonb_build_object('modifier_option_id',pg_temp.pi_id('smash-option'),'quantity',1),
+   jsonb_build_object('modifier_option_id',pg_temp.pi_id('smash-cheese'),'quantity',1)))))));
+reset role;
+select ok((select r->>'ok'='true' and r->>'status'='pending' and r->>'replayed'='false'
+ from _pi_results where label='mixed_submit'),'mixed preparation uses the real submission contract');
+create temp table _pi_mixed_request as select id from web_order_requests
+ where restaurant_id=pg_temp.pi_id('restaurant') and client_request_id=pg_temp.pi_uuid(900);
+grant select on _pi_mixed_request to authenticated;
+select is((select count(*)::int from _pi_mixed_request),1,'mixed submission creates one pending request');
+select ok((select w.status='pending' and w.canonical_order_id is null
+ and not exists(select 1 from web_order_decisions d where d.request_id=w.id)
+ from web_order_requests w join _pi_mixed_request r on r.id=w.id),'mixed pending request has no canonical order or decision');
+set local role authenticated;
+select is(pg_temp.pi_accept((select id from _pi_mixed_request),900)->>'ok','true',
+ 'mixed preparation is accepted through real device/PIN and canonical order.submit');
+reset role;
+select is((select count(*)::int from web_order_decisions d join _pi_mixed_request r on r.id=d.request_id
+ where d.decision='accepted'),1,'mixed acceptance records exactly one accepted decision');
+select is((select count(*)::int from kitchen_print_dispatches d join web_order_requests w on w.canonical_order_id=d.order_id
+ join _pi_mixed_request r on r.id=w.id where d.dispatch_type='initial_order'),1,
+ 'mixed acceptance creates exactly one initial dispatch');
+select ok((select count(*)=3 and bool_and(i.prep_snapshot='[{"name":"Bun","quantity":1,"unit":"pc"}]'::jsonb)
+ from order_items i join web_order_requests w on w.canonical_order_id=i.order_id
+ join _pi_mixed_request r on r.id=w.id),'each canonical mixed-order line retains one bread per item unit');
+create temp view _pi_mixed_canonical_prep as
+select i.quantity line_qty,m.quantity modifier_qty,m.meat_snapshot prep
+ from order_items i join web_order_requests w on w.canonical_order_id=i.order_id
+ join _pi_mixed_request r on r.id=w.id join order_item_modifiers m on m.order_item_id=i.id
+ where m.meat_snapshot is not null;
+select is((select jsonb_agg(jsonb_build_object('line',line_qty,'modifier',modifier_qty,'prep',prep->'quantity',
+ 'unit',prep->>'unit','classifier',prep->>'classifier_option_name','cheese',prep->'classifier_selected') order by prep->>'unit',line_qty)
+ from _pi_mixed_canonical_prep),
+ '[{"line":1,"modifier":1,"prep":2,"unit":"Meat","classifier":"Cheese","cheese":false},
+   {"line":2,"modifier":2,"prep":2,"unit":"Meat","classifier":"Cheese","cheese":true},
+   {"line":2,"modifier":1,"prep":3,"unit":"Smash meat","classifier":"Cheese","cheese":true}]'::jsonb,
+ 'canonical snapshots keep line/modifier/per-unit quantities separate and classify each line');
+create temp view _pi_mixed_dispatch as select d.money_free_payload payload
+ from kitchen_print_dispatches d join web_order_requests w on w.canonical_order_id=d.order_id
+ join _pi_mixed_request r on r.id=w.id where d.dispatch_type='initial_order';
+create temp view _pi_mixed_dispatch_prep as
+select (i->>'qty')::integer line_qty,(m->>'qty')::integer modifier_qty,m->'prep' prep
+ from _pi_mixed_dispatch d cross join lateral jsonb_array_elements(d.payload->'items') i
+ cross join lateral jsonb_array_elements(i->'modifiers') m where m ? 'prep';
+select is((select jsonb_agg(jsonb_build_object('line',line_qty,'modifier',modifier_qty,'prep',prep)
+ order by prep->>'unit',line_qty) from _pi_mixed_dispatch_prep),
+ (select jsonb_agg(jsonb_build_object('line',line_qty,'modifier',modifier_qty,'prep',prep)
+ order by prep->>'unit',line_qty) from _pi_mixed_canonical_prep),
+ 'initial dispatch retains the exact canonical classified per-unit snapshots');
+select is((select sum((i->>'qty')::integer*(p->>'quantity')::numeric) from _pi_mixed_dispatch d
+ cross join lateral jsonb_array_elements(d.payload->'items') i
+ cross join lateral jsonb_array_elements(i->'prep') p where p->>'name'='Bun'),5::numeric,
+ 'bread is multiplied by item quantity once, not by modifier quantity');
+select is((select jsonb_object_agg(bucket,total) from (
+ select (prep->>'unit')||case when (prep->>'classifier_selected')::boolean then ' with Cheese' else ' without Cheese' end bucket,
+ sum(line_qty*modifier_qty*(prep->>'quantity')::numeric) total from _pi_mixed_dispatch_prep
+ group by prep->>'unit',(prep->>'classifier_selected')::boolean) counts),
+ '{"Meat with Cheese":8,"Meat without Cheese":2,"Smash meat with Cheese":6}'::jsonb,
+ 'dispatch counts apply each multiplier once and keep mixed resources and cheese buckets separate');
+
 select * from finish();
 rollback;

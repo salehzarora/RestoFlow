@@ -68,8 +68,8 @@ function publicResult(result, requestId) {
   };
 }
 
-async function callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit }) {
-  const rpc = input.action === "submit" ? (testPermit ? "submit_web_order_test_request" : "submit_web_order_request") : "get_web_order_request_status";
+async function callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit, pilotSubmission }) {
+  const rpc = input.action === "submit" ? (testPermit ? "submit_web_order_test_request" : pilotSubmission ? "submit_web_order_pilot_request" : "submit_web_order_request") : "get_web_order_request_status";
   const args = { p_slug: input.slug, p_client_request_id: input.request_id, p_status_token_hash: tokenHash };
   if (input.action === "submit") args.p_order = input.order;
   if (testPermit) Object.assign(args, {
@@ -145,17 +145,23 @@ export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl
       }
       const input = validateRequest(await readRequestJson(request));
       let testPermit = null;
-      if (input.action === "submit" && getEnv("WEB_ORDERS_ENABLED") === "true" && getEnv("WEB_ORDERS_TEST_ENABLED") === "true") {
+      let pilotSubmission = false;
+      const enabledGates = ["WEB_ORDERS_ENABLED", "WEB_ORDERS_TEST_ENABLED", "WEB_ORDERS_PILOT_ENABLED"]
+        .filter((name) => getEnv(name) === "true").length;
+      if (input.action === "submit" && enabledGates > 1) {
         return json({ ok: false, error: "ordering_unavailable" }, 503, origin);
       }
       if (input.action === "submit" && getEnv("WEB_ORDERS_ENABLED") !== "true") {
         testPermit = await authorizeTestSubmission({ input, request, getEnv, cryptoImpl, now });
-        if (!testPermit) return json({ ok: false, error: "ordering_unavailable" }, 503, origin);
+        // This is routing, never admission authority. The private database pilot
+        // enforces exact branch, approved contact, expiry and one atomic request.
+        pilotSubmission = !testPermit && getEnv("WEB_ORDERS_PILOT_ENABLED") === "true" && input.slug === "mapsburger";
+        if (!testPermit && !pilotSubmission) return json({ ok: false, error: "ordering_unavailable" }, 503, origin);
       }
       const configuration = credentials(getEnv);
       if (!configuration) return json({ ok: false, error: input.action === "submit" ? "ordering_unavailable" : "status_unavailable", uncertain: false }, 503, origin);
       const tokenHash = await hashStatusToken(input.status_token, cryptoImpl);
-      const result = await callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit });
+      const result = await callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit, pilotSubmission });
       if (result.failed) {
         return json({ ok: false, error: input.action === "submit" ? "submission_outcome_unknown" : "status_unavailable", request_id: input.request_id, uncertain: input.action === "submit" }, result.status, origin);
       }

@@ -16,7 +16,8 @@
  *   - old catalog envelopes have quantity selection off until rollout
  *   - the campaign hero falls back to the tagline, else the display name, with
  *     an EMPTY subline the hero omits (D11); every other optional module is off
- *   - ordering is OFF, delivery is OFF, zones are empty: the flow is browse-only
+ *   - general ordering is OFF; only the server-admitted Maps Burger Pickup
+ *     pilot can enable checkout. Delivery stays OFF and zones stay empty.
  *
  * Pure: no I/O. `liveSource` is the only thing that calls the client.
  */
@@ -36,7 +37,7 @@ import { isValidSlug } from '@/theme/sanitize';
 import { fetchStorefrontMenu, liveConfig, type LiveConfig } from './client';
 import { decodeStorefrontMenu, type StorefrontMenuOk } from './decode';
 import { iconPathFor } from './icons';
-import { LIVE_ORDERING_RELEASED, orderEndpointOrigin } from './ordering';
+import { liveOrderingEnabled, orderEndpointOrigin } from './ordering';
 
 const MEDIA_PATH = /^\/storage\/v1\/object\/public\/storefront-media\/[0-9a-f]{32}\/[0-9a-f]{64}\.webp$/;
 
@@ -98,7 +99,7 @@ export function adaptStorefront(envelope: StorefrontMenuOk, origin: string): Sto
       pickupEnabled: envelope.service.pickup_enabled,
       deliveryEnabled: false,
       deliveryFromMinor: 0,
-      orderingEnabled: LIVE_ORDERING_RELEASED && envelope.service.ordering_enabled,
+      orderingEnabled: liveOrderingEnabled(r.slug, envelope.service),
     },
     heroImage: mediaUrl(r.hero_url, origin),
     currency: 'ILS',
@@ -205,8 +206,9 @@ export function liveStorefrontSource(config?: LiveConfig): StorefrontSource {
       return adaptStorefront(envelope, cfg.url);
     },
     staticSlugs(): readonly string[] {
-      // Nothing is pre-rendered in live mode: every slug renders on demand and
-      // is cached per URL (revalidate = 60).
+      // Nothing is pre-rendered in live mode: all tenants retain per-URL ISR.
+      // The server enforces pilot expiry and the single-request budget even
+      // if a previously rendered document still displays checkout.
       return [];
     },
   };

@@ -34,7 +34,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(121);
+select plan(122);
 
 -- ===== fixtures ==============================================================
 -- Org A (ILS): R-A1 published (branch A1a storefront, A1b sibling), R-A2 unpublished,
@@ -282,9 +282,15 @@ select throws_ok(
   'A16. the REAL authenticated role is refused at the FUNCTION grant layer');
 reset role;
 select ok(
-  (select prosrc from pg_proc where oid = 'public.storefront_menu(text)'::regprocedure) ~ 'ordering_enabled'', false'
-  and (select prosrc from pg_proc where oid = 'public.storefront_menu(text)'::regprocedure) ~ 'delivery_enabled'', false',
-  'A17. the served ordering_enabled / delivery_enabled are LITERAL false in the function body (browse-only slice)');
+  (select prosrc from pg_proc where oid = 'app.storefront_menu_browse_only_manual_pilot_001(text)'::regprocedure) ~ 'ordering_enabled'', false'
+  and (select prosrc from pg_proc where oid = 'app.storefront_menu_browse_only_manual_pilot_001(text)'::regprocedure) ~ 'delivery_enabled'', false',
+  'A17. the original private reader retains literal false ordering/delivery defaults');
+select ok(
+  (select prosrc from pg_proc where oid = 'public.storefront_menu(text)'::regprocedure) ~ 'app.storefront_menu_browse_only_manual_pilot_001'
+  and (select prosrc from pg_proc where oid = 'public.storefront_menu(text)'::regprocedure) ~ 'app.storefront_manual_order_pilot_open'
+  and (select prosrc from pg_proc where oid = 'public.storefront_menu(text)'::regprocedure) ~ '\{service,ordering_enabled\}'
+  and (select prosrc from pg_proc where oid = 'public.storefront_menu(text)'::regprocedure) !~ '\{service,delivery_enabled\}',
+  'A18. public wrapper delegates the unchanged reader and overrides only ordering through the private pilot guard');
 
 -- ============================================================================
 -- B. bucket + write policies ............................................. (22)

@@ -1,5 +1,47 @@
 # WEB-ORDERS-001 Edge API
 
+## BIZBOT-STOREFRONT-MANUAL-ORDER-PILOT-001 — expiring manual website pilot
+
+Default OFF. `WEB_ORDERS_PILOT_ENABLED=true` routes only `mapsburger` submissions
+to service-only `submit_web_order_pilot_request` with the same four arguments and
+public response shape. General, private-test and manual-pilot gates are mutually
+exclusive; more than one enabled gate denies submission. No bearer or permit is
+put in the browser. `status` remains independent of all admission gates.
+
+The database, not CORS or the website, authorizes this route. A private,
+operator-installed record binds the exact Maps Burger organization, restaurant
+and branch, a salted hash of the owner-approved name/normalized E.164 phone,
+a server window of at most 15 minutes, and one lifetime successful request.
+Migration installation inserts no pilot or channel and relaxes no profile CHECK.
+Wrong scope/contact, disabled, future or expired windows cannot admit a new
+request. The request identity lock precedes the pilot row and channel locks;
+the existing validator, price authority, abuse limits and pending-only writer
+are reused. Expiry after delegated writes rolls back requests, events and counters.
+
+The first successful browser submission atomically binds its client/internal
+UUIDs, consumes the budget, disables the pilot and disables the branch channel.
+Every second UUID is refused. The original payload/capability replay remains
+idempotent at the SQL contract after kill/expiry; customer status remains usable
+after the Edge pilot gate is also turned OFF. No accepted order or printing is
+created by this RPC. The operator must recognize the owner's browser request
+before separately authorizing its exact internal target and manual POS Accept.
+
+The public reader preserves all JSON keys and existing browse-only data. Its
+ordering bit becomes true only for this active unconsumed scoped pilot, open
+service, pickup and a live channel while printing policy is BLOCKED. The client
+allows that bit only for Maps Burger; general `LIVE_ORDERING_RELEASED=false`,
+delivery and online payments remain unchanged. Menu pages retain the existing
+60-second ISR/360-second bounded-stale contract. Verify rendered checkout before
+the owner orders; a cached hint cannot bypass the server deadline or atomic kill.
+
+Kill: disable the private pilot and scoped channel, set the Edge pilot flag OFF;
+leave consumed identity/status evidence intact. Expiry and the one-request
+budget protect intake even if the operator exits before cleanup. Neither kill nor
+installation modifies historical holds, canonical orders, print attempts or
+device state. Printing remains a separate exact-target-only owner action.
+
+## Existing API and controlled-test contracts
+
 `POST /functions/v1/web-order-submit` accepts JSON with exactly
 `action`, `slug`, `request_id`, `status_token`, and (for `submit` only) `order`.
 `action` is `submit` or `status`. Unknown and duplicate JSON keys fail at every
