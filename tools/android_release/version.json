@@ -99,6 +99,79 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.62",
+      "versionCode": 62,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / verified / NOT installed / NOT uploaded",
+      "applicationSourceSha": "a9ac17780c5adeaf6edde981c87a81159685787d",
+      "sourceSha": "f0a2628ecb874996a16426075c3fc88664576f97",
+      "buildDate": "2026-10-16",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v62-f0a2628.apk",
+          "packageId": "com.restoflow.pos",
+          "sizeBytes": 75568549,
+          "sha256": "c9b86ea80282aa06da41bdf5040883365252e7f1776f15e94a14c13aad854023"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v62-f0a2628.apk",
+          "packageId": "com.restoflow.kds",
+          "sizeBytes": 57938786,
+          "sha256": "9454df2926a39b87962aea7f16b52de0eee2b2105bce93e674c0ecb7b6ffd9e1"
+        }
+      },
+      "notes": [
+        "BIZBOT-ANDROID-OFFICIAL-V62-BUILD-001: both APKs built by unchanged tools/android_release/build_official_pair.ps1 from clean audited local f0a2628ecb874996a16426075c3fc88664576f97 using -SourceSha and -AllowNonMain.",
+        "Approved main CI 38897614692 completed successfully for application source a9ac17780c5adeaf6edde981c87a81159685787d before the official build. Only ledger/documentation differ from that application source.",
+        "Build started 2026-10-16T15:26:22 and completed 2026-10-16T15:30:13 Asia/Jerusalem. Actual artifacts, SHA256SUMS.txt and BUILD-METADATA.txt independently reconcile.",
+        "Both official APK verifiers PASS: version 0.0.62 / 62, pinned production certificate, non-debuggable AOT, demo=false, correct oqmevrndtivqxgyvcmwy backend and public client key only, signatures and ZIP alignment. POS additionally passes 16-KB ZIP alignment.",
+        "POS bundles libsqlite3.so for arm64-v8a, armeabi-v7a and x86_64. All three library hashes match the exact QA APK used in a fresh Android 16/API36 x86_64 loader-only PASS; SQLite 3.52.0 loaded without opening a database.",
+        "sqlite3_flutter_libs remains exact 0.5.42 and sqlite3 remains 2.9.4. No application logic, dependency, runner, signing, backend, migration or KDS implementation change during preparation/build.",
+        "Fresh focused spool/containment/readiness/key/target-print and data-local regressions: 258 passed. Release-output checks: 35 passed. Independent release-source audit: APPROVE, no actionable findings.",
+        "No physical-device installation, hosted access/write, ordering/admission/policy change, real order, claim, ACK or printing. BLOCKED revision 1254 and 624 holds were left unchanged. Preserve the prior failed accepted order and target enrollment.",
+        "PR #314/#315 excluded. v60/v61 artifacts and release records preserved; v61 remains owner-installed, Inbox/audio PASS, automatic print FAILED before claim, NOT fully accepted, adbVerified=false.",
+        "NOT installed, NOT uploaded, no GitHub Release or full physical-print acceptance. v62 needs separately authorized HOME update in place and later controlled acceptance. Cold-offline imported-spool limitation remains unapproved for commercial rollout.",
+        "Code 62 is consumed; reserve 0.0.63 / 63 next. Do not rebuild or silently replace this verified pair."
+      ]
+    },
+    {
+      "versionName": "0.0.61",
+      "versionCode": 61,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / verified / POS owner-installed HOME hg / Inbox-audio PASS / automatic kitchen printing FAILED before claim / NOT fully accepted / KDS NOT installed / NOT uploaded",
+      "applicationSourceSha": "17d8c1cd6d5b980e231edafabf4a0a6e94f37467",
+      "sourceSha": "40be700d687e014570c1bbcefad8991068e465b5",
+      "buildDate": "2026-10-15",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v61-40be700.apk",
+          "packageId": "com.restoflow.pos",
+          "sizeBytes": 70933455,
+          "sha256": "ccb4c3d1c84557fb099235955fb599a56913dafef23ed45269c22a8b32d47d44"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v61-40be700.apk",
+          "packageId": "com.restoflow.kds",
+          "sizeBytes": 57938742,
+          "sha256": "f31f622f63fc270e93c62577a49a20d5637dd10d6a0a6d3360d095e256248194"
+        }
+      },
+      "notes": [
+        "Reconciled under BIZBOT-ANDROID-OFFICIAL-V62-BUILD-001 from preserved actual v61 artifacts, SHA256SUMS.txt and BUILD-METADATA.txt. Both current hashes and sizes match.",
+        "Built 2026-10-15 with the unchanged official pair runner from clean audited source 40be700d687e014570c1bbcefad8991068e465b5. Application inputs match main17d8c1cd6d5b980e231edafabf4a0a6e94f37467; only ledger/documentation differ.",
+        "Both APKs verified production-signed 0.0.61/61, non-debuggable AOT, demo=false, production backend, valid signatures and ZIP alignment.",
+        "Original build-time NOT INSTALLED metadata remains unchanged. Later HOME installation is owner-reported with adbVerified=false; exact installation time and installed certificate were not independently inspected.",
+        "Real pending-only Inbox/audio test passed badge, details/photo, first/repeating alert and natural expiry/cancellation.",
+        "Automatic kitchen-print test FAILED before claim: one accepted canonical order, decision, initial dispatch and target enrollment, but no send reservation and zero paper. v61 is NOT fully accepted.",
+        "Android SQLite packaging defect was reproduced separately later; original HOME exception remains uncaptured. KDS not installed; no upload or commercial rollout.",
+        "Code61 consumed. Preserve both artifacts and historical records. Cold-offline imported-spool limitation remains unapproved for commercial rollout."
+      ]
+    },
+    {
       "versionName": "0.0.60",
       "versionCode": 60,
       "signing": "restoflow-production",
@@ -696,20 +769,15 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.61",
-    "versionCode": 61,
+    "versionName": "0.0.63",
+    "versionCode": 63,
     "signing": "restoflow-production",
     "status": "reserved - NOT planned / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "to be decided and separately approved when the next official POS/KDS release is planned",
+    "intendedSource": "To be separately planned and approved after verified official v62; this reservation authorizes no build or rollout.",
     "notes": [
-      "Reserved after the verified official 0.0.60 / 60 pair; 61 > 60 preserves monotonic",
-      "update versioning. Code 60 stays consumed. Do not reuse or rebuild the v60 release.",
-      "No v61 source or feature scope is approved. Follow the existing preparation,",
-      "exact-source authorization, synchronized build and artifact-verification process.",
-      "All earlier release facts, production signing identity and the owner-reported",
-      "v59 acceptance supplement remain intact. Kiosk and Dashboard lineages are separate.",
-      "No installation, hosted migration, admission activation or physical printing",
-      "is authorized by this reservation or the v60 release-record PR."
+      "Reserved after verified official synchronized v62. Code 62 remains consumed; preserve its exact artifacts and source identity.",
+      "All prior release history and v59/v61 owner-reported evidence remain unchanged. v61 was not fully accepted; v62 is not installed.",
+      "Follow existing source authorization, signing, synchronized POS/KDS build and release-record governance. No physical device, hosted, admission, print or commercial offline-policy action is authorized."
     ]
   },
   "ownerReportedAcceptanceRecords": [
@@ -731,6 +799,25 @@
         "Owner reported exactly one correct physical kitchen ticket and requested the louder audio/automatic-print improvements now included in the v60 source."
       ],
       "limitations": "Owner report only, not Codex ADB/certificate/hardware verification; no DND, background/screen-off or KDS installation acceptance is inferred. Previous release records and currentOfficialRelease are preserved unchanged."
+    },
+    {
+      "recordedDate": "2026-10-16",
+      "workId": "BIZBOT-ANDROID-OFFICIAL-V62-BUILD-001",
+      "versionName": "0.0.61",
+      "versionCode": 61,
+      "packageId": "com.restoflow.pos",
+      "sourceSha": "40be700d687e014570c1bbcefad8991068e465b5",
+      "artifactSha256": "ccb4c3d1c84557fb099235955fb599a56913dafef23ed45269c22a8b32d47d44",
+      "evidence": "Owner confirms official v61 installed on HOME hg; real pending-only Inbox/audio PASS and automatic kitchen printing FAILED before claim. Not full acceptance.",
+      "adbVerified": false,
+      "fullyAccepted": false,
+      "observations": [
+        "HOME hg bb80c0d8-6893-4e24-8eea-5a14cf545ecd: owner physically confirmed official v61. No ADB installed-version/certificate inspection or exact installation time is claimed.",
+        "BIZBOT-HOME-REAL-PICKUP-AUDIO-EXECUTE-001: badge, photo/details, initial/repeating nonoverlapping foreground alert and cancellation on expiry passed by owner observation with backend reconciliation.",
+        "BIZBOT-HOME-V61-REAL-TARGET-PRINT-ACCEPTANCE-001: one manual Accept; accepted request dfa8716f-bc19-4c8f-a959-fb9b8f7a5107 and canonical order db3c3776-16ba-44d4-9785-f6ff3e1a3bc3. No successful claim/begin; owner confirmed zero target or historical paper.",
+        "Explicit BLOCKED1254, all624 holds and admissionOFF were verified after the test. No replay or resend."
+      ],
+      "limitations": "Owner testimony distinguished from artifact/backend facts. Earlier preinstall-gate.json was BLOCKED before installation, not installation PASS. No KDS installation, full print acceptance or cold-offline imported-spool commercial approval."
     }
   ],
   "androidRendererPolicy": {
