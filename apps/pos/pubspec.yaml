@@ -81,6 +81,8 @@ dependencies:
   # impossible until 001C3 (no mode revision + no readiness reporting).
   restoflow_data_local:
     path: ../../packages/data_local
+  # Bundles the native SQLite library required by the Android spool's sqlite3 2.x FFI loader.
+  sqlite3_flutter_libs: 0.5.42
   # KITCHEN-MODE-001C2B: the native application-documents directory for the
   # dedicated spool database path (never called on web).
   path_provider: '>=2.1.0 <3.0.0'
