@@ -419,7 +419,7 @@ update modifier_options set kitchen_meat=jsonb_build_object('quantity',3,'unit',
  'classifier_option_id',pg_temp.pi_id('smash-cheese')) where id=pg_temp.pi_id('smash-option');
 grant all on _pi_results to service_role;
 set local role service_role;
-insert into _pi_results values('mixed_submit',public.submit_web_order_request('pi001-alpha',pg_temp.pi_uuid(18),repeat('c',64),
+insert into _pi_results values('mixed_submit',public.submit_web_order_request('pi001-alpha',pg_temp.pi_uuid(900),repeat('c',64),
  jsonb_build_object('order_type','takeaway','customer',jsonb_build_object('name','PI001 Prep Guest','phone','+972520001018'),
  'notes','Synthetic mixed preparation test','items',jsonb_build_array(
  jsonb_build_object('menu_item_id',pg_temp.pi_id('paid'),'quantity',2,'modifiers',jsonb_build_array(
@@ -434,14 +434,14 @@ reset role;
 select ok((select r->>'ok'='true' and r->>'status'='pending' and r->>'replayed'='false'
  from _pi_results where label='mixed_submit'),'mixed preparation uses the real submission contract');
 create temp table _pi_mixed_request as select id from web_order_requests
- where restaurant_id=pg_temp.pi_id('restaurant') and client_request_id=pg_temp.pi_uuid(18);
+ where restaurant_id=pg_temp.pi_id('restaurant') and client_request_id=pg_temp.pi_uuid(900);
 grant select on _pi_mixed_request to authenticated;
 select is((select count(*)::int from _pi_mixed_request),1,'mixed submission creates one pending request');
 select ok((select w.status='pending' and w.canonical_order_id is null
  and not exists(select 1 from web_order_decisions d where d.request_id=w.id)
  from web_order_requests w join _pi_mixed_request r on r.id=w.id),'mixed pending request has no canonical order or decision');
 set local role authenticated;
-select is(pg_temp.pi_accept((select id from _pi_mixed_request),18)->>'ok','true',
+select is(pg_temp.pi_accept((select id from _pi_mixed_request),900)->>'ok','true',
  'mixed preparation is accepted through real device/PIN and canonical order.submit');
 reset role;
 select is((select count(*)::int from web_order_decisions d join _pi_mixed_request r on r.id=d.request_id
