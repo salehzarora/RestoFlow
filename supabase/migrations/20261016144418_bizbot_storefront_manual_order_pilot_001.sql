@@ -61,7 +61,7 @@ create trigger manual_pilot_no_truncate before truncate on app.storefront_manual
 for each statement execute function app.guard_storefront_manual_order_pilot();
 
 create function app.storefront_manual_order_pilot_open(p_slug text)
-returns boolean language sql volatile security definer set search_path='' as $$
+returns boolean language sql stable security definer set search_path='' as $$
   select p_slug='mapsburger' and exists (
     select 1 from app.storefront_manual_order_pilots p
     join public.restaurant_storefront_profiles s on s.organization_id=p.organization_id
@@ -70,7 +70,9 @@ returns boolean language sql volatile security definer set search_path='' as $$
       and c.restaurant_id=p.restaurant_id and c.branch_id=p.branch_id
     where s.slug=p_slug and s.deleted_at is null and s.is_published and s.pickup_enabled
       and not s.delivery_enabled and p.enabled and p.consumed_request_id is null
-      and clock_timestamp()>=p.starts_at and clock_timestamp()<p.expires_at
+      -- This read-only hint uses the HTTP query's statement time. Actual
+      -- admission separately rechecks clock_timestamp after every lock/write.
+      and statement_timestamp()>=p.starts_at and statement_timestamp()<p.expires_at
       and c.submission_enabled
       and app.kitchen_print_containment_state(p.organization_id,p.restaurant_id,p.branch_id)->>'mode'='blocked'
   );
@@ -85,7 +87,7 @@ alter function public.storefront_menu_browse_only_manual_pilot_001(text) set sch
 revoke all on function app.storefront_menu_browse_only_manual_pilot_001(text)
   from public,anon,authenticated,service_role;
 create function public.storefront_menu(p_slug text)
-returns jsonb language plpgsql volatile security definer set search_path='' as $$
+returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare v jsonb;
 begin
   v:=app.storefront_menu_browse_only_manual_pilot_001(p_slug);
