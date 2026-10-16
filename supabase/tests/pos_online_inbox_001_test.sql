@@ -409,7 +409,10 @@ values
  (pg_temp.pi_id('cheese'),pg_temp.pi_id('org'),pg_temp.pi_id('restaurant'),pg_temp.pi_id('cheese-group'),'Cheese',0),
  (pg_temp.pi_id('smash-option'),pg_temp.pi_id('org'),pg_temp.pi_id('restaurant'),pg_temp.pi_id('smash-group'),'360g',0),
  (pg_temp.pi_id('smash-cheese'),pg_temp.pi_id('org'),pg_temp.pi_id('restaurant'),pg_temp.pi_id('smash-cheese-group'),'Cheese',0);
-update modifiers set allow_quantity=true,max_quantity=2 where id=pg_temp.pi_id('group');
+-- Repeated option units require a multiple-select group; min/max still count
+-- distinct options, so this synthetic group keeps its existing 1/1 bounds.
+update modifiers set selection_type='multiple',allow_quantity=true,max_quantity=2
+ where id=pg_temp.pi_id('group');
 update modifier_options set kitchen_meat=jsonb_build_object('quantity',2,'unit','Meat',
  'classifier_option_id',pg_temp.pi_id('cheese')) where id=pg_temp.pi_id('option');
 update modifier_options set kitchen_meat=jsonb_build_object('quantity',3,'unit','Smash meat',
