@@ -24,7 +24,15 @@ content is unchanged. No native application or APK changes.
 - A closed, unused window may be followed by a fresh window of at most 15
   minutes. Every old row and deadline remain immutable. Only one window may be
   enabled, and one successful request consumes the branch's budget across all
-  windows. A consumed window cannot be renewed.
+  windows. A consumed window cannot be renewed automatically.
+- After the first unaccepted request genuinely expires, the owner may authorize
+  ONE additional request using migration20261016202838. Its empty/default-OFF
+  private singleton authorization binds one exact future pilot UUID, expired
+  predecessor pilot/request, scope, <=15-minute deadline and owner reference.
+  Authorization and its exact window must commit together. No historical row
+  is rewritten/deleted; no third allowance can be minted. Old/new exact replay
+  retains original identity and the existing abuse accounting. A decision,
+  canonical mapping, targeted enrollment or unexpired predecessor refuses it.
 - Profile browse-only CHECK and stored ordering/delivery flags stay intact.
   The reader overrides only the existing public ordering bit while pilot/open/
   pickup/channel/BLOCKED predicates hold. No public JSON field is added.
@@ -111,3 +119,36 @@ Uncertain submission: reconcile the same browser identity/capability; never
 replace it. Uncertain begin/send or no paper: preserve attempt and reconcile,
 never resend. No ordinary policy or other-device restart is part of this pilot.
 Cold-offline imported-spool behavior remains unapproved for commercial rollout.
+
+
+## Owner-authorized additional attempt / operating restaurant
+
+The owner subsequently authorized another website order after the first pilot
+request expired unaccepted, and explicitly allowed the restaurant to continue
+operating during the test. This supersedes the earlier requirement to quiesce
+all other clients for this specific manual pilot. Restaurant OPEN is a service
+state, separate from device operation. Do not falsely report fleet quiescence.
+
+Keep the original624 and separately approved625th hold immutable, ordinary
+server-imported printing BLOCKED and prior web targets excluded. Ongoing
+ordinary orders/dispatches and legitimate order-status updates must be recorded
+as normal restaurant activity, not held, acknowledged or silently removed.
+Any original held-dispatch drift or prior target claim/send drift still stops
+this pilot. The new test may authorize only its genuine internal request ID;
+existing global claim/begin fencing permits at most one automatic transmission
+across eligible devices. Do not promise which printer wins. Tell restaurant
+operators not to Accept the labeled TEST request; the owner Accepts once on
+HOME only after exact target authorization. Premature acceptance, an uncertain
+submission or send, no paper, or any unexpected prior target activity means
+reconcile and stop, never a replacement or automatic resend.
+
+The extra allowance is a singleton, not a reusable release gate. Install only
+its reviewed additive migration while all admission stays OFF. In one bounded
+privileged transaction under the exclusive branch fence, verify the exact
+expired unaccepted predecessor and unchanged protection, then insert the
+immutable authorization and exact new pilot window. The existing approved
+contact binding remains private. There is no Edge/Storefront/APK contract change.
+Reconfirm owner/cart presence and remaining service time BEFORE opening this
+window. First successful browser submission atomically closes pilot/channel;
+then disable the Edge pilot flag and verify closure before target-only policy.
+An expired predecessor remains preserved and cannot be accepted or reused.

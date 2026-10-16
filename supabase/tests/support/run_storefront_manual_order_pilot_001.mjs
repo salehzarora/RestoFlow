@@ -137,6 +137,10 @@ const renewalMigration = await readFile(new URL(
   "../../migrations/20261016184616_bizbot_storefront_manual_order_pilot_001_unused_window_renewal.sql", import.meta.url), "utf8");
 assert.ok(renewalMigration.startsWith(`-- ${WORK_ID}:`), "Use only the task's additive unused-window migration");
 
+const extraAllowanceMigration = await readFile(new URL(
+  "../../migrations/20261016202838_bizbot_storefront_manual_order_pilot_001_additional_expired_allowance.sql", import.meta.url), "utf8");
+assert.ok(extraAllowanceMigration.startsWith(`-- ${WORK_ID}:`), "Use only the task's additional-allowance migration");
+
 async function makeClone(kind) {
   const db = `manual_pilot_001_${runId}_${kind}`;
   const tag = `${WORK_ID}:${runId}:${kind}`;
@@ -151,6 +155,7 @@ async function makeClone(kind) {
   // Apply only to this newly generated owned clone. The preserved template
   // retains its original schema and is never migrated, seeded or reset.
   await command(renewalMigration, db);
+  await command(extraAllowanceMigration, db);
   await command(`${fixture}\ncommit;`, db);
   return db;
 }
@@ -172,6 +177,52 @@ async function insertClosedUnusedWindow(db) {
    clock_timestamp()-interval '2 minutes',clock_timestamp()-interval '1 minute',clock_timestamp(),
    ${literal(salt)},${literal(contactHash)},${literal(`${WORK_ID}:${runId}:closed-unused`)})
    returning to_jsonb(storefront_manual_order_pilots)::text;`, db));
+}
+
+async function installExtraFixture(db, seconds) {
+  const seed = await command(`begin;
+   create function pg_temp.backdate_extra_parent() returns trigger language plpgsql as $$
+   begin new.created_at:=new.created_at-interval '16 minutes';
+    new.expires_at:=new.expires_at-interval '16 minutes';
+    new.status_until:=new.status_until-interval '16 minutes'; return new; end $$;
+   create trigger zz_extra_parent_fixture before insert on public.web_order_requests
+    for each row execute function pg_temp.backdate_extra_parent();
+   insert into app.storefront_manual_order_pilots(
+    organization_id,restaurant_id,branch_id,enabled,starts_at,expires_at,contact_salt,contact_hash,operator_reference)
+   values(${literal(org)},${literal(restaurant)},${literal(branch)},true,
+    clock_timestamp()-interval '1 second',clock_timestamp()+interval '120 seconds',
+    ${literal(salt)},${literal(contactHash)},${literal(`${WORK_ID}:${runId}:parent`)});
+   do $$ declare r jsonb; begin
+    r:=public.submit_web_order_pilot_request('mapsburger',${literal(client(301))},
+     ${literal(tokenHash)},${literal(JSON.stringify(order))}::jsonb);
+    if r->>'ok' is distinct from 'true' or r->>'replayed' is distinct from 'false' then
+     raise exception 'synthetic predecessor creation failed'; end if; end $$;
+   drop trigger zz_extra_parent_fixture on public.web_order_requests;
+   select jsonb_build_object('pilot',to_jsonb(p),'request',to_jsonb(w),
+    'expired',w.expires_at<=clock_timestamp())::text
+   from app.storefront_manual_order_pilots p join public.web_order_requests w on w.id=p.consumed_request_id;
+   commit;`, db);
+  const parent = oneJson(seed);
+  assert.equal(parent.expired, true);
+  assert.equal(parent.request.canonical_order_id, null);
+  const extraId = randomUUID();
+  await command(`begin;
+   select app.lock_kitchen_print_containment(${literal(branch)}::uuid,true);
+   do $$ declare t timestamptz:=clock_timestamp(); begin
+    insert into app.storefront_manual_order_pilot_extra_allowance(
+     pilot_id,previous_pilot_id,previous_request_id,organization_id,restaurant_id,branch_id,
+     starts_at,expires_at,operator_reference)
+    values(${literal(extraId)},${literal(parent.pilot.id)},${literal(parent.request.id)},
+     ${literal(org)},${literal(restaurant)},${literal(branch)},t,t+interval '${seconds} seconds',
+     ${literal(`${WORK_ID}:${runId}:extra`)});
+    insert into app.storefront_manual_order_pilots(id,organization_id,restaurant_id,branch_id,
+     enabled,starts_at,expires_at,contact_salt,contact_hash,operator_reference)
+    values(${literal(extraId)},${literal(org)},${literal(restaurant)},${literal(branch)},true,
+     t,t+interval '${seconds} seconds',${literal(salt)},${literal(contactHash)},
+     ${literal(`${WORK_ID}:${runId}:extra`)});
+    update public.web_order_channel_settings set submission_enabled=true where branch_id=${literal(branch)};
+   end $$; commit;`, db);
+  return { parent, extraId };
 }
 
 async function waitFor(check, message, maxMs = 10_000) {
@@ -277,6 +328,55 @@ try {
     lockWaitObserved: true, serverDeadlineObserved: true, refused: true,
     allStateUnchanged: true, priorWindowUnchanged: true, historicalWindows: 1,
     requests: 0, events: 0, canonicalOrders: 0, dispatches: 0, printAttempts: 0 });
+
+  // The same real lock races apply to the independently authorized extra
+  // budget, not just the original lifetime slot. All fixtures are disposable.
+  const extraDb = await makeClone("extra");
+  const extraFixture = await installExtraFixture(extraDb, 120);
+  const extra = await group(extraDb, "extra");
+  const extraFirst = oneJson(await extra.holder.query(`begin; set local role service_role;
+   set local statement_timeout='15s'; ${submit(302)}`));
+  assert.equal(extraFirst.ok, true); assert.equal(extraFirst.replayed, false);
+  const extraSecondPending = extra.contender.query(`set role service_role; set statement_timeout='15s'; ${submit(303)}`);
+  extraSecondPending.catch(() => {});
+  await witnessWait(extra.observer, extra.contenderPid, extra.holderPid, extraSecondPending);
+  await extra.holder.query("commit;");
+  assert.equal(oneJson(await extraSecondPending).error, "ordering_unavailable");
+  const extraState = oneJson(await extra.observer.query(snapshotSql));
+  assert.deepEqual([extraState.requests, extraState.events, extraState.orders, extraState.decisions,
+    extraState.dispatches, extraState.attempts], [2, 2, 0, 0, 0, 0]);
+  assert.equal(extraState.channel.submission_enabled, false);
+  assert.deepEqual(extraState.all_pilot_windows.find((p) => p.id === extraFixture.parent.pilot.id),
+    extraFixture.parent.pilot, "Extra consumption preserves exact historical pilot");
+  const preservedParent = oneJson(await extra.observer.query(`select to_jsonb(w)::text
+   from public.web_order_requests w where id=${literal(extraFixture.parent.request.id)};`));
+  assert.deepEqual(preservedParent, extraFixture.parent.request, "Extra consumption preserves exact expired request");
+  assert.equal(oneJson(await extra.contender.query(submit(301))).replayed, true);
+  assert.equal(oneJson(await extra.contender.query(submit(302))).replayed, true);
+  evidence.cases.push({ name: "one additional authorized request under concurrent identities", passed: true,
+    lockWaitObserved: true, totalRequests: 2, totalReceivedEvents: 2, thirdRefused: true,
+    parentPilotUnchanged: true, parentRequestUnchanged: true, oldReplay: true, newReplay: true,
+    disabledChannel: true, canonicalOrders: 0, dispatches: 0, printAttempts: 0 });
+  for (const session of [extra.holder, extra.contender, extra.observer]) session.stop();
+
+  const extraExpiryDb = await makeClone("extraexpiry");
+  await installExtraFixture(extraExpiryDb, 5);
+  const extraExpiry = await group(extraExpiryDb, "extraexpiry");
+  await extraExpiry.holder.query("begin; select id from app.storefront_manual_order_pilots where enabled for update;");
+  const extraExpiryBefore = oneJson(await extraExpiry.observer.query(snapshotSql));
+  const extraLatePending = extraExpiry.contender.query(`set role service_role; set statement_timeout='15s'; ${submit(304)}`);
+  extraLatePending.catch(() => {});
+  await witnessWait(extraExpiry.observer, extraExpiry.contenderPid, extraExpiry.holderPid, extraLatePending);
+  await waitFor(async () => oneJson(await extraExpiry.observer.query(`select to_jsonb(clock_timestamp()>=expires_at)::text
+   from app.storefront_manual_order_pilots where enabled;`)) === true, "Extra authorization expiry was not observed", 10_000);
+  await extraExpiry.holder.query("commit;");
+  assert.equal(oneJson(await extraLatePending).error, "ordering_unavailable");
+  const extraExpiryAfter = oneJson(await extraExpiry.observer.query(snapshotSql));
+  assert.deepEqual(extraExpiryAfter, extraExpiryBefore, "Extra expiry after actual lock wait must roll back all mutations");
+  assert.equal((await extraExpiry.observer.query("select public.storefront_menu('mapsburger')#>>'{service,ordering_enabled}';"))[0], "false");
+  evidence.cases.push({ name: "extra authorization expiry during actual row-lock wait", passed: true,
+    lockWaitObserved: true, serverDeadlineObserved: true, allStateUnchanged: true,
+    requests: 1, receivedEvents: 1, canonicalOrders: 0, dispatches: 0, printAttempts: 0 });
 } catch (error) {
   failure = error;
 } finally {
