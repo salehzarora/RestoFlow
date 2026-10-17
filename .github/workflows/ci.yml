@@ -260,6 +260,11 @@ jobs:
           node --version
           node --test test/*.test.mjs
 
+      # Notification-only fake FCM/status transports; no hosted credentials,
+      # order creation, printer or notification activation.
+      - name: Tests — POS background order alerts (Node, synthetic FCM)
+        run: node --test supabase/functions/pos-order-alert-dispatch/test/*.test.mjs
+
       - name: Storefront — install (locked)
         working-directory: storefront
         run: |

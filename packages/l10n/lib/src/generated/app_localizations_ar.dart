@@ -9531,4 +9531,22 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get storefrontItemImageUnknown =>
       'النتيجة غير مؤكدة. أعد المحاولة للتحقق من الطلب نفسه.';
+
+  @override
+  String get posBackgroundOrderAlerts => 'تنبيهات الاستلام في الخلفية';
+
+  @override
+  String get posBackgroundOrderAlertsHelp =>
+      'تلقي تنبيهات عامة عندما لا تكون نقطة البيع ظاهرة. قد تؤخرها أو توقفها إعدادات أندرويد والبطارية.';
+
+  @override
+  String get posBackgroundOrderAlertsExplanation =>
+      'السماح بإشعارات طلبات الاستلام المعلقة. يتكرر الصوت فقط ما دامت الطلبات المصرح بها معلقة. لا تظهر بيانات العملاء على شاشة القفل. تُحترم إعدادات صوت الإشعارات والوضع الصامت وعدم الإزعاج.';
+
+  @override
+  String get posBackgroundOrderAlertsEnable => 'تفعيل التنبيهات';
+
+  @override
+  String get posBackgroundOrderAlertsUnavailable =>
+      'تنبيهات الخلفية غير متاحة. يستمر تحديث صندوق الطلبات الحالي.';
 }

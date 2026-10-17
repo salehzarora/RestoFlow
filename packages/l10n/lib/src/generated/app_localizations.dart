@@ -17085,6 +17085,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Outcome unknown. Retry to check the same request.'**
   String get storefrontItemImageUnknown;
+
+  /// BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup.
+  ///
+  /// In en, this message translates to:
+  /// **'Background Pickup alerts'**
+  String get posBackgroundOrderAlerts;
+
+  /// BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup.
+  ///
+  /// In en, this message translates to:
+  /// **'Receive generic alerts when POS is not visible. Android and battery settings may delay or stop them.'**
+  String get posBackgroundOrderAlertsHelp;
+
+  /// BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow notifications for pending Pickup requests. The sound repeats only while authorized requests remain pending. No customer details appear on the lock screen. Android notification volume, silent mode and Do Not Disturb are respected.'**
+  String get posBackgroundOrderAlertsExplanation;
+
+  /// BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable alerts'**
+  String get posBackgroundOrderAlertsEnable;
+
+  /// BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup.
+  ///
+  /// In en, this message translates to:
+  /// **'Background alerts are unavailable. Existing Inbox polling remains active.'**
+  String get posBackgroundOrderAlertsUnavailable;
 }
 
 class _AppLocalizationsDelegate

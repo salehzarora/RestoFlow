@@ -9465,4 +9465,22 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get storefrontItemImageUnknown =>
       'התוצאה לא ידועה. נסו שוב כדי לבדוק את אותה בקשה.';
+
+  @override
+  String get posBackgroundOrderAlerts => 'התראות איסוף ברקע';
+
+  @override
+  String get posBackgroundOrderAlertsHelp =>
+      'קבלת התראות כלליות כשהקופה אינה מוצגת. הגדרות Android והסוללה עלולות לעכב או לעצור אותן.';
+
+  @override
+  String get posBackgroundOrderAlertsExplanation =>
+      'אפשרו התראות על בקשות איסוף ממתינות. הצליל חוזר רק כל עוד נותרו בקשות מורשות וממתינות. פרטי הלקוחות אינם מוצגים במסך הנעילה. עוצמת ההתראות, מצב שקט ונא לא להפריע נשמרים.';
+
+  @override
+  String get posBackgroundOrderAlertsEnable => 'הפעלת התראות';
+
+  @override
+  String get posBackgroundOrderAlertsUnavailable =>
+      'התראות הרקע אינן זמינות. רענון תיבת ההזמנות הקיימת ממשיך לפעול.';
 }

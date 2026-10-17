@@ -2868,5 +2868,10 @@
   "storefrontItemImagesPublishAll": "פרסום / רענון הכול",
   "storefrontItemImagesTitle": "תמונות מוצרים",
   "storefrontItemImagesUnavailable": "לא ניתן לאמת את תמונות המוצרים הנוכחיות. נסו שוב.",
-  "storefrontItemImageUnknown": "התוצאה לא ידועה. נסו שוב כדי לבדוק את אותה בקשה."
+  "storefrontItemImageUnknown": "התוצאה לא ידועה. נסו שוב כדי לבדוק את אותה בקשה.",
+  "posBackgroundOrderAlerts": "התראות איסוף ברקע",
+  "posBackgroundOrderAlertsHelp": "קבלת התראות כלליות כשהקופה אינה מוצגת. הגדרות Android והסוללה עלולות לעכב או לעצור אותן.",
+  "posBackgroundOrderAlertsExplanation": "אפשרו התראות על בקשות איסוף ממתינות. הצליל חוזר רק כל עוד נותרו בקשות מורשות וממתינות. פרטי הלקוחות אינם מוצגים במסך הנעילה. עוצמת ההתראות, מצב שקט ונא לא להפריע נשמרים.",
+  "posBackgroundOrderAlertsEnable": "הפעלת התראות",
+  "posBackgroundOrderAlertsUnavailable": "התראות הרקע אינן זמינות. רענון תיבת ההזמנות הקיימת ממשיך לפעול."
 }

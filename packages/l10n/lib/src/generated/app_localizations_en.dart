@@ -9617,4 +9617,22 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get storefrontItemImageUnknown =>
       'Outcome unknown. Retry to check the same request.';
+
+  @override
+  String get posBackgroundOrderAlerts => 'Background Pickup alerts';
+
+  @override
+  String get posBackgroundOrderAlertsHelp =>
+      'Receive generic alerts when POS is not visible. Android and battery settings may delay or stop them.';
+
+  @override
+  String get posBackgroundOrderAlertsExplanation =>
+      'Allow notifications for pending Pickup requests. The sound repeats only while authorized requests remain pending. No customer details appear on the lock screen. Android notification volume, silent mode and Do Not Disturb are respected.';
+
+  @override
+  String get posBackgroundOrderAlertsEnable => 'Enable alerts';
+
+  @override
+  String get posBackgroundOrderAlertsUnavailable =>
+      'Background alerts are unavailable. Existing Inbox polling remains active.';
 }
