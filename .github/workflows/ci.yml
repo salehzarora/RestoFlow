@@ -49,8 +49,9 @@ jobs:
       - name: Tests — Vercel deployment filtering
         run: node --test tools/vercel/ignore-build.test.mjs
 
-      - name: Tests — official Android Firebase build plumbing (synthetic only)
+      - name: Tests — official Android release guardrails (synthetic only)
         run: |
+          pwsh -NoProfile -File tools/android_release/test_signing_identity.ps1
           pwsh -NoProfile -File tools/android_release/test_firebase_build.ps1
           pwsh -NoProfile -File tools/android_release/test_release_output.ps1
 

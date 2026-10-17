@@ -26,6 +26,83 @@ function Fail([string]$m) { Write-Output "FAIL  $m"; $script:fail = 1 }
 function Ok([string]$m) { Write-Output "OK    $m" }
 function Info([string]$m) { Write-Output "      $m" }
 
+# BIZBOT-ANDROID-SIGNING-DRIFT-GUARD-001: exact reviewed differences only.
+# Never strip arbitrary Kotlin blocks or derive an accepted pin from the inputs.
+function Assert-ExactCount([string]$Text, [string]$Literal, [int]$Expected, [string]$Label) {
+    $count = 0; $offset = 0
+    while (($offset = $Text.IndexOf($Literal, $offset, [StringComparison]::Ordinal)) -ge 0) {
+        $count++; $offset += $Literal.Length
+    }
+    if ($count -ne $Expected) { throw "unexpected Gradle occurrence count: $Label" }
+}
+
+function Remove-ReviewedPosFragment([string]$Text, [string]$Before, [string]$Fragment, [string]$After, [string]$Label) {
+    $Before = $Before.Replace("`r`n", "`n")
+    $Fragment = $Fragment.Replace("`r`n", "`n")
+    $After = $After.Replace("`r`n", "`n")
+    Assert-ExactCount $Text $Fragment 1 $Label
+    $window = $Before + $Fragment + $After
+    Assert-ExactCount $Text $window 1 "$Label context"
+    if ($After.Length -eq 0 -and -not $Text.EndsWith($window, [StringComparison]::Ordinal)) {
+        throw "unexpected Gradle placement: $Label"
+    }
+    return $Text.Replace($window, ($Before + $After))
+}
+
+function Get-ReviewedCommonGradle([string]$Text, [string]$App) {
+    # Line endings are the only whitespace normalization. Preserve all other
+    # characters, comments and the final newline in the strict comparison.
+    $text = $Text.Replace("`r`n", "`n")
+    if ($App -ceq 'pos') {
+        $text = Remove-ReviewedPosFragment $text "import java.util.Properties`n" `
+            "import java.util.Base64`n" "`nplugins {" 'POS Base64 import'
+        $options = @'
+// Public Android client configuration only. This opt-in is OFF for every existing release invocation.
+val bizbotBackgroundAlerts = providers.gradleProperty("BIZBOT_BACKGROUND_ORDER_ALERTS").orNull == "true"
+fun bizbotPublicOption(name: String): String = providers.gradleProperty(name).orNull ?: ""
+fun bizbotQuoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+// Use the SAME backend define as Flutter; a method-channel caller cannot choose an arbitrary host.
+val bizbotDartDefines = (project.findProperty("dart-defines") as? String).orEmpty().split(',').mapNotNull {
+    try { String(Base64.getDecoder().decode(it), Charsets.UTF_8).split('=', limit = 2).takeIf { pair -> pair.size == 2 } }
+    catch (_: Exception) { null }
+}.associate { it[0] to it[1] }
+'@
+        $text = Remove-ReviewedPosFragment $text "    id(`"dev.flutter.flutter-gradle-plugin`")`n}`n`n" `
+            ($options + "`n`n") "// ---------------------------------------------------------------------------`n// RELEASE-KEY-AND-PIPELINE-001" 'POS Firebase options'
+        $text = Remove-ReviewedPosFragment $text "    ndkVersion = flutter.ndkVersion`n" `
+            "    buildFeatures { buildConfig = true }`n" "`n    compileOptions {" 'POS BuildConfig feature'
+        $fields = @'
+        manifestPlaceholders["bizbotBackgroundAlertsEnabled"] = bizbotBackgroundAlerts.toString()
+        buildConfigField("boolean", "BIZBOT_BACKGROUND_ORDER_ALERTS", bizbotBackgroundAlerts.toString())
+        buildConfigField("String", "BIZBOT_SUPABASE_URL", bizbotQuoted(bizbotDartDefines["RESTOFLOW_SUPABASE_URL"].orEmpty()))
+        for (name in listOf("BIZBOT_FIREBASE_APP_ID", "BIZBOT_FIREBASE_API_KEY", "BIZBOT_FIREBASE_PROJECT_ID", "BIZBOT_FIREBASE_SENDER_ID")) {
+            buildConfigField("String", name, bizbotQuoted(bizbotPublicOption(name)))
+        }
+'@
+        $text = Remove-ReviewedPosFragment $text "        versionName = flutter.versionName`n" `
+            ($fields + "`n") "    }`n`n    signingConfigs {" 'POS Firebase fields'
+        $dependency = @'
+dependencies {
+    // Native data-message receiver; no Flutter background isolate or Google Services plugin.
+    implementation("com.google.firebase:firebase-messaging:25.1.3")
+}
+'@
+        $text = Remove-ReviewedPosFragment $text "flutter {`n    source = `"../..`"`n}`n" `
+            ("`n" + $dependency + "`n") '' 'POS Firebase dependency'
+    }
+    elseif ($App -cne 'kds') { throw 'unexpected Gradle application identity' }
+
+    $otherApp = if ($App -ceq 'pos') { 'kds' } else { 'pos' }
+    foreach ($rule in @(
+            @{ Literal = "com.restoflow.$App"; Occurrences = 2; Common = 'APPID' },
+            @{ Literal = "RestoFlow $($App.ToUpperInvariant())"; Occurrences = 1; Common = 'APPNAME' },
+            @{ Literal = "apps/$otherApp"; Occurrences = 1; Common = 'OTHERAPP' })) {
+        Assert-ExactCount $text $rule.Literal $rule.Occurrences 'application identity'
+        $text = $text.Replace($rule.Literal, $rule.Common)
+    }
+    return $text
+}
+
 # ---- 1. POS / KDS signing blocks must not drift ---------------------------
 $pos = Join-Path $repo 'apps/pos/android/app/build.gradle.kts'
 $kds = Join-Path $repo 'apps/kds/android/app/build.gradle.kts'
@@ -33,14 +110,19 @@ foreach ($f in @($pos, $kds)) {
     if (-not (Test-Path $f)) { Fail "missing $f"; }
 }
 if ($fail -eq 0) {
-    # Normalise ONLY the four app-identity differences, then require equality.
-    $a = (Get-Content $pos -Raw) -replace 'com\.restoflow\.pos', 'APPID' `
-        -replace 'RestoFlow POS', 'APPNAME' -replace 'apps/kds', 'OTHERAPP'
-    $b = (Get-Content $kds -Raw) -replace 'com\.restoflow\.kds', 'APPID' `
-        -replace 'RestoFlow KDS', 'APPNAME' -replace 'apps/pos', 'OTHERAPP'
-    $a = $a -replace "`r`n", "`n"; $b = $b -replace "`r`n", "`n"
-    if ($a -eq $b) { Ok 'POS and KDS Gradle signing configuration is identical' }
-    else { Fail 'POS and KDS Gradle files have DRIFTED - they must stay in sync' }
+    try {
+        $a = Get-ReviewedCommonGradle (Get-Content $pos -Raw) 'pos'
+        $b = Get-ReviewedCommonGradle (Get-Content $kds -Raw) 'kds'
+        if (-not [string]::Equals($a, $b, [StringComparison]::Ordinal)) { throw 'unreviewed POS/KDS Gradle difference' }
+        # Reviewed common Gradle from approved main 8cf2d425. Pair equality alone
+        # cannot catch an unsafe change made identically to BOTH apps. Every
+        # future shared Gradle edit requires an explicitly reviewed pin update.
+        $pin = '4480a3bb20acd72de2fcb31655b1228f09f6d4c72aabfdd93b0d9bb8f3ec7db1'
+        $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b))).ToLowerInvariant()
+        if (-not [string]::Equals($digest, $pin, [StringComparison]::Ordinal)) { throw 'reviewed common Gradle content changed' }
+        Ok 'POS and KDS Gradle match reviewed signing and application differences'
+    }
+    catch { Fail 'POS/KDS Gradle content, counts or placement differ from the reviewed configuration' }
 
     # The debug-fallback must never come back. Comments are stripped first: the
     # file deliberately NAMES the forbidden call in prose to explain why it is
@@ -57,6 +139,8 @@ if ($fail -eq 0) {
     }
     if ($fail -eq 0) { Ok 'neither app can fall back to debug signing for a release' }
 }
+
+if ($fail -ne 0) { Write-Output ''; Write-Output 'signing-identity check: FAIL'; exit 1 }
 
 # ---- 2. The configured key (optional until the ceremony has run) -----------
 $propsPath = $env:RESTOFLOW_ANDROID_SIGNING_PROPERTIES
