@@ -99,6 +99,44 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.64",
+      "versionCode": 64,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / verified / consumed / NOT installed / NOT uploaded / NOT distributed",
+      "applicationSourceSha": "ecfdbec6985c160589684b2ccd8486af6142656e",
+      "sourceSha": "ecfdbec6985c160589684b2ccd8486af6142656e",
+      "buildDate": "2026-10-17",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v64-ecfdbec.apk",
+          "packageId": "com.restoflow.pos",
+          "sizeBytes": 76048997,
+          "sha256": "6cf6358e9a895d2f68f2294fe39f797a5f1352c322175de212f3d73b1e819d76"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v64-ecfdbec.apk",
+          "packageId": "com.restoflow.kds",
+          "sizeBytes": 57938786,
+          "sha256": "327aaf7ee722a409722a1b934f4f6fcd19a405c6b1eb18910eb244f5e721b713"
+        }
+      },
+      "notes": [
+        "BIZBOT-ANDROID-V64-RELEASE-LEDGER-001 reconciles the completed BIZBOT-ANDROID-OFFICIAL-V64-FCM-BUILD-001 build. The unchanged official pair runner used -SourceSha ecfdbec6985c160589684b2ccd8486af6142656e, -AllowNonMain, -EnablePosBackgroundOrderAlerts and the approved external public Firebase configuration in a clean isolated checkout of approved main after PR #345.",
+        "Source CI 39058672744 completed SUCCESS, including application validation and pgTAP, before the build. Build started 2026-10-17T21:59:20 and completed 2026-10-17T22:03:13 Asia/Jerusalem. Both APKs have synchronized version 0.0.64 / 64 and the same audited source; source SHA is clean-build provenance, not an independently embedded APK field.",
+        "Both official APK verifiers PASS: packages com.restoflow.pos and com.restoflow.kds, pinned restoflow-production certificate, valid signatures, ZIP alignment, non-debuggable AOT release, RESTOFLOW_DEMO_MODE=false, production oqmevrndtivqxgyvcmwy backend and public client key only. Supplemental 16-KB ZIP alignment passes for both; no privileged-key or private-key material was found in the artifact checks.",
+        "POS Firebase background-alert build opt-in is ON in both Dart and native Gradle inputs. Generated release BuildConfig and actual APK manifest/DEX match bizbot-production, sender 31661231890 and app 1:31661231890:android:1856c6d5ac4e64a229adcb; the public API key was compared in memory and is not recorded here. Four alert components are enabled and non-exported; Firebase messaging auto-init and analytics remain false.",
+        "KDS Firebase opt-in is OFF/absent: no Dart alert define, Firebase configuration, alert components or Firebase Messaging integration in the verified APK. KDS application behavior is unchanged; POS-only Firebase inputs were cleared for its build. Retained Gradle executionHistory dartDefines inputs independently establish POS-only Dart opt-in.",
+        "Actual APK bytes and SHA-256 values reconcile with dist/official-v64/SHA256SUMS.txt, BUILD-METADATA.txt and the preserved verification-summary.json. Both checksum entries independently pass PowerShell hashing and sha256sum -c. Original evidence and artifacts are unchanged.",
+        "BUILD-METADATA.txt formatting limitation: the unchanged runner records the first Gradle output separator in its Gradle field. A separate read-only probe verified Gradle 9.1.0, recorded in verification-summary.json; the original metadata was not edited.",
+        "POS retains libsqlite3.so and AOT libapp.so for arm64-v8a, armeabi-v7a and x86_64. No new native-loader, physical-device, notification-delivery or kitchen-print acceptance test was performed for v64.",
+        "v63 APKs, SHA256SUMS.txt and BUILD-METADATA.txt remain hash-identical; every earlier ledger entry, owner-reported acceptance supplement and currentOfficialRelease is preserved. PR #314/#315 remain excluded. No application, runner, signing, Firebase, hosted, admission, policy, hold, order, printer or device changes are part of this record.",
+        "v64 is BUILT / VERIFIED / NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED, with no GitHub Release or physical acceptance. Notification server flags remain unmodified; this record activates nothing. Cold-offline imported-spool commercial rollout remains unapproved.",
+        "Code 64 is consumed; reserve 0.0.65 / 65 as bookkeeping only, NOT approved for building, installing or releasing. Do not rebuild or silently replace this verified pair, or promote v64 to currentOfficialRelease before physical device acceptance. This PR requires separate merge approval; device installation and notification activation require separate authorization."
+      ]
+    },
+    {
       "versionName": "0.0.63",
       "versionCode": 63,
       "signing": "restoflow-production",
@@ -806,14 +844,14 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.64",
-    "versionCode": 64,
+    "versionName": "0.0.65",
+    "versionCode": 65,
     "signing": "restoflow-production",
     "status": "reserved - NOT planned / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "To be separately planned and approved after verified official v63; this reservation authorizes no build or rollout.",
+    "intendedSource": "Bookkeeping reservation only after verified official v64; source and scope require separate owner approval. NOT approved for building, installing or releasing.",
     "notes": [
-      "Reserved after verified official synchronized v63. Code 63 remains consumed; preserve its exact artifacts and source identity.",
-      "All prior release history and v59/v61 owner-reported evidence remain unchanged. v62 installation and physical printing are owner-reported separately with adbVerified=false; v63 is not installed.",
+      "Reserved after verified official synchronized v64. Code 64 is consumed; preserve its exact artifacts and source identity. No v65 build, installation or release is authorized.",
+      "All prior build-time release records and owner-reported acceptance evidence remain unchanged. The owner subsequently reported POS v63 installed on HOME; this is owner testimony only, not ADB verification or formal physical acceptance. v64 remains NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED; currentOfficialRelease is not promoted.",
       "Follow existing source authorization, signing, synchronized POS/KDS build and release-record governance. No physical device, hosted, admission, print or commercial offline-policy action is authorized."
     ]
   },
