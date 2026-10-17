@@ -7,6 +7,7 @@
      mismatched key/data state; there is no silent key regeneration. -->
 <data-extraction-rules>
     <cloud-backup>
+        <exclude domain="sharedpref" path="bizbot_order_alert_status_v1.xml" />
         <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
         <exclude domain="sharedpref" path="FlutterSecureKeyStorage.xml" />
         <exclude domain="root" path="app_flutter/restoflow_kitchen_spool" />
@@ -14,6 +15,7 @@
         <exclude domain="database" path="restoflow_kitchen_spool" />
     </cloud-backup>
     <device-transfer>
+        <exclude domain="sharedpref" path="bizbot_order_alert_status_v1.xml" />
         <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
         <exclude domain="sharedpref" path="FlutterSecureKeyStorage.xml" />
         <exclude domain="root" path="app_flutter/restoflow_kitchen_spool" />

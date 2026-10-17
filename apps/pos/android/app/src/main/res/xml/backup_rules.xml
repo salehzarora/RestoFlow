@@ -19,6 +19,7 @@
         Nothing creates this directory yet (001C2B); the rule is
         deploy-ahead. -->
 <full-backup-content>
+    <exclude domain="sharedpref" path="bizbot_order_alert_status_v1.xml" />
     <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
     <!-- CLEANUP 2: the plugin's LEGACY preferences filename (pre-9.x
          installs may still hold values there after an upgrade). -->

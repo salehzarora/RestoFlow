@@ -1,0 +1,8 @@
+<resources>
+    <string name="background_order_channel">Pickup order alerts</string>
+    <string name="background_order_channel_description">BIZBOT pending pickup requests. Notification volume and Do Not Disturb apply.</string>
+    <string name="background_order_title">BIZBOT Pickup</string>
+    <string name="background_order_active">A pickup request needs attention. Open POS and sign in to review.</string>
+    <string name="background_order_open">Open POS and sign in to check pickup requests.</string>
+    <string name="background_order_stop">Stop alerts</string>
+</resources>

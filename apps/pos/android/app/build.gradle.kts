@@ -1,12 +1,23 @@
 import java.io.FileInputStream
 import java.security.KeyStore
 import java.util.Properties
+import java.util.Base64
 
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Public Android client configuration only. This opt-in is OFF for every existing release invocation.
+val bizbotBackgroundAlerts = providers.gradleProperty("BIZBOT_BACKGROUND_ORDER_ALERTS").orNull == "true"
+fun bizbotPublicOption(name: String): String = providers.gradleProperty(name).orNull ?: ""
+fun bizbotQuoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+// Use the SAME backend define as Flutter; a method-channel caller cannot choose an arbitrary host.
+val bizbotDartDefines = (project.findProperty("dart-defines") as? String).orEmpty().split(',').mapNotNull {
+    try { String(Base64.getDecoder().decode(it), Charsets.UTF_8).split('=', limit = 2).takeIf { pair -> pair.size == 2 } }
+    catch (_: Exception) { null }
+}.associate { it[0] to it[1] }
 
 // ---------------------------------------------------------------------------
 // RELEASE-KEY-AND-PIPELINE-001 — FAIL-CLOSED production signing.
@@ -81,6 +92,7 @@ android {
     namespace = "com.restoflow.pos"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
+    buildFeatures { buildConfig = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -96,6 +108,12 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["bizbotBackgroundAlertsEnabled"] = bizbotBackgroundAlerts.toString()
+        buildConfigField("boolean", "BIZBOT_BACKGROUND_ORDER_ALERTS", bizbotBackgroundAlerts.toString())
+        buildConfigField("String", "BIZBOT_SUPABASE_URL", bizbotQuoted(bizbotDartDefines["RESTOFLOW_SUPABASE_URL"].orEmpty()))
+        for (name in listOf("BIZBOT_FIREBASE_APP_ID", "BIZBOT_FIREBASE_API_KEY", "BIZBOT_FIREBASE_PROJECT_ID", "BIZBOT_FIREBASE_SENDER_ID")) {
+            buildConfigField("String", name, bizbotQuoted(bizbotPublicOption(name)))
+        }
     }
 
     signingConfigs {
@@ -158,4 +176,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Native data-message receiver; no Flutter background isolate or Google Services plugin.
+    implementation("com.google.firebase:firebase-messaging:25.1.3")
 }

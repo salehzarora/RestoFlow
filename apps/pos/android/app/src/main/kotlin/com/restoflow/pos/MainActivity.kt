@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
@@ -57,6 +58,7 @@ class MainActivity : FlutterActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var onlineOrderAlertAudio: OnlineOrderAlertAudioChannel? = null
+    private var backgroundOrderAlertBridge: BackgroundOrderAlertBridge? = null
     private var alertForeground = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -66,6 +68,9 @@ class MainActivity : FlutterActivity() {
             this,
             flutterEngine.dartExecutor.binaryMessenger,
         ).also { it.setForeground(alertForeground) }
+        backgroundOrderAlertBridge?.detach()
+        backgroundOrderAlertBridge = BackgroundOrderAlertBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        BackgroundOrderAlertCoordinator.get(this).onIntent(intent)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -105,17 +110,32 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        backgroundOrderAlertBridge?.detach()
+        backgroundOrderAlertBridge = null
         onlineOrderAlertAudio?.detach()
         onlineOrderAlertAudio = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
     override fun onDestroy() {
+        backgroundOrderAlertBridge?.detach()
+        backgroundOrderAlertBridge = null
         onlineOrderAlertAudio?.detach()
         onlineOrderAlertAudio = null
         jobExecutor.shutdownNow()
         watchdog.shutdownNow()
         super.onDestroy()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        BackgroundOrderAlertCoordinator.get(this).onIntent(intent)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        backgroundOrderAlertBridge?.permissionsResult(requestCode, grantResults)
     }
 
     private fun bluetoothAdapter(): BluetoothAdapter? =

@@ -4,6 +4,10 @@
          source sets, so the release (main) manifest must declare it too, or a
          release build's pilot APK would have no network access (ANDROID-001). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Bluetooth Classic (SPP) thermal printing (ANDROID-003). Android 12+
          (API 31+) uses the runtime BLUETOOTH_CONNECT (connect to a bonded
          printer) + BLUETOOTH_SCAN; "neverForLocation" declares scan does not
@@ -28,6 +32,22 @@
         android:icon="@mipmap/ic_launcher"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules">
+        <!-- Private sideloaded pilot only. User-visible and stoppable; no media/remoteMessaging impersonation. -->
+        <service android:name=".BackgroundOrderAlertService" android:exported="false"
+            android:enabled="${bizbotBackgroundAlertsEnabled}" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-enabled, bounded audible alert for server-verified pending pickup requests on this paired POS; expires within fifteen minutes and stops on status, logout or user Stop." />
+        </service>
+        <service android:name=".BackgroundOrderAlertMessagingService" android:exported="false"
+            android:enabled="${bizbotBackgroundAlertsEnabled}">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
+        <receiver android:name=".BackgroundOrderAlertStopReceiver" android:exported="false"
+            android:enabled="${bizbotBackgroundAlertsEnabled}" />
+        <provider android:name=".BackgroundOrderAlertInitProvider" android:authorities="${applicationId}.backgroundorderalert.init"
+            android:exported="false" android:initOrder="101" android:enabled="${bizbotBackgroundAlertsEnabled}" />
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+        <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

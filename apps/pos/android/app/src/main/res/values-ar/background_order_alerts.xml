@@ -1,0 +1,8 @@
+<resources>
+    <string name="background_order_channel">تنبيهات طلبات الاستلام</string>
+    <string name="background_order_channel_description">طلبات الاستلام المعلقة في BIZBOT. تُحترم إعدادات الصوت وعدم الإزعاج.</string>
+    <string name="background_order_title">BIZBOT — طلب استلام</string>
+    <string name="background_order_active">طلب استلام يحتاج إلى المراجعة. افتح نقطة البيع وسجّل الدخول.</string>
+    <string name="background_order_open">افتح نقطة البيع وسجّل الدخول للتحقق من طلبات الاستلام.</string>
+    <string name="background_order_stop">إيقاف التنبيهات</string>
+</resources>
