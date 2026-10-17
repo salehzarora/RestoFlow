@@ -2868,5 +2868,10 @@
   "storefrontItemImagesPublishAll": "نشر / تحديث الكل",
   "storefrontItemImagesTitle": "صور المنتجات",
   "storefrontItemImagesUnavailable": "تعذّر التحقق من صور المنتجات الحالية. حاول مرة أخرى.",
-  "storefrontItemImageUnknown": "النتيجة غير مؤكدة. أعد المحاولة للتحقق من الطلب نفسه."
+  "storefrontItemImageUnknown": "النتيجة غير مؤكدة. أعد المحاولة للتحقق من الطلب نفسه.",
+  "posBackgroundOrderAlerts": "تنبيهات الاستلام في الخلفية",
+  "posBackgroundOrderAlertsHelp": "تلقي تنبيهات عامة عندما لا تكون نقطة البيع ظاهرة. قد تؤخرها أو توقفها إعدادات أندرويد والبطارية.",
+  "posBackgroundOrderAlertsExplanation": "السماح بإشعارات طلبات الاستلام المعلقة. يتكرر الصوت فقط ما دامت الطلبات المصرح بها معلقة. لا تظهر بيانات العملاء على شاشة القفل. تُحترم إعدادات صوت الإشعارات والوضع الصامت وعدم الإزعاج.",
+  "posBackgroundOrderAlertsEnable": "تفعيل التنبيهات",
+  "posBackgroundOrderAlertsUnavailable": "تنبيهات الخلفية غير متاحة. يستمر تحديث صندوق الطلبات الحالي."
 }

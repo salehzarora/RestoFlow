@@ -10,6 +10,7 @@ import '../data/ids.dart';
 import '../data/secure_session_store.dart';
 import '../data/shift_repository.dart';
 import '../data/sync_cursor_store.dart' show PosSyncScope;
+import '../media/background_order_alert_bridge.dart';
 import 'cart_controller.dart' show posActiveCorrectionSourceProvider;
 import 'outbox_controller.dart' show outboxControllerProvider;
 import 'pos_device_context.dart';
@@ -632,6 +633,11 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   /// the record's own hard window still bounds any restore, and destroying it
   /// there would brick a till that merely sat idle offline.
   void endSession({bool clearStoredSession = true}) {
+    // Local sign-out is authoritative even if the server PIN has not expired.
+    // Revoke only notification delegation; never alter pairing or print state.
+    if (ref.exists(backgroundOrderAlertBridgeProvider)) {
+      unawaited(ref.read(backgroundOrderAlertBridgeProvider).disable());
+    }
     if (clearStoredSession) {
       final scope = _scopeOfBinding(_binding);
       if (scope != null) {

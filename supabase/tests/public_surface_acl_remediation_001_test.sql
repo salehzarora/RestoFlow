@@ -170,11 +170,15 @@ select is(
     union all select 'submit_web_order_live_request(text,uuid,text,jsonb)'
     union all select 'submit_web_order_pilot_request(text,uuid,text,jsonb)'
     union all select 'get_web_order_request_status(text,uuid,text)'
+    union all select 'pos_order_alert_status(uuid,text)'
+    union all select 'pos_disable_order_alert(uuid,text)'
+    union all select 'pos_claim_order_alert_deliveries(integer)'
+    union all select 'pos_finish_order_alert_delivery(uuid,uuid,text)'
     union all select regexp_replace(
       'public.submit_web_order_test_request(text,uuid,text,jsonb,uuid,uuid,uuid,uuid,timestamptz,timestamptz)'::regprocedure::text,
       '^public.', '')
   ) denied),
-  'D1. authenticated excludes the anon-only read and all five exact service-only web-request wrappers');
+  'D1. authenticated excludes the anon-only read and all nine exact service-only web-request/notification wrappers');
 
 -- device / pairing
 select ok(has_function_privilege('authenticated', 'public.redeem_device_pairing(text, text)', 'EXECUTE'),

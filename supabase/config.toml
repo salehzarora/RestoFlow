@@ -444,3 +444,13 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: native scoped delegation / private worker.
+# Both handlers and the database feature are default OFF. No scheduler is installed.
+# These are NOT Supabase JWT endpoints: they validate distinct 256-bit secrets.
+[functions.pos-order-alert-status]
+enabled = true
+verify_jwt = false
+[functions.pos-order-alert-dispatch]
+enabled = true
+verify_jwt = false

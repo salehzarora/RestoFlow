@@ -5953,5 +5953,15 @@
   "storefrontItemImagesUnavailable": "The current product images could not be verified. Try again.",
   "@storefrontItemImagesUnavailable": {"description":"STOREFRONT-PUBLISH-002: Existing product-image publication workflow."},
   "storefrontItemImageUnknown": "Outcome unknown. Retry to check the same request.",
-  "@storefrontItemImageUnknown": {"description":"STOREFRONT-PUBLISH-002: Existing product-image publication workflow."}
+  "@storefrontItemImageUnknown": {"description":"STOREFRONT-PUBLISH-002: Existing product-image publication workflow."},
+  "posBackgroundOrderAlerts": "Background Pickup alerts",
+  "@posBackgroundOrderAlerts": {"description":"BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup."},
+  "posBackgroundOrderAlertsHelp": "Receive generic alerts when POS is not visible. Android and battery settings may delay or stop them.",
+  "@posBackgroundOrderAlertsHelp": {"description":"BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup."},
+  "posBackgroundOrderAlertsExplanation": "Allow notifications for pending Pickup requests. The sound repeats only while authorized requests remain pending. No customer details appear on the lock screen. Android notification volume, silent mode and Do Not Disturb are respected.",
+  "@posBackgroundOrderAlertsExplanation": {"description":"BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup."},
+  "posBackgroundOrderAlertsEnable": "Enable alerts",
+  "@posBackgroundOrderAlertsEnable": {"description":"BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup."},
+  "posBackgroundOrderAlertsUnavailable": "Background alerts are unavailable. Existing Inbox polling remains active.",
+  "@posBackgroundOrderAlertsUnavailable": {"description":"BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup."}
 }

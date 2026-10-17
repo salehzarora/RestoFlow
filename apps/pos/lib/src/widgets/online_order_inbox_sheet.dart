@@ -9,6 +9,7 @@ import '../data/online_order_inbox.dart';
 import '../format/money_format.dart';
 import '../media/pos_media_image.dart';
 import '../state/online_order_inbox_controller.dart';
+import '../state/background_order_alerts.dart';
 import '../state/pos_menu_provider.dart';
 import '../state/pos_offline_state.dart';
 import '../spool/online_order_print_hooks.dart'
@@ -67,6 +68,8 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
       if (WidgetsBinding.instance.lifecycleState == null ||
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         _controller!.onResume();
+        ref.read(backgroundOrderAlertsProvider.notifier).onResume();
+        unawaited(_consumeNotificationTap());
       } else {
         _controller!.onPaused();
       }
@@ -77,8 +80,11 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _controller?.onResume();
+      ref.read(backgroundOrderAlertsProvider.notifier).onResume();
+      unawaited(_consumeNotificationTap());
     } else {
       _controller?.onPaused();
+      ref.read(backgroundOrderAlertsProvider.notifier).onPaused();
     }
   }
 
@@ -102,10 +108,22 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
     }
   }
 
+  Future<void> _consumeNotificationTap() async {
+    final tapped = await ref
+        .read(backgroundOrderAlertsProvider.notifier)
+        .consumeInboxTap();
+    if (mounted &&
+        tapped &&
+        ref.read(onlineOrderInboxIdentityProvider) != null) {
+      await _open();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(onlineOrderInboxControllerProvider);
+    ref.watch(backgroundOrderAlertsProvider);
     ref.listen(
       onlineOrderInboxControllerProvider.select((s) => s.printOutcome),
       (previous, next) {
@@ -167,6 +185,58 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
           overflow: TextOverflow.ellipsis,
         ),
       ),
+    );
+  }
+}
+
+class _BackgroundOrderAlertControl extends ConsumerWidget {
+  const _BackgroundOrderAlertControl();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final alerts = ref.watch(backgroundOrderAlertsProvider);
+    if (!alerts.available) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    return SwitchListTile.adaptive(
+      key: const Key('background-order-alert-switch'),
+      contentPadding: EdgeInsets.zero,
+      title: Text(l10n.posBackgroundOrderAlerts),
+      subtitle: Text(
+        alerts.failed
+            ? l10n.posBackgroundOrderAlertsUnavailable
+            : l10n.posBackgroundOrderAlertsHelp,
+      ),
+      value: alerts.enabled,
+      onChanged: alerts.busy
+          ? null
+          : (value) async {
+              if (value) {
+                final allowed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    scrollable: true,
+                    title: Text(l10n.posBackgroundOrderAlerts),
+                    content: Text(l10n.posBackgroundOrderAlertsExplanation),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text(
+                          MaterialLocalizations.of(context).cancelButtonLabel,
+                        ),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text(l10n.posBackgroundOrderAlertsEnable),
+                      ),
+                    ],
+                  ),
+                );
+                if (allowed != true) return;
+              }
+              if (!context.mounted) return;
+              await ref
+                  .read(backgroundOrderAlertsProvider.notifier)
+                  .setEnabled(value);
+            },
     );
   }
 }
@@ -256,6 +326,7 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
                           ),
                         ],
                       ),
+                      const _BackgroundOrderAlertControl(),
                       if (state.loading || state.deciding)
                         LinearProgressIndicator(
                           semanticsLabel: state.deciding

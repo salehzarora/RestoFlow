@@ -12,6 +12,7 @@ import 'package:restoflow_pos/src/design/pos_visual_tokens.dart';
 import 'package:restoflow_pos/src/media/pos_media_image.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/state/online_order_inbox_controller.dart';
+import 'package:restoflow_pos/src/state/background_order_alerts.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
 import 'package:restoflow_pos/src/state/ready_notifications_controller.dart';
@@ -75,6 +76,18 @@ class _QuietOutbox extends OutboxController {
   List<OutboxEntry> build() => const [];
 }
 
+class _BackgroundAlerts extends BackgroundOrderAlerts {
+  final choices = <bool>[];
+  @override
+  BackgroundOrderAlertState build() =>
+      const BackgroundOrderAlertState(available: true);
+  @override
+  Future<void> setEnabled(bool value) async {
+    choices.add(value);
+    state = BackgroundOrderAlertState(available: true, enabled: value);
+  }
+}
+
 Future<void> pumpNavbar(
   WidgetTester tester, {
   required String locale,
@@ -134,6 +147,7 @@ Future<_Controller> pumpInbox(
   PosMenuData? menu,
   bool menuUnavailable = false,
   WebOrderPrintOutcome? recovery,
+  BackgroundOrderAlerts? backgroundAlerts,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -146,6 +160,8 @@ Future<_Controller> pumpInbox(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        if (backgroundAlerts != null)
+          backgroundOrderAlertsProvider.overrideWith(() => backgroundAlerts),
         onlineInboxPrintRecoveryProvider.overrideWith((ref) async => recovery),
         onlineOrderInboxControllerProvider.overrideWith(() => controller),
         onlineOrderInboxIdentityProvider.overrideWithValue('test-authority'),
@@ -178,6 +194,43 @@ Future<_Controller> pumpInbox(
 }
 
 void main() {
+  for (final language in ['ar', 'he', 'en']) {
+    for (final width in [390.0, 1024.0]) {
+      testWidgets(
+        '$language $width background opt-in explanation precedes enabling',
+        (tester) async {
+          final alerts = _BackgroundAlerts();
+          final inbox = await pumpInbox(
+            tester,
+            locale: language,
+            size: Size(width, 844),
+            scale: 2,
+            backgroundAlerts: alerts,
+          );
+          final toggle = find.descendant(
+            of: find.byKey(const Key('background-order-alert-switch')),
+            matching: find.byType(Switch),
+          );
+          await tester.ensureVisible(toggle);
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          expect(find.byType(AlertDialog), findsOneWidget);
+          expect(alerts.choices, isEmpty);
+          final context = tester.element(find.byType(AlertDialog));
+          final l10n = AppLocalizations.of(context);
+          expect(
+            find.text(l10n.posBackgroundOrderAlertsExplanation),
+            findsOneWidget,
+          );
+          await tester.tap(find.text(l10n.posBackgroundOrderAlertsEnable));
+          await tester.pumpAndSettle();
+          expect(alerts.choices, [true]);
+          expect(inbox.decisions, isEmpty);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
   testWidgets(
     'restart recovery projects durable hold without a retry control',
     (tester) async {

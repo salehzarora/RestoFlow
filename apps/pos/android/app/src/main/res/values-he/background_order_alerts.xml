@@ -1,0 +1,8 @@
+<resources>
+    <string name="background_order_channel">התראות הזמנות איסוף</string>
+    <string name="background_order_channel_description">בקשות איסוף ממתינות ב־BIZBOT. עוצמת ההתראות ומצב נא לא להפריע נשמרים.</string>
+    <string name="background_order_title">BIZBOT — הזמנת איסוף</string>
+    <string name="background_order_active">בקשת איסוף דורשת טיפול. פתחו את הקופה והתחברו.</string>
+    <string name="background_order_open">פתחו את הקופה והתחברו לבדיקת בקשות האיסוף.</string>
+    <string name="background_order_stop">הפסקת התראות</string>
+</resources>
