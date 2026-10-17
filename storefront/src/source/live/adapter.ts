@@ -17,7 +17,7 @@
  *   - the campaign hero falls back to the tagline, else the display name, with
  *     an EMPTY subline the hero omits (D11); every other optional module is off
  *   - general ordering is OFF; only the server-admitted Maps Burger Pickup
- *     pilot can enable checkout. Delivery stays OFF and zones stay empty.
+ *     rollout can enable checkout. Delivery stays OFF and zones stay empty.
  *
  * Pure: no I/O. `liveSource` is the only thing that calls the client.
  */
@@ -207,8 +207,8 @@ export function liveStorefrontSource(config?: LiveConfig): StorefrontSource {
     },
     staticSlugs(): readonly string[] {
       // Nothing is pre-rendered in live mode: all tenants retain per-URL ISR.
-      // The server enforces pilot expiry and the single-request budget even
-      // if a previously rendered document still displays checkout.
+      // The server rechecks live branch admission for every new request even
+      // if a previously rendered document still displays checkout after OFF.
       return [];
     },
   };

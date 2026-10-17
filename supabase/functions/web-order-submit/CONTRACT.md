@@ -79,7 +79,8 @@ KDS and kitchen dispatch readers consume.
 The server uses `SUPABASE_URL` and the platform-injected
 `SUPABASE_SERVICE_ROLE_KEY` for exactly one public-schema RPC call per request:
 
-- `submit_web_order_request(p_slug, p_client_request_id, p_status_token_hash, p_order)`
+- `submit_web_order_live_request(p_slug, p_client_request_id, p_status_token_hash, p_order)`
+  for ordinary admission under BIZBOT-MAPSBURGER-ALWAYS-ON-WEB-ORDERS-001.
 - `get_web_order_request_status(p_slug, p_client_request_id, p_status_token_hash)`
 - `submit_web_order_test_request(...)` only for the separately authorized,
   disabled-by-default controlled-test permit described below.
@@ -92,6 +93,15 @@ disabled unless `WEB_ORDERS_ENABLED` is exactly `true`; the independent database
 channel gate is also disabled by default. `status` remains available while the
 Edge submit gate is disabled. RPC execution is granted only to `service_role`;
 anonymous gateway access does not grant database RPC access.
+
+The live RPC is default OFF and pins the exact Maps Burger published branch to
+private persistent rollout authority. It delegates the existing trusted pricing,
+validation, quotas and idempotency contract, then atomically enrolls only fresh
+live requests. It has no private-contact or one-request budget. Intake OFF closes
+new admission while retaining capability status and exact replay. The existing
+service-only `submit_web_order_request` remains an internal delegated contract;
+the general Edge route no longer invokes it directly. See the
+[persistent rollout and OFF runbook](../../../docs/MAPSBURGER_ALWAYS_ON_WEB_ORDERS.md).
 
 Only the exact `WEB_ORDERS_ALLOWED_ORIGIN` is allowed (default
 `https://menu.bizbot.systems`); absent Origin permits server calls. CORS is not

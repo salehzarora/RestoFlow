@@ -104,7 +104,7 @@ test("submit uses the exact RPC, only the server credential, and a SHA-256 token
   assert.match(output.response.headers.get("cache-control"), /no-store/);
   assert.equal(calls.length, 1);
   const { url, init, args } = calls[0];
-  assert.equal(url, `${BASE}/rest/v1/rpc/submit_web_order_request`);
+  assert.equal(url, `${BASE}/rest/v1/rpc/submit_web_order_live_request`);
   assert.equal(init.method, "POST");
   assert.equal(init.redirect, "error");
   assert.equal(init.cache, "no-store");
@@ -117,6 +117,48 @@ test("submit uses the exact RPC, only the server credential, and a SHA-256 token
   assert.equal(JSON.stringify(output.body).includes(TOKEN), false);
   assert.equal(JSON.stringify(output.body).includes(SERVICE_KEY), false);
   assert.deepEqual(args.p_order, submission().order);
+});
+
+test("persistent Maps Burger routing admits independent customers without pilot credentials", async () => {
+  const { handler, calls, envReads } = harness({
+    env: { WEB_ORDERS_TEST_ENABLED: "false", WEB_ORDERS_PILOT_ENABLED: "false" },
+    fetchImpl: async (_url, init) => {
+      const args = JSON.parse(init.body);
+      return new Response(JSON.stringify(success({ request_id: args.p_client_request_id })));
+    },
+  });
+  const first = { ...submission(), slug: "mapsburger" };
+  const second = structuredClone(first);
+  second.request_id = "2c25ed67-acf7-454c-a0a5-932d6f6ea86f";
+  second.status_token = Buffer.alloc(32, 18).toString("base64url");
+  second.order.customer = { name: "Another Customer", phone: "+972509876543" };
+  for (const body of [first, second]) {
+    const output = await result(handler, body, { headers: { origin: ORIGIN } });
+    assert.equal(output.response.status, 200);
+    assert.equal(output.body.request_id, body.request_id);
+  }
+  assert.equal(calls.length, 2);
+  assert.equal(calls.every((call) => call.url === `${BASE}/rest/v1/rpc/submit_web_order_live_request`), true);
+  assert.notEqual(calls[0].args.p_status_token_hash, calls[1].args.p_status_token_hash);
+  assert.deepEqual(calls.map((call) => call.args.p_order.customer), [first.order.customer, second.order.customer]);
+  assert.equal(envReads.includes("WEB_ORDERS_TEST_PERMIT"), false);
+});
+
+test("persistent Maps Burger database OFF rejects a stale checkout while status remains usable", async () => {
+  const { handler, calls } = harness({
+    fetchImpl: async (url) => new Response(JSON.stringify(url.endsWith("/submit_web_order_live_request")
+      ? { ok: false, error: "ordering_unavailable" }
+      : success({ status: "accepted" }))),
+  });
+  const body = { ...submission(), slug: "mapsburger" };
+  const blocked = await result(handler, body, { headers: { origin: ORIGIN } });
+  assert.equal(blocked.response.status, 503);
+  assert.deepEqual(blocked.body, { ok: false, error: "ordering_unavailable" });
+  const { order: _order, ...status } = body;
+  const existing = await result(handler, { ...status, action: "status" }, { headers: { origin: ORIGIN } });
+  assert.equal(existing.response.status, 200);
+  assert.equal(existing.body.status, "accepted");
+  assert.equal(calls[1].url, `${BASE}/rest/v1/rpc/get_web_order_request_status`);
 });
 
 test("omitted optional fields normalize and repeated submissions keep identical RPC arguments", async () => {
@@ -531,7 +573,7 @@ test("missing or invalid server configuration fails closed without fetch or secr
   }
   const { handler, calls } = harness({ env: { SUPABASE_URL: "http://127.0.0.1:54321" } });
   assert.equal((await result(handler)).response.status, 200);
-  assert.equal(calls[0].url, "http://127.0.0.1:54321/rest/v1/rpc/submit_web_order_request");
+  assert.equal(calls[0].url, "http://127.0.0.1:54321/rest/v1/rpc/submit_web_order_live_request");
 });
 
 test("Supabase's exact injected local gateway is allowed while other HTTP network targets stay denied", async () => {
@@ -539,7 +581,7 @@ test("Supabase's exact injected local gateway is allowed while other HTTP networ
     const { handler, calls } = harness({ env: { SUPABASE_URL: base } });
     assert.equal((await result(handler)).response.status, 200);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, "http://kong:8000/rest/v1/rpc/submit_web_order_request");
+    assert.equal(calls[0].url, "http://kong:8000/rest/v1/rpc/submit_web_order_live_request");
     assert.equal(calls[0].init.headers.Authorization, `Bearer ${SERVICE_KEY}`);
   }
   for (const base of [
