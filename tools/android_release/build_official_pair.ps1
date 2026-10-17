@@ -22,7 +22,9 @@
 param(
     [string]$SourceSha = '',
     [switch]$AllowNonMain,
-    [string]$OutputRoot = ''
+    [string]$OutputRoot = '',
+    [switch]$EnablePosBackgroundOrderAlerts,
+    [string]$FirebasePublicConfig = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,6 +35,7 @@ Set-Location $repo
 # so SHA256SUMS.txt and BUILD-METADATA.txt have one tested format instead of two
 # ad-hoc ones. See tools/android_release/test_release_output.ps1.
 . (Join-Path $PSScriptRoot 'release_output.ps1')
+. (Join-Path $PSScriptRoot 'firebase_build.ps1')
 
 function Stop-Release([string]$m) { Write-Output "STOP: $m"; exit 1 }
 
@@ -87,6 +90,11 @@ if ($expectedCert -eq 'PENDING_KEY_CEREMONY') {
 }
 
 # ---- 3. Production signing must be present and correct BEFORE building ----
+$posFirebaseConfig = Get-PosFirebaseBuildConfiguration -RepositoryRoot $repo `
+    -EnableBackgroundOrderAlerts:$EnablePosBackgroundOrderAlerts -FirebasePublicConfig $FirebasePublicConfig
+Assert-NoFirebaseBuildOverrides -RepositoryRoot $repo
+Write-Output "POS background alerts  $([bool]$posFirebaseConfig) (explicit build opt-in only)"
+
 $propsPath = $env:RESTOFLOW_ANDROID_SIGNING_PROPERTIES
 if ([string]::IsNullOrWhiteSpace($propsPath) -or -not (Test-Path $propsPath)) {
     Stop-Release 'Production Android signing configuration is unavailable.'
@@ -125,13 +133,11 @@ foreach ($app in @('pos', 'kds')) {
 
     Push-Location (Join-Path $repo "apps/$app")
     try {
-        & flutter build apk --release `
-            --build-name=$versionName `
-            --build-number=$versionCode `
-            --dart-define=RESTOFLOW_DEMO_MODE=false `
-            --dart-define=RESTOFLOW_SUPABASE_URL=$url `
-            --dart-define=RESTOFLOW_SUPABASE_ANON_KEY=$key
-        if ($LASTEXITCODE -ne 0) { Stop-Release "$upper build failed" }
+        $buildArguments = @('build', 'apk', '--release', "--build-name=$versionName", "--build-number=$versionCode",
+            '--dart-define=RESTOFLOW_DEMO_MODE=false', "--dart-define=RESTOFLOW_SUPABASE_URL=$url",
+            "--dart-define=RESTOFLOW_SUPABASE_ANON_KEY=$key")
+        Invoke-OfficialFlutterBuild -App $app -BuildArguments $buildArguments `
+            -PosFirebaseConfig $posFirebaseConfig -RepositoryRoot $repo
     }
     finally { Pop-Location }
 

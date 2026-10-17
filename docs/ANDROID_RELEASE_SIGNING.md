@@ -233,6 +233,38 @@ never installs, uploads, pushes, releases or deploys.
 
 ---
 
+### Optional POS background-order notifications
+
+`BIZBOT-POS-V64-FIREBASE-BUILD-PLUMBING-001` adds an explicit, default-OFF
+POS-only build opt-in. After separate source/release authorization, use the
+same official runner with:
+
+```powershell
+pwsh tools/android_release/build_official_pair.ps1 `
+  -EnablePosBackgroundOrderAlerts `
+  -FirebasePublicConfig "$env:USERPROFILE\.codex\local-config\BIZBOT-FIREBASE-PRODUCTION-SETUP-002\android-public-build-config.json"
+```
+
+The external JSON must contain exactly four string fields:
+`BIZBOT_FIREBASE_APP_ID`, `BIZBOT_FIREBASE_API_KEY`,
+`BIZBOT_FIREBASE_PROJECT_ID`, and `BIZBOT_FIREBASE_SENDER_ID`.
+The project, number and Android app are pinned to the approved
+`bizbot-production` / `31661231890` registration. Missing, malformed,
+foreign, in-checkout or linked configuration fails before a build. No private
+service-account or signing credential belongs in this file.
+
+Only POS receives the Dart flag and matching native Gradle properties. The
+runner temporarily scopes public inputs to that Flutter invocation, clears
+them for KDS/default-OFF builds, and restores prior environment on success or
+failure. Conflicting reserved JVM/Gradle settings fail closed rather than
+overriding the audited inputs. Configuration values are never logged.
+
+This plumbing does not authorize an APK build, consume reserved v64, modify
+v63 artifacts, or activate Firebase/server notifications. Existing source,
+signing, synchronized versions and APK/checksum verification gates still apply.
+Synthetic checks (no APK, signing access or hosted calls):
+`pwsh tools/android_release/test_firebase_build.ps1`.
+
 ## 7. Release history
 
 | Version | Signing | Source | Status |

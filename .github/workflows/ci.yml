@@ -49,6 +49,11 @@ jobs:
       - name: Tests — Vercel deployment filtering
         run: node --test tools/vercel/ignore-build.test.mjs
 
+      - name: Tests — official Android Firebase build plumbing (synthetic only)
+        run: |
+          pwsh -NoProfile -File tools/android_release/test_firebase_build.ps1
+          pwsh -NoProfile -File tools/android_release/test_release_output.ps1
+
       - name: Set up Flutter (bundles Dart)
         uses: subosito/flutter-action@v2
         with:
