@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { brotliCompressSync, constants } from 'node:zlib';
 import { SYNTH_IDS } from '../support/envelope.mjs';
+import { orderMessages } from '../../src/i18n/orders';
 
 const BASE = process.env.SF_WEB_ORDER_BASE ?? '';
 const RUN = process.env.SF_WEB_ORDER_RUN_DIR ?? '';
@@ -13,6 +14,12 @@ const ORIGIN = 'https://oqmevrndtivqxgyvcmwy.supabase.co';
 const EDGE = `${ORIGIN}/functions/v1/web-order-submit`;
 const TTL = 86_400_000;
 const PHONE = '+972501234567';
+const LOCAL_PHONE = '050 123 4567';
+const PHONE_CASES = [
+  { input: LOCAL_PHONE, canonical: PHONE },
+  { input: '03-234-5678', canonical: '+97232345678' },
+  { input: '+447700900123', canonical: '+447700900123' },
+];
 const NAME = 'Synthetic Browser Guest';
 const ITEM_NOTES = ['First line בלי בצל بدون بصل', 'Second line extra onion'];
 const ORDER_NOTE = 'Synthetic pickup note ملاحظة הערה';
@@ -124,7 +131,7 @@ async function addLine(page: Page, note: string, itemQuantity = 1, optionQuantit
   await sheet.locator('[data-sf-cta="product"]').click();
   await expect(sheet).toHaveCount(0);
 }
-async function prepare(page: Page, locale: string, slug: string, twoLines = true) {
+async function prepare(page: Page, locale: 'ar' | 'he' | 'en', slug: string, twoLines = true, phone = LOCAL_PHONE) {
   const document = await page.goto(routeFor(locale, slug, 'menu'), { waitUntil: 'networkidle' });
   expect(document?.status()).toBe(200);
   expect(document?.headers()['content-security-policy']).toContain(`connect-src 'self' ${ORIGIN};`);
@@ -143,12 +150,24 @@ async function prepare(page: Page, locale: string, slug: string, twoLines = true
   await expect(page.locator('[data-sf-web-order="details"]')).toBeVisible();
   await expect(page.locator('[data-sf-address]')).toHaveCount(0);
   await page.locator('[data-sf-field="fullName"]').fill(NAME);
-  await page.locator('[data-sf-field="phone"]').fill('0501234567');
+  await expect(page.locator('[data-sf-field="phone"]')).toHaveAttribute('placeholder', '0521234567');
+  await expect(page.locator('[data-sf-phone-help]')).toHaveText(orderMessages(locale).phoneHelp);
+  await page.locator('[data-sf-field="phone"]').fill('050123456');
   await expect(page.locator('[data-sf-cta="to-review"]')).toHaveAttribute('aria-disabled', 'true');
-  await page.locator('[data-sf-field="phone"]').fill(PHONE);
+  // The aria-disabled CTA intentionally remains keyboard-activatable to explain errors.
+  await page.locator('[data-sf-cta="to-review"]').press('Enter');
+  await expect(page.locator('[data-sf-field="phone"]')).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.locator('[data-sf-phone-help]')).toHaveText(orderMessages(locale).phoneError);
+  await page.locator('[data-sf-field="phone"]').fill(phone);
   await page.locator('[data-sf-field="orderNotes"]').fill(ORDER_NOTE);
   await page.locator('[data-sf-cta="to-review"]').click();
   await expect(page.locator('[data-sf-web-order="review"]')).toBeVisible();
+  await expect(page.locator('[data-sf-block="contact"]')).toContainText(phone);
+  await page.locator('[data-sf-edit="contact"]').click();
+  await expect(page.locator('[data-sf-field="phone"]')).toHaveValue(phone);
+  await page.locator('[data-sf-cta="to-review"]').click();
+  await expect(page.locator('[data-sf-web-order="review"]')).toBeVisible();
+  await expect(page.locator('[data-sf-block="contact"]')).toContainText(phone);
   await expect(page.locator('[data-sf-item-note]')).toHaveText(twoLines ? ITEM_NOTES : [ITEM_NOTES[0]]);
   await expect(page.locator('[data-sf-order-notes]')).toContainText(ORDER_NOTE);
   await expect(page.locator('[data-sf-banner="truth-notice"]')).toBeVisible();
@@ -158,9 +177,9 @@ async function prepare(page: Page, locale: string, slug: string, twoLines = true
   expect(directReview.status()).toBe(200);
   recordInitialJs(await directReview.text(), routeFor(locale, slug, 'review'));
 }
-function assertPayload(body: RequestBody, twoLines = true) {
+function assertPayload(body: RequestBody, twoLines = true, phone = PHONE) {
   expect(body.order?.order_type).toBe('takeaway');
-  expect(body.order?.customer).toEqual({ name: NAME, phone: PHONE });
+  expect(body.order?.customer).toEqual({ name: NAME, phone });
   expect(body.order?.notes).toBe(ORDER_NOTE);
   expect(body.order?.items.map((item) => ({ id: item.menu_item_id, quantity: item.quantity, notes: item.notes, modifiers: item.modifiers }))).toEqual([
     { id: SYNTH_IDS.burger, quantity: 2, notes: ITEM_NOTES[0], modifiers: [{ modifier_option_id: SYNTH_IDS.classic, quantity: 1 }, { modifier_option_id: SYNTH_IDS.cheese, quantity: 2 }] },
@@ -180,6 +199,10 @@ async function assertPrivateStorage(page: Page, slug: string) {
   for (const [, content] of [...stored.local, ...stored.session]) {
     expect(content.includes(NAME)).toBe(false); expect(content.includes(PHONE)).toBe(false); expect(content.includes(ITEM_NOTES[0])).toBe(false); expect(content.includes(ORDER_NOTE)).toBe(false); expect(content.includes(SYNTH_IDS.burger)).toBe(false);
   }
+  for (const value of PHONE_CASES.flatMap(({ input, canonical }) => [input, canonical])) {
+    expect(stored.url.includes(value) || stored.url.includes(encodeURIComponent(value))).toBe(false);
+    for (const [, content] of [...stored.local, ...stored.session]) expect(content.includes(value)).toBe(false);
+  }
 }
 
 test.beforeAll(() => {
@@ -189,18 +212,18 @@ test.beforeAll(() => {
   expect(readFileSync(path.join(APP, 'src/source/live/ordering.ts'), 'utf8')).toContain('LIVE_ORDERING_RELEASED = true;');
 });
 
-for (const locale of ['ar', 'he', 'en']) {
+for (const locale of ['ar', 'he', 'en'] as const) {
   for (const [index, width] of [390, 1024, 1440].entries()) {
     const terminal = (['accepted', 'rejected', 'expired'] as const)[index];
     test(`${locale} ${width}px: quantity + distinct notes → pending → ${terminal} → status reload`, async ({ page, context }) => {
       await page.setViewportSize({ width, height: 900 });
       const edge = await offlineEdge(context, page);
       const slug = `sf-browser-${locale}-${width}`;
-      await prepare(page, locale, slug);
+      await prepare(page, locale, slug, true, PHONE_CASES[index].input);
       await assertPage(page, locale); await picture(page, `${locale}-${width}-review.png`);
       await page.locator('[data-sf-cta="send"]').click();
       await expect(page.locator('[data-sf-live-status="pending"]')).toBeVisible();
-      expect(edge.writes).toBe(1); expect(edge.ledger.size).toBe(1); assertPayload(edge.submissions[0]);
+      expect(edge.writes).toBe(1); expect(edge.ledger.size).toBe(1); assertPayload(edge.submissions[0], true, PHONE_CASES[index].canonical);
       await expect(page.locator('[data-sf-server-totals]')).toContainText('₪145.67');
       await expect(page.locator('[data-sf-status-action="order-again"]')).toHaveCount(0);
       await assertPrivateStorage(page, slug); await picture(page, `${locale}-${width}-pending.png`);
