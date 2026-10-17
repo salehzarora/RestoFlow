@@ -1516,6 +1516,29 @@ hours remain unchanged. Capability status survives closing test admission.
 See the [Edge permit contract](../supabase/functions/web-order-submit/CONTRACT.md)
 and [operator/switch-off runbook](STOREFRONT_ROLLOUT_001C_PREP.md).
 
+### 4.52 Persistent scoped Pickup admission (BIZBOT-MAPSBURGER-ALWAYS-ON-WEB-ORDERS-001)
+
+Ordinary Edge submission now calls service-only
+`public.submit_web_order_live_request(text,uuid,text,jsonb)`, retaining §4.48's
+four argument names and public result shape. Default-OFF private rollout authority
+pins Maps Burger's exact organization, restaurant and published branch. New
+requests require enabled intake/channel, OPEN service and Pickup eligibility;
+pricing, validation, quotas and idempotency delegate the existing trusted writer.
+Exact replay and capability status remain recoverable after intake OFF. No
+approved-contact restriction, pilot deadline or one-request budget applies.
+The profile browse-only CHECK and other restaurants' release gates remain intact.
+
+Fresh live requests receive immutable eligibility atomically with submission.
+Trusted POS acceptance allocates a device/session-bound exact print lease in the
+same transaction as canonical creation. Installed v63 consumes its unchanged
+`target_only` wire contract; no ordinary authority is granted. A second acceptance
+on that device is refused before canonical creation while its previous callback
+is unresolved. Historical requests and accepted replays never allocate a lease.
+Readiness, assignment checks, irreversible begin and no-resend fencing remain.
+Intake OFF preserves admitted work; separate emergency print OFF revokes future
+claim/begin authority without deleting identities, outcomes or audit evidence.
+See [scope, operator API, release sequence and OFF procedure](MAPSBURGER_ALWAYS_ON_WEB_ORDERS.md).
+
 ## 5. Cross-References
 - Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034, D-037, D-039, D-040, D-041, D-042, D-043, D-044, D-045, D-046, D-047).
 - Open questions: [OPEN_QUESTIONS](OPEN_QUESTIONS.md) (Q-004, Q-007, Q-008, Q-009, Q-010, Q-011, Q-012, Q-014, Q-015, Q-017, Q-028, Q-029, Q-030, Q-031, Q-032, Q-033, Q-034, Q-035, Q-036, Q-039, Q-040, Q-041, Q-042, Q-043, Q-044, Q-045, Q-046).

@@ -69,7 +69,7 @@ function publicResult(result, requestId) {
 }
 
 async function callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit, pilotSubmission }) {
-  const rpc = input.action === "submit" ? (testPermit ? "submit_web_order_test_request" : pilotSubmission ? "submit_web_order_pilot_request" : "submit_web_order_request") : "get_web_order_request_status";
+  const rpc = input.action === "submit" ? (testPermit ? "submit_web_order_test_request" : pilotSubmission ? "submit_web_order_pilot_request" : "submit_web_order_live_request") : "get_web_order_request_status";
   const args = { p_slug: input.slug, p_client_request_id: input.request_id, p_status_token_hash: tokenHash };
   if (input.action === "submit") args.p_order = input.order;
   if (testPermit) Object.assign(args, {

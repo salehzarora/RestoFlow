@@ -1,13 +1,13 @@
 import type { WireService } from './decode';
 
-/** General rollout remains disabled; the bounded Maps Burger pilot is separate. */
+/** Other restaurants remain disabled; Maps Burger has a server-controlled rollout. */
 export const LIVE_ORDERING_RELEASED = false;
 
-/** The server alone admits the owner-bound, expiring, single-request pilot. */
-export const MANUAL_ORDER_PILOT_SLUG = 'mapsburger';
+/** This allowlist is only a UI gate; the server authorizes the exact branch. */
+export const LIVE_PICKUP_ROLLOUT_SLUG = 'mapsburger';
 
 export function liveOrderingEnabled(slug: string, service: WireService): boolean {
-  return (LIVE_ORDERING_RELEASED || slug === MANUAL_ORDER_PILOT_SLUG)
+  return (LIVE_ORDERING_RELEASED || slug === LIVE_PICKUP_ROLLOUT_SLUG)
     && service.ordering_enabled
     && service.state === 'open'
     && service.pickup_enabled;

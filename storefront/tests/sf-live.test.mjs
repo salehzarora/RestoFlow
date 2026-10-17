@@ -66,7 +66,7 @@ test('general ordering admission stays off even when another tenant advertises o
   assert.throws(() => decodeStorefrontMenu(syntheticEnvelope({ service: { delivery_enabled: true } })), EnvelopeError);
 });
 
-test('only the exact open Pickup Maps Burger pilot follows the current server admission flag', () => {
+test('only the exact open Pickup Maps Burger rollout follows the current server admission flag', () => {
   const adapted = (slug, service = {}) => adaptStorefront(decodeStorefrontMenu(syntheticEnvelope({
     restaurant: { slug },
     service: { ordering_enabled: true, ...service },
@@ -86,9 +86,26 @@ test('only the exact open Pickup Maps Burger pilot follows the current server ad
   ]) {
     assert.equal(adapted('mapsburger', service).view.tenant.service.orderingEnabled, false, JSON.stringify(service));
   }
-  // Expiry, consumption and operator closure are all represented by the same
-  // existing server boolean; a prior enabled resolution confers no authority.
+  // OFF is represented by the same existing server boolean; a prior enabled
+  // resolution confers no authority over a later request.
   assert.equal(adapted('mapsburger', { ordering_enabled: false }).view.tenant.service.orderingEnabled, false);
+});
+
+test('Maps Burger checkout has no client-side single-request allowance or pilot deadline', () => {
+  const envelope = syntheticEnvelope({
+    restaurant: { slug: 'mapsburger' },
+    service: { ordering_enabled: true },
+  });
+  // Independent browser resolutions and subsequent menu loads follow the
+  // current server hint. No customer identity or consumed budget lives here.
+  for (let resolution = 0; resolution < 3; resolution += 1) {
+    assert.equal(adaptStorefront(decodeStorefrontMenu(envelope), ORIGIN).view.tenant.service.orderingEnabled, true);
+  }
+  const off = syntheticEnvelope({
+    restaurant: { slug: 'mapsburger' },
+    service: { ordering_enabled: false },
+  });
+  assert.equal(adaptStorefront(decodeStorefrontMenu(off), ORIGIN).view.tenant.service.orderingEnabled, false);
 });
 
 test('closed enums, uuid ids, HH:MM hours and the tag vocabulary are enforced', () => {
@@ -404,7 +421,7 @@ test('the client builds exactly the PostgREST RPC request with the anon key on t
   assert.equal(Object.hasOwn(init, 'cache'), false, 'ordinary tenant caching is unchanged');
 });
 
-test('pilot and ordinary menu reads preserve the established ISR fetch contract', () => {
+test('rollout and ordinary menu reads preserve the established ISR fetch contract', () => {
   for (const slug of ['mapsburger', 'maps-burger', 'sf-synth-a']) {
     const { url, init } = storefrontMenuRequest(CONFIG, slug);
     assert.equal(url, `${ORIGIN}/rest/v1/rpc/storefront_menu`);
