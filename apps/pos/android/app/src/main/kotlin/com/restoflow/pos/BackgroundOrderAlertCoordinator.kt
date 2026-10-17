@@ -78,7 +78,8 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     private var hintDuringRead = false
     private var visibilityEpoch = 0L
     private var fallbackWanted = false
-    private val expireFallback = Runnable { cancelFallback() }
+    // Visibility expiry must not invalidate an authenticated read already in flight for B.
+    private val expireFallback = Runnable { notifications().cancel(FALLBACK_NOTIFICATION_ID) }
     private val reconcileHint = Runnable { reconcileScheduled = false; reconcile() }
     private val playback = OnlineOrderAlertPlayback(
         createClip = { BackgroundAlertClip(context) },

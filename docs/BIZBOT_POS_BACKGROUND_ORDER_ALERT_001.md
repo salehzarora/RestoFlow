@@ -40,7 +40,9 @@ guarantee a ten-second cadence in deep Doze.
 
 Fallback visibility is capped at 60 seconds and by the earliest verified
 request/authority deadline using Android's platform notification timeout plus
-in-process cleanup. Cancel hints (including bounded late expiry hints) only
+in-process cleanup. Visibility expiry does not invalidate an authenticated
+status read already in flight for another request. Cancel hints (including
+bounded late expiry hints) only
 request a coalesced full-set read. Authoritative empty state cancels coverage;
 resolving A while B remains updates coverage silently. A failed read stops
 local coverage, and an absent terminal hint cannot leave an indefinite notice.
