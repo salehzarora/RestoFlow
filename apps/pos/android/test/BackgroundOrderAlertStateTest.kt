@@ -152,5 +152,80 @@ fun main() {
         check(backgroundOrderAlertHintAction(false, false, true, false) == BackgroundOrderAlertHintAction.none)
         check(backgroundOrderAlertHintAction(true, false, true, false) == BackgroundOrderAlertHintAction.foreground)
     }
+    scenario("expired cancel is a bounded refresh signal, never a new pending request") {
+        val gate = BackgroundOrderAlertHints()
+        check(gate.accept(hint("cancel"), registration, epoch + 60_001, 0))
+        check(!gate.accept(hint(), registration, epoch + 60_001, 1))
+        check(!BackgroundOrderAlertHints().accept(hint("cancel"), registration, epoch + 180_001, 0))
+    }
+    scenario("verified fallback requests one sound, bounded visibility and no repeating schedule") {
+        var reservations = 0
+        val first = BackgroundOrderAlertFallback.plan(pending("A"), 0, 100_000, 0, emptyMap(), true) { reservations++; true }
+        check(first.audible && first.timeoutMs == 60_000L && reservations == 1)
+        val duplicate = BackgroundOrderAlertFallback.plan(pending("A"), 61_000, 39_000, 61_000, first.heard, true) { error("duplicate sound") }
+        check(!duplicate.audible && duplicate.timeoutMs == 39_000L)
+    }
+    scenario("heard fences survive process recreation, notification expiry and delayed duplicate hints") {
+        val first = BackgroundOrderAlertFallback.plan(pending("A"), 0, 100_000, 0, emptyMap(), true) { true }
+        val restoredVault = first.heard.toMap()
+        val restarted = BackgroundOrderAlertFallback.plan(pending("A"), 70_000, 30_000, 70_000, restoredVault, true) { error("restarted duplicate") }
+        check(!restarted.audible && restarted.timeoutMs == 30_000L)
+    }
+    scenario("fresh B can alert once while A notification remains, without re-alerting A or B") {
+        val owner = BackgroundOrderAlertOwnership()
+        val first = BackgroundOrderAlertFallback.plan(pending("A"), 0, 100_000, 0, emptyMap(), true) { owner.reservePlayback(0) }
+        check(first.audible)
+        val next = BackgroundOrderAlertFallback.plan(pending("A", "B"), 11_000, 89_000, 11_000, first.heard, true) { owner.reservePlayback(11_000) }
+        check(next.audible && next.timeoutMs == 60_000L)
+        val duplicate = BackgroundOrderAlertFallback.plan(pending("A", "B"), 22_000, 78_000, 22_000, next.heard, true) { error("already alerted") }
+        check(!duplicate.audible)
+    }
+    scenario("authoritative final acceptance rejection and expiry each cancel fallback coverage") {
+        for (terminal in listOf("accepted", "rejected", "expired")) {
+            val first = BackgroundOrderAlertFallback.plan(pending(terminal), 0, 100_000, 0, emptyMap(), true) { true }
+            val result = BackgroundOrderAlertFallback.plan(emptyMap(), 1_000, 99_000, 1_000, first.heard, true) { error("terminal sound") }
+            check(result.timeoutMs == 0L && !result.audible)
+        }
+    }
+    scenario("cancel A cannot remove B; only full server truth selects fallback coverage") {
+        val first = BackgroundOrderAlertFallback.plan(pending("A", "B"), 0, 100_000, 0, emptyMap(), true) { true }
+        val remaining = BackgroundOrderAlertFallback.plan(pending("B"), 1_000, 99_000, 1_000, first.heard, true) { error("B already covered") }
+        check(!remaining.audible && remaining.timeoutMs == 60_000L && "B" in remaining.heard)
+        val falseCancel = BackgroundOrderAlertFallback.plan(pending("A", "B"), 2_000, 98_000, 2_000, remaining.heard, true) { error("hint is not authority") }
+        check(falseCancel.timeoutMs > 0 && !falseCancel.audible)
+    }
+    scenario("fallback expiry is capped by earliest request and real authority, including clock offset") {
+        val offset = 4_000_000_000L
+        val request = BackgroundOrderAlertFallback.plan(mapOf("A" to offset + 4_000), offset, 99_000, 500, emptyMap(), true) { true }
+        check(request.timeoutMs == 4_000L)
+        val authority = BackgroundOrderAlertFallback.plan(pending("A"), 0, 1_500, 0, emptyMap(), true) { true }
+        check(authority.timeoutMs == 1_500L)
+        val expired = BackgroundOrderAlertFallback.plan(mapOf("A" to offset), offset + 1, 99_000, 500, emptyMap(), true) { error("expired") }
+        check(expired.timeoutMs == 0L)
+    }
+    scenario("denied sound policy stays silent and a delayed duplicate cannot ring after unmuting") {
+        for (policy in listOf("permission", "channel-muted", "DND", "silent", "vibrate", "zero-volume")) {
+            val first = BackgroundOrderAlertFallback.plan(pending(policy), 0, 100_000, 0, emptyMap(), false) { error("policy denied") }
+            check(!first.audible)
+            val retry = BackgroundOrderAlertFallback.plan(pending(policy), 10_000, 90_000, 10_000, first.heard, true) { error("no late ring") }
+            check(!retry.audible)
+        }
+    }
+    scenario("fallback foreground and FGS share one playback reservation during handoff") {
+        val owner = BackgroundOrderAlertOwnership()
+        val first = BackgroundOrderAlertFallback.plan(pending("A"), 0, 100_000, 0, emptyMap(), true) { owner.reservePlayback(0) }
+        check(first.audible)
+        owner.setForeground(true)
+        check(!owner.reservePlayback(1))
+        owner.setForeground(false)
+        check(!owner.reservePlayback(9_999) && owner.reservePlayback(10_000))
+        val next = BackgroundOrderAlertFallback.plan(pending("B"), 10_000, 90_000, 10_000, first.heard, true) { owner.reservePlayback(10_000) }
+        check(!next.audible)
+    }
+    scenario("bounded deduplication never evicts a live fence to sound another duplicate") {
+        val heard = (0 until BackgroundOrderAlertFallback.MAX_HEARD).associate { "heard-$it" to 100_000L }
+        val full = BackgroundOrderAlertFallback.plan(pending("new"), 0, 100_000, 0, heard, true) { error("capacity must fail silent") }
+        check(!full.audible && full.heard == heard)
+    }
     println("$passed native background state scenarios passed")
 }

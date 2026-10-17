@@ -22,8 +22,15 @@ episode is capped at fifteen minutes. Requests and delegated authority have
 independent expiry bounds; neither can be renewed by the native status API.
 
 High-priority FCM is an OS background-start exemption only when actually
-delivered at high priority. Start denial/downgrade yields a limited generic
-notification, not a claim of working repeats. Notification denial/muting,
+delivered at high priority. Start denial/downgrade requests a best-effort
+authenticated full-set status read. On API 26+, a verified pending set can
+produce one generic audible notification through the actual Android channel,
+not a repeat service. A durable, bounded heard-request fence is committed to
+the existing encrypted vault before notification delivery, including uncertain
+delivery outcomes. Duplicate/delayed hints and process recreation cannot
+authorize another sound for those still-live IDs. The shared playback cadence
+also fences foreground/FGS/fallback handoff; the FGS notification stays silent.
+Notification denial/muting,
 silent/vibrate, DND, deep Doze, Force Stop, OEM battery killing and missing
 Google Play services can prevent sound/delivery. No volume/DND overrides,
 full-screen intent, exact alarm, boot service or battery-exemption request.
@@ -31,11 +38,32 @@ Normal process termination and Android Force Stop are different: Force Stop
 requires the operator to reopen POS. A bounded partial wake lock does not
 guarantee a ten-second cadence in deep Doze.
 
+Fallback visibility is capped at 60 seconds and by the earliest verified
+request/authority deadline using Android's platform notification timeout plus
+in-process cleanup. Cancel hints (including bounded late expiry hints) only
+request a coalesced full-set read. Authoritative empty state cancels coverage;
+resolving A while B remains updates coverage silently. A failed read stops
+local coverage, and an absent terminal hint cannot leave an indefinite notice.
+No fallback timer polls the server or repeats sound. State hints share the
+existing single-flight read and five-second coalescing boundary.
+
+This fallback is **best effort**, not guaranteed delivery: Android may kill
+the process after `onMessageReceived` returns before asynchronous verification
+finishes. No sound is authorized without a successful read. API 24/25 omit
+the no-FGS fallback because they lack platform timeout enforcement after
+process death; the regular eligible FGS path is unchanged. Force Stop cannot
+be worked around and requires reopening POS. A future lifecycle-managed
+fallback job would require separate scope; no such job or additional polling
+is introduced here. Android may still suppress/throttle channel sound and
+heads-up presentation even when the app requests them.
+
 Primary references: [service types](https://developer.android.com/develop/background-work/services/fgs/service-types),
 [background-start restrictions](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start),
 [notification permission](https://developer.android.com/develop/ui/views/notifications/notification-permission),
 [Doze](https://developer.android.com/training/monitoring-device-state/doze-standby),
 [FCM priority](https://firebase.google.com/docs/cloud-messaging/android-message-priority),
+[FCM processing lifetime](https://firebase.google.com/docs/cloud-messaging/android/receive-messages),
+[notification silence and timeout](https://developer.android.com/reference/androidx/core/app/NotificationCompat.Builder),
 [Play declaration](https://support.google.com/googleplay/android-developer/answer/13392821).
 
 ## Authority and event path

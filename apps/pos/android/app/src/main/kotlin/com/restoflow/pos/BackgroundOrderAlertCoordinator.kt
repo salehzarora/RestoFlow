@@ -37,6 +37,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     companion object {
         const val CHANNEL_ID = "bizbot_pickup_requests_v1"
         const val NOTIFICATION_ID = 38101
+        const val FALLBACK_NOTIFICATION_ID = 38103
         const val OPEN_INBOX = "com.restoflow.pos.OPEN_ONLINE_INBOX"
         const val STOP_ALERTS = "com.restoflow.pos.STOP_ONLINE_ALERTS"
         private var instance: BackgroundOrderAlertCoordinator? = null
@@ -76,6 +77,8 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     private var reconcileScheduled = false
     private var hintDuringRead = false
     private var visibilityEpoch = 0L
+    private var fallbackWanted = false
+    private val expireFallback = Runnable { cancelFallback() }
     private val reconcileHint = Runnable { reconcileScheduled = false; reconcile() }
     private val playback = OnlineOrderAlertPlayback(
         createClip = { BackgroundAlertClip(context) },
@@ -225,6 +228,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         playback.setForeground(true) // Shared clip eligibility; audio policy and ownership remain independently fenced.
         if (value) {
             handler.removeCallbacks(tick)
+            handler.removeCallbacks(reconcileHint)
+            reconcileScheduled = false
+            cancelFallback()
             service?.stopSelf()
             service = null
             playback.stop()
@@ -279,15 +285,15 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     fun hint(data: Map<String, String>, highPriority: Boolean) {
         handler.post {
             if (!authorityValid() || !hints.accept(data, record.optString("registration_id"), System.currentTimeMillis(), SystemClock.elapsedRealtime())) return@post
-            if (!foreground && service == null && data["kind"] == "cancel") return@post
+            // Cancellation is only a reason to read the FULL set, including when no FGS exists.
+            if (!foreground && service == null && data["kind"] == "cancel") {
+                fallbackNotification()
+                return@post
+            }
             when (backgroundOrderAlertHintAction(foreground, service != null, highPriority, channelAllowed())) {
                 BackgroundOrderAlertHintAction.foreground -> channel?.invokeMethod("pendingHint", null)
                 BackgroundOrderAlertHintAction.reconcile -> {
-                    val delay = (5_000 - (SystemClock.elapsedRealtime() - lastReconcileAt)).coerceAtLeast(0)
-                    if (!reconcileScheduled) {
-                        reconcileScheduled = true
-                        handler.postDelayed(reconcileHint, delay)
-                    }
+                    scheduleReconcile()
                 }
                 BackgroundOrderAlertHintAction.start -> startBackground()
                 BackgroundOrderAlertHintAction.fallback -> fallbackNotification()
@@ -312,12 +318,13 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         if (foreground || !authorityValid() || !channelAllowed()) { value.stopSelf(); return }
         if (service === value) { reconcile(); return }
         service = value
+        cancelFallback()
         state.clear()
         playback.setForeground(true)
         reconcile() // Fresh authenticated truth before any background clip, including handoff.
     }
 
-    fun serviceStartRefused() { playback.stop(); fallbackNotification() }
+    fun serviceStartRefused() { if (service == null) playback.stop(); fallbackNotification() }
 
     fun serviceDestroyed(value: BackgroundOrderAlertService) {
         if (service !== value) return
@@ -337,28 +344,36 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         service = null
         playback.stop()
         notifications().cancel(NOTIFICATION_ID)
+        cancelFallback()
+    }
+
+    private fun scheduleReconcile() {
+        if (reconcileScheduled) return
+        reconcileScheduled = true
+        val delay = (5_000 - (SystemClock.elapsedRealtime() - lastReconcileAt)).coerceAtLeast(0)
+        handler.postDelayed(reconcileHint, delay)
     }
 
     private fun reconcile() {
-        if (foreground || service == null || !authorityValid()) return
+        if (foreground || (service == null && !fallbackWanted) || !authorityValid()) return
         if (reconciling) { hintDuringRead = true; return }
         reconciling = true
         lastReconcileAt = SystemClock.elapsedRealtime()
         val expected = generation
         val expectedVisibility = visibilityEpoch
+        val expectedService = service
         val startedAt = SystemClock.elapsedRealtime()
         val snapshot = JSONObject(record.toString())
         network.execute {
             var denied = false
-            val response = try { request(snapshot, false) } catch (_: AuthorityDenied) { denied = true; null } catch (_: Exception) { null }
+            val response = try { request(snapshot, false, if (expectedService == null) 3_000 else 7_000) }
+                catch (_: AuthorityDenied) { denied = true; null } catch (_: Exception) { null }
             handler.post {
                 reconciling = false
-                if (expected != generation || expectedVisibility != visibilityEpoch || foreground || service == null || !authorityValid() ||
+                if (expected != generation || expectedVisibility != visibilityEpoch || foreground ||
+                    service !== expectedService || (service == null && !fallbackWanted) || !authorityValid() ||
                     snapshot.optString("registration_id") != record.optString("registration_id")) {
-                    if (!foreground && service != null && authorityValid()) {
-                        reconcileScheduled = true
-                        handler.postDelayed(reconcileHint, 5_000L)
-                    }
+                    if (!foreground && (service != null || fallbackWanted) && authorityValid()) scheduleReconcile()
                     return@post
                 }
                 if (denied) { clearAuthority(); return@post }
@@ -378,13 +393,15 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                     }
                     val conservativeServerNow = serverTime + (SystemClock.elapsedRealtime() - startedAt)
                     val remaining = minOf(expiry - conservativeServerNow, record.optLong("authority_deadline") - SystemClock.elapsedRealtime())
-                    state.replace(values, conservativeServerNow, remaining, SystemClock.elapsedRealtime())
-                    handler.removeCallbacks(tick)
-                    tick.run()
-                    if (hintDuringRead && service != null) {
+                    if (service == null) showVerifiedFallback(values, conservativeServerNow, remaining)
+                    else {
+                        state.replace(values, conservativeServerNow, remaining, SystemClock.elapsedRealtime())
+                        handler.removeCallbacks(tick)
+                        tick.run()
+                    }
+                    if (hintDuringRead && (service != null || fallbackWanted)) {
                         hintDuringRead = false
-                        reconcileScheduled = true
-                        handler.postDelayed(reconcileHint, 5_000L)
+                        scheduleReconcile()
                     }
                 } catch (_: Exception) {
                     // Unknown state is not permission to continue ringing indefinitely.
@@ -395,15 +412,16 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         }
     }
 
-    private fun request(snapshot: JSONObject, disable: Boolean): JSONObject? {
+    private fun request(snapshot: JSONObject, disable: Boolean, timeoutMs: Int = 7_000): JSONObject? {
         val endpoint = snapshot.optString("endpoint")
         if (!exactEndpoint(endpoint) || !snapshot.has("status_secret") || !uuid(snapshot.optString("installation_id"))) return null
         val connection = URL(endpoint + if (disable) "/disable" else "").openConnection() as HttpURLConnection
+        val startedAt = SystemClock.elapsedRealtime()
         return try {
             connection.instanceFollowRedirects = false
             connection.requestMethod = "POST"
-            connection.connectTimeout = 7_000
-            connection.readTimeout = 7_000
+            connection.connectTimeout = timeoutMs
+            connection.readTimeout = timeoutMs
             connection.doOutput = true
             connection.setRequestProperty("Authorization", "Bearer ${snapshot.getString("status_secret")}")
             connection.setRequestProperty("Content-Type", "application/json")
@@ -415,6 +433,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                 val output = java.io.ByteArrayOutputStream()
                 val buffer = ByteArray(1024)
                 while (output.size() <= 16_384) {
+                    check(SystemClock.elapsedRealtime() - startedAt <= timeoutMs * 2L)
                     val read = it.read(buffer, 0, minOf(buffer.size, 16_385 - output.size()))
                     if (read < 0) break
                     output.write(buffer, 0, read)
@@ -429,11 +448,41 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     private class AuthorityDenied : Exception()
 
     private fun fallbackNotification() {
-        if (!channelAllowed()) return
-        try { notifications().notify(NOTIFICATION_ID, notification(false)) } catch (_: Exception) { }
+        if (foreground || !authorityValid() || !channelAllowed()) return
+        if (service != null) { scheduleReconcile(); return }
+        // API 24/25 cannot enforce notification expiry after process death. Fail silent there.
+        if (Build.VERSION.SDK_INT < 26) return
+        fallbackWanted = true
+        scheduleReconcile()
     }
 
-    fun notification(ongoing: Boolean): Notification {
+    private fun cancelFallback() {
+        fallbackWanted = false
+        handler.removeCallbacks(expireFallback)
+        notifications().cancel(FALLBACK_NOTIFICATION_ID)
+    }
+
+    private fun showVerifiedFallback(values: Map<String, Long>, serverTime: Long, authorityRemaining: Long) {
+        if (foreground || service != null || !authorityValid() || !channelAllowed()) { cancelFallback(); return }
+        val now = SystemClock.elapsedRealtime()
+        val saved = if (record.has("fallback_heard")) record.getJSONObject("fallback_heard") else JSONObject()
+        check(saved.length() <= BackgroundOrderAlertFallback.MAX_HEARD)
+        val heard = saved.keys().asSequence().associateWith { id ->
+            check(uuid(id))
+            saved.getLong(id).also { check(it <= now + BackgroundOrderAlertState.HARD_TIMEOUT_MS) }
+        }
+        val plan = BackgroundOrderAlertFallback.plan(values, serverTime, authorityRemaining, now, heard,
+            audioAllowed(), { ownership.reservePlayback(now) })
+        if (plan.timeoutMs == 0L) { cancelFallback(); return }
+        // Durable fence BEFORE asking the OS to alert. A failed/uncertain notify is never retried audibly.
+        record.put("fallback_heard", JSONObject(plan.heard))
+        persist()
+        handler.removeCallbacks(expireFallback)
+        notifications().notify(FALLBACK_NOTIFICATION_ID, notification(false, plan.audible, plan.timeoutMs))
+        handler.postDelayed(expireFallback, plan.timeoutMs)
+    }
+
+    fun notification(ongoing: Boolean, audible: Boolean = false, timeoutMs: Long = 0): Notification {
         createChannel()
         val open = Intent(context, MainActivity::class.java).setAction(OPEN_INBOX)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -445,11 +494,13 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
             .setContentTitle(context.getString(R.string.background_order_title))
             .setContentText(context.getString(if (ongoing) R.string.background_order_active else R.string.background_order_open))
             .setContentIntent(tap).setVisibility(Notification.VISIBILITY_PUBLIC).setCategory(Notification.CATEGORY_STATUS)
-            .setOngoing(ongoing).setOnlyAlertOnce(true)
+            .setOngoing(ongoing).setOnlyAlertOnce(ongoing || !audible)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .addAction(NotificationCompat.Action.Builder(android.R.drawable.ic_media_pause, context.getString(R.string.background_order_stop), stop).build())
-        // Channel keeps the reviewed asset, while this visible status notification is silent: the singleton owns audio.
-        builder.setSilent(true)
+        // FGS is always silent: its singleton owns repeats. Only a verified fallback may ask
+        // the OS channel for one sound/heads-up; Android permission, channel and DND still win.
+        builder.setSilent(ongoing || !audible)
+        if (!ongoing) builder.setTimeoutAfter(timeoutMs)
         return builder.build()
     }
 
