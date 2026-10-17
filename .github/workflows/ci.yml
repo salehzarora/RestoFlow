@@ -270,6 +270,10 @@ jobs:
       - name: Tests — POS background order alerts (Node, synthetic FCM)
         run: node --test supabase/functions/pos-order-alert-dispatch/test/*.test.mjs
 
+      # Isolated scheduler boundary: fake HTTPS only, no credentials or deploy.
+      - name: Tests — Vercel POS alert scheduler (Node, synthetic transport)
+        run: node --test services/pos-alert-cron/test/*.test.mjs
+
       - name: Storefront — install (locked)
         working-directory: storefront
         run: |

@@ -1,0 +1,7 @@
+{
+  "name": "bizbot-pos-alert-cron",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "24.x" },
+  "scripts": { "test": "node --test test/*.test.mjs" }
+}
