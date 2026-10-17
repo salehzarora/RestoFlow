@@ -99,6 +99,43 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.63",
+      "versionCode": 63,
+      "signing": "restoflow-production",
+      "status": "built / Production-signed / verified / NOT installed / NOT uploaded",
+      "applicationSourceSha": "9718e101ceb23897cda149e63b88095dc48eab35",
+      "sourceSha": "9718e101ceb23897cda149e63b88095dc48eab35",
+      "buildDate": "2026-10-17",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v63-9718e10.apk",
+          "packageId": "com.restoflow.pos",
+          "sizeBytes": 75568549,
+          "sha256": "60f876827384e4bfba823842d9e4824949b45fc66c5f840604fc71da4aa2aafe"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v63-9718e10.apk",
+          "packageId": "com.restoflow.kds",
+          "sizeBytes": 57938786,
+          "sha256": "edb9b1847cc27e581c7b2fb8490852ddc25d14b276ca486fb8b90ac995fe912b"
+        }
+      },
+      "notes": [
+        "BIZBOT-ANDROID-OFFICIAL-V63-BUILD-001: the unchanged official pair runner built both APKs from clean approved main 9718e101ceb23897cda149e63b88095dc48eab35 using -SourceSha and -AllowNonMain. No preparation or application changes preceded the build.",
+        "PR #338 supplies the POS-only kitchen-label correction: each automatic render snapshots that device's locally selected POS language once; Android OS language does not override it. Initial, service-round, change-slip and VOID documents retain one language per render without rebuilding the spool runtime.",
+        "Source CI 38980905685 passed. Fresh focused locale/print/spool safety checks: 142 passed; release-output checks: 35 passed. Existing saved content, preparation totals, manual printing, authorization and at-most-once behavior remain unchanged.",
+        "Build started 2026-10-17T02:55:29 and completed 2026-10-17T02:58:48 Asia/Jerusalem. Actual artifacts, SHA256SUMS.txt and BUILD-METADATA.txt independently reconcile.",
+        "Both official APK verifiers PASS: version 0.0.63 / 63, pinned production certificate, non-debuggable AOT, demo=false, correct oqmevrndtivqxgyvcmwy backend and public client key only, valid signatures and ZIP alignment. Supplemental 16-KB ZIP alignment passes for both APKs.",
+        "POS packages libsqlite3.so for arm64-v8a, armeabi-v7a and x86_64; all three hashes match the preserved loader-tested v62 libraries exactly. No new Android loader or physical-device test was performed.",
+        "KDS implementation, shared application inputs, dependencies, runner, signing and backend configuration are unchanged from v62. PR #314/#315 remain excluded; all earlier artifacts and release records are preserved.",
+        "No hosted access/write, order, admission, policy, hold, printer or device action occurred. BLOCKED revision 1264 and all 625 historical holds were not modified; prior accepted and printed orders were not resent.",
+        "NOT installed, NOT uploaded, no GitHub Release and no v63 physical acceptance. The v62 owner-installed/physical-print evidence is appended separately with adbVerified=false; it does not prove the v63 locale fix on hardware. Cold-offline imported-spool commercial rollout remains unapproved.",
+        "Code 63 is consumed; reserve 0.0.64 / 64 next. Do not rebuild or silently replace this verified pair. This release-record PR requires separate merge approval; HOME installation requires separate authorization."
+      ]
+    },
+    {
       "versionName": "0.0.62",
       "versionCode": 62,
       "signing": "restoflow-production",
@@ -769,14 +806,14 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.63",
-    "versionCode": 63,
+    "versionName": "0.0.64",
+    "versionCode": 64,
     "signing": "restoflow-production",
     "status": "reserved - NOT planned / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "To be separately planned and approved after verified official v62; this reservation authorizes no build or rollout.",
+    "intendedSource": "To be separately planned and approved after verified official v63; this reservation authorizes no build or rollout.",
     "notes": [
-      "Reserved after verified official synchronized v62. Code 62 remains consumed; preserve its exact artifacts and source identity.",
-      "All prior release history and v59/v61 owner-reported evidence remain unchanged. v61 was not fully accepted; v62 is not installed.",
+      "Reserved after verified official synchronized v63. Code 63 remains consumed; preserve its exact artifacts and source identity.",
+      "All prior release history and v59/v61 owner-reported evidence remain unchanged. v62 installation and physical printing are owner-reported separately with adbVerified=false; v63 is not installed.",
       "Follow existing source authorization, signing, synchronized POS/KDS build and release-record governance. No physical device, hosted, admission, print or commercial offline-policy action is authorized."
     ]
   },
@@ -818,6 +855,26 @@
         "Explicit BLOCKED1254, all624 holds and admissionOFF were verified after the test. No replay or resend."
       ],
       "limitations": "Owner testimony distinguished from artifact/backend facts. Earlier preinstall-gate.json was BLOCKED before installation, not installation PASS. No KDS installation, full print acceptance or cold-offline imported-spool commercial approval."
+    },
+    {
+      "recordedDate": "2026-10-17",
+      "workId": "BIZBOT-ANDROID-OFFICIAL-V63-BUILD-001",
+      "acceptanceWorkId": "BIZBOT-HOME-V62-REAL-PRINT-ACCEPTANCE-001",
+      "versionName": "0.0.62",
+      "versionCode": 62,
+      "packageId": "com.restoflow.pos",
+      "sourceSha": "f0a2628ecb874996a16426075c3fc88664576f97",
+      "artifactSha256": "c9b86ea80282aa06da41bdf5040883365252e7f1776f15e94a14c13aad854023",
+      "evidence": "Owner reports official POS v62 installed on HOME hg and confirms successful physical automatic kitchen printing. Backend acceptance and at-most-once transport evidence were recorded separately; installed version/certificate and physical paper were not ADB-verified.",
+      "adbVerified": false,
+      "fullyAccepted": false,
+      "observations": [
+        "HOME hg bb80c0d8-6893-4e24-8eea-5a14cf545ecd: the owner confirmed official v62 foreground with the existing pairing, real PIN, open shift and Printer001. No independent installation timestamp or installed-certificate inspection is claimed.",
+        "BIZBOT-HOME-V62-REAL-PRINT-ACCEPTANCE-001: one manual Accept created one canonical order and targeted initial dispatch; one irreversible transport reservation finished transport_accepted, and the owner confirmed one correct physical ticket.",
+        "BIZBOT-STOREFRONT-MANUAL-ORDER-PILOT-001: the later owner-operated website order reached HOME, was accepted and printed. The owner confirmed correct preparation counts above the items; final protection was BLOCKED revision 1264, admission OFF and 625 historical holds unchanged.",
+        "The owner reported English automatic ticket labels despite Arabic selection and Arabic labels on a manual POS kitchen reprint. This v62 locale discrepancy remained unresolved until the PR #338 source correction; v63 has not been physically tested."
+      ],
+      "limitations": "Owner testimony is distinct from source/artifact and backend verification. The original v62 build-time NOT INSTALLED record remains unchanged. No full locale acceptance, KDS installation, general commercial rollout or cold-offline imported-spool approval is claimed. No additional print was requested to record this supplement."
     }
   ],
   "androidRendererPolicy": {
