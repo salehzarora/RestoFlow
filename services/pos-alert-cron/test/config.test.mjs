@@ -4,11 +4,13 @@ import { test } from 'node:test';
 import { GET } from '../api/dispatch.mjs';
 import { TIMEOUT_MS } from '../lib/handler.mjs';
 
-test('deployable configuration has no Cron schedule or embedded environment values', async () => {
+test('deployable configuration pins one approved minute schedule without embedded environment values', async () => {
   const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
-  assert.deepEqual(Object.keys(config).sort(), ['$schema', 'framework', 'functions']);
+  assert.deepEqual(Object.keys(config).sort(), ['$schema', 'crons', 'framework', 'functions']);
+  assert.equal(config.$schema, 'https://openapi.vercel.sh/vercel.json');
   assert.equal(config.framework, null);
   assert.deepEqual(config.functions, { 'api/dispatch.mjs': { maxDuration: 125 } });
+  assert.deepEqual(config.crons, [{ path: '/api/dispatch', schedule: '* * * * *' }]);
   assert.equal(TIMEOUT_MS < config.functions['api/dispatch.mjs'].maxDuration * 1000, true);
 });
 

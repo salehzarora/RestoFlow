@@ -1,8 +1,29 @@
-# Later installation / activation proposal — NOT EXECUTED
+# Cron schedule preparation — NOT MERGED OR DEPLOYED
 
-This is a review handoff, not an executable config or authorization. The deployed
-`vercel.json` intentionally has no `crons` key. No project, schedule, credential
-or hosted resource is created by this PR. Keep notification delivery OFF.
+Work ID: BIZBOT-HOME-FCM-CRON-SCHEDULE-001. This PR prepares exactly one
+`/api/dispatch` schedule, `* * * * *`, in the dedicated scheduler's `vercel.json`.
+It is preparation only: no hosted schedule or setting is changed by opening it.
+**Merging may trigger a Git-integrated Production deployment that registers the
+schedule. Disable and verify the platform Cron switch BEFORE any later merge or
+production deployment. If the switch is enabled or unknown, STOP before merge.**
+
+Keep `POS_ALERT_CRON_ENABLED=false`, Supabase `POS_ORDER_ALERTS_ENABLED=false`,
+operator alerts absent/OFF and both pilot UTC timestamps unset until separate
+owner authorization. An enabled Cron can create billable function invocations
+even when the handler rejects forwarding. A 30-minute window limits forwarding;
+it does not disable Cron or all server/native notification authority. A later
+pilot requires exact approved UTC start/end, an available shutdown operator and
+explicit confirmation that server gates, Cron and native coverage are stopped.
+
+Read-only schedule preflight on 2026-10-18 (23:48 UTC on 2026-10-17): main
+`e004d807811b036b3265088bda6faacc4cc239c2`, CI `39078357292` SUCCESS. Dedicated
+Production `dpl_HQk5AN1gYbeDiLcbtDqNLuS4jDmj` is READY from that exact source with
+the UTC guard. The correct owner team is Pro; one-minute Cron is eligible.
+**The current platform Cron switch is enabled, with zero definitions.** It has
+not been disabled by this task. Both notification flags are false, UTC values
+unset, operator settings/registrations/deliveries zero, and secret metadata
+present without retrieving values. HOME restrictions, rollout 1265, BLOCKED 1264
+and all 625 holds are unchanged. Recheck these gates before any later mutation.
 
 ## HOME pilot preparation — BIZBOT-HOME-FCM-PILOT-PREP-001
 
@@ -74,20 +95,24 @@ preparation. A clock/configuration/deployment problem is also a STOP.
    `POS_ALERT_CRON_ENABLED=false`, operator setting absent/OFF and no enabled
    registration. Preserve rollout 1265, BLOCKED 1264, all 625 holds and HOME's
    existing targeted printing. Stop on scope/authority/credential drift.
-3. Obtain explicit owner approval of exact UTC start/end while a shutdown operator
-   is available. After separate merge/deployment approval, deploy this reviewed
-   window guard with both flags OFF and no schedule; verify actual runtime source,
-   environment snapshot and destination. Production env updates require a new
-   deployment; choose a window that will not expire during installation. Never
-   extend it silently or reuse an old activation deployment as a fresh window.
-4. In a **separate reviewed activation change**, add only the documented Cron
-   entry below to this dedicated project. Disable its platform Cron switch before
-   installing the reviewed schedule, keep both forwarding flags OFF, then verify
-   the exact production configuration and one definition. Protection must admit
-   legitimate Vercel-authenticated Cron without weakening access controls or
-   exposing the bearer. Missing/invalid auth, Preview, OFF and out-of-window calls
-   must never forward. Do not copy the entry into another project's config.
-5. Only under separate owner activation authorization, within the approved window,
+3. Before any separately approved merge/Production deployment of the prepared
+   schedule, disable the exact project's platform Cron switch and verify its
+   disabled state through current platform metadata. Keep both notification flags
+   false, operator alerts OFF and UTC values unset. The UTC guard is already
+   installed. Do not merge or deploy if switch state, source CI or other gates are
+   unverified; an enabled switch can begin billable ticks immediately on deployment.
+4. After separate merge/deployment approval, install only the reviewed schedule
+   below in the dedicated project while the switch remains disabled. Verify actual
+   Production source/alias, exact configuration, one definition and disabled state.
+   Protection must admit legitimate Vercel-authenticated Cron without weakening
+   access controls or exposing the bearer. Missing/invalid auth, Preview, OFF and
+   out-of-window calls must never forward. Do not copy the entry into another
+   project's config. No UTC or notification activation is authorized by this PR.
+5. Only under separate owner pilot authorization, establish exact UTC start/end
+   of at most 30 minutes while a shutdown operator is available. Configure the two
+   server-only Production UTC values; env updates require a new deployment, so
+   choose a window that will not expire during installation. Never extend it
+   silently or reuse an old activation deployment as a fresh window. Within it,
    enable the existing Supabase notification flag and append the operator setting
    through privileged `app.set_pos_order_alerts(true, reason, operator_reference)`.
    The operator records the reason/reference and returned revision; do not alter
@@ -176,11 +201,13 @@ process must validate both successful authenticated writes of the same in-memory
 worker value; do not claim a metadata-only equality check. If transport or error
 suppression cannot be proven safe, stop before generating or rotating secrets.
 
-## Default-OFF installation acceptance
+## Default-OFF schedule installation acceptance
 
 - Confirm exact reviewed source, dedicated project/root and production deployment
   identity/alias. No existing product project or custom-domain changes.
-- Verify `vercel.json` has no schedule; hosted Cron list empty; both flags false.
+- Verify exactly the one approved schedule in source and hosted metadata, with
+  the platform switch disabled; both notification flags false, operator OFF and
+  both UTC variables unset. Preserve zero enabled registrations and no deliveries.
 - Missing/wrong inbound auth must not forward. With valid inbound auth and OFF,
   expect `503 disabled`; Preview must never forward even if accidentally enabled.
 - Verify secret storage type/Production scope and no credentials in logs/bundles.
@@ -189,11 +216,11 @@ suppression cannot be proven safe, stop before generating or rotating secrets.
 - Preserve Maps Burger rollout 1265, printing BLOCKED revision 1264, all 625 holds,
   previous order/print evidence, official APKs and other devices.
 
-## Separate reviewed activation change
+## Prepared schedule — separate merge/deployment approval required
 
-Only a later owner-approved PR may add the following schedule to this project's
-config, after the installation passes and Pro/Enterprise eligibility/costs are
-approved:
+The candidate config contains exactly this schedule, solely for the dedicated
+project. Production registration requires later owner merge/deployment approval
+and verified platform Cron shutdown beforehand:
 
 ```json
 {
@@ -201,9 +228,10 @@ approved:
 }
 ```
 
-This snippet is documentation only and must not be copied into current deployable
-config. That later change must use the HOME-only activation procedure and mandatory
-UTC window above before enabling either flag. Preserve the
+The schedule is not registered by this preparation. A later merge may automatically
+deploy/register it, so the disabled platform switch is a mandatory pre-merge gate.
+Follow the HOME-only activation procedure and mandatory UTC window above before
+enabling either flag. Preserve the
 existing device-authorized registration/status contract; Cron is not a device or
 PIN credential. No broad fleet activation is implied.
 

@@ -3,5 +3,8 @@
   "framework": null,
   "functions": {
     "api/dispatch.mjs": { "maxDuration": 125 }
-  }
+  },
+  "crons": [
+    { "path": "/api/dispatch", "schedule": "* * * * *" }
+  ]
 }
