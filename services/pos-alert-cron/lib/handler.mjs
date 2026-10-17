@@ -3,6 +3,15 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 export const DISPATCH_URL = 'https://oqmevrndtivqxgyvcmwy.supabase.co/functions/v1/pos-order-alert-dispatch';
 export const TIMEOUT_MS = 115_000;
 const MAX_RESPONSE_BYTES = 4096;
+const MAX_PILOT_MS = 30 * 60 * 1000;
+function utcTimestamp(value) {
+  if (typeof value !== 'string'
+    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z(?![\s\S])/.test(value)) return NaN;
+  const timestamp = Date.parse(value);
+  const canonical = value.length === 20 ? `${value.slice(0, -1)}.000Z` : value;
+  // Date.parse normalizes some impossible dates; round-trip instead of accepting them.
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === canonical ? timestamp : NaN;
+}
 // Both secrets are independently generated 256-bit lowercase hex bearers.
 const bearer = (value) => typeof value === 'string' && /^[0-9a-f]{64}(?![\s\S])/.test(value);
 const equal = (a, b) => timingSafeEqual(
@@ -45,6 +54,7 @@ export function createHandler({
   getEnv = (name) => process.env[name],
   fetchImpl = globalThis.fetch,
   timeoutMs = TIMEOUT_MS,
+  now = () => Date.now(),
 } = {}) {
   return async function handler(request) {
     let timedOut = false;
@@ -63,6 +73,12 @@ export function createHandler({
       const outbound = getEnv('POS_ORDER_ALERT_WORKER_SECRET');
       if (!bearer(outbound) || equal(inbound, outbound)
         || getEnv('POS_ALERT_DISPATCH_URL') !== DISPATCH_URL) return reply(503, 'unavailable');
+      const pilotStart = utcTimestamp(getEnv('POS_ALERT_PILOT_START_UTC'));
+      const pilotEnd = utcTimestamp(getEnv('POS_ALERT_PILOT_END_UTC'));
+      const currentTime = now();
+      if (!Number.isFinite(currentTime) || !Number.isFinite(pilotStart) || !Number.isFinite(pilotEnd)
+        || pilotStart >= pilotEnd || pilotEnd - pilotStart > MAX_PILOT_MS
+        || currentTime < pilotStart || currentTime >= pilotEnd) return reply(503, 'unavailable');
 
       controller = new AbortController();
       let expire;
@@ -71,7 +87,7 @@ export function createHandler({
         timedOut = true;
         controller.abort();
         expire(false);
-      }, timeoutMs);
+      }, Math.min(timeoutMs, pilotEnd - currentTime));
       // Exactly one POST per invocation. Database leases/idempotency, not
       // process-local locks, protect concurrent or duplicate Cron invocations.
       const operation = (async () => {

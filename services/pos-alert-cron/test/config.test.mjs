@@ -24,7 +24,7 @@ test('isolated Node package has no dependencies, lifecycle scripts or deploy scr
 
 test('actual Vercel entry point is inert with all runtime configuration absent', async () => {
   const names = ['CRON_SECRET', 'POS_ORDER_ALERT_WORKER_SECRET', 'POS_ALERT_CRON_ENABLED',
-    'POS_ALERT_DISPATCH_URL', 'VERCEL', 'VERCEL_ENV'];
+    'POS_ALERT_DISPATCH_URL', 'POS_ALERT_PILOT_START_UTC', 'POS_ALERT_PILOT_END_UTC', 'VERCEL', 'VERCEL_ENV'];
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   const fetch = globalThis.fetch;
   let calls = 0;
