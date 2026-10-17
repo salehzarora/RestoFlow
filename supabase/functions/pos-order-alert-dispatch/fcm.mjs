@@ -42,7 +42,11 @@ export function message(delivery, nowMs) {
   return { message: { token: delivery.fcm_token,
     data: { version: "1", kind: delivery.kind === "pending" ? "pending" : "cancel", request_id: delivery.request_id,
       expires_at: delivery.expires_at, registration_id: delivery.registration_id },
-    android: { priority: "HIGH", ttl: `${Math.min(remaining, 120)}s`, collapse_key: "bizbot_pending_orders" },
+    // A terminal event must never replace another request's only pending wake
+    // while Android is disconnected/closed. Each kind still coalesces hints;
+    // native reconciles the complete authoritative set before playing sound.
+    android: { priority: "HIGH", ttl: `${Math.min(remaining, 120)}s`,
+      collapse_key: delivery.kind === "pending" ? "bizbot_pending_orders" : "bizbot_resolved_orders" },
   } };
 }
 export async function send(account, token, delivery, { fetchImpl, now, timeoutMs }) {

@@ -64,6 +64,24 @@ test("FCM TTL never extends authority or request expiry",()=>{
   assert.equal(message({...delivery,expires_at:"2026-10-17T09:00:07Z"},now()).message.android.ttl,"7s");
   assert.equal(message({...delivery,authority_expires_at:"2026-10-17T09:00:02Z"},now()).message.android.ttl,"2s");
 });
+for (const terminalExpiry of ["2026-10-17T09:10:00Z", "2026-10-17T08:59:00Z"]) {
+  test(`closed/offline tablet retains pending B after accepted/expired A signal (${terminalExpiry})`, () => {
+    // FCM retains only the latest undelivered message for each collapse key.
+    // Exercise the REAL payload constructor at the offline-delivery boundary,
+    // including the expired cancellation that a stopped native client ignores.
+    const waiting = new Map();
+    const pendingB = message({ ...delivery, request_id: id(20) }, now()).message;
+    const terminalA = message({ ...delivery, request_id: id(21), kind: "terminal", expires_at: terminalExpiry }, now()).message;
+    for (const item of [pendingB, terminalA]) waiting.set(item.android.collapse_key, item);
+    const delivered = [...waiting.values()];
+    const actionableWake = delivered.filter((item) => item.data.kind === "pending" && Date.parse(item.data.expires_at) > now());
+    assert.equal(actionableWake.length, 1);
+    assert.equal(actionableWake[0].data.request_id, id(20));
+    assert.equal(actionableWake[0].android.priority, "HIGH");
+    assert.equal(delivered.length, 2);
+    assert.ok(delivered.every((item) => item.notification === undefined));
+  });
+}
 for(const [code,status,expected] of [["UNREGISTERED",404,"invalid_token"],["QUOTA_EXCEEDED",429,"retry"],[null,503,"retry"],["INVALID_ARGUMENT",400,"permanent_failure"]]) test(`FCM ${status}/${code}`,async()=>{
   const outcome=await send(serviceAccount(env.POS_ORDER_ALERT_FCM_SERVICE_ACCOUNT),"synthetic-access-token",delivery,{now,timeoutMs:1000,fetchImpl:async()=>reply({error:{details:[{"@type":"type.googleapis.com/google.firebase.fcm.v1.FcmError",errorCode:code}]}},status)});assert.equal(outcome,expected);
 });
