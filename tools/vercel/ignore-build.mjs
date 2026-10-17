@@ -756,6 +756,10 @@ function category(file, selector, graphs) {
       if (below(file, `${member}/lib`) || (APPS.includes(member) && below(file, `${member}/web`)) || file === `${member}/l10n.yaml` || file === `${member}/.metadata`) return { relevant: true, name: 'product_runtime' };
     }
   }
+  // Standalone Node scheduler, outside all three inspected application graphs.
+  // Keep declared Flutter assets above this exception: an explicit shared
+  // dependency must BUILD. Other services and unknown inputs remain conservative.
+  if (below(file, 'services/pos-alert-cron')) return { relevant: false, name: 'isolated_alert_scheduler' };
   if (file.startsWith('site/')) {
     const runtime = ['site/src', 'site/public', 'site/api', 'site/lib'].some((dir) => below(file, dir)) || ['site/scripts/build.mjs', 'site/vercel.json', 'site/package.json', 'site/package-lock.json', 'site/npm-shrinkwrap.json', 'site/pnpm-lock.yaml', 'site/yarn.lock', 'site/.npmrc', 'site/.vercelignore'].includes(file);
     if (runtime) return { relevant: selector === 'marketing', name: 'marketing_runtime' };
