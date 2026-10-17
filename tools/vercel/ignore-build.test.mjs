@@ -388,6 +388,106 @@ pathCase('Admin and currently unused package code', ['apps/admin/lib/filter_fixt
 pathCase('unknown root control config builds conservatively', ['future-build.config.json'], 'BUILD', 'BUILD', 'BUILD');
 pathCase('checkout-transform attributes are shared deployment control', ['.gitattributes'], 'BUILD', 'BUILD', 'BUILD');
 
+test('R2 alert scheduler-only additions, modifications and deletions ignore all three projects', () => {
+  const { repo, base } = fixture();
+  const root = 'services/pos-alert-cron';
+  const files = ['api/dispatch.mjs', 'lib/handler.mjs', 'package.json', 'vercel.json',
+    'test/config.test.mjs', 'test/handler.test.mjs', 'README.md', 'ACTIVATION.md'];
+  for (const file of files) put(repo, `${root}/${file}`, readFileSync(join(SOURCE_ROOT, root, file)));
+  const added = commit(repo);
+  for (const selector of ['marketing', 'product', 'storefront']) {
+    const result = expectDecision(repo, selector, base, 'IGNORE');
+    assert.deepEqual(result.categories, { isolated_alert_scheduler: files.length });
+  }
+  appendFileSync(join(repo, root, 'lib/handler.mjs'), '// scheduler-only edit\n');
+  const edited = commit(repo);
+  expectAll(repo, added, 'IGNORE', 'IGNORE', 'IGNORE');
+  unlinkSync(join(repo, root, 'lib/handler.mjs'));
+  commit(repo);
+  expectAll(repo, edited, 'IGNORE', 'IGNORE', 'IGNORE');
+});
+
+test('R2 alert scheduler exception never covers unknown services, shared inputs or prefix lookalikes', () => {
+  const { repo } = fixture();
+  for (const file of ['services/unknown/api/dispatch.mjs', 'services/shared/alerts.mjs',
+    'services/pos-alert-cron-other/lib/handler.mjs', 'services/pos-alert-cron.mjs',
+    'shared/alerts.mjs', 'services/pos-alert-cron']) {
+    const base = runGit(repo, ['rev-parse', 'HEAD']);
+    put(repo, file, '// unreviewed input\n');
+    commit(repo);
+    for (const selector of ['marketing', 'product', 'storefront']) {
+      const result = expectDecision(repo, selector, base, 'BUILD');
+      assert.deepEqual(result.categories, { unknown_input: 1 });
+    }
+  }
+});
+
+test('R2 alert scheduler mixed with application inputs still builds the affected project', () => {
+  const file = 'services/pos-alert-cron/lib/handler.mjs';
+  const { repo } = fixture({ seed(repo) { put(repo, file, '// scheduler fixture\n'); } });
+  for (const [application, expected] of [
+    ['site/src/main.js', ['BUILD', 'IGNORE', 'IGNORE']],
+    ['apps/pos/lib/filter_fixture.dart', ['IGNORE', 'BUILD', 'IGNORE']],
+    ['storefront/src/lib/hello.ts', ['IGNORE', 'IGNORE', 'BUILD']],
+  ]) {
+    const base = runGit(repo, ['rev-parse', 'HEAD']);
+    appendFileSync(join(repo, file), '// scheduler-only edit\n');
+    appendFileSync(join(repo, application), '// application edit\n');
+    commit(repo);
+    expectAll(repo, base, ...expected);
+  }
+});
+
+for (const kind of ['file asset', 'directory asset', 'font']) {
+  test(`R2 alert scheduler declared Flutter ${kind} remains a shared product input`, () => {
+    const root = 'services/pos-alert-cron';
+    const file = `${root}/${kind === 'font' ? 'fixture.ttf' : 'lib/handler.mjs'}`;
+    const { repo, base } = fixture({ seed(repo) {
+      put(repo, file, 'fixture bytes\n');
+      const manifest = manifestTexts.get('apps/pos');
+      const updated = kind === 'font'
+        ? manifest.replace(/^(        - asset: )[^\r\n]+/m, `$1../../${file}`)
+        : manifest.replace(/^flutter:\s*\r?$/m,
+          `flutter:\n  assets:\n    - ../../${kind === 'directory asset' ? `${root}/` : file}`);
+      assert.notEqual(updated, manifest, 'fixture must declare the scheduler dependency');
+      put(repo, 'apps/pos/pubspec.yaml', updated);
+    } });
+    appendFileSync(join(repo, file), 'changed bytes\n');
+    commit(repo);
+    const result = expectDecision(repo, 'product', base, 'BUILD');
+    assert.deepEqual(result.categories, { declared_asset: 1 });
+    expectDecision(repo, 'marketing', base, 'IGNORE');
+    expectDecision(repo, 'storefront', base, 'IGNORE');
+  });
+}
+
+for (const [selector, consumer, source, file] of [
+  ['product', 'apps/pos/lib/escape.dart',
+    "import '../../../services/pos-alert-cron/fixture.dart';\n", 'fixture.dart'],
+  ['marketing', 'site/src/escape.mjs',
+    "import '../../services/pos-alert-cron/lib/handler.mjs';\n", 'lib/handler.mjs'],
+  ['storefront', 'storefront/app/page.tsx',
+    "import '../../services/pos-alert-cron/lib/handler.mjs';\nexport default function P() { return null; }\n", 'lib/handler.mjs'],
+]) {
+  test(`R2 alert scheduler persistent ${selector} cross-root import fails before classification`, () => {
+    const target = `services/pos-alert-cron/${file}`;
+    const { repo, base } = fixture({ seed(repo) {
+      put(repo, target, '// scheduler fixture\n');
+      put(repo, consumer, source);
+    } });
+    // The invalid consumer exists in BOTH trees. Only the normally ignored
+    // scheduler input changes, so this BUILD must come from the import guard.
+    appendFileSync(join(repo, target), '// scheduler-only edit\n');
+    commit(repo);
+    const result = expectDecision(repo, selector, base, 'BUILD');
+    assert.equal(result.reason, 'unsupported_graph');
+    assert.deepEqual(result.categories, {});
+    for (const other of ['marketing', 'product', 'storefront'].filter((value) => value !== selector)) {
+      expectDecision(repo, other, base, 'IGNORE');
+    }
+  });
+}
+
 test('04 marketing JSON config and package manifest', () => {
   const { repo, base } = fixture();
   const config = JSON.parse(readFileSync(join(repo, 'site/vercel.json'), 'utf8'));
