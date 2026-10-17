@@ -4,6 +4,138 @@ This is a review handoff, not an executable config or authorization. The deploye
 `vercel.json` intentionally has no `crons` key. No project, schedule, credential
 or hosted resource is created by this PR. Keep notification delivery OFF.
 
+## HOME pilot preparation — BIZBOT-HOME-FCM-PILOT-PREP-001
+
+The OFF-only installation is already complete. Reuse the existing Firebase sender,
+worker credential and independent inbound bearer unchanged; the rotation section
+below is recovery guidance requiring separate approval, not a pilot step.
+
+Exact scope:
+
+- Dedicated Vercel project `prj_QVlsRLCT0IsnqHwhMoPzNq6D3Vos`, team
+  `team_yynO6ARGc6VsRrAB69hOTTZy`, root `services/pos-alert-cron`, Node 24.
+- Supabase `oqmevrndtivqxgyvcmwy`, Firebase `bizbot-production`.
+- HOME POS `hg`, device `bb80c0d8-6893-4e24-8eea-5a14cf545ecd`, organization
+  `20605c2b-3145-4803-a990-bbec3d9c1096`, Maps Burger restaurant
+  `de3bbc64-edad-4ff4-bccd-c2ef217c1d56`, branch
+  `2847c0be-3e31-45a5-957c-508729f1971e`.
+- POS v64 installation/launch/kitchen printing are owner-reported, not a new ADB
+  or notification acceptance claim. No APK or device action belongs to this PR.
+
+Read-only preflight on 2026-10-18: approved main
+`0daced0c4dd956f5addaacb3a3813cb4436c288e` and CI `39073448483` SUCCESS;
+dedicated production deployment `dpl_94xyLB62jtFrnv28kRBCNnWhwMUP` READY from that
+SHA. Its Cron definitions are empty; the platform Cron toggle is enabled but has
+nothing scheduled. Both server notification flags are false, and settings,
+registrations and deliveries are zero. Both alert Edge routes are ACTIVE v2 with
+`verify_jwt=false` and independent application authentication; OFF probes return
+`503 disabled`. There are 166 migrations. Maps Burger rollout 1265, printing
+BLOCKED 1264 and all 625 immutable holds are unchanged.
+
+Existing non-sensitive installation receipts record that the same in-memory worker
+was successfully written/verified in both platforms. Current secret-name/storage
+metadata agrees with the installed production-only Vercel secret identities.
+This is historical provisioning evidence plus current metadata, not a fresh
+secret-value equality comparison. Never retrieve values to compare them, rotate
+them for this pilot, or infer equality from secret-name presence alone. Any
+credential drift or authenticated dispatcher failure is a STOP for separately
+authorized secure reconciliation, not a reason to replay an invocation.
+
+### Enforced window and its limits
+
+Supply absolute, owner-approved `POS_ALERT_PILOT_START_UTC` and
+`POS_ALERT_PILOT_END_UTC` as server-only Production Config values. Accept only
+`YYYY-MM-DDTHH:mm:ssZ` or `YYYY-MM-DDTHH:mm:ss.sssZ`, with real calendar dates,
+start before end and duration **at most 30 minutes**. No local-time strings,
+offsets, whitespace or relative/rolling dates. There are no source defaults.
+The endpoint forwards only for `start <= server UTC now < end`, in production,
+with its existing authentication/configuration guards. The HTTP wait is also
+bounded by the cutoff. Missing/invalid/expired configuration is fail-closed.
+
+**The cutoff automatically stops new scheduler forwarding, not every downstream
+effect.** A worker or FCM message already in flight can finish; cancellation of
+the HTTP caller does not undo it. The native status capability can last up to
+eight hours, bounded by genuine PIN/device expiry, and background episodes have
+their existing 15-minute bound. The window does not automatically clear the Edge
+flag, append an operator OFF revision, disable Cron, or cancel native audio.
+An operator must be available at cutoff to perform and verify shutdown below.
+If unattended expiry of all server/native authority is required, STOP before
+activation: that needs a separately approved contract change, not this scheduler
+preparation. A clock/configuration/deployment problem is also a STOP.
+
+### Later, separately authorized activation
+
+1. Reconfirm HOME is the intended official v64 installation. The owner checks
+   Android notification permission, the app's notification channel/volume/DND,
+   working Google Play services and battery/background restrictions. Record actual
+   OS/OEM settings; do not promise Force Stop, deep Doze or denied-permission
+   delivery. Do not change pairing, PIN, printer settings, outbox or spool.
+2. Verify Supabase `POS_ORDER_ALERTS_ENABLED=false`, Vercel
+   `POS_ALERT_CRON_ENABLED=false`, operator setting absent/OFF and no enabled
+   registration. Preserve rollout 1265, BLOCKED 1264, all 625 holds and HOME's
+   existing targeted printing. Stop on scope/authority/credential drift.
+3. Obtain explicit owner approval of exact UTC start/end while a shutdown operator
+   is available. After separate merge/deployment approval, deploy this reviewed
+   window guard with both flags OFF and no schedule; verify actual runtime source,
+   environment snapshot and destination. Production env updates require a new
+   deployment; choose a window that will not expire during installation. Never
+   extend it silently or reuse an old activation deployment as a fresh window.
+4. In a **separate reviewed activation change**, add only the documented Cron
+   entry below to this dedicated project. Disable its platform Cron switch before
+   installing the reviewed schedule, keep both forwarding flags OFF, then verify
+   the exact production configuration and one definition. Protection must admit
+   legitimate Vercel-authenticated Cron without weakening access controls or
+   exposing the bearer. Missing/invalid auth, Preview, OFF and out-of-window calls
+   must never forward. Do not copy the entry into another project's config.
+5. Only under separate owner activation authorization, within the approved window,
+   enable the existing Supabase notification flag and append the operator setting
+   through privileged `app.set_pos_order_alerts(true, reason, operator_reference)`.
+   The operator records the reason/reference and returned revision; do not alter
+   private tables directly. Set the Vercel flag true and deploy its reviewed
+   production env snapshot. Do not create/rotate/read credentials or change any
+   order/printing gate. Keep Cron disabled until HOME registration is verified.
+6. The owner uses HOME's existing foreground, authenticated POS Inbox switch to
+   opt in/register, with the real paired device and active PIN/shift. Do not
+   manufacture registration proof or insert a token. The registration RPC and
+   table CHECK both pin the exact HOME/org/restaurant/branch above. Read-only
+   verification must show only HOME enabled; never widen this allowlist. New
+   enable revisions require fresh foreground registration and do not backfill
+   requests from before the setting/registration cutoff. Then enable only the
+   dedicated project's Cron switch under the same bounded approval.
+7. Observe a **naturally arriving legitimate Pickup request** created after those
+   cutoffs. Do not create a real/synthetic test order, invoke dispatch manually,
+   Accept/Reject, pay, claim, reprint or send printer bytes to validate alerts.
+   Controlled orders require separate authorization. Observe ordinary business
+   resolution without changing its checkout, acceptance or targeted-print flow.
+8. Record opaque request/registration/delivery identities and UTC timestamps only:
+   pending creation, first scheduled worker result, owner-observed notification/
+   audio receipt, foreground/background/screen-off state, and naturally occurring
+   accepted/rejected/expired resolution followed by cancellation. Compare server
+   evidence with actual device observations; FCM transport success is not proof
+   of display/audio. Missing arrivals or unobserved resolution make that portion
+   INCONCLUSIVE, never PASS. Duplicate/overlapping ticks rely on existing database
+   leases/idempotency, not a new local lock or repeated manual sends.
+9. At the cutoff (or earlier on a failure), execute the shutdown below immediately.
+   The endpoint automatically denies new forwarding at/after END even if its
+   deployed flag remains true. Verify server gates and Cron are actually disabled,
+   and the owner confirms HOME audio/notification stops. Do not infer global
+   shutdown solely from the UTC guard, HTTP 200, or an empty pending count.
+
+Read-only operator acceptance queries (no token/status-secret/customer fields):
+
+```sql
+select revision, enabled from app.pos_order_alert_settings order by revision desc limit 1;
+select device_id, organization_id, restaurant_id, branch_id, enabled, count(*)
+from app.pos_order_alert_registrations
+group by device_id, organization_id, restaurant_id, branch_id, enabled;
+select state, count(*) from app.pos_order_alert_deliveries group by state;
+```
+
+Use the authorized operator connection, not an app-role workaround. Retain audit
+rows and leases. Zero rows is the current OFF baseline, not a future requirement
+to delete evidence after the pilot. Inspect claims/sends/uncertain outcomes before
+any later activation; never automatically replay a timed-out notification.
+
 ## Secure worker rotation — separate approval required
 
 The old Supabase worker bearer was not retained. Do not retrieve it or copy it
@@ -70,8 +202,8 @@ approved:
 ```
 
 This snippet is documentation only and must not be copied into current deployable
-config. That later change must define a bounded HOME-only activation window and
-its enforceable UTC cutoff/kill switch before enabling either flag. Preserve the
+config. That later change must use the HOME-only activation procedure and mandatory
+UTC window above before enabling either flag. Preserve the
 existing device-authorized registration/status contract; Cron is not a device or
 PIN credential. No broad fleet activation is implied.
 
@@ -87,16 +219,22 @@ bearer; never use User-Agent, Origin or a query token as authentication.
    secure secret path. Verify dispatcher/status OFF responses. This stops new
    invocations before queue claiming; a worker already in flight may finish its
    current batch. Disabling does not recall a delivered notification.
-2. Disable Cron in the dedicated Vercel project's settings, then set
+2. Append operator OFF through privileged
+   `app.set_pos_order_alerts(false, reason, operator_reference)` and verify the
+   latest revision is OFF. This invalidates prior registration authority; preserve
+   registrations/deliveries and every prior setting row. The owner switches HOME
+   Inbox background alerts OFF (or notification Stop) and verifies actual silence;
+   do not restart/Force Stop POS or change its printing/spool settings.
+3. Disable Cron in the dedicated Vercel project's settings, then set
    `POS_ALERT_CRON_ENABLED=false` and deploy that reviewed OFF configuration.
    Remove the schedule through a later reviewed change. Changing a Vercel env
    value alone does not alter an existing deployment's env snapshot.
-3. Inspect in-flight leases/queue and invocation status read-only. Retain all
+4. Inspect in-flight leases/queue and invocation status read-only. Retain all
    registrations, deliveries, audit events, orders and print evidence. Never
    delete queue rows, release leases manually or replay notifications to test
    shutdown. Rotate compromised credentials only through a separately approved
    coordinated procedure with both gates OFF.
-4. Roll back source only to a reviewed no-schedule/OFF deployment. Vercel rollback
+5. Roll back source only to a reviewed no-schedule/OFF deployment. Vercel rollback
    can restore an older schedule/env snapshot, so recheck Cron and both flags;
    never treat rollback alone as a kill switch. Printing and order intake are
    independent and must not be changed during notification recovery.

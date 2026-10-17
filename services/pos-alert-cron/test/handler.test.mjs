@@ -5,11 +5,16 @@ import { createHandler, DISPATCH_URL } from '../lib/handler.mjs';
 // Public synthetic fixtures, never credentials from an environment or file.
 const INBOUND = 'a'.repeat(64);
 const OUTBOUND = 'b'.repeat(64);
+const START = '2026-10-18T09:00:00.000Z';
+const END = '2026-10-18T09:30:00.000Z';
+const NOW = Date.parse(START);
 const config = () => ({
   CRON_SECRET: INBOUND,
   POS_ORDER_ALERT_WORKER_SECRET: OUTBOUND,
   POS_ALERT_CRON_ENABLED: 'true',
   POS_ALERT_DISPATCH_URL: DISPATCH_URL,
+  POS_ALERT_PILOT_START_UTC: START,
+  POS_ALERT_PILOT_END_UTC: END,
   VERCEL: '1',
   VERCEL_ENV: 'production',
 });
@@ -17,14 +22,91 @@ const request = (options = {}) => new Request('https://scheduler.invalid/api/dis
   headers: { Authorization: `Bearer ${INBOUND}` }, ...options,
 });
 const success = () => Response.json({ ok: true, sent: 1, deferred: 0 });
-function fixture(env = config(), fetchImpl = async () => success(), timeoutMs) {
+function fixture(env = config(), fetchImpl = async () => success(), timeoutMs, now = () => NOW) {
   const calls = [];
   const handler = createHandler({
-    getEnv: (name) => env[name], timeoutMs,
+    getEnv: (name) => env[name], timeoutMs, now,
     fetchImpl: (...args) => { calls.push(args); return fetchImpl(...args); },
   });
   return { handler, calls };
 }
+
+for (const value of [undefined, null, '', 123, '2026-10-18', '2026-10-18T09:00Z',
+  '2026-10-18T09:00:00', '2026-10-18T09:00:00+00:00', '2026-10-18T09:00:00z',
+  ' 2026-10-18T09:00:00Z', '2026-10-18T09:00:00Z ', '2026-10-18T09:00:00Z\n',
+  '2026-10-18T09:00:00.1Z', '2026-10-18T09:00:00.0000Z',
+  '2026-02-29T09:00:00Z', '2026-02-30T09:00:00Z', '2026-04-31T09:00:00Z',
+  '2026-13-18T09:00:00Z', '2026-10-18T24:00:00Z', '2026-10-18T09:60:00Z',
+  '2026-10-18T09:00:60Z']) {
+  for (const name of ['POS_ALERT_PILOT_START_UTC', 'POS_ALERT_PILOT_END_UTC']) {
+    test(`invalid strict UTC ${name} fails closed without forwarding`, async () => {
+      const { handler, calls } = fixture({ ...config(), [name]: value });
+      const response = await handler(request());
+      assert.equal(response.status, 503);
+      assert.deepEqual(await response.json(), { ok: false, error: 'unavailable' });
+      assert.equal(calls.length, 0);
+    });
+  }
+}
+
+for (const [start, end] of [[START, START], [END, START],
+  [START, '2026-10-18T09:30:00.001Z'], [START, '2026-10-19T09:00:00Z']]) {
+  test('empty, reversed or longer than 30-minute pilot windows never forward', async () => {
+    const { handler, calls } = fixture({ ...config(),
+      POS_ALERT_PILOT_START_UTC: start, POS_ALERT_PILOT_END_UTC: end });
+    assert.equal((await handler(request())).status, 503);
+    assert.equal(calls.length, 0);
+  });
+}
+
+for (const [time, expectedCalls] of [[NOW - 1, 0], [NOW, 1],
+  [Date.parse(END) - 1, 1], [Date.parse(END), 0], [Date.parse(END) + 1, 0],
+  [NaN, 0], [Infinity, 0], ['2026-10-18T09:00:00Z', 0]]) {
+  test('pilot admits start inclusively, ends exclusively, and denies invalid clocks', async () => {
+    const { handler, calls } = fixture(config(), undefined, undefined, () => time);
+    assert.equal((await handler(request())).status, expectedCalls ? 200 : 503);
+    assert.equal(calls.length, expectedCalls);
+  });
+}
+
+for (const [start, end] of [['2026-10-18T09:00:00Z', '2026-10-18T09:30:00Z'],
+  ['2028-02-29T09:00:00.123Z', '2028-02-29T09:30:00.123Z']]) {
+  test('valid UTC seconds, milliseconds, leap dates and exactly 30 minutes are admitted', async () => {
+    const { handler, calls } = fixture({ ...config(),
+      POS_ALERT_PILOT_START_UTC: start, POS_ALERT_PILOT_END_UTC: end },
+    undefined, undefined, () => Date.parse(start));
+    assert.equal((await handler(request())).status, 200);
+    assert.equal(calls.length, 1);
+  });
+}
+
+test('same retained handler rejects expired and removed pilot configuration', async () => {
+  const env = config();
+  let clock = NOW;
+  const { handler, calls } = fixture(env, undefined, undefined, () => clock);
+  assert.equal((await handler(request())).status, 200);
+  clock = Date.parse(END);
+  assert.equal((await handler(request())).status, 503);
+  delete env.POS_ALERT_PILOT_END_UTC;
+  clock = NOW;
+  assert.equal((await handler(request())).status, 503);
+  assert.equal(calls.length, 1);
+});
+
+test('UTC cutoff bounds concurrent in-flight HTTP waits and denies further forwarding', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.parse(END) - 10 });
+  const { handler, calls } = fixture(config(), (_, { signal }) => new Promise((resolve, reject) => {
+    signal.addEventListener('abort', () => reject(new Error('synthetic_abort')));
+  }), undefined, () => Date.now());
+  const first = handler(request());
+  const second = handler(request());
+  assert.equal(calls.length, 2);
+  t.mock.timers.tick(10);
+  assert.deepEqual((await Promise.all([first, second])).map((r) => r.status), [504, 504]);
+  assert.equal(calls.every(([, options]) => options.signal.aborted), true);
+  assert.equal((await handler(request())).status, 503);
+  assert.equal(calls.length, 2);
+});
 
 for (const headers of [{}, { Authorization: 'Basic invalid' },
   { Authorization: `Bearer ${'c'.repeat(64)}` },

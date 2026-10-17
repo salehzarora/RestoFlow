@@ -9,7 +9,8 @@ the Supabase worker are unchanged. **No Cron schedule is registered.**
 
 `GET /api/dispatch` requires a constant-time authenticated inbound bearer, exact
 explicit enablement, a Vercel production runtime, two different valid secrets,
-and the exact approved destination. Each authorized invocation makes one HTTPS
+the exact approved destination, and a valid, currently open UTC pilot window.
+Each authorized invocation makes one HTTPS
 POST with `{}` to the existing dispatcher. It forwards no incoming body, query,
 Origin, or other header. Redirects and automatic retries are forbidden.
 
@@ -26,7 +27,19 @@ access logs must not capture Authorization headers or request/response bodies.
 | `POS_ORDER_ALERT_WORKER_SECRET` | Different random 256-bit bearer matching Supabase Edge Secrets; production-only Sensitive/Secret |
 | `POS_ALERT_CRON_ENABLED` | Defaults OFF when absent; only exact `true` enables |
 | `POS_ALERT_DISPATCH_URL` | `https://oqmevrndtivqxgyvcmwy.supabase.co/functions/v1/pos-order-alert-dispatch` |
+| `POS_ALERT_PILOT_START_UTC` | Required server-only Config, Production only; strict `YYYY-MM-DDTHH:mm:ssZ` or `YYYY-MM-DDTHH:mm:ss.sssZ` |
+| `POS_ALERT_PILOT_END_UTC` | Same strict UTC format; later than start, at most 30 minutes after start |
 | `VERCEL` / `VERCEL_ENV` | Platform-provided `1` / `production`; do not override |
+
+The window is start-inclusive and end-exclusive. Missing, malformed, impossible
+calendar dates, offsets, inactive windows and windows longer than 30 minutes fail
+closed with `503 unavailable`, with no outbound request even when the enable flag
+is true. Each invocation reads its configuration and server clock again. Its HTTP
+deadline is the earlier of 115 seconds or the pilot cutoff. Aborting an in-flight
+request cannot recall a worker/FCM send already underway. This guard does not
+automatically turn off the Supabase flag, operator setting, Cron switch or native
+Android delegation; the cutoff/shutdown procedure in [ACTIVATION.md](ACTIVATION.md)
+is mandatory. Neither UTC variable has a default pilot value in source/config.
 
 Both credentials are server-only, scoped solely to this future project's
 Production environment. Do not share them with existing projects, Preview,
@@ -74,7 +87,9 @@ They do not send a notification or establish deployed readiness.
 
 ## Installation and activation boundary
 
-See [ACTIVATION.md](ACTIVATION.md). A later owner-approved installation must create
+See [ACTIVATION.md](ACTIVATION.md) for the HOME-only pilot and shutdown runbook.
+The dedicated OFF-only project is already installed; no credential rotation or
+project creation is needed for this preparation. A new installation would create
 a **separate** Vercel project with Root Directory `services/pos-alert-cron`, Node
 24, framework Other, no application build/output overrides and no access to files
 outside that root. Do not link/reconfigure Storefront, Dashboard, POS or KDS.
