@@ -98,7 +98,10 @@ test('live validation accepts E.164 and Unicode note boundaries, then rejects ov
   const draft = { ...EMPTY_DRAFT, fullName: customer.name, phone: customer.phone, orderNotes: '😀'.repeat(500) };
   const available = { pickup: true, delivery: false };
   assert.equal(validateCheckout(draft, quote, available, true).ok, true);
-  assert.deepEqual(validateCheckout({ ...draft, phone: '0501234567' }, quote, available, true).invalid, ['phone']);
+  for (const phone of ['0501234567', '050-123-4567', '02 234 5678', '+447700900123']) {
+    assert.equal(validateCheckout({ ...draft, phone }, quote, available, true).ok, true);
+  }
+  assert.deepEqual(validateCheckout({ ...draft, phone: '050123456' }, quote, available, true).invalid, ['phone']);
   assert.deepEqual(validateCheckout({ ...draft, orderNotes: '😀'.repeat(501) }, quote, available, true).invalid, ['orderNotes']);
 });
 
@@ -108,6 +111,8 @@ test('AR/HE/EN cover all four real states, recovery uncertainty and the same ten
     const m = orderMessages(locale);
     assert.deepEqual(Object.keys(m).sort(), keys);
     assert.ok(m.payAtPickup.length > 0 && m.orderNotes.length > 0 && m.itemNotesLimit.length > 0);
+    assert.equal(m.phoneHint, '0521234567');
+    assert.ok(m.phoneHelp.includes('0521234567') && m.phoneError.includes('0521234567'));
     for (const state of ['pending', 'accepted', 'rejected', 'expired']) {
       const copy = orderStatusCopy(state, m);
       assert.ok(copy.title.length > 0 && copy.body.length > 0);

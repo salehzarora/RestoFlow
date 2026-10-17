@@ -22,7 +22,7 @@
  */
 import type { Quote } from '@/money/quote';
 import type { CheckoutDraft } from './draft';
-import { validCustomerName, validCustomerPhone } from '@/orders/customer';
+import { validCustomerName, normalizeCheckoutPhone } from '@/orders/customer';
 import { validOrderNotes } from '@/orders/notes';
 
 /**
@@ -110,7 +110,7 @@ export function validateCheckout(
    */
   if (!isServiceAvailable(draft.service, available)) blockers.push('service-unavailable');
   if (livePickup ? !validCustomerName(draft.fullName) : draft.fullName.trim() === '') invalid.add('fullName');
-  if (livePickup ? !validCustomerPhone(draft.phone) : !PHONE.test(draft.phone.trim())) invalid.add('phone');
+  if (livePickup ? normalizeCheckoutPhone(draft.phone) === null : !PHONE.test(draft.phone.trim())) invalid.add('phone');
   if (livePickup && !validOrderNotes(draft.orderNotes)) invalid.add('orderNotes');
   if (livePickup && draft.service !== 'pickup') invalid.add('service');
 

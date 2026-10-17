@@ -298,14 +298,13 @@ export function DetailsScreen({
               data-sf-field="phone"
             />
           </label>
-          {/* The helper SWAPS to the format mask and turns danger; it is not an
-              alert, because the placeholder it mirrors never was. */}
+          {/* Live checkout explains the accepted formats; the fixture keeps its mask. */}
           <span
             className={`${s.help} ${bad('phone') ? s.helpBad : ''}`}
             id={ID.phoneHelp}
             data-sf-phone-help=""
           >
-            {pickupCopy ? (bad('phone') ? pickupCopy.phoneHint : pickupCopy.phoneHelp) : bad('phone') ? m.phoneHint : m.phoneHelp}
+            {pickupCopy ? (bad('phone') ? pickupCopy.phoneError : pickupCopy.phoneHelp) : bad('phone') ? m.phoneHint : m.phoneHelp}
           </span>
         </section>
 
