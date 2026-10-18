@@ -3,7 +3,13 @@
 Work ID: BIZBOT-VERCEL-ALERT-CRON-001. This directory is a standalone Node 24
 Vercel Functions project, with no dependencies, client bundle, database access,
 Firebase credential, or deployment script. Existing application deployments and
-the Supabase worker are unchanged. **No Cron schedule is registered.**
+the Supabase worker are unchanged. **The candidate config declares one minute
+schedule; this preparation does not register or activate it.** A later merge may
+automatically deploy Production and register it. Disable and verify the dedicated
+project's platform Cron switch BEFORE any merge/deployment, keep both notification
+flags OFF and pilot UTC values unset until separately approved. See
+[ACTIVATION.md](ACTIVATION.md). An enabled schedule can incur function-invocation
+usage even while forwarding is OFF.
 
 ## Request boundary
 
@@ -41,7 +47,7 @@ automatically turn off the Supabase flag, operator setting, Cron switch or nativ
 Android delegation; the cutoff/shutdown procedure in [ACTIVATION.md](ACTIVATION.md)
 is mandatory. Neither UTC variable has a default pilot value in source/config.
 
-Both credentials are server-only, scoped solely to this future project's
+Both credentials are server-only, scoped solely to this dedicated project's
 Production environment. Do not share them with existing projects, Preview,
 Development, custom environments, client-prefixed variables, or team-wide envs.
 Use Vercel's write-only Secret type (legacy API `type: sensitive`,
@@ -88,13 +94,14 @@ They do not send a notification or establish deployed readiness.
 ## Installation and activation boundary
 
 See [ACTIVATION.md](ACTIVATION.md) for the HOME-only pilot and shutdown runbook.
-The dedicated OFF-only project is already installed; no credential rotation or
-project creation is needed for this preparation. A new installation would create
-a **separate** Vercel project with Root Directory `services/pos-alert-cron`, Node
-24, framework Other, no application build/output overrides and no access to files
-outside that root. Do not link/reconfigure Storefront, Dashboard, POS or KDS.
-Deploy with `POS_ALERT_CRON_ENABLED=false` and no schedule first. Preserve
-`POS_ORDER_ALERTS_ENABLED=false` in Supabase until separate activation approval.
+The dedicated OFF-only project and UTC guard are already installed; no credential
+rotation or project creation is needed. Root Directory remains
+`services/pos-alert-cron`, Node 24, framework Other. Do not link/reconfigure
+Storefront, Dashboard, POS or KDS. This schedule-preparation PR must stay unmerged
+until the platform Cron switch is disabled and verified. A later approved
+deployment must preserve `POS_ALERT_CRON_ENABLED=false`, Supabase
+`POS_ORDER_ALERTS_ENABLED=false`, operator OFF and unset UTC values. Registration
+of the schedule does not authorize notification activation.
 
 Once-per-minute Cron requires a qualifying Pro/Enterprise plan. Verify plan,
 cost approval, duration support and Cron access to the protected endpoint before
