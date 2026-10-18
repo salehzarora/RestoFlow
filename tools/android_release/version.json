@@ -99,6 +99,44 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.65",
+      "versionCode": 65,
+      "signing": "restoflow-production",
+      "status": "BUILT / PRODUCTION-SIGNED / VERIFIED / CONSUMED / NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED",
+      "applicationSourceSha": "87a4552a9d344fcc8babaefb2664e34f0055c01d",
+      "sourceSha": "87a4552a9d344fcc8babaefb2664e34f0055c01d",
+      "buildDate": "2026-10-18",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v65-87a4552.apk",
+          "packageId": "com.restoflow.pos",
+          "sizeBytes": 76130917,
+          "sha256": "2c1b72e695f921b22405a6946d9867941da06a763500a223f1adb803cd9bbcf9"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v65-87a4552.apk",
+          "packageId": "com.restoflow.kds",
+          "sizeBytes": 57938786,
+          "sha256": "62277e3ca82e5444ea47a1245ffcee20b70eeaa3ead644c911ddc4108817e5a8"
+        }
+      },
+      "notes": [
+        "BIZBOT-ANDROID-V65-RELEASE-LEDGER-001 reconciles the completed BIZBOT-ANDROID-OFFICIAL-V65-ALERT-FIX-BUILD-001 pair. The unchanged official runner built clean isolated approved main 87a4552a9d344fcc8babaefb2664e34f0055c01d using -SourceSha, -AllowNonMain, -EnablePosBackgroundOrderAlerts and the approved external public Firebase configuration after source CI 39126905219 completed SUCCESS, including application validation and pgTAP.",
+        "Preflight began 2026-10-18T12:59:56Z. Build ran 13:05:12-13:09:03 UTC; verification-summary.json was recorded at 13:13:55.2329093Z, followed by final readback at 13:14:29 UTC. Both APKs are 0.0.65 / 65 from the same audited source. Source identity is clean-build/receipt provenance, not an independently embedded APK Git field.",
+        "PR #349 preserves confirmed background-alert enable intent during asynchronous preparation and strengthens uncertain-registration cleanup/reconciliation. Inclusion in this build is not proof that the HOME switch, registration, background notifications or physical delivery have been fixed or accepted. No restart, re-enable, provider/pairing reset or data clearing may bypass an uncertain registration.",
+        "Both official APK verifiers PASS: exact package/version, pinned restoflow-production certificate, valid signatures, ZIP alignment, non-debuggable release/AOT, RESTOFLOW_DEMO_MODE=false and production oqmevrndtivqxgyvcmwy backend with public client key only. Formatted privileged-credential/private-key pattern scans found no matches; this is not an absolute proof about arbitrary unknown strings.",
+        "POS Firebase/background-alert opt-in is ON in retained Dart inputs and native release BuildConfig. Actual APK manifest/DEX and generated configuration match bizbot-production, sender 31661231890 and app 1:31661231890:android:1856c6d5ac4e64a229adcb. Four alert components are enabled and non-exported; messaging auto-init and analytics remain false. Public API-key values are not recorded.",
+        "KDS Firebase/alert opt-in is OFF/absent, without Firebase configuration, alert components or messaging integration. KDS application behavior is unchanged; POS-only build inputs were cleared for KDS.",
+        "Both artifacts independently reconcile with preserved SHA256SUMS.txt, BUILD-METADATA.txt, runner-invocation.json, verification-summary.json and the durable code-65 consumption receipt. Independent artifact review APPROVE. Checksums are exactly two LF-only/no-BOM entries. Original receipts and artifacts remain unchanged.",
+        "Supplemental 16-KB ZIP alignment and all checked 64-bit ELF load alignments PASS for both APKs. Existing 32-bit armeabi-v7a POS SQLite p_align=4096 remains a limitation; no all-architecture ELF or physical-device compatibility claim is made. POS libsqlite3.so for arm64-v8a, armeabi-v7a and x86_64 is byte-identical to v64. Native inventories are preserved; six libdartjni.so GNU build-ID notes alone differ outside AOT, with code/data unchanged.",
+        "Original BUILD-METADATA.txt retains its Gradle-field formatting limitation (first output separator). A separate read-only probe established Gradle 9.1.0; the original metadata was not repaired. No new loader, device, notification-delivery or kitchen-print test was performed.",
+        "All v64 artifacts/receipts and every prior ledger/history object, acceptance supplement and currentOfficialRelease remain unchanged. The owner later reported v64 installed and working on HOME; this is owner testimony, not ADB verification or formal background-alert acceptance, and does not rewrite the original v64 build-time record. PR #314/#315 remain excluded.",
+        "Code 65 is consumed and must not be reused or rebuilt under this reconciliation. Reserve 0.0.66 / 66 as bookkeeping only, NOT approved for building, signing, installing or releasing. v65 is NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED and not promoted to currentOfficialRelease. Installation, promotion and a notification pilot require separate owner approval; commercial cold-offline imported-spool behavior remains unapproved. This record changes no application, runner, signing, hosted, admission, notification, hold, order, printer or device state."
+      ]
+    },
+    {
       "versionName": "0.0.64",
       "versionCode": 64,
       "signing": "restoflow-production",
@@ -844,15 +882,15 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.65",
-    "versionCode": 65,
+    "versionName": "0.0.66",
+    "versionCode": 66,
     "signing": "restoflow-production",
     "status": "reserved - NOT planned / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "Bookkeeping reservation only after verified official v64; source and scope require separate owner approval. NOT approved for building, installing or releasing.",
+    "intendedSource": "Bookkeeping reservation only after verified official v65; source and scope require separate owner approval. NOT approved for building, signing, installing or releasing.",
     "notes": [
-      "Reserved after verified official synchronized v64. Code 64 is consumed; preserve its exact artifacts and source identity. No v65 build, installation or release is authorized.",
-      "All prior build-time release records and owner-reported acceptance evidence remain unchanged. The owner subsequently reported POS v63 installed on HOME; this is owner testimony only, not ADB verification or formal physical acceptance. v64 remains NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED; currentOfficialRelease is not promoted.",
-      "Follow existing source authorization, signing, synchronized POS/KDS build and release-record governance. No physical device, hosted, admission, print or commercial offline-policy action is authorized."
+      "Reserved after reconciliation of the verified official synchronized v65 pair. Code 65 is consumed; preserve its exact artifacts, source and durable local consumption receipt. No v66 build, signing, installation or release is authorized.",
+      "All previous release records, acceptance supplements and currentOfficialRelease remain unchanged. Later owner-reported HOME installations do not rewrite historical build-time facts or constitute ADB verification. v65 remains NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED.",
+      "Follow separate source, signing, synchronized-build and release authorization. No device, hosted, admission, notification, print or commercial offline-policy activation is authorized; uncertain registration requires reconciliation, never restart/reset/data clearing as a shortcut."
     ]
   },
   "ownerReportedAcceptanceRecords": [
