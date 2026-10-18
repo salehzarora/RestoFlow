@@ -1,5 +1,6 @@
 -- BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: rollback-only synthetic security tests.
 -- Uses the established synthetic Maps Burger fixture; no network/printer call.
+-- Notification device-4 is distinct from unchanged device-1 printing fixtures.
 -- This scoped rollout pins these scope UUIDs. All rows below are synthetic
 -- fixtures in the disposable CI database, never hosted restaurant operations.
 begin;
@@ -10,6 +11,7 @@ select no_plan();
 
 create function pg_temp.mp_id(label text) returns uuid language sql immutable as
 $$select case when label='device-1' then 'bb80c0d8-6893-4e24-8eea-5a14cf545ecd'::uuid
+ when label='device-4' then 'd9f876fb-57e8-44ee-be94-f2284c6fc905'::uuid
  else md5('manual-order-pilot-001-synthetic-'||label)::uuid end$$;
 create function pg_temp.mp_client(n integer) returns uuid language sql immutable as
 $$select ('62000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid$$;
@@ -83,7 +85,7 @@ create temp table _ao_staff as select n,
  pg_temp.mp_id('device-'||n) device,pg_temp.mp_id('pairing-'||n) pairing,
  pg_temp.mp_id('session-'||n) session,pg_temp.mp_id('staff-'||n) staff,
  pg_temp.mp_id('membership-'||n) membership,pg_temp.mp_id('employee-'||n) employee,
- pg_temp.mp_id('pin-'||n) pin,pg_temp.mp_id('shift-'||n) shift from generate_series(1,3) n;
+ pg_temp.mp_id('pin-'||n) pin,pg_temp.mp_id('shift-'||n) shift from generate_series(1,4) n;
 insert into devices(id,organization_id,restaurant_id,branch_id,device_type)
 select device,org,restaurant,branch,'pos' from _ao_staff;
 insert into device_pairings(id,organization_id,restaurant_id,branch_id,device_id,status)
@@ -122,7 +124,7 @@ create temp table _ao_results(label text primary key,r jsonb);
 grant all on _ao_results to service_role,authenticated;
 select set_config('request.jwt.claim.sub',pg_temp.mp_id('transport-user')::text,true);
 
-create function pg_temp.alert_register(p_secret text default repeat('a',64),p_token text default 'synthetic-fcm-token-123456789',p_device integer default 1)
+create function pg_temp.alert_register(p_secret text default repeat('a',64),p_token text default 'synthetic-fcm-token-123456789',p_device integer default 4)
 returns jsonb language sql volatile as $$
  select public.pos_register_order_alert(pg_temp.mp_client(700),p_token,p_secret,pg_temp.mp_id('device-'||p_device),
    pg_temp.mp_id('pin-'||p_device),'synthetic-live-token-'||p_device);
@@ -159,17 +161,20 @@ reset role;
 select app.set_pos_order_alerts(true,'Synthetic notification gate','background-alert-test');
 set local role authenticated;
 select is(pg_temp.alert_register(p_secret=>'wrong')->>'error','invalid_request','malformed delegation rejected');
+select is(pg_temp.alert_register(p_device=>1)->>'error','permission_denied','old HOME denied despite valid independent authentication');
 select is(pg_temp.alert_register(p_device=>2)->>'error','permission_denied','same-branch nonenabled device denied');
 select is(pg_temp.alert_register(p_device=>3)->>'error','permission_denied','foreign tenant/device denied');
 select is(public.pos_register_order_alert(pg_temp.mp_client(700),'synthetic-fcm-token-123456789',repeat('a',64),
- pg_temp.mp_id('device-1'),pg_temp.mp_id('pin-1'),'wrong-token')->>'error','invalid_session','paired secret must prove device');
+ pg_temp.mp_id('device-4'),pg_temp.mp_id('pin-4'),'wrong-token')->>'error','invalid_session','paired secret must prove device');
 insert into _ao_results values('registered',pg_temp.alert_register());
 select is((select r->>'ok' from _ao_results where label='registered'),'true','real paired/PIN registration succeeds');
 reset role;
 select ok((select authority_expires_at<=clock_timestamp()+interval '8 hours' and
- authority_expires_at<=(select expires_at from pin_sessions where id=pg_temp.mp_id('pin-1'))
- and authority_expires_at<=(select expires_at from device_sessions where id=pg_temp.mp_id('session-1'))
+ authority_expires_at<=(select expires_at from pin_sessions where id=pg_temp.mp_id('pin-4'))
+ and authority_expires_at<=(select expires_at from device_sessions where id=pg_temp.mp_id('session-4'))
  from app.pos_order_alert_registrations),'delegation is bounded by real PIN, device and eight hours');
+select is((select allowed_device_ids from app.mapsburger_web_order_rollouts order by revision desc limit 1),
+ array[pg_temp.mp_id('device-1')],'original printing allowlist remains exclusively OLD');
 create temp table _alert_registration as select id,generation,registered_at from app.pos_order_alert_registrations;
 set local role authenticated;
 select is(pg_temp.alert_register()->>'ok','true','same foreground registration may refresh');
@@ -242,6 +247,8 @@ insert into _ao_results values('second-pending',pg_temp.ao_submit(2)),('third-pe
 select is(jsonb_array_length(pg_temp.alert_status()->'requests'),2,'multiple requests remain one bounded status set');
 reset role;
 set local role authenticated;
+select is(pg_temp.ao_accept(2,device=>4)->>'error','ordering_unavailable',
+ 'NEW notification authorization does not grant targeted-print acceptance');
 select is(pg_temp.ao_accept(2)->>'status','accepted','existing trusted acceptance still succeeds');
 reset role;
 set local role service_role;
@@ -290,33 +297,33 @@ select is(public.pos_finish_order_alert_delivery(
  'invalid_token')->>'ok','true','stale-generation send outcome can be recorded');
 reset role;
 select is((select count(*) from app.pos_order_alert_registrations where enabled),1::bigint,'old invalid-token outcome cannot disable rotated registration');
-update employee_profiles set employment_status='suspended' where id=pg_temp.mp_id('employee-1');
+update employee_profiles set employment_status='suspended' where id=pg_temp.mp_id('employee-4');
 set local role service_role;
 select is(pg_temp.alert_status(p_secret=>repeat('b',64))->>'error','unauthorized','employee suspension invalidates delegated authority');
 reset role;
-update employee_profiles set employment_status='active' where id=pg_temp.mp_id('employee-1');
-update memberships set role='kitchen_staff' where id=pg_temp.mp_id('membership-1');
+update employee_profiles set employment_status='active' where id=pg_temp.mp_id('employee-4');
+update memberships set role='kitchen_staff' where id=pg_temp.mp_id('membership-4');
 set local role service_role;
 select is(pg_temp.alert_status(p_secret=>repeat('b',64))->>'error','unauthorized','role downgrade invalidates delegated authority');
 reset role;
-update memberships set role='cashier' where id=pg_temp.mp_id('membership-1');
+update memberships set role='cashier' where id=pg_temp.mp_id('membership-4');
 update branches set status='suspended' where id=pg_temp.mp_branch();
 set local role service_role;
 select is(pg_temp.alert_status(p_secret=>repeat('b',64))->>'error','unauthorized','branch suspension invalidates delegated authority');
 reset role;
 update branches set status='active' where id=pg_temp.mp_branch();
-update pin_sessions set is_active=false,ended_at=clock_timestamp() where id=pg_temp.mp_id('pin-1');
+update pin_sessions set is_active=false,ended_at=clock_timestamp() where id=pg_temp.mp_id('pin-4');
 set local role service_role;
 select is(pg_temp.alert_status(p_secret=>repeat('b',64))->>'error','unauthorized','ended PIN immediately removes delegated authority');
 select is(jsonb_array_length(public.pos_claim_order_alert_deliveries()->'deliveries'),0,'ended PIN prevents worker delivery');
 reset role;
-update pin_sessions set is_active=true,ended_at=null where id=pg_temp.mp_id('pin-1');
-update memberships set status='revoked' where id=pg_temp.mp_id('membership-1');
+update pin_sessions set is_active=true,ended_at=null where id=pg_temp.mp_id('pin-4');
+update memberships set status='revoked' where id=pg_temp.mp_id('membership-4');
 set local role service_role;
 select is(pg_temp.alert_status(p_secret=>repeat('b',64))->>'error','unauthorized','membership revocation invalidates delegation');
 reset role;
-update memberships set status='active' where id=pg_temp.mp_id('membership-1');
-update device_sessions set is_active=false,revoked_at=clock_timestamp() where id=pg_temp.mp_id('session-1');
+update memberships set status='active' where id=pg_temp.mp_id('membership-4');
+update device_sessions set is_active=false,revoked_at=clock_timestamp() where id=pg_temp.mp_id('session-4');
 set local role service_role;
 select is(pg_temp.alert_status(p_secret=>repeat('b',64))->>'error','unauthorized','revoked device session invalidates delegation');
 reset role;

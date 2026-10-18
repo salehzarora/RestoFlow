@@ -1,4 +1,32 @@
-# Cron schedule preparation — NOT MERGED OR DEPLOYED
+# Notification scheduler activation handoff
+
+## Current HOME identity handoff — PREPARED / NOT APPLIED
+
+`BIZBOT-HOME-ALERT-ALLOWLIST-RETARGET-001` proposes replacing notification HOME
+`hg` (`bb80c0d8-6893-4e24-8eea-5a14cf545ecd`) exclusively with owner-approved
+`salehtab` (`d9f876fb-57e8-44ee-be94-f2284c6fc905`) in the unchanged Maps Burger
+tenant. The existing v65 update/physical mapping is owner-reported, not ADB or
+FCM acceptance evidence. Hosted notification eligibility is still OLD-only.
+Printing authorization remains OLD-only and is not retargeted by this change.
+
+Follow the [notification-only migration/application gates](../../docs/BIZBOT_POS_BACKGROUND_ORDER_ALERT_001.md#home-identity-retarget--prepared--not-applied)
+before any later registration or pilot. Separate approvals are required for PR
+merge and its Git automation, migration application while all notification gates
+are OFF, and fresh HOME registration/attended pilot. Do not enable HOME using the
+historical identity/runbook below. After approved application, catalog verification
+must prove the RPC and validated CHECK both pin NEW, with no OLD fallback.
+
+Current read-only preparation baseline: both notification flags false, UTC keys
+absent, operator OFF revision 3, zero registrations/deliveries/leases; platform
+Cron disabled with one `/api/dispatch` once-per-minute definition. Rollout 1265,
+ordinary printing BLOCKED 1264 and 625 immutable holds remain unchanged. No
+scheduler executable/configuration, credential, Edge Function, APK or gate changes
+belong to this PR. The existing UTC/explicit-shutdown procedure still applies.
+Retargeting does not register a token, turn on Cron, send FCM or authorize printing.
+Uncertain registration needs reconciliation, not reset/replay. Preserve evidence;
+no destructive rollback, row deletion, uninstall/re-pair or two-device fallback.
+
+## Historical Cron schedule preparation record
 
 Work ID: BIZBOT-HOME-FCM-CRON-SCHEDULE-001. This PR prepares exactly one
 `/api/dispatch` schedule, `* * * * *`, in the dedicated scheduler's `vercel.json`.
