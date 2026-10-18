@@ -5,6 +5,84 @@ No hosted installation, activation, official v64 build or device test is part
 of this change. Notification failure must not gate checkout, Inbox polling,
 acceptance or printing.
 
+## HOME identity retarget — PREPARED / NOT APPLIED
+
+`BIZBOT-HOME-ALERT-ALLOWLIST-RETARGET-001` prepares an exclusive notification
+replacement from historical HOME `hg`
+(`bb80c0d8-6893-4e24-8eea-5a14cf545ecd`) to owner-approved HOME `salehtab`
+(`d9f876fb-57e8-44ee-be94-f2284c6fc905`). Both remain scoped to organization
+`20605c2b-3145-4803-a990-bbec3d9c1096`, restaurant
+`de3bbc64-edad-4ff4-bccd-c2ef217c1d56`, branch
+`2847c0be-3e31-45a5-957c-508729f1971e`. Names, a shared branch or physical-tablet
+assumptions never authorize registration. The physical mapping is owner testimony
+plus backend metadata, without independent tablet UUID inspection or ADB evidence.
+
+The preserved installation supplement reports the existing official POS v65
+updated in place on HOME and launching normally. This does not prove FCM delivery,
+registration acceptance or physical printing. It does not consume v66 or promote
+`currentOfficialRelease`. Historical v64/hg implementation and pilot material
+below remains historical; it is not permission to activate that old identity.
+
+Only the notification-specific check in
+`app.pos_register_order_alert(uuid,text,text,uuid,uuid,text)` and the validated
+`app.pos_order_alert_registrations.pos_order_alert_registrations_check` change.
+The public v65 RPC signature/response, auth helper, authority/status/worker,
+owner/ACLs, forced RLS, unique indexes, expiry, generation, refresh, arrival cutoff,
+leases and delivery idempotency remain unchanged. OLD is removed, not retained as
+a fallback. No registration/token/operator revision/history is seeded or rewritten.
+
+**Printing stays separate.** The existing targeted-print rollout still allows
+only `bb80c0d8-6893-4e24-8eea-5a14cf545ecd`; ordinary printing remains BLOCKED
+revision 1264 with 625 protected historical holds. NEW notification eligibility
+does not grant targeted printing or prove that salehtab can print an accepted
+order. Pickup rollout 1265 and its order/print contracts are unchanged.
+
+### Separately approved application and recovery
+
+1. Obtain separate PR merge approval, identifying normal Git CI/preview/main
+   publication effects. Preparation does not merge, deploy or apply SQL. Before
+   pushing/merging, recheck Supabase Git integration: automatic PR branching and
+   production database deployment must be disabled. Recheck dedicated Vercel
+   project/team/root/main-only production targeting; no production deployment is
+   authorized by this preparation.
+2. Obtain separate hosted application approval for only
+   `20261018182517_bizbot_home_alert_allowlist_retarget_001.sql`. Reconfirm exact
+   source and device scopes, the current function/constraint catalog, grants/RLS,
+   notification Edge flag false, Vercel flag false, UTC keys absent, platform Cron
+   disabled, latest operator OFF (current revision 3), zero registrations and
+   deliveries/leases, and no unresolved registration transaction. Inspect metadata
+   only; do not invoke registration/auth/claim helpers as read-only probes.
+3. The committed migration is atomic. It sets a five-second lock timeout and
+   thirty-second statement timeout, then locks settings SHARE before registrations
+   ACCESS EXCLUSIVE. It requires operator absent/OFF, empty registration/delivery
+   tables, the reviewed old function/security metadata and exact validated CHECK.
+   Fresh local/CI replay needs no production fixture rows. It replaces the CHECK
+   with an immediately validated NEW-only CHECK and replaces just the function's
+   UUID literal. No committed period admits both devices. SQL cannot verify Edge,
+   Vercel, physical identity or every client Future; those remain external gates.
+4. On timeout, unsafe gate, incompatible history or schema drift, STOP and retain
+   evidence. The failed transaction must leave the original function, constraints
+   and all rows intact. Never delete, disable, reassign or rewrite rows to force
+   application, and never blindly retry an uncertain migration outcome.
+5. After a confirmed commit, read migration history (one added version), validated
+   CHECK expression, function signature/owner/security/search_path/ACLs, private
+   table RLS/denials and zero registration/delivery counts. Compare all unaffected
+   auth/printing definitions and business evidence; verify the OLD printing
+   allowlist, rollout 1265, BLOCKED 1264 and 625 holds. Keep all notification gates
+   OFF. Do not invoke the RPC or dispatch a notification to validate installation.
+6. Fresh HOME registration and an attended, at-most-thirty-minute notification
+   pilot need another explicit owner authorization. Use existing v65 authentication
+   and foreground Enable only then; do not re-pair, reset storage, replay uncertain
+   registration or reuse old authority. Follow the scheduler runbook's independent
+   gates, exact UTC window and explicit full shutdown; retargeting does not enroll
+   HOME, activate Cron or send FCM.
+
+If post-application verification fails, leave notifications OFF and preserve the
+successfully installed schema and evidence. Do not edit migration history, run a
+destructive down-migration, delete registrations, widen back to both UUIDs or
+uninstall/re-pair as recovery. A compensating schema change needs separate review
+and approval. Printing authorization is outside this change and outside recovery.
+
 ## Android feasibility decision
 
 The current private Android distribution targets SDK 36 (minimum 24). A
