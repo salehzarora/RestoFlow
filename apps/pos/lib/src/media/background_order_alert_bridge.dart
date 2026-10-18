@@ -20,6 +20,12 @@ abstract class BackgroundOrderAlertBridge {
   Future<void> dispose();
 }
 
+/// Optional observable cleanup for the controller. Legacy logout/unpair callers
+/// retain their nonthrowing void methods; no native method or payload changes.
+abstract interface class BackgroundOrderAlertRevocation {
+  Future<bool> revoke({bool suspend = false, bool retainOptIn = false});
+}
+
 final backgroundOrderAlertsBuildEnabledProvider = Provider<bool>(
   (ref) =>
       !kIsWeb &&
@@ -36,7 +42,7 @@ final backgroundOrderAlertBridgeProvider = Provider<BackgroundOrderAlertBridge>(
 );
 
 class MethodChannelBackgroundOrderAlertBridge
-    implements BackgroundOrderAlertBridge {
+    implements BackgroundOrderAlertBridge, BackgroundOrderAlertRevocation {
   MethodChannelBackgroundOrderAlertBridge({MethodChannel? channel})
     : _channel =
           channel ??
@@ -74,9 +80,24 @@ class MethodChannelBackgroundOrderAlertBridge
       _call<void>('pending', snapshot);
   @override
   Future<void> suspend({bool retainOptIn = false}) async =>
-      _call<void>('suspend', {'retain_opt_in': retainOptIn});
+      revoke(suspend: true, retainOptIn: retainOptIn);
   @override
-  Future<void> disable() async => _call<void>('disable');
+  Future<void> disable() async => revoke();
+  @override
+  Future<bool> revoke({bool suspend = false, bool retainOptIn = false}) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+    try {
+      // Revocation remains possible after disposal, under controller ownership.
+      await _channel.invokeMethod<void>(
+        suspend ? 'suspend' : 'disable',
+        suspend ? {'retain_opt_in': retainOptIn} : null,
+      );
+      return true; // native void success returns null, not a boolean
+    } catch (_) {
+      return false; // no raw platform diagnostics or credentials escape
+    }
+  }
+
   @override
   Future<bool> consumeInboxTap() async =>
       await _call<bool>('consumeInboxTap') ?? false;
