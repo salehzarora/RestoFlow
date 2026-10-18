@@ -72,6 +72,7 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
         unawaited(_consumeNotificationTap());
       } else {
         _controller!.onPaused();
+        ref.read(backgroundOrderAlertsProvider.notifier).onPaused();
       }
     });
   }
@@ -189,54 +190,103 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
   }
 }
 
-class _BackgroundOrderAlertControl extends ConsumerWidget {
+class _BackgroundOrderAlertControl extends ConsumerStatefulWidget {
   const _BackgroundOrderAlertControl();
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_BackgroundOrderAlertControl> createState() =>
+      _BackgroundOrderAlertControlState();
+}
+
+class _BackgroundOrderAlertControlState
+    extends ConsumerState<_BackgroundOrderAlertControl> {
+  bool _confirming = false;
+
+  Future<void> _change(bool value) async {
+    final controller = ref.read(backgroundOrderAlertsProvider.notifier);
+    if (!value) {
+      await controller.setEnabled(false);
+      return;
+    }
+    if (_confirming || ref.read(backgroundOrderAlertsProvider).busy) return;
+    final identity = ref.read(onlineOrderInboxIdentityProvider);
+    final generation = controller.authorityGeneration;
+    setState(() => _confirming = true);
+    try {
+      final l10n = AppLocalizations.of(context);
+      final allowed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          scrollable: true,
+          title: Text(l10n.posBackgroundOrderAlerts),
+          content: Text(l10n.posBackgroundOrderAlertsExplanation),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.posBackgroundOrderAlertsEnable),
+            ),
+          ],
+        ),
+      );
+      if (!mounted ||
+          allowed != true ||
+          ref.read(onlineOrderInboxIdentityProvider) != identity ||
+          controller.authorityGeneration != generation)
+        return;
+      // Do not hold the dialog guard over native/HTTP work; the controller owns
+      // pending/cancellation, and never shows ON before binding succeeds.
+      unawaited(controller.setEnabled(true));
+    } finally {
+      if (mounted) setState(() => _confirming = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final alerts = ref.watch(backgroundOrderAlertsProvider);
     if (!alerts.available) return const SizedBox.shrink();
     final l10n = AppLocalizations.of(context);
-    return SwitchListTile.adaptive(
-      key: const Key('background-order-alert-switch'),
-      contentPadding: EdgeInsets.zero,
-      title: Text(l10n.posBackgroundOrderAlerts),
-      subtitle: Text(
-        alerts.failed
-            ? l10n.posBackgroundOrderAlertsUnavailable
-            : l10n.posBackgroundOrderAlertsHelp,
-      ),
-      value: alerts.enabled,
-      onChanged: alerts.busy
-          ? null
-          : (value) async {
-              if (value) {
-                final allowed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    scrollable: true,
-                    title: Text(l10n.posBackgroundOrderAlerts),
-                    content: Text(l10n.posBackgroundOrderAlertsExplanation),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text(
-                          MaterialLocalizations.of(context).cancelButtonLabel,
-                        ),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text(l10n.posBackgroundOrderAlertsEnable),
-                      ),
-                    ],
-                  ),
-                );
-                if (allowed != true) return;
-              }
-              if (!context.mounted) return;
-              await ref
-                  .read(backgroundOrderAlertsProvider.notifier)
-                  .setEnabled(value);
-            },
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SwitchListTile.adaptive(
+          key: const Key('background-order-alert-switch'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.posBackgroundOrderAlerts),
+          subtitle: Text(
+            alerts.failed
+                ? l10n.posBackgroundOrderAlertsUnavailable
+                : l10n.posBackgroundOrderAlertsHelp,
+          ),
+          value: alerts.enabled,
+          onChanged: alerts.busy || _confirming ? null : _change,
+        ),
+        if (alerts.busy)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  key: Key('background-order-alert-pending'),
+                  strokeWidth: 2,
+                ),
+              ),
+              TextButton(
+                key: const Key('background-order-alert-cancel'),
+                onPressed: () => _change(false),
+                child: Text(
+                  MaterialLocalizations.of(context).cancelButtonLabel,
+                ),
+              ),
+            ],
+          ),
+      ],
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/online_order_inbox.dart';
+import 'package:restoflow_pos/src/media/background_order_alert_bridge.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/data/order_submission.dart';
 import 'package:restoflow_pos/src/design/pos_visual_tokens.dart';
@@ -88,6 +90,55 @@ class _BackgroundAlerts extends BackgroundOrderAlerts {
   }
 }
 
+class _AlertBridge implements BackgroundOrderAlertBridge {
+  int permissionRequests = 0;
+  int bindings = 0;
+  int disables = 0;
+  bool refuse = false;
+  Completer<void>? permission;
+  Completer<bool>? binding;
+  @override
+  Future<Map<String, dynamic>> prepare({bool requestPermission = false}) async {
+    if (requestPermission) {
+      permissionRequests++;
+      await permission?.future;
+    }
+    return {
+      'available': true,
+      'enabled': requestPermission && !refuse,
+      'installation_id': '11111111-1111-4111-8111-111111111111',
+      'fcm_token': 'synthetic-token',
+      'status_secret': '0' * 64,
+      'generation': 1,
+    };
+  }
+
+  @override
+  Future<bool> bind(Map<String, dynamic> _) async {
+    bindings++;
+    return binding?.future ?? true;
+  }
+
+  @override
+  Future<void> pending(Map<String, dynamic> _) async {}
+  @override
+  Future<void> suspend({bool retainOptIn = false}) async {}
+  @override
+  Future<void> disable() async {
+    disables++;
+  }
+
+  @override
+  Future<bool> consumeInboxTap() async => false;
+  @override
+  void setHints({
+    required void Function() tokenChanged,
+    required void Function() pendingHint,
+  }) {}
+  @override
+  Future<void> dispose() async {}
+}
+
 Future<void> pumpNavbar(
   WidgetTester tester, {
   required String locale,
@@ -148,6 +199,8 @@ Future<_Controller> pumpInbox(
   bool menuUnavailable = false,
   WebOrderPrintOutcome? recovery,
   BackgroundOrderAlerts? backgroundAlerts,
+  _AlertBridge? backgroundBridge,
+  BackgroundOrderAlertRegistration? register,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -160,6 +213,26 @@ Future<_Controller> pumpInbox(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        if (backgroundBridge != null) ...[
+          backgroundOrderAlertsBuildEnabledProvider.overrideWithValue(true),
+          backgroundOrderAlertBridgeProvider.overrideWithValue(
+            backgroundBridge,
+          ),
+          backgroundOrderAlertEndpointProvider.overrideWithValue(
+            'https://synthetic.invalid/functions/v1/pos-order-alert-status',
+          ),
+          backgroundOrderAlertRegisterProvider.overrideWithValue(
+            register ??
+                (params, {authorize, isCurrent}) async => {
+                  'ok': true,
+                  'registration_id': '22222222-2222-4222-8222-222222222222',
+                  'authority_expires_at': DateTime.now()
+                      .toUtc()
+                      .add(const Duration(minutes: 15))
+                      .toIso8601String(),
+                },
+          ),
+        ],
         if (backgroundAlerts != null)
           backgroundOrderAlertsProvider.overrideWith(() => backgroundAlerts),
         onlineInboxPrintRecoveryProvider.overrideWith((ref) async => recovery),
@@ -194,6 +267,194 @@ Future<_Controller> pumpInbox(
 }
 
 void main() {
+  for (final language in ['ar', 'he', 'en']) {
+    for (final cancel in ['cancel', 'dismiss']) {
+      testWidgets(
+        '$language real callback $cancel never prompts or registers',
+        (tester) async {
+          final bridge = _AlertBridge();
+          var registrations = 0;
+          final inbox = await pumpInbox(
+            tester,
+            locale: language,
+            backgroundBridge: bridge,
+            register: (params, {authorize, isCurrent}) async {
+              registrations++;
+              return {};
+            },
+          );
+          final toggle = find.byKey(const Key('background-order-alert-switch'));
+          final callback = tester.widget<SwitchListTile>(toggle).onChanged!;
+          callback(true);
+          callback(
+            true,
+          ); // one confirmation, even using the original callback twice
+          await tester.pumpAndSettle();
+          expect(find.byType(AlertDialog), findsOneWidget);
+          if (cancel == 'cancel') {
+            final label = MaterialLocalizations.of(
+              tester.element(find.byType(AlertDialog)),
+            ).cancelButtonLabel;
+            await tester.tap(find.text(label));
+          } else {
+            await tester.binding.handlePopRoute();
+          }
+          await tester.pumpAndSettle();
+          expect(find.byType(AlertDialog), findsNothing);
+          expect(bridge.permissionRequests, 0);
+          expect(registrations, 0);
+          expect(inbox.decisions, isEmpty);
+        },
+      );
+    }
+    testWidgets(
+      '$language real confirmation shows pending then ON only after bind',
+      (tester) async {
+        final bridge = _AlertBridge()
+          ..permission = Completer<void>()
+          ..binding = Completer<bool>();
+        final inbox = await pumpInbox(
+          tester,
+          locale: language,
+          backgroundBridge: bridge,
+        );
+        final toggle = find.byKey(const Key('background-order-alert-switch'));
+        await tester.ensureVisible(toggle);
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        final l10n = AppLocalizations.of(
+          tester.element(find.byType(AlertDialog)),
+        );
+        await tester.tap(find.text(l10n.posBackgroundOrderAlertsEnable));
+        await tester.pump();
+        await tester.pump(
+          const Duration(milliseconds: 250),
+        ); // dialog animation only
+        expect(bridge.permissionRequests, 1);
+        expect(
+          find.byKey(const Key('background-order-alert-pending')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('background-order-alert-cancel')),
+          findsOneWidget,
+        );
+        expect(tester.widget<SwitchListTile>(toggle).value, false);
+        bridge.permission!.complete();
+        await tester.pump();
+        expect(bridge.bindings, 1);
+        expect(tester.widget<SwitchListTile>(toggle).value, false);
+        bridge.binding!.complete(true);
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(toggle).value, true);
+        expect(
+          find.byKey(const Key('background-order-alert-pending')),
+          findsNothing,
+        );
+        expect(inbox.decisions, isEmpty);
+      },
+    );
+    testWidgets('$language real refusal is visible with usable OFF control', (
+      tester,
+    ) async {
+      final bridge = _AlertBridge()..refuse = true;
+      await pumpInbox(tester, locale: language, backgroundBridge: bridge);
+      final toggle = find.byKey(const Key('background-order-alert-switch'));
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(AlertDialog)),
+      );
+      await tester.tap(find.text(l10n.posBackgroundOrderAlertsEnable));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(l10n.posBackgroundOrderAlertsUnavailable),
+        findsOneWidget,
+      );
+      expect(tester.widget<SwitchListTile>(toggle).value, false);
+      expect(tester.widget<SwitchListTile>(toggle).onChanged, isNotNull);
+      expect(bridge.bindings, 0);
+    });
+  }
+  testWidgets(
+    'Cancel pending permission rejects late result and restores usable OFF',
+    (tester) async {
+      final bridge = _AlertBridge()..permission = Completer<void>();
+      var registrations = 0;
+      await pumpInbox(
+        tester,
+        backgroundBridge: bridge,
+        register: (params, {authorize, isCurrent}) async {
+          registrations++;
+          return {};
+        },
+      );
+      final toggle = find.byKey(const Key('background-order-alert-switch'));
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(AlertDialog)),
+      );
+      await tester.tap(find.text(l10n.posBackgroundOrderAlertsEnable));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.tap(find.byKey(const Key('background-order-alert-cancel')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(toggle).value, false);
+      expect(tester.widget<SwitchListTile>(toggle).onChanged, isNotNull);
+      bridge.permission!.complete();
+      await tester.pumpAndSettle();
+      expect(registrations, 0);
+      expect(bridge.bindings, 0);
+      expect(bridge.disables, greaterThan(0));
+    },
+  );
+  testWidgets('OFF invalidates already displayed confirmation', (tester) async {
+    final bridge = _AlertBridge();
+    await pumpInbox(tester, backgroundBridge: bridge);
+    final toggle = find.byKey(const Key('background-order-alert-switch'));
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnlineOrderInboxSheet)),
+    );
+    await container
+        .read(backgroundOrderAlertsProvider.notifier)
+        .setEnabled(false);
+    final l10n = AppLocalizations.of(tester.element(find.byType(AlertDialog)));
+    await tester.tap(find.text(l10n.posBackgroundOrderAlertsEnable));
+    await tester.pumpAndSettle();
+    expect(bridge.permissionRequests, 0);
+    expect(bridge.bindings, 0);
+    expect(tester.widget<SwitchListTile>(toggle).value, false);
+  });
+  testWidgets(
+    'real notification lifecycle resumes permission from inactive once',
+    (tester) async {
+      final bridge = _AlertBridge()..permission = Completer<void>();
+      await pumpInbox(tester, button: true, backgroundBridge: bridge);
+      await tester.tap(find.byKey(const Key('online-inbox-button')));
+      await tester.pumpAndSettle();
+      final toggle = find.byKey(const Key('background-order-alert-switch'));
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(AlertDialog)),
+      );
+      await tester.tap(find.text(l10n.posBackgroundOrderAlertsEnable));
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      bridge.permission!.complete();
+      await tester.pump();
+      expect(bridge.bindings, 0);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(bridge.permissionRequests, 1);
+      expect(bridge.bindings, 1);
+      expect(tester.widget<SwitchListTile>(toggle).value, true);
+    },
+  );
   for (final language in ['ar', 'he', 'en']) {
     for (final width in [390.0, 1024.0]) {
       testWidgets(

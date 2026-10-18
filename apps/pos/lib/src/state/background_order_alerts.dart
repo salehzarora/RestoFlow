@@ -23,14 +23,25 @@ class BackgroundOrderAlertState {
 
 /// Registration adapter uses the very same authenticated transport/secret store
 /// as Inbox. It cannot submit, accept, reject or print an order.
+typedef BackgroundOrderAlertRegistration =
+    Future<Map> Function(
+      Map<String, dynamic> params, {
+      Future<bool> Function()? authorize,
+      bool Function()? isCurrent,
+    });
+
+class _RegistrationUncertain implements Exception {
+  const _RegistrationUncertain();
+}
+
 final backgroundOrderAlertRegisterProvider =
-    Provider<Future<Map> Function(Map<String, dynamic>)>((ref) {
+    Provider<BackgroundOrderAlertRegistration>((ref) {
       final transport = ref.watch(posAuthTransportProvider);
       final session = ref.watch(posSyncSessionProvider);
       final store = ref.watch(onlineOrderInboxSecretStoreProvider);
       var current = true;
       ref.onDispose(() => current = false);
-      return (params) async {
+      return (params, {authorize, isCurrent}) async {
         final credential = await store?.read();
         if (!current ||
             transport == null ||
@@ -40,12 +51,28 @@ final backgroundOrderAlertRegisterProvider =
             credential.sessionToken.isEmpty) {
           throw StateError('alert_authority_unavailable');
         }
-        final result = await transport.invoke('pos_register_order_alert', {
-          ...params,
-          'p_device_id': session.deviceId,
-          'p_pin_session_id': session.pinSessionId,
-          'p_device_session_token': credential.sessionToken,
-        });
+        // Credential reads can outlive OFF, pause or identity replacement.
+        // Recheck before handing off to the existing authenticated transport.
+        if (authorize != null && !await authorize()) {
+          throw StateError('alert_authority_unavailable');
+        }
+        if (!current || (isCurrent != null && !isCurrent()))
+          throw StateError('alert_authority_unavailable');
+        Object? result;
+        try {
+          result = await transport.invoke('pos_register_order_alert', {
+            ...params,
+            'p_device_id': session.deviceId,
+            'p_pin_session_id': session.pinSessionId,
+            'p_device_session_token': credential.sessionToken,
+          });
+        } catch (_) {
+          // The SDK timeout does not cancel HTTP. A later upsert for this same
+          // installation could overwrite a newer registration. Generic server
+          // classifications also include ambiguous gateway failures, so none
+          // of these exceptions prove rollback. Never replay automatically.
+          throw const _RegistrationUncertain();
+        }
         if (!current || result is! Map || result['ok'] != true) {
           throw StateError('alert_registration_unavailable');
         }
@@ -67,59 +94,87 @@ final backgroundOrderAlertEndpointProvider = Provider<String?>((ref) {
   return uri.resolve('/functions/v1/pos-order-alert-status').toString();
 });
 
+// Confirmed consent is memory-only and bounded. It is not a timeout/cancellation
+// of the underlying native or HTTP operation, which keeps its serialized lane.
+class _EnableIntent {
+  _EnableIntent(this.generation, this.identity);
+  final int generation;
+  final String identity;
+  final done = Completer<void>();
+  Timer? expiry;
+}
+
+class _RegistrationAttempt {
+  _RegistrationAttempt(this.generation, this.identity, this.bridge);
+  final int generation;
+  final String identity;
+  final BackgroundOrderAlertBridge bridge;
+  final done = Completer<void>();
+  bool retainOptInOnExit = false;
+}
+
 class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   int _generation = 0;
   String? _identity;
   BackgroundOrderAlertBridge? _bridge;
   bool _foreground = true;
-  bool _registering = false;
   bool _disposed = false;
+  bool _off = false;
+  bool _explicitFailure = false;
+  bool _buildEnabled = false;
+  bool _waitingForNative = false;
+  // The MethodChannel is process-wide, including across provider replacement.
+  // A disposed owner's late cleanup must finish before a new owner prepares.
+  static _RegistrationAttempt? _nativeOwner;
+  static Future<void>? _revocation;
+  static bool _cleanupFailed = false;
+  static bool _registrationUncertain = false;
+  _RegistrationAttempt? _active;
+  _EnableIntent? _intent;
+  Completer<void>? _resume;
   DateTime? _authorityExpiresAt;
   DateTime? _lastRegistrationAttempt;
 
   @override
   BackgroundOrderAlertState build() {
     final enabledBuild = ref.watch(backgroundOrderAlertsBuildEnabledProvider);
+    _buildEnabled = enabledBuild;
     final previousIdentity = _identity;
     _identity = ref.watch(onlineOrderInboxIdentityProvider);
     if (previousIdentity != _identity && _bridge != null) {
-      unawaited(_bridge!.disable());
+      unawaited(_revoke(_bridge!));
     }
     _disposed = false;
     final gen = ++_generation;
-    _registering = false;
+    // Never release an unfinished native lane on rebuild/identity replacement.
+    _finishIntent();
+    _wake();
+    _off = false;
+    _explicitFailure = false;
     _authorityExpiresAt = null;
     _lastRegistrationAttempt = null;
     if (!enabledBuild) return const BackgroundOrderAlertState();
     final bridge = ref.watch(backgroundOrderAlertBridgeProvider);
     _bridge = bridge;
-    // An identity transition cannot inherit a previous PIN's native authority.
-    ref.listen(onlineOrderInboxIdentityProvider, (_, next) {
-      if (next != _identity) unawaited(bridge.disable());
-    });
     ref.listen(posOfflineModeProvider.select((s) => s.phase), (_, next) {
       if (next != PosOfflinePhase.online) {
-        _authorityExpiresAt = null;
-        unawaited(bridge.suspend(retainOptIn: true));
+        unawaited(_cancel(retainOptIn: _intent == null));
       } else if (_foreground) {
-        unawaited(_register(_generation));
+        _kick();
       }
     });
     ref.listen(onlineOrderInboxControllerProvider, (_, next) {
       if (next.failure == OnlineInboxFailure.invalidSession ||
           next.failure == OnlineInboxFailure.permissionDenied) {
-        _authorityExpiresAt = null;
-        unawaited(bridge.disable());
+        unawaited(_cancel());
       } else {
         _publish(next);
-        if (_foreground && next.failure == null)
-          unawaited(_register(_generation));
+        if (_foreground && next.failure == null) _kick();
       }
     });
     bridge.setHints(
       tokenChanged: () {
-        if (_current(_generation) && _foreground)
-          unawaited(_register(_generation, force: true));
+        if (_current(_generation) && _foreground) _kick(force: true);
       },
       pendingHint: () {
         if (_current(_generation) && _foreground)
@@ -130,24 +185,27 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     );
     ref.onDispose(() {
       _disposed = true;
+      _active?.retainOptInOnExit = false;
       _generation++;
-      // Normal Activity closure after pause must retain its bounded native
-      // delegation. Explicit logout/unpair revoke at their existing writers;
-      // identity changes also revoke above. Foreground teardown fails closed.
-      if (_foreground) unawaited(bridge.suspend());
-    });
-    Future.microtask(() async {
-      if (!_current(gen)) {
-        await bridge.disable();
-        return;
+      _finishIntent();
+      _wake();
+      // Paused, already-bound delegation remains bounded in native code.
+      // An unfinished enable must instead be revoked, including late completion.
+      if (_active != null) {
+        unawaited(_revoke(bridge));
+      } else if (_foreground) {
+        unawaited(_revoke(bridge, suspend: true));
       }
-      await _register(gen);
+    });
+    Future.microtask(() {
+      if (_current(gen)) _kick();
     });
     return const BackgroundOrderAlertState(available: true);
   }
 
   bool _current(int gen) =>
       !_disposed &&
+      _buildEnabled &&
       gen == _generation &&
       _identity != null &&
       ref.read(onlineOrderInboxIdentityProvider) == _identity;
@@ -155,47 +213,191 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   bool get _online =>
       ref.read(posOfflineModeProvider).phase == PosOfflinePhase.online;
 
-  Future<void> setEnabled(bool value) async {
-    final bridge = _bridge;
-    if (bridge == null) return;
-    if (!value) {
-      final gen = ++_generation;
-      _registering = false;
-      _authorityExpiresAt = null;
-      await bridge.disable();
-      if (!_disposed && gen == _generation)
-        state = const BackgroundOrderAlertState(available: true);
-      return;
-    }
-    await _register(_generation, force: true, requestPermission: true);
+  bool _authorized(int gen) {
+    if (!_current(gen) || !_online) return false;
+    final failure = ref.read(onlineOrderInboxControllerProvider).failure;
+    return failure != OnlineInboxFailure.invalidSession &&
+        failure != OnlineInboxFailure.permissionDenied;
   }
 
-  Future<void> _register(
-    int gen, {
-    bool force = false,
-    bool requestPermission = false,
-  }) async {
-    if (!_current(gen) || !_foreground || !_online || _registering) return;
-    final now = DateTime.now().toUtc();
-    if (!force &&
-        (_authorityExpiresAt?.isAfter(now.add(const Duration(minutes: 2))) ??
-            false))
-      return;
-    if (!force &&
-        _lastRegistrationAttempt != null &&
-        now.difference(_lastRegistrationAttempt!) < const Duration(minutes: 1))
-      return;
-    final bridge = _bridge!;
-    _registering = true;
-    _lastRegistrationAttempt = now;
-    if (requestPermission)
-      state = const BackgroundOrderAlertState(available: true, busy: true);
-    try {
-      final prepared = await bridge.prepare(
-        requestPermission: requestPermission,
+  bool _owns(_RegistrationAttempt attempt) =>
+      identical(_active, attempt) &&
+      _authorized(attempt.generation) &&
+      _identity == attempt.identity;
+
+  bool _confirmed(_RegistrationAttempt attempt) =>
+      _intent?.generation == attempt.generation &&
+      _intent?.identity == attempt.identity;
+
+  void _finishIntent() {
+    final intent = _intent;
+    _intent = null;
+    intent?.expiry?.cancel();
+    if (intent != null && !intent.done.isCompleted) intent.done.complete();
+  }
+
+  void _wake() {
+    final resume = _resume;
+    _resume = null;
+    if (resume != null && !resume.isCompleted) resume.complete();
+  }
+
+  // Revocation is serialized too: a newer prepare/bind cannot race old cleanup.
+  Future<void> _revoke(
+    BackgroundOrderAlertBridge bridge, {
+    bool suspend = false,
+    bool retainOptIn = false,
+  }) {
+    final previous = _revocation;
+    final work = () async {
+      if (previous != null) await previous;
+      try {
+        if (bridge is BackgroundOrderAlertRevocation) {
+          final observed = bridge as BackgroundOrderAlertRevocation;
+          if (!await observed.revoke(
+            suspend: suspend,
+            retainOptIn: retainOptIn,
+          ))
+            throw StateError('alert_cleanup_unavailable');
+        } else if (suspend) {
+          await bridge.suspend(retainOptIn: retainOptIn);
+        } else {
+          await bridge.disable();
+        }
+        _cleanupFailed = false;
+      } catch (_) {
+        // Do not start newer native work if cleanup itself is uncertain.
+        _cleanupFailed = true;
+        _finishIntent();
+        if (!_disposed) {
+          state = const BackgroundOrderAlertState(
+            available: true,
+            failed: true,
+          );
+        }
+      }
+    }();
+    _revocation = work;
+    unawaited(
+      work.whenComplete(() {
+        if (identical(_revocation, work)) {
+          _revocation = null;
+          if (!_disposed && _intent != null) _kick();
+        }
+      }),
+    );
+    return work;
+  }
+
+  Future<void> _cancel({bool failed = false, bool retainOptIn = false}) {
+    _generation++;
+    _active?.retainOptInOnExit = retainOptIn;
+    _off = !retainOptIn;
+    _explicitFailure = failed;
+    _authorityExpiresAt = null;
+    _finishIntent();
+    _wake();
+    if (!_disposed)
+      state = BackgroundOrderAlertState(
+        available: _buildEnabled,
+        failed: failed,
       );
-      if (!_current(gen) || !_foreground || !_online) return;
+    final bridge = _bridge;
+    return bridge == null
+        ? Future.value()
+        : _revoke(bridge, suspend: retainOptIn, retainOptIn: retainOptIn);
+  }
+
+  int get authorityGeneration => _generation;
+
+  Future<void> setEnabled(bool value) {
+    if (!value) return _cancel();
+    if (!_buildEnabled) return Future.value();
+    if (_bridge == null ||
+        !_authorized(_generation) ||
+        _cleanupFailed ||
+        _registrationUncertain) {
+      if (!_disposed && _bridge != null)
+        state = const BackgroundOrderAlertState(available: true, failed: true);
+      return Future.value();
+    }
+    if (state.enabled) return Future.value();
+    final existing = _intent;
+    if (existing != null) return existing.done.future;
+    _off = false;
+    _explicitFailure = false;
+    final intent = _EnableIntent(_generation, _identity!);
+    _intent = intent;
+    intent.expiry = Timer(const Duration(minutes: 2), () {
+      if (identical(_intent, intent)) unawaited(_cancel(failed: true));
+    });
+    state = const BackgroundOrderAlertState(available: true, busy: true);
+    _kick();
+    return intent.done.future;
+  }
+
+  void _kick({bool force = false}) {
+    if (!_authorized(_generation) ||
+        !_foreground ||
+        _active != null ||
+        _cleanupFailed ||
+        _registrationUncertain ||
+        _off ||
+        _explicitFailure)
+      return;
+    final wait = _nativeOwner?.done.future ?? _revocation;
+    if (wait != null) {
+      if (!_waitingForNative) {
+        _waitingForNative = true;
+        unawaited(
+          wait.then((_) {
+            _waitingForNative = false;
+            if (!_disposed) _kick();
+          }),
+        );
+      }
+      return;
+    }
+    final now = DateTime.now().toUtc();
+    if (_intent == null && !force) {
+      if (_authorityExpiresAt?.isAfter(now.add(const Duration(minutes: 2))) ??
+          false)
+        return;
+      if (_lastRegistrationAttempt != null &&
+          now.difference(_lastRegistrationAttempt!) <
+              const Duration(minutes: 1))
+        return;
+    }
+    final attempt = _RegistrationAttempt(_generation, _identity!, _bridge!);
+    _active = attempt;
+    _nativeOwner = attempt;
+    _lastRegistrationAttempt = now;
+    unawaited(_register(attempt));
+  }
+
+  Future<bool> _foregroundFor(_RegistrationAttempt attempt) async {
+    while (_owns(attempt) && !_foreground) {
+      _resume ??= Completer<void>();
+      await _resume!.future;
+    }
+    return _owns(attempt) && _foreground;
+  }
+
+  Future<void> _register(_RegistrationAttempt attempt) async {
+    final bridge = attempt.bridge;
+    try {
+      var explicit = _confirmed(attempt);
+      var prepared = await bridge.prepare(requestPermission: explicit);
+      if (!await _foregroundFor(attempt)) return;
+      // Confirmed Enable may have arrived during passive preparation. Reuse an
+      // already-enabled result; otherwise ask once, in the SAME native lane.
+      if (!explicit && _confirmed(attempt) && prepared['enabled'] != true) {
+        explicit = true;
+        prepared = await bridge.prepare(requestPermission: true);
+        if (!await _foregroundFor(attempt)) return;
+      }
       if (prepared['available'] != true || prepared['enabled'] != true) {
+        if (_confirmed(attempt)) throw StateError('alert_prepare_refused');
         state = BackgroundOrderAlertState(
           available: prepared['available'] == true,
         );
@@ -203,41 +405,75 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       }
       final endpoint = ref.read(backgroundOrderAlertEndpointProvider);
       if (endpoint == null) throw StateError('alert_endpoint_unavailable');
-      final result = await ref.read(backgroundOrderAlertRegisterProvider)({
-        'p_installation_id': prepared['installation_id'],
-        'p_fcm_token': prepared['fcm_token'],
-        'p_status_secret': prepared['status_secret'],
-      });
-      if (!_current(gen) || !_foreground || !_online) return;
-      final deadline = DateTime.tryParse(
-        result['authority_expires_at'] as String? ?? '',
-      )?.toUtc();
-      if (deadline == null || !deadline.isAfter(now))
-        throw StateError('alert_authority_expired');
+      final result = await ref.read(backgroundOrderAlertRegisterProvider)(
+        {
+          'p_installation_id': prepared['installation_id'],
+          'p_fcm_token': prepared['fcm_token'],
+          'p_status_secret': prepared['status_secret'],
+        },
+        authorize: () => _foregroundFor(attempt),
+        isCurrent: () => _owns(attempt) && _foreground,
+      );
+      // Keep the actual result over pause/resume: never replay an issued RPC.
+      if (!await _foregroundFor(attempt)) return;
+      final rawExpiry = result['authority_expires_at'];
+      final deadline = rawExpiry is String
+          ? DateTime.tryParse(rawExpiry)?.toUtc()
+          : null;
+      final registration = result['registration_id'];
+      if (result['ok'] != true ||
+          registration is! String ||
+          !RegExp(
+            r'^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$',
+          ).hasMatch(registration) ||
+          deadline == null ||
+          !deadline.isAfter(DateTime.now().toUtc()))
+        throw StateError('alert_registration_unavailable');
       final bound = await bridge.bind({
-        'identity': _identity,
+        'identity': attempt.identity,
         'generation': prepared['generation'],
-        'registration_id': result['registration_id'],
+        'registration_id': registration,
         'endpoint': endpoint,
         'authority_expires_at': deadline.toIso8601String(),
       });
-      if (!_current(gen)) return;
-      if (!bound) throw StateError('alert_native_binding_refused');
+      if (!await _foregroundFor(attempt)) return;
+      if (!bound || !deadline.isAfter(DateTime.now().toUtc()))
+        throw StateError('alert_native_binding_refused');
       _authorityExpiresAt = deadline;
       state = const BackgroundOrderAlertState(available: true, enabled: true);
+      _finishIntent();
       _publish(ref.read(onlineOrderInboxControllerProvider));
-    } catch (_) {
-      if (_current(gen)) {
+    } catch (error) {
+      if (error is _RegistrationUncertain) _registrationUncertain = true;
+      if (_owns(attempt)) {
         _authorityExpiresAt = null;
-        await bridge.suspend();
-        if (_current(gen))
+        _explicitFailure = _confirmed(attempt);
+        await _revoke(bridge, suspend: true);
+        if (_owns(attempt)) {
           state = const BackgroundOrderAlertState(
             available: true,
             failed: true,
           );
+          _finishIntent();
+        }
       }
     } finally {
-      if (gen == _generation) _registering = false;
+      if (!_owns(attempt)) {
+        // Android permission/token/bind may finish AFTER OFF. Do not release
+        // ownership until late native authority is revoked; no new lane yet.
+        final retain =
+            attempt.retainOptInOnExit &&
+            !_disposed &&
+            !_off &&
+            _identity == attempt.identity;
+        await _revoke(bridge, suspend: retain, retainOptIn: retain);
+      }
+      if (identical(_active, attempt)) {
+        _active = null;
+        if (identical(_nativeOwner, attempt)) _nativeOwner = null;
+        if (!attempt.done.isCompleted) attempt.done.complete();
+        if (!_disposed && _intent != null) _kick();
+      }
     }
   }
 
@@ -268,7 +504,8 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
 
   void onResume() {
     _foreground = true;
-    if (_bridge != null) unawaited(_register(_generation));
+    _wake();
+    if (_bridge != null) _kick();
   }
 
   Future<bool> consumeInboxTap() async {
