@@ -9,7 +9,8 @@ const PEM_END = ["-----END", "PRIVATE KEY-----"].join(" ");
 const id = (n) => `71000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
 const secret = "a".repeat(64); const worker = "b".repeat(64);
 const now = () => Date.parse("2026-10-17T09:00:00Z");
-const env = { POS_ORDER_ALERTS_ENABLED: "true", SUPABASE_URL: "https://synthetic.example.test", SUPABASE_SERVICE_ROLE_KEY: "synthetic-server-key",
+const env = { POS_ORDER_ALERTS_ENABLED: "true", POS_ALERT_PILOT_START_UTC: "2026-10-17T09:00:00Z", POS_ALERT_PILOT_END_UTC: "2026-10-17T09:30:00Z",
+  SUPABASE_URL: "https://synthetic.example.test", SUPABASE_SERVICE_ROLE_KEY: "synthetic-server-key",
   POS_ORDER_ALERT_WORKER_SECRET: worker, POS_ORDER_ALERT_FCM_SERVICE_ACCOUNT: JSON.stringify({ type: "service_account", project_id: "synthetic-project",
     client_email: "synthetic@synthetic-project.iam.gserviceaccount.com", private_key: `${PEM_BEGIN}\nSYNTHETIC\n${PEM_END}`, token_uri: "https://oauth2.googleapis.com/token" }) };
 const reply = (body,status=200) => new Response(JSON.stringify(body), {status,headers:{"content-type":"application/json"}});
