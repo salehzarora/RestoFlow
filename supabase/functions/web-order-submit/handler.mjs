@@ -58,6 +58,10 @@ function publicResult(result, requestId) {
   const amounts = [totals.subtotal_minor, totals.tax_total_minor, totals.grand_total_minor];
   if (amounts.some((amount) => !Number.isSafeInteger(amount) || amount < 0 || amount > MAX_TOTAL_MINOR)) return null;
   if (totals.subtotal_minor + totals.tax_total_minor !== totals.grand_total_minor) return null;
+  const publicReason = result.customer_rejection_reason;
+  if (Object.hasOwn(result, "customer_rejection_reason") && (result.status !== "rejected"
+    || typeof publicReason !== "string" || publicReason !== publicReason.trim()
+    || [...publicReason].length < 1 || [...publicReason].length > 240 || /[\x00-\x1f\x7f\uD800-\uDFFF]/u.test(publicReason))) return null;
   // Project explicitly: even a future upstream field cannot expose customer data or capabilities.
   return {
     status: 200,
@@ -65,6 +69,7 @@ function publicResult(result, requestId) {
       ok: true, request_id: requestId, status: result.status, expires_at: result.expires_at,
       totals: { currency_code: "ILS", subtotal_minor: totals.subtotal_minor, tax_total_minor: totals.tax_total_minor, grand_total_minor: totals.grand_total_minor },
       replayed: result.replayed,
+      ...(publicReason !== undefined ? { customer_rejection_reason: publicReason } : {}),
     },
   };
 }
