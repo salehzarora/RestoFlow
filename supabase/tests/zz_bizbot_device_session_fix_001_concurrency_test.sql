@@ -278,6 +278,9 @@ select is((select count(*)::integer from device_sessions where id in (select ses
 delete from device_sessions where device_id in (select device_id from bds_fixtures);
 delete from device_pairings where device_id in (select device_id from bds_fixtures);
 delete from devices where id in (select device_id from bds_fixtures);
+-- Remove only automatically provisioned settings for this synthetic fixture.
+delete from app.pos_order_alert_branch_cursors where branch_id = 'bf510000-0000-0000-0000-000000000003';
+delete from app.online_order_settings where branch_id = 'bf510000-0000-0000-0000-000000000003';
 delete from branches where id = 'bf510000-0000-0000-0000-000000000003';
 delete from restaurants where id = 'bf510000-0000-0000-0000-000000000002';
 delete from organizations where id = 'bf510000-0000-0000-0000-000000000001';

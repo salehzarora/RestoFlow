@@ -8815,7 +8815,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get storefrontPickupHelp =>
-      'Informational only: the storefront is browse-only in this release, so online ordering is off.';
+      'Enable Pickup to receive online requests when your published menu and storefront are ready and open. Turn it off or use Temporary pause to stop new requests.';
 
   @override
   String get storefrontPauseTitle => 'Temporary pause';
@@ -9635,4 +9635,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posBackgroundOrderAlertsUnavailable =>
       'Background alerts are unavailable. Existing Inbox polling remains active.';
+
+  @override
+  String get posBackgroundOrderAlertsSignIn =>
+      'Background notification authorization ended. Sign in again to renew it.';
 }

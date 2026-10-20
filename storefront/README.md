@@ -1,5 +1,25 @@
 # BIZBOT Storefront - server-rendered, fixture or live source
 
+## Current platform ordering
+
+Every restaurant uses the same Pickup checkout. Complete the restaurant's
+published menu, storefront branch, opening hours and Pickup setup in Dashboard;
+no restaurant slug allowlist, device UUID list or developer rollout is needed.
+The current server response decides whether checkout is available. Managers can
+pause intake with the existing Pickup and temporary-pause controls. Closed,
+paused, unpublished or otherwise unavailable restaurants cannot admit requests.
+
+Pair an eligible POS with that branch and authenticate the employee to join its
+shared Inbox. Background alerts additionally require the device's opt-in and
+Android notification permission. Configure the restaurant's kitchen workflow
+and printer separately; a missing printer does not authorize a fallback resend.
+Checkout uses authoritative server prices and preserves its original request
+identity across reconciliation. Customer contact fields remain memory-only.
+Online card payments are a separate feature.
+
+The historical implementation notes below describe the original browse-only
+read slice; they do not override the current platform ordering contract.
+
 STOREFRONT-INFRA-001B established this project as an infrastructure shell,
 STOREFRONT-UI-001 turned it into the approved Storefront experience over typed
 fixtures, and STOREFRONT-READ-001 gave it a **real read source**: the published

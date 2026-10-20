@@ -73,12 +73,18 @@ export function createHandler({
       const outbound = getEnv('POS_ORDER_ALERT_WORKER_SECRET');
       if (!bearer(outbound) || equal(inbound, outbound)
         || getEnv('POS_ALERT_DISPATCH_URL') !== DISPATCH_URL) return reply(503, 'unavailable');
-      const pilotStart = utcTimestamp(getEnv('POS_ALERT_PILOT_START_UTC'));
-      const pilotEnd = utcTimestamp(getEnv('POS_ALERT_PILOT_END_UTC'));
       const currentTime = now();
-      if (!Number.isFinite(currentTime) || !Number.isFinite(pilotStart) || !Number.isFinite(pilotEnd)
-        || pilotStart >= pilotEnd || pilotEnd - pilotStart > MAX_PILOT_MS
-        || currentTime < pilotStart || currentTime >= pilotEnd) return reply(503, 'unavailable');
+      const mode = getEnv('POS_ORDER_ALERT_MODE') ?? 'continuous';
+      if (!Number.isFinite(currentTime) || !['continuous', 'pilot'].includes(mode)) return reply(503, 'unavailable');
+      let budget = timeoutMs;
+      if (mode === 'pilot') {
+        const pilotStart = utcTimestamp(getEnv('POS_ALERT_PILOT_START_UTC'));
+        const pilotEnd = utcTimestamp(getEnv('POS_ALERT_PILOT_END_UTC'));
+        if (!Number.isFinite(pilotStart) || !Number.isFinite(pilotEnd)
+          || pilotStart >= pilotEnd || pilotEnd - pilotStart > MAX_PILOT_MS
+          || currentTime < pilotStart || currentTime >= pilotEnd) return reply(503, 'unavailable');
+        budget = Math.min(budget, pilotEnd - currentTime);
+      }
 
       controller = new AbortController();
       let expire;
@@ -87,7 +93,7 @@ export function createHandler({
         timedOut = true;
         controller.abort();
         expire(false);
-      }, Math.min(timeoutMs, pilotEnd - currentTime));
+      }, budget);
       // Exactly one POST per invocation. Database leases/idempotency, not
       // process-local locks, protect concurrent or duplicate Cron invocations.
       const operation = (async () => {

@@ -30,7 +30,7 @@ function fixture({ dropWake = false, fcmStatus = 200, enabled = true } = {}) {
   const requests = new Map(); const rows = new Map();
   const calls = []; const sends = []; const tasks = [];
   const env = { SUPABASE_URL: "https://oqmevrndtivqxgyvcmwy.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "synthetic-server-key",
-    POS_ORDER_ALERT_WORKER_SECRET: WORKER, POS_ORDER_ALERTS_ENABLED: "true", POS_ORDER_ALERT_INSTANT_WAKE_ENABLED: "true",
+    POS_ORDER_ALERT_WORKER_SECRET: WORKER, POS_ORDER_ALERT_MODE: "pilot", POS_ORDER_ALERTS_ENABLED: "true", POS_ORDER_ALERT_INSTANT_WAKE_ENABLED: "true",
     POS_ALERT_PILOT_START_UTC: START, POS_ALERT_PILOT_END_UTC: END, WEB_ORDERS_ENABLED: "true",
     POS_ORDER_ALERT_FCM_SERVICE_ACCOUNT: JSON.stringify({ type: "service_account", project_id: "synthetic-project",
       client_email: "synthetic@synthetic-project.iam.gserviceaccount.com", private_key: ["-----BEGIN", "PRIVATE KEY-----\nSYNTHETIC"].join(" "),
@@ -75,7 +75,7 @@ function fixture({ dropWake = false, fcmStatus = 200, enabled = true } = {}) {
     }
     assert.equal(init.headers.Authorization, "Bearer synthetic-server-key");
     const args = JSON.parse(init.body);
-    if (url.endsWith("/submit_web_order_live_request")) {
+    if (url.endsWith("/submit_web_order_platform_request")) {
       const replayed = requests.size > 0;
       if (!replayed) requests.set(id(10), { id: id(10), status: "pending", expires_at: "2026-10-17T09:15:00Z" });
       return Response.json({ ok: true, request_id: clientId, replayed, status: "pending", expires_at: "2026-10-17T09:15:00Z",

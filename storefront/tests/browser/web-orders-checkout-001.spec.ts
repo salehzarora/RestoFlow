@@ -61,7 +61,7 @@ function recordInitialJs(html: string, route: string) {
   });
   const row = { route, rawBytes: assets.reduce((sum, asset) => sum + asset.rawBytes, 0), brotliBytes: assets.reduce((sum, asset) => sum + asset.brotliBytes, 0), assets };
   jsBudgets.set(route, row);
-  writeFileSync(path.join(RUN, 'live-js-budgets.json'), JSON.stringify({ source: 'live', copiedReleaseGate: true, method: 'unique initial script src + link script/modulepreload URL union; CSS/fonts/speculative prefetch excluded', brotli: { mode: 'TEXT', quality: 11, perAsset: true, modelledCompression: true }, limits: { rawBytes: 690000, brotliBytes: 200000 }, routes: [...jsBudgets.values()].sort((a, b) => a.route.localeCompare(b.route)) }, null, 2) + '\n');
+  writeFileSync(path.join(RUN, 'live-js-budgets.json'), JSON.stringify({ source: 'live', productionAdmissionSourceUnchanged: true, method: 'unique initial script src + link script/modulepreload URL union; CSS/fonts/speculative prefetch excluded', brotli: { mode: 'TEXT', quality: 11, perAsset: true, modelledCompression: true }, limits: { rawBytes: 690000, brotliBytes: 200000 }, routes: [...jsBudgets.values()].sort((a, b) => a.route.localeCompare(b.route)) }, null, 2) + '\n');
   expect(assets.length, `${route}: initial JS measurement must be nonempty`).toBeGreaterThan(0);
   expect(row.rawBytes, `${route}: complete initial JS URL union`).toBeLessThanOrEqual(690000);
   expect(row.brotliBytes, `${route}: per-asset Brotli quality 11`).toBeLessThanOrEqual(200000);
@@ -208,8 +208,9 @@ async function assertPrivateStorage(page: Page, slug: string) {
 test.beforeAll(() => {
   expect(BASE).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
   expect(RUN && APP && ORIGINAL).toBeTruthy();
-  expect(readFileSync(path.join(ORIGINAL, 'src/source/live/ordering.ts'), 'utf8')).toContain('LIVE_ORDERING_RELEASED = false;');
-  expect(readFileSync(path.join(APP, 'src/source/live/ordering.ts'), 'utf8')).toContain('LIVE_ORDERING_RELEASED = true;');
+  const admissionSource = readFileSync(path.join(ORIGINAL, 'src/source/live/ordering.ts'), 'utf8');
+  expect(readFileSync(path.join(APP, 'src/source/live/ordering.ts'), 'utf8')).toBe(admissionSource);
+  expect(admissionSource).not.toContain('LIVE_PICKUP_ROLLOUT_SLUG');
 });
 
 for (const locale of ['ar', 'he', 'en'] as const) {
@@ -286,7 +287,7 @@ test('tenant and capability separation prevents cross-tenant or substituted-toke
   await expect(page.locator('[data-sf-live-status]')).toHaveCount(0); expect(edge.actions.length).toBe(reads);
   expect(edge.writes).toBe(1); await expect(page.locator('[data-sf-cta="send"]')).toHaveCount(0);
 });
-test('backend ordering flag OFF stays browse-only even in the isolated release-enabled copy', async ({ page, context }) => {
+test('backend ordering flag OFF stays browse-only with identical production admission source', async ({ page, context }) => {
   const edge = await offlineEdge(context, page);
   await page.goto(routeFor('en', 'sf-browser-profile-off', 'menu'), { waitUntil: 'networkidle' });
   await expect(page.locator('[data-sf-notice="ordering-off"]')).toBeVisible();

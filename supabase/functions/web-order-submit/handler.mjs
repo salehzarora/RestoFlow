@@ -70,7 +70,7 @@ function publicResult(result, requestId) {
 }
 
 async function callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit, pilotSubmission }) {
-  const rpc = input.action === "submit" ? (testPermit ? "submit_web_order_test_request" : pilotSubmission ? "submit_web_order_pilot_request" : "submit_web_order_live_request") : "get_web_order_request_status";
+  const rpc = input.action === "submit" ? (testPermit ? "submit_web_order_test_request" : pilotSubmission ? "submit_web_order_pilot_request" : "submit_web_order_platform_request") : "get_web_order_request_status";
   const args = { p_slug: input.slug, p_client_request_id: input.request_id, p_status_token_hash: tokenHash };
   if (input.action === "submit") args.p_order = input.order;
   if (testPermit) Object.assign(args, {
@@ -168,9 +168,9 @@ export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl
         return json({ ok: false, error: input.action === "submit" ? "submission_outcome_unknown" : "status_unavailable", request_id: input.request_id, uncertain: input.action === "submit" }, result.status, origin);
       }
       const response = json(result.body, result.status, origin);
-      // Only a validated, committed NEW normal-live Maps Burger pending result.
+      // Only a validated, committed NEW normal-live pending result, for any tenant.
       // Construct the unchanged public response first; never await notification work.
-      if (input.action === "submit" && input.slug === "mapsburger" && !testPermit && !pilotSubmission
+      if (input.action === "submit" && !testPermit && !pilotSubmission
         && result.body.ok === true && result.body.status === "pending" && result.body.replayed === false) {
         scheduleInstantWake({ getEnv, waitUntil, fetchImpl, now, timeoutMs: wakeTimeoutMs });
       }

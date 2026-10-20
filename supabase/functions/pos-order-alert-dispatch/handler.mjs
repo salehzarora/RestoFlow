@@ -1,6 +1,6 @@
 import { configuration, constantSecret, object, readJson, response, rpc } from "../_shared/pos-order-alert.mjs";
 import { serviceAccount, accessToken, send } from "./fcm.mjs";
-import { dispatchPilot, sameDispatchPilot } from "../_shared/pos-order-alert-pilot.mjs";
+import { dispatchAuthority, sameDispatchAuthority } from "../_shared/pos-order-alert-authority.mjs";
 export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl = globalThis.crypto,
   now = Date.now, timeoutMs = 5000, tokenProvider = accessToken } = {}) {
   return async function handler(request) {
@@ -13,21 +13,21 @@ export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl
       const input = await readJson(request);
       if (!object(input) || Object.keys(input).length !== 0 || new URL(request.url).search) return response({ ok: false, error: "invalid_request" }, 400);
       // ALL callers, including Cron and instant wakes, need Edge-side authority.
-      const pilot = dispatchPilot(getEnv, now());
-      if (!pilot) return response({ ok: false, error: "unavailable" }, 503);
+      const authority = dispatchAuthority(getEnv, now());
+      if (!authority) return response({ ok: false, error: "unavailable" }, 503);
       const config = configuration(getEnv); const account = serviceAccount(getEnv("POS_ORDER_ALERT_FCM_SERVICE_ACCOUNT"));
       if (!config || !account) return response({ ok: false, error: "unavailable" }, 503);
       // OAuth failure happens BEFORE queue claiming. No credential/token/PII
       // appears in responses, logs or metadata. Each invocation is bounded.
       const token = await tokenProvider(account, { fetchImpl, cryptoImpl, now, timeoutMs });
-      if (!sameDispatchPilot(pilot, getEnv, now())) return response({ ok: false, error: "unavailable" }, 503);
+      if (!sameDispatchAuthority(authority, getEnv, now())) return response({ ok: false, error: "unavailable" }, 503);
       const batch = await rpc("pos_claim_order_alert_deliveries", { p_limit: 10 }, config, fetchImpl, timeoutMs);
       if (!object(batch) || batch.ok !== true || !Array.isArray(batch.deliveries) || batch.deliveries.length > 10) throw new Error("invalid_batch");
       let sent = 0; let deferred = 0;
       for (const delivery of batch.deliveries) {
         // Expiry/reconfiguration cannot authorize a later send from this batch.
         // Leave unsent leases intact for the existing later reconciliation path.
-        if (!sameDispatchPilot(pilot, getEnv, now())) return response({ ok: false, error: "unavailable" }, 503);
+        if (!sameDispatchAuthority(authority, getEnv, now())) return response({ ok: false, error: "unavailable" }, 503);
         let outcome = "retry";
         try { outcome = await send(account, token, delivery, { fetchImpl, now, timeoutMs }); } catch { /* Unknown HTTP outcome is only a duplicate-safe hint retry. */ }
         const result = await rpc("pos_finish_order_alert_delivery", { p_delivery_id: delivery.delivery_id,

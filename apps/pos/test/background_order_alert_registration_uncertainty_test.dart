@@ -34,6 +34,7 @@ class _Wire extends http.BaseClient {
           jsonEncode({
             'ok': true,
             'registration_id': '22222222-2222-4222-8222-222222222222',
+            'generation': '33333333-3333-4333-8333-333333333333',
             'authority_expires_at': DateTime.now()
                 .toUtc()
                 .add(const Duration(minutes: 15))

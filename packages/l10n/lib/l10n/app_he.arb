@@ -2649,7 +2649,7 @@
   "storefrontMotionFull": "רגילה",
   "storefrontMotionLively": "תוססת",
   "storefrontPickupLabel": "איסוף עצמי זמין",
-  "storefrontPickupHelp": "למידע בלבד: בגרסה הזו דף החנות מיועד לצפייה בלבד, ולכן הזמנה מקוונת כבויה.",
+  "storefrontPickupHelp": "הפעלת איסוף עצמי מאפשרת קבלת בקשות מקוונות כשהתפריט ודף החנות מפורסמים, מוכנים ובשעות הפעילות. כבו את האפשרות או השתמשו בהשהיה זמנית כדי לעצור בקשות חדשות.",
   "storefrontPauseTitle": "השהיה זמנית",
   "storefrontPausedUntilLabel": "מושהה עד",
   "storefrontNotPaused": "לא מושהה",
@@ -2873,5 +2873,6 @@
   "posBackgroundOrderAlertsHelp": "קבלת התראות כלליות כשהקופה אינה מוצגת. הגדרות Android והסוללה עלולות לעכב או לעצור אותן.",
   "posBackgroundOrderAlertsExplanation": "אפשרו התראות על בקשות איסוף ממתינות. הצליל חוזר רק כל עוד נותרו בקשות מורשות וממתינות. פרטי הלקוחות אינם מוצגים במסך הנעילה. עוצמת ההתראות, מצב שקט ונא לא להפריע נשמרים.",
   "posBackgroundOrderAlertsEnable": "הפעלת התראות",
-  "posBackgroundOrderAlertsUnavailable": "התראות הרקע אינן זמינות. רענון תיבת ההזמנות הקיימת ממשיך לפעול."
+  "posBackgroundOrderAlertsUnavailable": "התראות הרקע אינן זמינות. רענון תיבת ההזמנות הקיימת ממשיך לפעול.",
+  "posBackgroundOrderAlertsSignIn": "הרשאת ההתראות ברקע הסתיימה. יש להתחבר שוב כדי לחדש אותה."
 }

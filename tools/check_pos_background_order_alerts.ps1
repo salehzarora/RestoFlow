@@ -14,11 +14,15 @@ if (-not $GradleHome) { throw 'Existing Gradle compiler is unavailable.' }
 $lib = Join-Path $GradleHome 'lib'
 $stdlib = Get-ChildItem -LiteralPath $lib -Filter 'kotlin-stdlib-*.jar' | Select-Object -First 1
 $annotations = Get-ChildItem -LiteralPath $lib -Filter 'annotations-*.jar' | Select-Object -First 1
-$java = if ($JavaHome) { Join-Path $JavaHome 'bin/java.exe' } else { 'java' }
+$java = if ($JavaHome) { Join-Path $JavaHome $(if ($IsWindows) { 'bin/java.exe' } else { 'bin/java' }) } else { 'java' }
 $classpath = "$($stdlib.FullName)$([IO.Path]::PathSeparator)$($annotations.FullName)"
+# Native wildcard arguments expand on Unix. Pass only an explicit, single
+# classpath argument so Gradle's lib/plugins directory cannot become main class.
+$compilerClasspath = (Get-ChildItem -LiteralPath $lib -Filter '*.jar' -File |
+    ForEach-Object { $_.FullName }) -join [IO.Path]::PathSeparator
 $jar = Join-Path ([IO.Path]::GetTempPath()) ('bizbot-background-alert-state-' + [guid]::NewGuid().ToString('N') + '.jar')
 try {
-    & $java -cp (Join-Path $lib '*') org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect `
+    & $java -cp $compilerClasspath org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect `
         -classpath $classpath -jvm-target 17 -d $jar `
         (Join-Path $repoRoot 'apps/pos/android/app/src/main/kotlin/com/restoflow/pos/BackgroundOrderAlertState.kt') `
         (Join-Path $repoRoot 'apps/pos/android/test/BackgroundOrderAlertStateTest.kt')

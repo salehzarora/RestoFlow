@@ -8,7 +8,7 @@ const START = "2026-10-17T09:00:00Z";
 const END = "2026-10-17T09:30:00Z";
 const NOW = Date.parse(START);
 const WORKER = "b".repeat(64);
-const env = () => ({ POS_ORDER_ALERTS_ENABLED: "true", POS_ALERT_PILOT_START_UTC: START, POS_ALERT_PILOT_END_UTC: END,
+const env = () => ({ POS_ORDER_ALERT_MODE: "pilot", POS_ORDER_ALERTS_ENABLED: "true", POS_ALERT_PILOT_START_UTC: START, POS_ALERT_PILOT_END_UTC: END,
   SUPABASE_URL: "https://synthetic.invalid", SUPABASE_SERVICE_ROLE_KEY: "synthetic-server-only", POS_ORDER_ALERT_WORKER_SECRET: WORKER,
   POS_ORDER_ALERT_FCM_SERVICE_ACCOUNT: JSON.stringify({ type: "service_account", project_id: "synthetic-project",
     client_email: "synthetic@synthetic-project.iam.gserviceaccount.com",

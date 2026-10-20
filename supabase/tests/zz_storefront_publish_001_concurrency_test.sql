@@ -242,6 +242,9 @@ reset storage.allow_delete_query;
 delete from management_request_results where actor_app_user_id = '00000000-0000-0000-0000-00b20000ee02';
 delete from memberships where organization_id = '00000000-0000-0000-0000-00b200000a00';
 delete from app_users where id = '00000000-0000-0000-0000-00b20000ee02';
+-- Remove only automatically provisioned settings for this synthetic fixture.
+delete from app.pos_order_alert_branch_cursors where branch_id in (select id from branches where organization_id = '00000000-0000-0000-0000-00b200000a00');
+delete from app.online_order_settings where branch_id in (select id from branches where organization_id = '00000000-0000-0000-0000-00b200000a00');
 delete from branches where organization_id = '00000000-0000-0000-0000-00b200000a00';
 delete from restaurants where organization_id = '00000000-0000-0000-0000-00b200000a00';
 delete from organizations where id = '00000000-0000-0000-0000-00b200000a00';

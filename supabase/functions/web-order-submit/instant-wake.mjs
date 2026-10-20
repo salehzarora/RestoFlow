@@ -1,4 +1,4 @@
-import { dispatchPilot, sameDispatchPilot } from "../_shared/pos-order-alert-pilot.mjs";
+import { dispatchAuthority, sameDispatchAuthority, dispatchBudget } from "../_shared/pos-order-alert-authority.mjs";
 
 const BASE = "https://oqmevrndtivqxgyvcmwy.supabase.co";
 const DISPATCH_URL = `${BASE}/functions/v1/pos-order-alert-dispatch`;
@@ -10,21 +10,21 @@ function wakeConfiguration(getEnv, nowMs) {
     || getEnv("SUPABASE_URL") !== BASE) return null;
   const worker = getEnv("POS_ORDER_ALERT_WORKER_SECRET");
   if (typeof worker !== "string" || !/^[0-9a-f]{64}(?![\s\S])/.test(worker)) return null;
-  const pilot = dispatchPilot(getEnv, nowMs);
-  return pilot ? { worker, pilot } : null;
+  const authority = dispatchAuthority(getEnv, nowMs);
+  return authority ? { worker, authority } : null;
 }
 
 async function wake({ config, getEnv, fetchImpl, now, timeoutMs }) {
   const current = wakeConfiguration(getEnv, now());
   if (!current || current.worker !== config.worker
-    || !sameDispatchPilot(config.pilot, getEnv, now())) return;
+    || !sameDispatchAuthority(config.authority, getEnv, now())) return;
   const controller = new AbortController();
   let timer;
   let reader;
   try {
     const deadline = new Promise((resolve) => {
       timer = setTimeout(() => { controller.abort(); resolve(); },
-        Math.min(TIMEOUT_MS, timeoutMs, config.pilot.end - now()));
+        dispatchBudget(config.authority, now(), Math.min(TIMEOUT_MS, timeoutMs)));
     });
     const operation = (async () => {
       const result = await fetchImpl(DISPATCH_URL, {

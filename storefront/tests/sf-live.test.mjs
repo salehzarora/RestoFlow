@@ -11,7 +11,6 @@ import { NOT_FOUND_ENVELOPE, PAYLOAD_LIMIT_ENVELOPE, SYNTH_IDS, SYNTH_MEDIA_PATH
 const { decodeStorefrontMenu, EnvelopeError, CAPS } = await import('../src/source/live/decode.ts');
 const { adaptStorefront, liveStorefrontSource, mediaUrl, nextOpenParts } = await import('../src/source/live/adapter.ts');
 const { liveConfig, storefrontMenuRequest, fetchStorefrontMenu } = await import('../src/source/live/client.ts');
-const { LIVE_ORDERING_RELEASED } = await import('../src/source/live/ordering.ts');
 const { CATEGORY_ICON_KEYS, iconPathFor, DEFAULT_ICON_KEY } = await import('../src/source/live/icons.ts');
 const { sourceMode, isLiveMode, isProviderContext, fixtureStorefrontSource, storefrontSource } = await import('../src/source/storefront.ts');
 const { buildQuote } = await import('../src/money/quote.ts');
@@ -58,15 +57,14 @@ test('money and rates must be SAFE INTEGERS; a negative delta or a float is a co
   }
 });
 
-test('general ordering admission stays off even when another tenant advertises ordering', () => {
-  assert.equal(LIVE_ORDERING_RELEASED, false);
+test('a newly published tenant follows server Pickup admission without a slug allowlist', () => {
   const decoded = decodeStorefrontMenu(syntheticEnvelope({ service: { ordering_enabled: true } }));
   assert.equal(decoded.service.ordering_enabled, true);
-  assert.equal(adaptStorefront(decoded, ORIGIN).view.tenant.service.orderingEnabled, false);
+  assert.equal(adaptStorefront(decoded, ORIGIN).view.tenant.service.orderingEnabled, true);
   assert.throws(() => decodeStorefrontMenu(syntheticEnvelope({ service: { delivery_enabled: true } })), EnvelopeError);
 });
 
-test('only the exact open Pickup Maps Burger rollout follows the current server admission flag', () => {
+test('independent tenants and the existing Maps Burger site share fail-closed server admission', () => {
   const adapted = (slug, service = {}) => adaptStorefront(decodeStorefrontMenu(syntheticEnvelope({
     restaurant: { slug },
     service: { ordering_enabled: true, ...service },
@@ -75,25 +73,25 @@ test('only the exact open Pickup Maps Burger rollout follows the current server 
   assert.equal(admitted.view.tenant.service.orderingEnabled, true);
   assert.equal(admitted.view.tenant.service.deliveryEnabled, false);
   assert.deepEqual(admitted.zones, []);
-  for (const slug of ['sf-synth-a', 'maps-burger', 'mapsburger-other']) {
-    assert.equal(adapted(slug).view.tenant.service.orderingEnabled, false, slug);
-  }
-  for (const service of [
-    { ordering_enabled: false },
-    { state: 'closed' },
-    { state: 'paused' },
-    { pickup_enabled: false },
-  ]) {
-    assert.equal(adapted('mapsburger', service).view.tenant.service.orderingEnabled, false, JSON.stringify(service));
+  for (const slug of ['sf-synth-a', 'sf-synth-b', 'sf-new-tenant', 'mapsburger']) {
+    assert.equal(adapted(slug).view.tenant.service.orderingEnabled, true, slug);
+    for (const service of [
+      { ordering_enabled: false },
+      { state: 'closed' },
+      { state: 'paused' },
+      { pickup_enabled: false },
+    ]) {
+      assert.equal(adapted(slug, service).view.tenant.service.orderingEnabled, false, `${slug}: ${JSON.stringify(service)}`);
+    }
   }
   // OFF is represented by the same existing server boolean; a prior enabled
   // resolution confers no authority over a later request.
   assert.equal(adapted('mapsburger', { ordering_enabled: false }).view.tenant.service.orderingEnabled, false);
 });
 
-test('Maps Burger checkout has no client-side single-request allowance or pilot deadline', () => {
+test('each tenant can change server admission independently without a client pilot deadline', () => {
   const envelope = syntheticEnvelope({
-    restaurant: { slug: 'mapsburger' },
+    restaurant: { slug: 'sf-synth-a' },
     service: { ordering_enabled: true },
   });
   // Independent browser resolutions and subsequent menu loads follow the
@@ -102,10 +100,11 @@ test('Maps Burger checkout has no client-side single-request allowance or pilot 
     assert.equal(adaptStorefront(decodeStorefrontMenu(envelope), ORIGIN).view.tenant.service.orderingEnabled, true);
   }
   const off = syntheticEnvelope({
-    restaurant: { slug: 'mapsburger' },
+    restaurant: { slug: 'sf-synth-b' },
     service: { ordering_enabled: false },
   });
   assert.equal(adaptStorefront(decodeStorefrontMenu(off), ORIGIN).view.tenant.service.orderingEnabled, false);
+  assert.equal(adaptStorefront(decodeStorefrontMenu(envelope), ORIGIN).view.tenant.service.orderingEnabled, true, 'pausing B does not pause A');
 });
 
 test('closed enums, uuid ids, HH:MM hours and the tag vocabulary are enforced', () => {

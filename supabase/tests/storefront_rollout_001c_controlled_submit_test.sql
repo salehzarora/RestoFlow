@@ -107,9 +107,12 @@ select pg_temp.wo_ref('rest_a'),pg_temp.wo_ref('org_a'),pg_temp.wo_ref('branch_a
 insert into restaurant_storefront_profiles(restaurant_id,organization_id,storefront_branch_id,slug,display_name,pickup_enabled,opening_hours,is_published)
 select pg_temp.wo_ref('rest_b'),pg_temp.wo_ref('org_b'),pg_temp.wo_ref('branch_b'),'otherburger','WO001 Bravo',true,always_open,true from _wo_hours;
 
+-- Exercise the retained legacy pilot/rollout contract independently of the
+-- new platform entitlement (covered by platform_online_orders_353_test.sql).
+update app.online_order_settings set ordering_enabled=false where organization_id in (pg_temp.wo_ref('org_a'),pg_temp.wo_ref('org_b'));
 insert into web_order_channel_settings(organization_id,restaurant_id,branch_id,submission_enabled)
 select organization_id,restaurant_id,id,true from branches where id in
- (pg_temp.wo_ref('branch_a'),pg_temp.wo_ref('branch_sibling'),pg_temp.wo_ref('branch_b'));
+ (pg_temp.wo_ref('branch_a'),pg_temp.wo_ref('branch_sibling'),pg_temp.wo_ref('branch_b')) on conflict(branch_id) do update set submission_enabled=excluded.submission_enabled;
 create function pg_temp.ct_submit(p_n integer,p_overrides jsonb default '{}') returns jsonb
 language plpgsql as $$
 declare a jsonb;
@@ -190,7 +193,7 @@ set local role service_role;
 select is(pg_temp.ct_submit(3)->>'error','ordering_unavailable','missing exact channel fails closed');
 reset role;
 insert into web_order_channel_settings(organization_id,restaurant_id,branch_id,submission_enabled)
-values(pg_temp.wo_ref('org_a'),pg_temp.wo_ref('rest_a'),pg_temp.wo_ref('branch_a'),false);
+values(pg_temp.wo_ref('org_a'),pg_temp.wo_ref('rest_a'),pg_temp.wo_ref('branch_a'),false) on conflict(branch_id) do update set submission_enabled=excluded.submission_enabled;
 set local role service_role;
 select is(pg_temp.ct_submit(3)->>'error','ordering_unavailable','controlled guard does not bypass disabled SQL admission');
 reset role;

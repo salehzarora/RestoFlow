@@ -79,10 +79,15 @@ class _QuietOutbox extends OutboxController {
 }
 
 class _BackgroundAlerts extends BackgroundOrderAlerts {
+  _BackgroundAlerts({this.authorizationExpired = false});
+  final bool authorizationExpired;
   final choices = <bool>[];
   @override
-  BackgroundOrderAlertState build() =>
-      const BackgroundOrderAlertState(available: true);
+  BackgroundOrderAlertState build() => BackgroundOrderAlertState(
+    available: true,
+    failed: authorizationExpired,
+    authorizationExpired: authorizationExpired,
+  );
   @override
   Future<void> setEnabled(bool value) async {
     choices.add(value);
@@ -226,6 +231,7 @@ Future<_Controller> pumpInbox(
                 (params, {authorize, isCurrent}) async => {
                   'ok': true,
                   'registration_id': '22222222-2222-4222-8222-222222222222',
+                  'generation': '33333333-3333-4333-8333-333333333333',
                   'authority_expires_at': DateTime.now()
                       .toUtc()
                       .add(const Duration(minutes: 15))
@@ -456,6 +462,23 @@ void main() {
     },
   );
   for (final language in ['ar', 'he', 'en']) {
+    testWidgets(
+      '$language expired alert authority asks for sign-in without authorizing orders',
+      (tester) async {
+        final alerts = _BackgroundAlerts(authorizationExpired: true);
+        final inbox = await pumpInbox(
+          tester,
+          locale: language,
+          backgroundAlerts: alerts,
+        );
+        final toggle = find.byKey(const Key('background-order-alert-switch'));
+        final l10n = AppLocalizations.of(tester.element(toggle));
+        expect(find.text(l10n.posBackgroundOrderAlertsSignIn), findsOneWidget);
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+        expect(alerts.choices, isEmpty);
+        expect(inbox.decisions, isEmpty);
+      },
+    );
     for (final width in [390.0, 1024.0]) {
       testWidgets(
         '$language $width background opt-in explanation precedes enabling',

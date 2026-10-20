@@ -61,6 +61,7 @@ class KitchenPrintContainment {
   String? _fingerprint;
   bool _cacheLoaded = false;
   int? _ordinaryAuthorityRevision;
+  _Policy? _webOrderAuthority;
   int _operationEpoch = 0;
   late final _ScopeBarrier _barrier;
   late final int _generation;
@@ -78,6 +79,17 @@ class KitchenPrintContainment {
       _policy!.revision == _ordinaryAuthorityRevision &&
       _barrier.observation?.revision == _ordinaryAuthorityRevision;
 
+  // The additive platform setting permits only enrolled web-order targets.
+  // It never restores ordinary import/ACK authority, and cache bytes alone
+  // cannot recreate it after restart, a failed read or an offline transition.
+  bool get _webOrderAllowed =>
+      _active &&
+      !_isOffline() &&
+      _webOrderAuthority != null &&
+      identical(_webOrderAuthority, _policy) &&
+      identical(_webOrderAuthority, _barrier.observation) &&
+      _webOrderAuthority!.raw['web_order_printing_enabled'] == true;
+
   String get _cacheKey =>
       'restoflow.pos.kitchen_spool.containment.v1.'
       '${_context.organizationId}.${_context.restaurantId}.${_context.branchId}.${_context.deviceId}';
@@ -92,6 +104,7 @@ class KitchenPrintContainment {
 
   Future<bool> _synchronize() async {
     var succeeded = false;
+    _webOrderAuthority = null;
     try {
       final credential = await _secrets.read();
       if (!_active ||
@@ -146,6 +159,10 @@ class KitchenPrintContainment {
       if (!await _persist(merged, fingerprint)) return false;
       if (merged.raw['mode'] == 'ordinary') {
         _ordinaryAuthorityRevision = merged.revision;
+      }
+      if (fresh.raw['web_order_printing_enabled'] == true &&
+          merged.raw['web_order_printing_enabled'] == true) {
+        _webOrderAuthority = merged;
       }
       return succeeded = true;
     } catch (_) {
@@ -221,6 +238,8 @@ class KitchenPrintContainment {
         raw['device_id'] != _context.deviceId ||
         raw['revision'] is! int ||
         (raw['revision'] as int) < 0 ||
+        (raw.containsKey('web_order_printing_enabled') &&
+            raw['web_order_printing_enabled'] is! bool) ||
         !const {'ordinary', 'blocked', 'target_only'}.contains(raw['mode']) ||
         raw['held_dispatch_ids'] is! List)
       throw const FormatException();
@@ -242,9 +261,14 @@ class KitchenPrintContainment {
       await synchronize() && _ordinaryAuthority;
 
   Future<bool> allowsTarget(String requestId) async {
-    if (!await synchronize() || !_active || _isOffline()) return false;
+    if (!_uuid.hasMatch(requestId) ||
+        !await synchronize() ||
+        !_active ||
+        _isOffline())
+      return false;
     final policy = _policy!;
-    return policy.raw['mode'] == 'ordinary' ||
+    return _webOrderAllowed ||
+        policy.raw['mode'] == 'ordinary' ||
         (policy.raw['mode'] == 'target_only' &&
             policy.raw['target_request_id'] == requestId &&
             policy.expiry!.isAfter(_now().toUtc()));
@@ -319,7 +343,8 @@ class KitchenPrintContainment {
         ].every(_uuid.hasMatch)) {
       return false;
     }
-    return (policy.raw['mode'] == 'ordinary' && _ordinaryAuthority) ||
+    return _webOrderAllowed ||
+        (policy.raw['mode'] == 'ordinary' && _ordinaryAuthority) ||
         (policy.raw['mode'] == 'target_only' &&
             policy.raw['target_request_id'] == target.requestId &&
             policy.expiry!.isAfter(_now().toUtc()));
@@ -334,6 +359,7 @@ class KitchenPrintContainment {
     if (policy.held.contains(row.dispatchId.toLowerCase())) {
       return KitchenPrintPermission.held;
     }
+    if (_webOrderAllowed && _validWebOrderJob(row)) return null;
     if (policy.raw['mode'] == 'blocked' ||
         (policy.raw['mode'] == 'target_only' &&
             (!isTargetedWebPrintJob(row) ||
@@ -345,6 +371,10 @@ class KitchenPrintContainment {
     }
     return null;
   }
+
+  bool _validWebOrderJob(KitchenSpoolJobRow row) =>
+      isTargetedWebPrintJob(row) &&
+      _uuid.hasMatch(row.localJobId.substring('web-initial:'.length));
 
   Future<KitchenPrintPermission> permissionForJob(
     KitchenSpoolJobRow row,
@@ -358,6 +388,20 @@ class KitchenPrintContainment {
     // Immutable exact holds are positive ownership evidence. Branch blocks
     // stop sending but cannot exclude an owner; unknown reads cannot either.
     final restriction = _restriction(row);
+    // A blocked branch still needs a fresh server observation for an exact
+    // web job. Do not reuse a positive bit or deny a newly configured target
+    // merely because the restrictive disk snapshot predates that setting.
+    if (restriction == KitchenPrintPermission.blocked &&
+        _validWebOrderJob(row) &&
+        !_isOffline()) {
+      final observed = await synchronize();
+      if (!_active || !observed) return KitchenPrintPermission.unknown;
+      final learned = _restriction(row);
+      if (learned != null) return learned;
+      return _webOrderAllowed
+          ? KitchenPrintPermission.permitted
+          : KitchenPrintPermission.unknown;
+    }
     if (restriction != null) return restriction;
     final observed = await synchronize();
     if (!_active) return KitchenPrintPermission.unknown;

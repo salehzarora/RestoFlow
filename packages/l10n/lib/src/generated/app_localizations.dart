@@ -15766,10 +15766,10 @@ abstract class AppLocalizations {
   /// **'Pickup available'**
   String get storefrontPickupLabel;
 
-  /// STOREFRONT-PUBLISH-001: Truthful note under the pickup switch (ordering is off).
+  /// Platform Pickup setup and merchant pause guidance under the pickup switch.
   ///
   /// In en, this message translates to:
-  /// **'Informational only: the storefront is browse-only in this release, so online ordering is off.'**
+  /// **'Enable Pickup to receive online requests when your published menu and storefront are ready and open. Turn it off or use Temporary pause to stop new requests.'**
   String get storefrontPickupHelp;
 
   /// STOREFRONT-PUBLISH-001: Sub-heading of the pause fields.
@@ -17115,6 +17115,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Background alerts are unavailable. Existing Inbox polling remains active.'**
   String get posBackgroundOrderAlertsUnavailable;
+
+  /// Platform notification authorization renewal guidance; never bypass employee sign-in.
+  ///
+  /// In en, this message translates to:
+  /// **'Background notification authorization ended. Sign in again to renew it.'**
+  String get posBackgroundOrderAlertsSignIn;
 }
 
 class _AppLocalizationsDelegate

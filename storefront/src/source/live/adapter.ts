@@ -16,8 +16,8 @@
  *   - old catalog envelopes have quantity selection off until rollout
  *   - the campaign hero falls back to the tagline, else the display name, with
  *     an EMPTY subline the hero omits (D11); every other optional module is off
- *   - general ordering is OFF; only the server-admitted Maps Burger Pickup
- *     rollout can enable checkout. Delivery stays OFF and zones stay empty.
+ *   - every tenant follows its server-admitted Pickup configuration and
+ *     current service state. Delivery stays OFF and zones stay empty.
  *
  * Pure: no I/O. `liveSource` is the only thing that calls the client.
  */
@@ -99,7 +99,7 @@ export function adaptStorefront(envelope: StorefrontMenuOk, origin: string): Sto
       pickupEnabled: envelope.service.pickup_enabled,
       deliveryEnabled: false,
       deliveryFromMinor: 0,
-      orderingEnabled: liveOrderingEnabled(r.slug, envelope.service),
+      orderingEnabled: liveOrderingEnabled(envelope.service),
     },
     heroImage: mediaUrl(r.hero_url, origin),
     currency: 'ILS',

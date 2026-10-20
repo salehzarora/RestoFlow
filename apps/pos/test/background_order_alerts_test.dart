@@ -127,6 +127,7 @@ class _GatedStore extends InMemoryDeviceSessionSecretStore {
 Map<String, dynamic> _registered() => {
   'ok': true,
   'registration_id': '22222222-2222-4222-8222-222222222222',
+  'generation': '33333333-3333-4333-8333-333333333333',
   'authority_expires_at': DateTime.now()
       .toUtc()
       .add(const Duration(minutes: 15))
@@ -151,6 +152,7 @@ Future<void> _run(
   Future<bool> Function(Map<String, dynamic>)? bind,
   _Transport? transport,
   DeviceSessionSecretStore? store,
+  DateTime Function()? clock,
 }) async {
   final bridge = _Bridge()
     ..prepareHandler = prepare
@@ -164,6 +166,8 @@ Future<void> _run(
     overrides: [
       backgroundOrderAlertsBuildEnabledProvider.overrideWithValue(enabledBuild),
       backgroundOrderAlertBridgeProvider.overrideWithValue(bridge),
+      if (clock != null)
+        backgroundOrderAlertClockProvider.overrideWithValue(clock),
       backgroundOrderAlertEndpointProvider.overrideWithValue(
         'https://synthetic.invalid/functions/v1/pos-order-alert-status',
       ),
@@ -185,6 +189,7 @@ Future<void> _run(
               {
                 'ok': true,
                 'registration_id': '22222222-2222-4222-8222-222222222222',
+                'generation': '33333333-3333-4333-8333-333333333333',
                 'authority_expires_at': DateTime.now()
                     .toUtc()
                     .add(const Duration(minutes: 15))
@@ -221,6 +226,220 @@ Future<void> _run(
 }
 
 void main() {
+  testWidgets(
+    'token change during prepare re-reads latest token before one registration',
+    (tester) async {
+      final oldLookup = Completer<Map<String, dynamic>>();
+      var lookups = 0;
+      await _run(
+        tester,
+        (container, bridge, repository, registrations) async {
+          bridge.tokenChanged!();
+          oldLookup.complete({
+            ..._prepared(),
+            'fcm_token': 'synthetic-old-token',
+          });
+          await tester.pump();
+          expect(lookups, 2);
+          expect(registrations, hasLength(1));
+          expect(
+            registrations.single['p_fcm_token'],
+            'synthetic-current-token',
+          );
+          expect(bridge.permissionPrompts, 0);
+          expect(bridge.bindings, hasLength(1));
+          expect(container.read(backgroundOrderAlertsProvider).enabled, isTrue);
+          expect(repository.decisions, isEmpty);
+        },
+        prepare: (_) => ++lookups == 1
+            ? oldLookup.future
+            : Future.value({
+                ..._prepared(),
+                'fcm_token': 'synthetic-current-token',
+              }),
+      );
+    },
+  );
+  testWidgets(
+    'token hints during an issued registration reconcile once after its native lane',
+    (tester) async {
+      final first = Completer<Map>();
+      var issued = 0;
+      await _run(
+        tester,
+        (container, bridge, repository, registrations) async {
+          expect(registrations, hasLength(1));
+          for (var i = 0; i < 5; i++) {
+            bridge.tokenChanged!();
+          }
+          expect(registrations, hasLength(1));
+          first.complete(_registered());
+          await tester.pump();
+          expect(registrations, hasLength(2));
+          expect(bridge.bindings, hasLength(2));
+          expect(bridge.permissionPrompts, 0);
+          expect(container.read(backgroundOrderAlertsProvider).enabled, isTrue);
+          expect(repository.decisions, isEmpty);
+        },
+        register: (_) =>
+            ++issued == 1 ? first.future : Future.value(_registered()),
+      );
+    },
+  );
+  testWidgets(
+    'paused registration retains token hints and binds the latest server generation after resume',
+    (tester) async {
+      final firstRegistration = Completer<Map>();
+      var calls = 0;
+      const latestGeneration = '44444444-4444-4444-8444-444444444444';
+      await _run(
+        tester,
+        (container, bridge, repository, registrations) async {
+          final controller = container.read(
+            backgroundOrderAlertsProvider.notifier,
+          );
+          expect(registrations, hasLength(1));
+          controller.onPaused();
+          bridge.tokenChanged!();
+          firstRegistration.complete(_registered());
+          await tester.pump();
+          expect(bridge.bindings, isEmpty);
+          expect(registrations, hasLength(1));
+          controller.onResume();
+          await tester.pump();
+          expect(registrations, hasLength(2));
+          expect(bridge.bindings, hasLength(2));
+          expect(
+            bridge.bindings.last['registration_generation'],
+            latestGeneration,
+          );
+          expect(container.read(backgroundOrderAlertsProvider).enabled, isTrue);
+          expect(bridge.permissionPrompts, 0);
+          expect(repository.decisions, isEmpty);
+        },
+        register: (_) => ++calls == 1
+            ? firstRegistration.future
+            : Future.value({..._registered(), 'generation': latestGeneration}),
+      );
+    },
+  );
+  testWidgets(
+    'foreground renewal never extends an unchanged server authorization deadline',
+    (tester) async {
+      var clock = DateTime.utc(2026, 10, 20, 12);
+      final expiry = clock.add(const Duration(minutes: 5));
+      await _run(
+        tester,
+        (container, bridge, repository, registrations) async {
+          for (final minutes in [3, 1, 1]) {
+            clock = clock.add(Duration(minutes: minutes));
+            await tester.pump(Duration(minutes: minutes));
+          }
+          expect(registrations, hasLength(3));
+          expect(
+            container.read(backgroundOrderAlertsProvider).enabled,
+            isFalse,
+          );
+          expect(
+            container.read(backgroundOrderAlertsProvider).authorizationExpired,
+            isTrue,
+          );
+          expect(bridge.permissionPrompts, 0);
+          expect(repository.decisions, isEmpty);
+        },
+        clock: () => clock,
+        register: (_) async => {
+          'ok': true,
+          'registration_id': '22222222-2222-4222-8222-222222222222',
+          'generation': '33333333-3333-4333-8333-333333333333',
+          'authority_expires_at': expiry.toIso8601String(),
+        },
+      );
+    },
+  );
+  testWidgets(
+    'foreground opt-in renews before expiry without another permission prompt',
+    (tester) async {
+      var clock = DateTime.utc(2026, 10, 20, 12);
+      await _run(
+        tester,
+        (container, bridge, repository, registrations) async {
+          expect(registrations, hasLength(1));
+          expect(container.read(backgroundOrderAlertsProvider).enabled, isTrue);
+          clock = clock.add(const Duration(minutes: 2, seconds: 59));
+          await tester.pump(const Duration(minutes: 2, seconds: 59));
+          expect(registrations, hasLength(1));
+          clock = clock.add(const Duration(seconds: 1));
+          await tester.pump(const Duration(seconds: 1));
+          expect(registrations, hasLength(2));
+          expect(bridge.bindings, hasLength(2));
+          expect(bridge.permissionPrompts, 0);
+          expect(repository.decisions, isEmpty);
+          expect(container.read(backgroundOrderAlertsProvider).enabled, isTrue);
+        },
+        clock: () => clock,
+        register: (_) async => {
+          'ok': true,
+          'registration_id': '22222222-2222-4222-8222-222222222222',
+          'generation': '33333333-3333-4333-8333-333333333333',
+          'authority_expires_at': clock
+              .add(const Duration(minutes: 5))
+              .toIso8601String(),
+        },
+      );
+    },
+  );
+  testWidgets(
+    'expired background delegation needs a fresh authenticated identity',
+    (tester) async {
+      var clock = DateTime.utc(2026, 10, 20, 12);
+      await _run(
+        tester,
+        (container, bridge, repository, registrations) async {
+          final controller = container.read(
+            backgroundOrderAlertsProvider.notifier,
+          );
+          controller.onPaused();
+          clock = clock.add(const Duration(hours: 9));
+          await tester.pump(const Duration(hours: 9));
+          expect(registrations, hasLength(1));
+          controller.onResume();
+          await tester.pump();
+          expect(registrations, hasLength(1));
+          expect(
+            container.read(backgroundOrderAlertsProvider).enabled,
+            isFalse,
+          );
+          expect(
+            container.read(backgroundOrderAlertsProvider).authorizationExpired,
+            isTrue,
+          );
+          expect(bridge.permissionPrompts, 0);
+          // Existing PIN authentication publishes a new identity. Re-enabling
+          // under that real identity uses the existing consent flow; this
+          // notification controller never manufactures a PIN session.
+          container.read(_identity.notifier).state =
+              'synthetic-scope|device-session|new-real-pin';
+          await tester.pump();
+          await container
+              .read(backgroundOrderAlertsProvider.notifier)
+              .setEnabled(true);
+          expect(registrations, hasLength(2));
+          expect(container.read(backgroundOrderAlertsProvider).enabled, isTrue);
+          expect(repository.decisions, isEmpty);
+        },
+        clock: () => clock,
+        register: (_) async => {
+          'ok': true,
+          'registration_id': '22222222-2222-4222-8222-222222222222',
+          'generation': '33333333-3333-4333-8333-333333333333',
+          'authority_expires_at': clock
+              .add(const Duration(hours: 8))
+              .toIso8601String(),
+        },
+      );
+    },
+  );
   for (final missingPlugin in [false, true]) {
     testWidgets(
       'real MethodChannel ${missingPlugin ? 'missing plugin' : 'platform error'} cleanup fails closed without throwing legacy writers',
@@ -627,6 +846,8 @@ void main() {
     'refusal',
     'missing-id',
     'bad-id',
+    'missing-generation',
+    'bad-generation',
     'expired',
     'missing-expiry',
     'non-map',
@@ -639,6 +860,8 @@ void main() {
           'refusal' => {'ok': false, 'error': 'disabled'},
           'missing-id' => {..._registered(), 'registration_id': null},
           'bad-id' => {..._registered(), 'registration_id': 'not-an-id'},
+          'missing-generation' => {..._registered(), 'generation': null},
+          'bad-generation' => {..._registered(), 'generation': 1},
           'expired' => {
             ..._registered(),
             'authority_expires_at': DateTime.utc(2000).toIso8601String(),
@@ -982,6 +1205,7 @@ void main() {
         'identity',
         'generation',
         'registration_id',
+        'registration_generation',
         'endpoint',
         'authority_expires_at',
       });
@@ -1054,7 +1278,7 @@ void main() {
     },
   );
   testWidgets(
-    'pause does not duplicate registration/polling; resume discovers existing pending',
+    'pause defers token rotation until authenticated resume without adding polling',
     (tester) async {
       await _run(tester, (c, b, r, reg) async {
         final controller = c.read(backgroundOrderAlertsProvider.notifier);
@@ -1067,7 +1291,7 @@ void main() {
         expect(reg, hasLength(1));
         controller.onResume();
         await tester.pump();
-        expect(reg, hasLength(1));
+        expect(reg, hasLength(2));
         b.pendingHint!();
         await tester.pump();
         expect(r.fetches.length, fetches + 1);
@@ -1112,6 +1336,7 @@ void main() {
       pending.complete({
         'ok': true,
         'registration_id': '22222222-2222-4222-8222-222222222222',
+        'generation': '33333333-3333-4333-8333-333333333333',
         'authority_expires_at': DateTime.now()
             .toUtc()
             .add(const Duration(minutes: 15))

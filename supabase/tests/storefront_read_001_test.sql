@@ -443,8 +443,8 @@ select is(
   'C4. hours key set is EXACTLY the contract');
 select is(
   (select r -> 'service' from _sf where label = 'alpha'),
-  '{"state":"open","ordering_enabled":false,"pickup_enabled":true,"delivery_enabled":false}'::jsonb,
-  'C5. service: open, ordering OFF, pickup on, delivery off');
+  '{"state":"open","ordering_enabled":true,"pickup_enabled":true,"delivery_enabled":false}'::jsonb,
+  'C5. service: open platform Pickup ordering, delivery off');
 select is(
   (select r -> 'tax' from _sf where label = 'alpha'),
   '{"enabled":true,"rate_bp":1800,"mode":"exclusive"}'::jsonb,

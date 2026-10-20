@@ -155,8 +155,8 @@ select throws_ok($$select public.submit_web_order_request('wo001-alpha',pg_temp.
 select throws_ok($$select public.get_web_order_request_status('wo001-alpha',pg_temp.wo_client(1),repeat('a',64))$$,
  '42501',null,'real anon cannot poll');
 select throws_ok($$select * from public.web_order_requests$$,'42501',null,'real anon cannot read requests');
-select is(public.storefront_menu('wo001-alpha')->'service'->>'ordering_enabled','false',
- 'reader continues to advertise ordering disabled');
+select is(public.storefront_menu('wo001-alpha')->'service'->>'ordering_enabled','true',
+ 'published platform storefront advertises authoritative ordering');
 reset role;
 set local role authenticated;
 select throws_ok($$select public.submit_web_order_request('wo001-alpha',pg_temp.wo_client(1),repeat('a',64),pg_temp.wo_order())$$,
@@ -166,13 +166,14 @@ select throws_ok($$select public.get_web_order_request_status('wo001-alpha',pg_t
 select throws_ok($$select * from public.web_order_requests$$,'42501',null,'real authenticated cannot read requests');
 reset role;
 
+delete from web_order_channel_settings where organization_id=pg_temp.wo_ref('org_a');
 select is((select count(*)::int from web_order_channel_settings where organization_id=pg_temp.wo_ref('org_a')),0,
- 'migration does not provision an enabled tenant channel');
+ 'synthetic missing-channel fixture removes automatic onboarding configuration');
 set local role service_role;
 select is(pg_temp.wo_submit(pg_temp.wo_order(),1)->>'ok','false','missing channel settings fail closed');
 reset role;
 insert into web_order_channel_settings(organization_id,restaurant_id,branch_id)
-values(pg_temp.wo_ref('org_a'),pg_temp.wo_ref('rest_a'),pg_temp.wo_ref('branch_a'));
+values(pg_temp.wo_ref('org_a'),pg_temp.wo_ref('rest_a'),pg_temp.wo_ref('branch_a')) on conflict(branch_id) do update set submission_enabled=excluded.submission_enabled;
 select is((select submission_enabled from web_order_channel_settings where branch_id=pg_temp.wo_ref('branch_a')),false,
  'explicit channel defaults to disabled');
 update restaurant_storefront_profiles set is_published=false where restaurant_id=pg_temp.wo_ref('rest_a');
@@ -186,14 +187,15 @@ set local role service_role;
 select is(pg_temp.wo_submit(pg_temp.wo_order(),1)->>'ok','false','disabled channel refuses submission');
 reset role;
 select throws_ok($$insert into web_order_channel_settings(organization_id,restaurant_id,branch_id)
- values(pg_temp.wo_ref('org_a'),pg_temp.wo_ref('rest_a'),pg_temp.wo_ref('branch_b'))$$,
+ values(pg_temp.wo_ref('org_a'),pg_temp.wo_ref('rest_a'),pg_temp.wo_ref('branch_b'))
+ on conflict(branch_id) do update set organization_id=excluded.organization_id,restaurant_id=excluded.restaurant_id$$,
  '23503',null,'composite FK refuses another tenant branch');
 update web_order_channel_settings set submission_enabled=true where branch_id=pg_temp.wo_ref('branch_a');
 insert into web_order_channel_settings(organization_id,restaurant_id,branch_id,submission_enabled)
-values(pg_temp.wo_ref('org_b'),pg_temp.wo_ref('rest_b'),pg_temp.wo_ref('branch_b'),true);
+values(pg_temp.wo_ref('org_b'),pg_temp.wo_ref('rest_b'),pg_temp.wo_ref('branch_b'),true) on conflict(branch_id) do update set submission_enabled=excluded.submission_enabled;
 set local role anon;
-select is(public.storefront_menu('wo001-alpha')->'service'->>'ordering_enabled','false',
- 'backend channel enable does not activate browser ordering flag');
+select is(public.storefront_menu('wo001-alpha')->'service'->>'ordering_enabled','true',
+ 'enabled published platform channel exposes browser ordering');
 reset role;
 create procedure pg_temp.wo_reset_counters() language sql as $$
  update public.web_order_channel_settings set

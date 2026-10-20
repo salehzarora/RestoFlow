@@ -21,11 +21,12 @@ export async function accessToken(account, { fetchImpl, cryptoImpl, now, timeout
   const key = await cryptoImpl.subtle.importKey("pkcs8", Uint8Array.from(atob(pem), (c) => c.charCodeAt(0)),
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
   const signature = await cryptoImpl.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned));
-  const result = await boundedFetch("https://oauth2.googleapis.com/token", { method: "POST", headers: {
+  const body = await boundedFetch("https://oauth2.googleapis.com/token", { method: "POST", headers: {
     "Content-Type": "application/x-www-form-urlencoded",
-  }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${unsigned}.${encode(new Uint8Array(signature))}` }) }, fetchImpl, timeoutMs);
-  if (!result.ok) { if (result.body) void result.body.cancel().catch(() => {}); throw new Error("oauth_unavailable"); }
-  const body = await readJson(result, 16384);
+  }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${unsigned}.${encode(new Uint8Array(signature))}` }) }, fetchImpl, timeoutMs, async (result) => {
+    if (!result.ok) { if (result.body) void result.body.cancel().catch(() => {}); throw new Error("oauth_unavailable"); }
+    return readJson(result, 16384);
+  });
   if (!object(body) || typeof body.access_token !== "string" || !/^[A-Za-z0-9._~-]{20,4096}$/.test(body.access_token)
     || body.token_type !== "Bearer" || !Number.isInteger(body.expires_in) || body.expires_in < 1 || body.expires_in > 3600) throw new Error("oauth_invalid");
   return body.access_token;
@@ -52,10 +53,10 @@ export function message(delivery, nowMs) {
 export async function send(account, token, delivery, { fetchImpl, now, timeoutMs }) {
   const payload = message(delivery, now());
   if (!payload) return "permanent_failure";
-  const result = await boundedFetch(`https://fcm.googleapis.com/v1/projects/${account.projectId}/messages:send`, {
+  return boundedFetch(`https://fcm.googleapis.com/v1/projects/${account.projectId}/messages:send`, {
     method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
     body: JSON.stringify(payload),
-  }, fetchImpl, timeoutMs);
+  }, fetchImpl, timeoutMs, async (result) => {
   if (result.ok) {
     const body = await readJson(result, 16384);
     return object(body) && typeof body.name === "string" && body.name.startsWith(`projects/${account.projectId}/messages/`) ? "sent" : "retry";
@@ -67,4 +68,5 @@ export async function send(account, token, delivery, { fetchImpl, now, timeoutMs
   if (code === "UNREGISTERED") return "invalid_token";
   if ([408, 429, 500, 502, 503, 504].includes(result.status)) return "retry";
   return "permanent_failure";
+  });
 }

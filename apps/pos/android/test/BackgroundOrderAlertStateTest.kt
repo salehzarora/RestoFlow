@@ -227,5 +227,81 @@ fun main() {
         val full = BackgroundOrderAlertFallback.plan(pending("new"), 0, 100_000, 0, heard, true) { error("capacity must fail silent") }
         check(!full.audible && full.heard == heard)
     }
+    scenario("token refresh preserves existing delegation cutoff even if a response requests longer authority") {
+        check(BackgroundOrderAlertTokenRefresh.remaining(1_000, 999_000, 100, 200, 5_000) == 4_800L)
+        check(BackgroundOrderAlertTokenRefresh.remaining(1_000, 2_000, 100, 200, 5_000) == 900L)
+    }
+    scenario("token refresh cannot recover expired authority or manufacture time after a clock reversal") {
+        check(BackgroundOrderAlertTokenRefresh.remaining(1_000, 1_000, 100, 200, 5_000) == null)
+        check(BackgroundOrderAlertTokenRefresh.remaining(1_000, 2_000, 100, 200, 200) == null)
+        check(BackgroundOrderAlertTokenRefresh.remaining(1_000, 1_050, 100, 200, 5_000) == null)
+        check(BackgroundOrderAlertTokenRefresh.remaining(1_000, 2_000, 200, 100, 5_000) == null)
+    }
+    scenario("token refresh accepts opaque SDK tokens while rejecting oversized whitespace or control input") {
+        check(BackgroundOrderAlertTokenRefresh.validToken("synthetic-firebase-token:1234567890"))
+        for (bad in listOf("", "short", "a".repeat(4097), "a".repeat(20) + " ", "a".repeat(20) + "\n")) {
+            check(!BackgroundOrderAlertTokenRefresh.validToken(bad))
+        }
+    }
+    scenario("foreground preparation fences old token success and denial before native bind") {
+        val lane = BackgroundOrderAlertTokenLane()
+        val oldRequest = lane.offer("A", "G0")!!
+        check(lane.canComplete(oldRequest, "G0"))
+        lane.prepare()
+        check(lane.preparing && !lane.canComplete(oldRequest, "G0"))
+        check(lane.offer("B", "G0") == null)
+        lane.finishPreparation()
+        check(!lane.preparing && !lane.canComplete(oldRequest, "G0"))
+        check(lane.canComplete(lane.offer("B", "G1")!!, "G1"))
+    }
+    scenario("bind or clear invalidates in-flight token completions without enabling another audio owner") {
+        val lane = BackgroundOrderAlertTokenLane()
+        val oldRequest = lane.offer("A", "G0")!!
+        lane.finishPreparation()
+        check(!lane.canComplete(oldRequest, "G0"))
+        val newerRequest = lane.offer("B", "G1")!!
+        check(lane.canComplete(newerRequest, "G1") && !lane.canComplete(oldRequest, "G0"))
+    }
+    scenario("back-to-back background tokens serialize with the successfully committed generation") {
+        val lane = BackgroundOrderAlertTokenLane()
+        val first = lane.offer("A", "G0")!!
+        check(lane.offer("B", "G0") == null)
+        check(lane.canComplete(first, "G0"))
+        val second = lane.complete(first, "G1")!!
+        check(second.token == "B" && second.generation == "G1")
+        check(!lane.canComplete(second, "G0") && lane.canComplete(second, "G1"))
+        check(lane.complete(second, "G2") == null)
+    }
+    scenario("background rotation coalesces to the latest token without invalidating the active result") {
+        val lane = BackgroundOrderAlertTokenLane()
+        val first = lane.offer("A", "G0")!!
+        check(lane.offer("B", "G0") == null && lane.offer("C", "G0") == null)
+        val latest = lane.complete(first, "G1")!!
+        check(latest.token == "C" && latest.generation == "G1")
+        check(lane.offer("C", "G1") == null)
+        check(lane.complete(latest, "G2") == null)
+    }
+    scenario("an unknown background commit never starts another token write with an uncertain generation") {
+        val lane = BackgroundOrderAlertTokenLane()
+        val first = lane.offer("A", "G0")!!
+        check(lane.offer("B", "G0") == null)
+        check(lane.complete(first, null) == null)
+        check(lane.offer("B", "G0") == null && lane.offer("C", "G1") == null)
+        lane.prepare()
+        lane.finishPreparation()
+        check(lane.canComplete(lane.offer("C", "G2")!!, "G2"))
+    }
+    scenario("process recreation retains the unconfirmed-write fence until a genuine foreground bind") {
+        val original = BackgroundOrderAlertTokenLane()
+        val first = original.offer("A", "G0")!!
+        check(original.offer("B", "G0", true) == null)
+        check(original.canComplete(first, "G0"))
+        val restarted = BackgroundOrderAlertTokenLane()
+        check(restarted.offer("B", "G0", true) == null)
+        check(restarted.offer("B", "G0") == null)
+        restarted.prepare()
+        restarted.finishPreparation()
+        check(restarted.canComplete(restarted.offer("B", "G1", false)!!, "G1"))
+    }
     println("$passed native background state scenarios passed")
 }

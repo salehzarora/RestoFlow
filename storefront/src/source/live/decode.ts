@@ -246,8 +246,8 @@ export function decodeStorefrontMenu(raw: unknown): StorefrontMenuEnvelope {
     pickup_enabled: bool(s.pickup_enabled, 'service.pickup_enabled'),
     delivery_enabled: bool(s.delivery_enabled, 'service.delivery_enabled'),
   };
-  // The independent release gate in the adapter keeps ordering off. A future
-  // owner-approved activation can use this same decoded admission flag.
+  // Pickup admission is tenant-scoped server authority. Delivery remains a
+  // separate feature and cannot be enabled through this Pickup contract.
   if (service.delivery_enabled) fail('service: delivery must be off in this slice');
   const tax: WireTax = {
     enabled: bool(t.enabled, 'tax.enabled'),

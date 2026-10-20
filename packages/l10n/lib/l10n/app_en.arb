@@ -5514,8 +5514,8 @@
   "@storefrontMotionLively": {"description": "STOREFRONT-PUBLISH-001: Motion: lively."},
   "storefrontPickupLabel": "Pickup available",
   "@storefrontPickupLabel": {"description": "STOREFRONT-PUBLISH-001: Label of the pickup switch."},
-  "storefrontPickupHelp": "Informational only: the storefront is browse-only in this release, so online ordering is off.",
-  "@storefrontPickupHelp": {"description": "STOREFRONT-PUBLISH-001: Truthful note under the pickup switch (ordering is off)."},
+  "storefrontPickupHelp": "Enable Pickup to receive online requests when your published menu and storefront are ready and open. Turn it off or use Temporary pause to stop new requests.",
+  "@storefrontPickupHelp": {"description": "Platform Pickup setup and merchant pause guidance under the pickup switch."},
   "storefrontPauseTitle": "Temporary pause",
   "@storefrontPauseTitle": {"description": "STOREFRONT-PUBLISH-001: Sub-heading of the pause fields."},
   "storefrontPausedUntilLabel": "Paused until",
@@ -5963,5 +5963,7 @@
   "posBackgroundOrderAlertsEnable": "Enable alerts",
   "@posBackgroundOrderAlertsEnable": {"description":"BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup."},
   "posBackgroundOrderAlertsUnavailable": "Background alerts are unavailable. Existing Inbox polling remains active.",
-  "@posBackgroundOrderAlertsUnavailable": {"description":"BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup."}
+  "@posBackgroundOrderAlertsUnavailable": {"description":"BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup."},
+  "posBackgroundOrderAlertsSignIn": "Background notification authorization ended. Sign in again to renew it.",
+  "@posBackgroundOrderAlertsSignIn": {"description":"Platform notification authorization renewal guidance; never bypass employee sign-in."}
 }

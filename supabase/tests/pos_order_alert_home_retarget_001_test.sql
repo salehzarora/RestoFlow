@@ -1,4 +1,5 @@
--- BIZBOT-HOME-ALERT-ALLOWLIST-RETARGET-001: synthetic, rollback-only.
+-- Historical HOME identities retain authentication/isolation coverage after
+-- BIZBOT-PLATFORM-ONLINE-ORDERS-353 removes the obsolete UUID admission list.
 -- Real public registration boundary; no HTTP/FCM/order/printer transport.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -27,6 +28,9 @@ insert into branches(id,organization_id,restaurant_id,name,timezone) values
  (pg_temp.rt_id('other-branch'),pg_temp.rt_id('org'),pg_temp.rt_id('restaurant'),'Sibling','UTC'),
  (pg_temp.rt_id('other-restaurant-branch'),pg_temp.rt_id('org'),pg_temp.rt_id('other-restaurant'),'Sibling restaurant','UTC'),
  (pg_temp.rt_id('foreign-branch'),pg_temp.rt_id('foreign-org'),pg_temp.rt_id('foreign-restaurant'),'Foreign','UTC');
+insert into app.online_order_settings(organization_id,restaurant_id,branch_id,print_generation,containment_revision)
+  select organization_id,restaurant_id,id,nextval('app.kitchen_print_containment_revision'),0 from branches
+  where organization_id in(pg_temp.rt_id('org'),pg_temp.rt_id('foreign-org')) on conflict(branch_id) do nothing;
 create temp table _rt_devices as
 select label,
  case when label='foreign' then pg_temp.rt_id('foreign-org') else pg_temp.rt_id('org') end org,
@@ -78,15 +82,15 @@ select is((select count(*) from app.pos_order_alert_registrations),0::bigint,'OF
 select app.set_pos_order_alerts(true,'Synthetic notification-only ON','retarget-001-on');
 set local role authenticated;
 select is(pg_temp.rt_register()->>'ok','true','NEW registers through unchanged v65 public RPC');
-select is(pg_temp.rt_register('old')->>'error','permission_denied','OLD denied despite valid session and PIN');
-select is(pg_temp.rt_register('third')->>'error','permission_denied','third same-branch POS denied');
-select is(pg_temp.rt_register('foreign')->>'error','permission_denied','valid foreign-organization POS denied');
-select is(pg_temp.rt_register('other-restaurant')->>'error','permission_denied','valid other-restaurant POS denied');
-select is(pg_temp.rt_register('other-branch')->>'error','permission_denied','valid other-branch POS denied');
+select is(pg_temp.rt_register('old')->>'ok','true','old identity with genuine current authority joins its own branch');
+select is(pg_temp.rt_register('third')->>'ok','true','third independently paired same-branch POS joins dynamically');
+select is(pg_temp.rt_register('foreign')->>'ok','true','another organization joins only through its own session and PIN');
+select is(pg_temp.rt_register('other-restaurant')->>'ok','true','sibling restaurant joins through its own authority');
+select is(pg_temp.rt_register('other-branch')->>'ok','true','sibling branch joins through its own authority');
 select is(pg_temp.rt_register('new','wrong-synthetic-token')->>'error','invalid_session','invalid device token denied');
 reset role;
-select is((select array_agg(device_id) from app.pos_order_alert_registrations),array[pg_temp.rt_id('new')],
- 'exclusive notification registration set contains only NEW');
+select is((select count(distinct device_id) from app.pos_order_alert_registrations),6::bigint,
+ 'six real paired identities join their own scopes without a static UUID list');
 
 -- Authentication failures exercise the actual public entry point. Restore
 -- only the deliberately changed synthetic fields; the suite's final ROLLBACK
@@ -149,7 +153,7 @@ select is(public.pos_register_order_alert(pg_temp.rt_id('new-installation'),
  pg_temp.rt_id('old-pin'),'synthetic-retarget-token-new')->>'error','invalid_session','wrong device PIN cannot register NEW');
 reset role;
 
--- The CHECK is independently tested using valid referenced fixture IDs.
+-- Full tenant scope remains structural even without a fixed device CHECK.
 create function pg_temp.rt_insert(p_org uuid,p_rest uuid,p_branch uuid,p_device uuid) returns void
  language sql volatile as $$
  insert into app.pos_order_alert_registrations(installation_id,setting_revision,
@@ -162,20 +166,21 @@ create function pg_temp.rt_insert(p_org uuid,p_rest uuid,p_branch uuid,p_device 
   registered_at,refreshed_at,authority_expires_at from app.pos_order_alert_registrations
  where device_id=pg_temp.rt_id('new')
 $$;
-select throws_ok(format('select pg_temp.rt_insert(%L,%L,%L,%L)',
+select lives_ok(format('select pg_temp.rt_insert(%L,%L,%L,%L)',
  pg_temp.rt_id('org'),pg_temp.rt_id('restaurant'),pg_temp.rt_id('branch'),pg_temp.rt_id(label)),
- '23514',null,label||' direct insertion hits exact notification CHECK') from unnest(array['old','third']) label;
+ label||' same-scope identity is no longer rejected by a pilot UUID CHECK') from unnest(array['old','third']) label;
 select throws_ok(format('select pg_temp.rt_insert(%L,%L,%L,%L)',
  pg_temp.rt_id('foreign-org'),pg_temp.rt_id('restaurant'),pg_temp.rt_id('branch'),pg_temp.rt_id('new')),
- '23514',null,'NEW with wrong organization hits CHECK');
+ '23503',null,'NEW with wrong organization hits structural tenant FK');
 select throws_ok(format('select pg_temp.rt_insert(%L,%L,%L,%L)',
  pg_temp.rt_id('org'),pg_temp.rt_id('other-restaurant'),pg_temp.rt_id('branch'),pg_temp.rt_id('new')),
- '23514',null,'NEW with wrong restaurant hits CHECK');
+ '23503',null,'NEW with wrong restaurant hits structural restaurant FK');
 select throws_ok(format('select pg_temp.rt_insert(%L,%L,%L,%L)',
  pg_temp.rt_id('org'),pg_temp.rt_id('restaurant'),pg_temp.rt_id('other-branch'),pg_temp.rt_id('new')),
- '23514',null,'NEW with wrong branch hits CHECK');
-select ok(convalidated,'notification scope CHECK is validated') from pg_constraint
- where conrelid='app.pos_order_alert_registrations'::regclass and conname='pos_order_alert_registrations_check';
+ '23503',null,'NEW with wrong branch hits structural branch FK');
+select is((select count(*) from pg_constraint where conrelid='app.pos_order_alert_registrations'::regclass
+  and conname in('pos_order_alert_device_scope','pos_order_alert_session_scope','pos_order_alert_pin_scope') and convalidated),3::bigint,
+  'device, session and PIN composite scope FKs are validated');
 
 select ok(not has_table_privilege(role_name,'app.pos_order_alert_registrations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),
  role_name||' direct table ACL remains denied') from unnest(array['anon','authenticated','service_role']) role_name;

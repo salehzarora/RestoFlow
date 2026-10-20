@@ -2,7 +2,7 @@
 /**
  * WEB-ORDERS-CHECKOUT-001: offline release-build browser evidence.
  * Run with Node 24 after `npm ci` and installation of the matching Chromium.
- * Only a fresh local copy has its release gate enabled; tracked source stays OFF.
+ * A fresh local copy uses the identical tracked server-admission source.
  * Server reads are redirected to a loopback synthetic RPC and every other
  * off-machine Node fetch is denied. The browser spec intercepts the exact Edge
  * endpoint, denies other remote requests, and receives committed CSP headers.
@@ -24,8 +24,7 @@ const SYNTHETIC_KEY = 'sb_publishable_SYNTHETIC_browser_local_only_000000';
 const GATE = path.join(ROOT, 'src/source/live/ordering.ts');
 const gateSource = readFileSync(GATE, 'utf8');
 assert.match(process.version, /^v24\./, 'Use the task Node 24 runtime');
-assert.match(gateSource, /export const LIVE_ORDERING_RELEASED = false;/, 'Tracked rollout must remain OFF');
-assert.equal((gateSource.match(/export const LIVE_ORDERING_RELEASED = false;/g) ?? []).length, 1);
+assert.ok(!gateSource.includes('LIVE_ORDERING_RELEASED') && !gateSource.includes('LIVE_PICKUP_ROLLOUT_SLUG'), 'Checkout must follow tenant-scoped server admission without local rollout overrides');
 assert.ok(existsSync(path.join(ROOT, 'node_modules/next/dist/bin/next')), 'Run npm ci in this worktree first');
 
 const evidenceRoot = path.join(WORKTREE, 'build/web-orders-checkout-001');
@@ -37,7 +36,7 @@ for (const input of ['package.json', 'package-lock.json', 'next.config.mjs', 'ts
   cpSync(path.join(ROOT, input), path.join(app, input), { recursive: true });
 }
 symlinkSync(path.join(ROOT, 'node_modules'), path.join(app, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
-writeFileSync(path.join(app, 'src/source/live/ordering.ts'), gateSource.replace('export const LIVE_ORDERING_RELEASED = false;', 'export const LIVE_ORDERING_RELEASED = true;'));
+assert.equal(readFileSync(path.join(app, 'src/source/live/ordering.ts'), 'utf8'), gateSource, 'Evidence must exercise identical production admission source');
 const committedHeaders = JSON.parse(readFileSync(path.join(ROOT, 'vercel.json'), 'utf8')).headers;
 const globalHeaders = Object.fromEntries(committedHeaders.find((rule) => rule.source === '/(.*)').headers.map(({ key, value }) => [key.toLowerCase(), value]));
 assert.match(globalHeaders['content-security-policy'], /connect-src 'self' https:\/\/oqmevrndtivqxgyvcmwy\.supabase\.co;/);
@@ -45,7 +44,7 @@ assert.match(globalHeaders['content-security-policy'], /connect-src 'self' https
 const children = new Set();
 const servers = [];
 const rpcCalls = [];
-const summary = { workId: 'WEB-ORDERS-CHECKOUT-001', generatedAt: new Date().toISOString(), node: process.version, run, app, trackedReleaseGate: false, copiedReleaseGate: true, trackedGateSha256: createHash('sha256').update(gateSource).digest('hex'), hostedRequests: 0, status: 'running' };
+const summary = { workId: 'BIZBOT-PLATFORM-ONLINE-ORDERS-353', generatedAt: new Date().toISOString(), node: process.version, run, app, productionAdmissionSourceUnchanged: true, trackedGateSha256: createHash('sha256').update(gateSource).digest('hex'), hostedRequests: 0, status: 'running' };
 const safeEnv = {};
 for (const key of ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'TEMP', 'TMP', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'COMSPEC', 'PATHEXT']) if (process.env[key]) safeEnv[key] = process.env[key];
 
@@ -110,9 +109,9 @@ try {
   writeFileSync(preload, `// Generated offline-only process boundary. No real service is contacted.\nconst originalFetch = globalThis.fetch;\nglobalThis.fetch = (input, init) => {\n const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;\n if (url === ${JSON.stringify(RPC)}) return originalFetch(${JSON.stringify(`http://127.0.0.1:${stubPort}/rest/v1/rpc/storefront_menu`)}, init);\n const parsed = new URL(url);\n if (parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1') return originalFetch(input, init);\n throw new Error('offline_verification_remote_fetch_blocked');\n};\n`);
   const env = { NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', STOREFRONT_SOURCE: 'live', STOREFRONT_SUPABASE_URL: PROJECT, STOREFRONT_SUPABASE_ANON_KEY: SYNTHETIC_KEY, NODE_OPTIONS: `--import=${pathToFileURL(preload).href}` };
   console.log(`Offline browser evidence: ${run}`);
-  console.log('Building an isolated LIVE-mode copy; tracked rollout remains OFF.');
+  console.log('Building an isolated LIVE-mode copy with identical tenant-scoped admission source.');
   await completion(launch([path.join(app, 'node_modules/next/dist/bin/next'), 'build', '--webpack'], app, env, path.join(run, 'build.log')));
-  assert.equal(readFileSync(GATE, 'utf8'), gateSource, 'Tracked release gate changed during evidence build');
+  assert.equal(readFileSync(GATE, 'utf8'), gateSource, 'Tracked admission source changed during evidence build');
   const manifest = JSON.parse(readFileSync(path.join(app, '.next/prerender-manifest.json'), 'utf8'));
   assert.deepEqual(Object.keys(manifest.routes).filter((route) => /\/(?:s|r)\//.test(route)), [], 'Live build must not prerender fixture tenants');
   const next = launch([path.join(app, 'node_modules/next/dist/bin/next'), 'start', '-p', String(nextPort), '-H', '127.0.0.1'], app, env, path.join(run, 'next.log'));
@@ -147,7 +146,7 @@ try {
   console.error(`Offline browser verification failed. Evidence: ${run}`);
   process.exitCode = 1;
 } finally {
-  assert.equal(readFileSync(GATE, 'utf8'), gateSource, 'Tracked release gate must remain OFF');
+  assert.equal(readFileSync(GATE, 'utf8'), gateSource, 'Tracked admission source must remain unchanged');
   writeFileSync(path.join(run, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
   for (const child of children) await stop(child);
   for (const server of servers.reverse()) { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); }
