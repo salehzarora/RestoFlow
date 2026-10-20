@@ -67,9 +67,20 @@ does not modify these production records or any operational gate.
 1. Obtain exact-head CI/security/RLS review and explicit owner merge approval.
    Keep live website ordering and notification authority ON throughout routine
    rollout; no registration, data, pairing, PIN or spool reset is a workaround.
+   **Do not execute the merge, mark auto-merge, or deploy/promote the updated
+   product web POS until steps 2–4 are deployed and independently verified.**
+   Normal main Git automation can immediately rebuild `/pos`; its updated
+   Accept/Reject transport requires the new decision endpoint. Product and
+   Storefront deployments are not an ordered dependency chain. Stage steps 2–4
+   from the exact owner-reviewed PR source in isolated checkouts, with source,
+   target and deployment receipts, before allowing the main merge. If that
+   predeployment path or a separately approved promotion interlock cannot be
+   established, stop before merge; do not pause ordering or notifications.
 2. Deploy the additive Storefront decoder/status UI first. Older already-open
    browser tabs have a strict decoder and may need a refresh before receiving a
    newly public reason. Older responses with the field omitted remain valid.
+   Verify the actual `menu.bizbot.systems` deployment and source, not merely a
+   Dashboard/Preview check or a successful product Git deployment.
 3. Apply only `20261020212503_bizbot_pos_order_decision_ux_sync_001.sql`
    through the governed exact-version
    process. Independently verify schema, ACLs/RLS and migration history before any
@@ -77,11 +88,17 @@ does not modify these production records or any operational gate.
 4. Deploy the new decision Edge function and updated public response whitelist.
    Preserve existing submission, operator, sender and dispatcher settings. Verify
    authenticated denial and scoped behavior without creating production orders.
-5. Follow the official synchronized Android release pipeline for the next
-   reserved version (v67), after reviewed source/main CI passes. Preserve v66
-   artifacts and consumption receipt. KDS functionality and printing are unchanged.
-   Update eligible accepting POS in place during safe maintenance, retaining local
-   state/settings. No automatic device action is part of source validation.
+   Record successful schema/history, function identity/authentication and actual
+   Storefront compatibility verification before the conditional main merge.
+5. After that dependency gate passes, execute only the separately approved main
+   merge and verify normal product Git deployment. Use the already verified
+   official synchronized v67 artifacts from audited source
+   `04445fdf019b4184ee0ce9fb9bbd8473b157db64`; code 67 is consumed and must not be
+   rebuilt. v68 is a bookkeeping reservation, without build authorization. Preserve
+   v66 artifacts and consumption receipt. KDS functionality and printing are
+   unchanged; no KDS device update is required for this fix. Update eligible
+   accepting POS in place during safe maintenance, retaining local state/settings.
+   No automatic device action is part of source validation.
 6. Separately restore the existing scheduled recovery path on the exact dedicated
    Vercel project after checking current continuous-mode authentication and
    notification controls. Do not rotate secrets or issue a manual Run as proof.
