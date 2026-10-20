@@ -107,6 +107,59 @@ internal object BackgroundOrderAlertProtocol {
     } catch (_: Exception) { null }
 }
 
+/** One background write at a time; foreground ownership supersedes the lane. */
+internal class BackgroundOrderAlertTokenLane {
+    private var epoch = 0L
+    private var inFlight: Work? = null
+    private var pending: String? = null
+    private var uncertain = false
+    var preparing = false
+        private set
+
+    // Deliberately not a data class: toString must not disclose an FCM token.
+    class Work internal constructor(val token: String, val generation: String, internal val epoch: Long)
+
+    private fun reset() { epoch++; inFlight = null; pending = null; uncertain = false }
+    fun prepare() { reset(); preparing = true }
+    fun finishPreparation() { reset(); preparing = false }
+
+    fun offer(token: String, generation: String, unconfirmedWrite: Boolean = false): Work? {
+        // The encrypted status record preserves this fence across process death.
+        // An in-memory owner may coalesce a newer token behind its own write;
+        // a restarted process must instead reconcile through foreground auth.
+        if (unconfirmedWrite && inFlight == null) { uncertain = true; return null }
+        if (preparing || uncertain) return null
+        if (inFlight != null) { pending = token; return null }
+        return Work(token, generation, epoch).also { inFlight = it }
+    }
+
+    fun canComplete(work: Work, currentGeneration: String): Boolean = !preparing && !uncertain &&
+        work === inFlight && work.epoch == epoch && work.generation == currentGeneration
+
+    /** Null generation means UNKNOWN: no later write until foreground reconciliation. */
+    fun complete(work: Work, generation: String?): Work? {
+        if (!canComplete(work, work.generation)) return null
+        inFlight = null
+        val next = pending
+        pending = null
+        if (generation == null) { uncertain = true; return null }
+        if (next == null || next == work.token) return null
+        return Work(next, generation, epoch).also { inFlight = it }
+    }
+}
+
+/** Token maintenance may shrink a delegation, never mint or extend one. */
+internal object BackgroundOrderAlertTokenRefresh {
+    fun validToken(value: String): Boolean = value.length in 20..4096 &&
+        value.none { it.isWhitespace() || it.isISOControl() }
+
+    fun remaining(serverTime: Long, expiry: Long, startedAt: Long, now: Long, currentDeadline: Long): Long? {
+        if (expiry <= serverTime || now < startedAt || currentDeadline <= now) return null
+        val remaining = minOf(expiry - serverTime - (now - startedAt), currentDeadline - now)
+        return remaining.takeIf { it > 0 }
+    }
+}
+
 /** Bounded opaque hint deduplication; terminal hints cannot be reordered into a fresh arrival. */
 internal class BackgroundOrderAlertHints {
     private val recent = linkedMapOf<String, Long>()

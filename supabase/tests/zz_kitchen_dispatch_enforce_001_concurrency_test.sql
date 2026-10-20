@@ -267,6 +267,9 @@ delete from device_sessions  where id = '7f000000-0000-0000-0000-0000000005a1';
 delete from device_pairings  where id = '7f000000-0000-0000-0000-00000000fa11';
 delete from devices          where id = '7f000000-0000-0000-0000-00000000da11';
 delete from printer_devices  where id = '7f000000-0000-0000-0000-00000000ba11';
+-- Remove only automatically provisioned settings for this synthetic fixture.
+delete from app.pos_order_alert_branch_cursors where branch_id = '7f000000-0000-0000-0000-00000000a1b1';
+delete from app.online_order_settings where branch_id = '7f000000-0000-0000-0000-00000000a1b1';
 delete from branches         where id = '7f000000-0000-0000-0000-00000000a1b1';
 delete from restaurants      where id = '7f000000-0000-0000-0000-0000000000a1';
 delete from organizations    where id = '7f000000-0000-0000-0000-0000000000a0';

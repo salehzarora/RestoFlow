@@ -6,7 +6,7 @@ import { SYNTH_IDS, syntheticEnvelope } from './support/envelope.mjs';
 
 const { adaptStorefront } = await import('../src/source/live/adapter.ts');
 const { decodeStorefrontMenu, EnvelopeError } = await import('../src/source/live/decode.ts');
-const { LIVE_ORDERING_RELEASED, ORDER_PROJECT_ORIGIN, orderEndpointOrigin } = await import('../src/source/live/ordering.ts');
+const { ORDER_PROJECT_ORIGIN, orderEndpointOrigin } = await import('../src/source/live/ordering.ts');
 const { modifierSelectionValid, unitPriceMinor } = await import('../src/money/pricing.ts');
 const { addLine, summarise, optionSummary } = await import('../src/cart/cartModel.ts');
 const { orderFromCart, validOrderNotes } = await import('../src/orders/index.ts');
@@ -25,11 +25,10 @@ function catalog() {
   return adaptStorefront(decodeStorefrontMenu(raw), ORDER_PROJECT_ORIGIN);
 }
 
-test('the independent release gate stays false even when the server admission flag is true', () => {
-  assert.equal(LIVE_ORDERING_RELEASED, false);
+test('server-admitted tenants get Pickup checkout while the exact project boundary remains enforced', () => {
   const raw = syntheticEnvelope({ service: { ordering_enabled: true } });
   const resolved = adaptStorefront(decodeStorefrontMenu(raw), ORDER_PROJECT_ORIGIN);
-  assert.equal(resolved.view.tenant.service.orderingEnabled, false);
+  assert.equal(resolved.view.tenant.service.orderingEnabled, true);
   assert.equal(resolved.view.tenant.service.deliveryEnabled, false);
   assert.equal(resolved.orderEndpointOrigin, ORDER_PROJECT_ORIGIN);
   for (const origin of ['http://oqmevrndtivqxgyvcmwy.supabase.co', `${ORDER_PROJECT_ORIGIN}/anything`, `${ORDER_PROJECT_ORIGIN}?token=secret`, `${ORDER_PROJECT_ORIGIN}#secret`, 'https://other.supabase.co', 'https://user:secret@oqmevrndtivqxgyvcmwy.supabase.co']) assert.throws(() => orderEndpointOrigin(origin));

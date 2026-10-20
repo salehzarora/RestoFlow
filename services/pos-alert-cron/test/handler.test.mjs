@@ -11,7 +11,7 @@ const NOW = Date.parse(START);
 const config = () => ({
   CRON_SECRET: INBOUND,
   POS_ORDER_ALERT_WORKER_SECRET: OUTBOUND,
-  POS_ALERT_CRON_ENABLED: 'true',
+  POS_ORDER_ALERT_MODE: 'pilot', POS_ALERT_CRON_ENABLED: 'true',
   POS_ALERT_DISPATCH_URL: DISPATCH_URL,
   POS_ALERT_PILOT_START_UTC: START,
   POS_ALERT_PILOT_END_UTC: END,
@@ -153,10 +153,30 @@ for (const environment of ['preview', 'development', 'staging', undefined]) {
   });
 }
 
-for (const name of Object.keys(config())) {
+for (const name of Object.keys(config()).filter((name) => name !== 'POS_ORDER_ALERT_MODE')) {
   test(`missing ${name} fails closed without network`, async () => {
     const env = config(); delete env[name];
     const { handler, calls } = fixture(env);
+    assert.equal((await handler(request())).status, 503);
+    assert.equal(calls.length, 0);
+  });
+}
+
+test('continuous production Cron requires no tenant or pilot configuration and remains emergency-switch gated', async () => {
+  const env = config();
+  delete env.POS_ORDER_ALERT_MODE;
+  delete env.POS_ALERT_PILOT_START_UTC;
+  delete env.POS_ALERT_PILOT_END_UTC;
+  const { handler, calls } = fixture(env, undefined, undefined, () => NOW + 365 * 86400000);
+  assert.equal((await handler(request())).status, 200);
+  env.POS_ALERT_CRON_ENABLED = 'false';
+  assert.equal((await handler(request())).status, 503);
+  assert.equal(calls.length, 1);
+});
+
+for (const mode of ['', 'PILOT', 'enabled', 'continuous ']) {
+  test('unknown notification mode fails closed', async () => {
+    const { handler, calls } = fixture({ ...config(), POS_ORDER_ALERT_MODE: mode });
     assert.equal((await handler(request())).status, 503);
     assert.equal(calls.length, 0);
   });

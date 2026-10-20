@@ -258,7 +258,9 @@ class _BackgroundOrderAlertControlState
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.posBackgroundOrderAlerts),
           subtitle: Text(
-            alerts.failed
+            alerts.authorizationExpired
+                ? l10n.posBackgroundOrderAlertsSignIn
+                : alerts.failed
                 ? l10n.posBackgroundOrderAlertsUnavailable
                 : l10n.posBackgroundOrderAlertsHelp,
           ),

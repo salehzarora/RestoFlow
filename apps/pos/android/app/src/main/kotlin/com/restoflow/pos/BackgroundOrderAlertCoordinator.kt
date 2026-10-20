@@ -78,6 +78,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     private var hintDuringRead = false
     private var visibilityEpoch = 0L
     private var fallbackWanted = false
+    private val tokenLane = BackgroundOrderAlertTokenLane()
     // Visibility expiry must not invalidate an authenticated read already in flight for B.
     private val expireFallback = Runnable { notifications().cancel(FALLBACK_NOTIFICATION_ID) }
     private val reconcileHint = Runnable { reconcileScheduled = false; reconcile() }
@@ -163,10 +164,15 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
             }
             record.put("enabled", true).put("opt_in", true)
             persist()
+            tokenLane.prepare()
             FirebaseMessaging.getInstance().isAutoInitEnabled = true
             val expected = generation
             FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                if (expected != generation || !record.optBoolean("enabled") || !task.isSuccessful || task.result.isNullOrBlank()) {
+                if (expected != generation) {
+                    callback(mapOf("available" to true, "enabled" to false)); return@addOnCompleteListener
+                }
+                if (!record.optBoolean("enabled") || !task.isSuccessful || task.result.isNullOrBlank()) {
+                    tokenLane.finishPreparation()
                     callback(mapOf("available" to true, "enabled" to false)); return@addOnCompleteListener
                 }
                 callback(mapOf("available" to true, "enabled" to true,
@@ -189,14 +195,21 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         val identity = args["identity"] as? String ?: return false
         val endpoint = args["endpoint"] as? String ?: return false
         val registration = args["registration_id"] as? String ?: return false
+        val registrationGeneration = args["registration_generation"] as? String ?: return false
         val expires = parseTime(args["authority_expires_at"] as? String ?: return false) ?: return false
         if (!record.optBoolean("enabled") || !record.has("status_secret") || identity.isBlank() || identity.length > 512 ||
-            (args["generation"] as? Number)?.toLong() != generation || !uuid(registration) || !exactEndpoint(endpoint)) return false
+            (args["generation"] as? Number)?.toLong() != generation || !uuid(registration) ||
+            !uuid(registrationGeneration) || !exactEndpoint(endpoint)) return false
         val remaining = expires - System.currentTimeMillis()
         if (remaining <= 0) return false
+        // A fresh foreground bind supersedes every older native HTTP completion,
+        // including a same-token renewal with a later genuine PIN deadline.
+        tokenLane.finishPreparation()
         record.put("identity", identity).put("endpoint", endpoint).put("registration_id", registration)
+            .put("registration_generation", registrationGeneration)
             .put("authority_deadline", SystemClock.elapsedRealtime() + remaining.coerceAtMost(8 * 60 * 60_000L))
             .put("boot_count", vault.bootCount())
+        record.remove("token_refresh_unconfirmed")
         return try { persist(); true } catch (_: Exception) { clearAuthority(); false }
     }
 
@@ -255,6 +268,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     fun onIntent(intent: Intent?) { if (intent?.action == OPEN_INBOX) pendingInboxTap = true }
 
     fun clearAuthority(retainOptIn: Boolean = false) {
+        tokenLane.finishPreparation()
         ownership.invalidate()
         state.clear()
         hints.clear()
@@ -276,10 +290,84 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         network.execute { try { request(JSONObject(old), true) } catch (_: Exception) { /* Local stop never waits on network. */ } }
     }
 
-    fun tokenChanged() {
+    fun tokenChanged(token: String) {
         handler.post {
+            if (!BackgroundOrderAlertTokenRefresh.validToken(token)) return@post
+            if (foreground || tokenLane.preparing) {
+                // Keep the generation/status secret stable while a serialized
+                // foreground prepare/bind may be in flight. That owner reads
+                // the latest SDK token before registration; logout still revokes.
+                channel?.invokeMethod("tokenChanged", null)
+                return@post
+            }
+            if (!authorityValid()) {
+                clearAuthority(true)
+                channel?.invokeMethod("tokenChanged", null)
+                return@post
+            }
+            tokenLane.offer(token, record.optString("registration_generation"),
+                record.optBoolean("token_refresh_unconfirmed"))?.let { refreshToken(it) }
+            // Also retain the latest SDK change for ordinary foreground
+            // reconciliation if this process loses a response or is stopped.
+            channel?.invokeMethod("tokenChanged", null)
+        }
+    }
+
+    private fun refreshToken(work: BackgroundOrderAlertTokenLane.Work) {
+        try {
+            // A lost response/process must not recreate permission to write
+            // another token against an unconfirmed server generation.
+            record.put("token_refresh_unconfirmed", true)
+            persist()
+        } catch (_: Exception) {
+            tokenLane.complete(work, null)
             clearAuthority(true)
             channel?.invokeMethod("tokenChanged", null)
+            return
+        }
+        val expected = generation
+        val startedAt = SystemClock.elapsedRealtime()
+        val snapshot = JSONObject(record.toString())
+        network.execute {
+            var denied = false
+            val response = try { request(snapshot, false, 3_000, work.token) }
+                catch (_: AuthorityDenied) { denied = true; null } catch (_: Exception) { null }
+            handler.post completion@ {
+                if (expected != generation || !tokenLane.canComplete(work, record.optString("registration_generation")) ||
+                    !authorityValid() || snapshot.optString("registration_id") != record.optString("registration_id")) return@completion
+                if (foreground) {
+                    // An old background denial must not cancel a foreground
+                    // registration that has committed but has not bound yet.
+                    tokenLane.complete(work, null)
+                    channel?.invokeMethod("tokenChanged", null)
+                    return@completion
+                }
+                var committedGeneration: String? = null
+                if (denied) {
+                    clearAuthority(true)
+                } else if (response != null) {
+                    try {
+                        check(response.getBoolean("ok") &&
+                            response.getString("registration_id") == record.getString("registration_id") &&
+                            uuid(response.getString("generation")))
+                        val serverTime = parseTime(response.getString("server_time")) ?: error("invalid time")
+                        val expiry = parseTime(response.getString("authority_expires_at")) ?: error("invalid expiry")
+                        val now = SystemClock.elapsedRealtime()
+                        val remaining = BackgroundOrderAlertTokenRefresh.remaining(serverTime, expiry,
+                            startedAt, now, record.getLong("authority_deadline")) ?: error("expired authority")
+                        record.put("authority_deadline", now + remaining)
+                            .put("registration_generation", response.getString("generation"))
+                        record.remove("token_refresh_unconfirmed")
+                        persist()
+                        committedGeneration = response.getString("generation")
+                    } catch (_: Exception) {
+                        // Unknown writes block this lane until foreground
+                        // reconciliation. Never send the next token with stale CAS.
+                    }
+                }
+                tokenLane.complete(work, committedGeneration)?.let { refreshToken(it) }
+                channel?.invokeMethod("tokenChanged", null)
+            }
         }
     }
 
@@ -413,10 +501,13 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         }
     }
 
-    private fun request(snapshot: JSONObject, disable: Boolean, timeoutMs: Int = 7_000): JSONObject? {
+    private fun request(snapshot: JSONObject, disable: Boolean, timeoutMs: Int = 7_000, token: String? = null): JSONObject? {
         val endpoint = snapshot.optString("endpoint")
         if (!exactEndpoint(endpoint) || !snapshot.has("status_secret") || !uuid(snapshot.optString("installation_id"))) return null
-        val connection = URL(endpoint + if (disable) "/disable" else "").openConnection() as HttpURLConnection
+        if (token != null && (disable || !uuid(snapshot.optString("registration_generation")) ||
+            !BackgroundOrderAlertTokenRefresh.validToken(token))) return null
+        val path = if (disable) "/disable" else if (token != null) "/token/refresh" else ""
+        val connection = URL(endpoint + path).openConnection() as HttpURLConnection
         val startedAt = SystemClock.elapsedRealtime()
         return try {
             connection.instanceFollowRedirects = false
@@ -426,7 +517,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
             connection.doOutput = true
             connection.setRequestProperty("Authorization", "Bearer ${snapshot.getString("status_secret")}")
             connection.setRequestProperty("Content-Type", "application/json")
-            val body = JSONObject().put("installation_id", snapshot.getString("installation_id")).toString().toByteArray(Charsets.UTF_8)
+            val input = JSONObject().put("installation_id", snapshot.getString("installation_id"))
+            if (token != null) input.put("fcm_token", token).put("generation", snapshot.getString("registration_generation"))
+            val body = input.toString().toByteArray(Charsets.UTF_8)
             connection.setFixedLengthStreamingMode(body.size)
             connection.outputStream.use { it.write(body) }
             if (connection.responseCode in setOf(401, 403)) throw AuthorityDenied()

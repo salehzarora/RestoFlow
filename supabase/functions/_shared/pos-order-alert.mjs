@@ -31,20 +31,40 @@ export function configuration(getEnv) {
   if ((url.protocol !== "https:" && !local) || url.username || url.password || url.search || url.hash || !["", "/"].includes(url.pathname)) return null;
   return { base: url.origin, key };
 }
-export async function boundedFetch(url, init, fetchImpl, timeoutMs = 5000) {
+export async function boundedFetch(url, init, fetchImpl, timeoutMs = 5000, consume) {
   const controller = new AbortController(); let timer;
   try {
     return await Promise.race([
-      fetchImpl(url, { ...init, redirect: "error", cache: "no-store", signal: controller.signal }),
+      Promise.resolve().then(() => fetchImpl(url, { ...init, redirect: "error", cache: "no-store", signal: controller.signal }))
+        .then((result) => {
+          if (controller.signal.aborted) {
+            if (result.body) void result.body.cancel().catch(() => {});
+            throw new Error("upstream_timeout");
+          }
+          return consume ? consume(result) : result;
+        }),
       new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error("upstream_timeout")); }, timeoutMs); }),
     ]);
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); if (consume) controller.abort(); }
 }
 export async function rpc(name, body, config, fetchImpl, timeoutMs = 5000) {
-  const result = await boundedFetch(`${config.base}/rest/v1/rpc/${name}`, { method: "POST", headers: {
-    "Content-Type": "application/json", "Accept": "application/json", "Accept-Profile": "public", "Content-Profile": "public",
-    "apikey": config.key, "Authorization": `Bearer ${config.key}`,
-  }, body: JSON.stringify(body) }, fetchImpl, timeoutMs);
-  if (!result.ok) { if (result.body) void result.body.cancel().catch(() => {}); throw new Error("rpc_unavailable"); }
-  return readJson(result, 32768);
+  // Headers and body share one deadline; a stalled body cannot hold a delivery
+  // lease worker or native status request indefinitely.
+  const controller = new AbortController(); let timer;
+  try {
+    const operation = (async () => {
+      const result = await fetchImpl(`${config.base}/rest/v1/rpc/${name}`, { method: "POST", headers: {
+        "Content-Type": "application/json", "Accept": "application/json", "Accept-Profile": "public", "Content-Profile": "public",
+        "apikey": config.key, "Authorization": `Bearer ${config.key}`,
+      }, body: JSON.stringify(body), redirect: "error", cache: "no-store", signal: controller.signal });
+      if (controller.signal.aborted || !result.ok) {
+        if (result.body) void result.body.cancel().catch(() => {});
+        throw new Error("rpc_unavailable");
+      }
+      return readJson(result, 32768);
+    })();
+    return await Promise.race([operation, new Promise((_, reject) => {
+      timer = setTimeout(() => { controller.abort(); reject(new Error("upstream_timeout")); }, timeoutMs);
+    })]);
+  } finally { clearTimeout(timer); controller.abort(); }
 }

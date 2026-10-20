@@ -2649,7 +2649,7 @@
   "storefrontMotionFull": "قياسية",
   "storefrontMotionLively": "حيوية",
   "storefrontPickupLabel": "الاستلام متاح",
-  "storefrontPickupHelp": "للعرض فقط: واجهة المتجر للتصفّح فقط في هذا الإصدار، لذا الطلب عبر الإنترنت متوقف.",
+  "storefrontPickupHelp": "فعّل الاستلام لتلقي الطلبات عبر الإنترنت عندما تكون قائمتك وواجهة متجرك منشورتين وجاهزتين وفي ساعات العمل. عطّله أو استخدم الإيقاف المؤقت لإيقاف الطلبات الجديدة.",
   "storefrontPauseTitle": "إيقاف مؤقت",
   "storefrontPausedUntilLabel": "متوقف حتى",
   "storefrontNotPaused": "غير متوقف",
@@ -2873,5 +2873,6 @@
   "posBackgroundOrderAlertsHelp": "تلقي تنبيهات عامة عندما لا تكون نقطة البيع ظاهرة. قد تؤخرها أو توقفها إعدادات أندرويد والبطارية.",
   "posBackgroundOrderAlertsExplanation": "السماح بإشعارات طلبات الاستلام المعلقة. يتكرر الصوت فقط ما دامت الطلبات المصرح بها معلقة. لا تظهر بيانات العملاء على شاشة القفل. تُحترم إعدادات صوت الإشعارات والوضع الصامت وعدم الإزعاج.",
   "posBackgroundOrderAlertsEnable": "تفعيل التنبيهات",
-  "posBackgroundOrderAlertsUnavailable": "تنبيهات الخلفية غير متاحة. يستمر تحديث صندوق الطلبات الحالي."
+  "posBackgroundOrderAlertsUnavailable": "تنبيهات الخلفية غير متاحة. يستمر تحديث صندوق الطلبات الحالي.",
+  "posBackgroundOrderAlertsSignIn": "انتهى تفويض إشعارات الخلفية. سجّل الدخول مجددًا لتجديده."
 }

@@ -70,8 +70,9 @@ class BackgroundOrderAlertService : Service() {
 
 class BackgroundOrderAlertMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
-        // Token is retrieved afresh by an authenticated foreground prepare; never logged or passed in an Intent.
-        if (BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS) BackgroundOrderAlertCoordinator.get(this).tokenChanged()
+        // Status-only maintenance cannot extend PIN authority, register a new
+        // device or print. The token is never logged or passed in an Intent.
+        if (BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS) BackgroundOrderAlertCoordinator.get(this).tokenChanged(token)
     }
 
     override fun onMessageReceived(message: RemoteMessage) {

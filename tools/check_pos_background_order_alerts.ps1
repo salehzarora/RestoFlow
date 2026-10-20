@@ -14,7 +14,7 @@ if (-not $GradleHome) { throw 'Existing Gradle compiler is unavailable.' }
 $lib = Join-Path $GradleHome 'lib'
 $stdlib = Get-ChildItem -LiteralPath $lib -Filter 'kotlin-stdlib-*.jar' | Select-Object -First 1
 $annotations = Get-ChildItem -LiteralPath $lib -Filter 'annotations-*.jar' | Select-Object -First 1
-$java = if ($JavaHome) { Join-Path $JavaHome 'bin/java.exe' } else { 'java' }
+$java = if ($JavaHome) { Join-Path $JavaHome $(if ($IsWindows) { 'bin/java.exe' } else { 'bin/java' }) } else { 'java' }
 $classpath = "$($stdlib.FullName)$([IO.Path]::PathSeparator)$($annotations.FullName)"
 $jar = Join-Path ([IO.Path]::GetTempPath()) ('bizbot-background-alert-state-' + [guid]::NewGuid().ToString('N') + '.jar')
 try {

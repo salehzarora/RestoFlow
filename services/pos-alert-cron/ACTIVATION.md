@@ -1,5 +1,23 @@
 # Notification scheduler activation handoff
 
+## Platform operation — Issue #353
+
+The [platform contract](../../docs/BIZBOT_PLATFORM_ONLINE_ORDERS_353.md) supersedes
+the HOME-only setup below for new onboarding. Once the reviewed platform has been
+installed and enabled, continuous mode does not require UTC timestamps or a
+restaurant/device allowlist. Global emergency OFF, production-only independent
+authentication, exact dispatcher destination and database delivery authority
+remain mandatory. `POS_ORDER_ALERT_MODE=pilot` explicitly retains the historical
+maximum-30-minute UTC controls; malformed modes fail closed. The once-per-minute
+schedule is shared infrastructure, not a new restaurant setup step. Historical
+statements below describe their captured dates and are not current live state.
+
+Deploy only after the new database RPCs exist. Keep notification controls OFF
+during installation, verify actual deployed source/configuration, and complete
+the multi-tenant acceptance matrix before claiming platform readiness. Disabling
+Cron alone does not revoke Edge/native authority; use the emergency shutdown in
+the platform contract. No credential rotation or new project is required.
+
 ## Current HOME identity handoff — PREPARED / NOT APPLIED
 
 `BIZBOT-HOME-ALERT-ALLOWLIST-RETARGET-001` proposes replacing notification HOME

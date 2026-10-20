@@ -8745,7 +8745,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get storefrontPickupHelp =>
-      'للعرض فقط: واجهة المتجر للتصفّح فقط في هذا الإصدار، لذا الطلب عبر الإنترنت متوقف.';
+      'فعّل الاستلام لتلقي الطلبات عبر الإنترنت عندما تكون قائمتك وواجهة متجرك منشورتين وجاهزتين وفي ساعات العمل. عطّله أو استخدم الإيقاف المؤقت لإيقاف الطلبات الجديدة.';
 
   @override
   String get storefrontPauseTitle => 'إيقاف مؤقت';
@@ -9549,4 +9549,8 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posBackgroundOrderAlertsUnavailable =>
       'تنبيهات الخلفية غير متاحة. يستمر تحديث صندوق الطلبات الحالي.';
+
+  @override
+  String get posBackgroundOrderAlertsSignIn =>
+      'انتهى تفويض إشعارات الخلفية. سجّل الدخول مجددًا لتجديده.';
 }

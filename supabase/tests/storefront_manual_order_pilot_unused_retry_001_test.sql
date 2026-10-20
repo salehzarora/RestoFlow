@@ -99,8 +99,11 @@ insert into restaurant_storefront_profiles(restaurant_id,organization_id,storefr
  display_name,pickup_enabled,opening_hours,is_published)
 select pg_temp.mp_id('rest_b'),pg_temp.mp_id('org_b'),pg_temp.mp_id('branch_b'),
  'manual-pilot-foreign','Synthetic Foreign',true,h,true from _mp_hours;
+-- Exercise the retained legacy pilot/rollout contract independently of the
+-- new platform entitlement (covered by platform_online_orders_353_test.sql).
+update app.online_order_settings set ordering_enabled=false where organization_id in (pg_temp.mp_org(),pg_temp.mp_id('org_b'));
 insert into web_order_channel_settings(organization_id,restaurant_id,branch_id,submission_enabled)
-values(pg_temp.mp_org(),pg_temp.mp_rest(),pg_temp.mp_branch(),true);
+values(pg_temp.mp_org(),pg_temp.mp_rest(),pg_temp.mp_branch(),true) on conflict(branch_id) do update set submission_enabled=excluded.submission_enabled;
 insert into kitchen_print_containment_policies(organization_id,restaurant_id,branch_id,mode,reason,operator_reference)
 values(pg_temp.mp_org(),pg_temp.mp_rest(),pg_temp.mp_branch(),'blocked',
  'Synthetic SQL test; no printer operation','manual-pilot-001-synthetic');

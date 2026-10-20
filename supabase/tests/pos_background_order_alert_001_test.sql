@@ -69,7 +69,7 @@ insert into restaurant_storefront_profiles(restaurant_id,organization_id,storefr
 select pg_temp.mp_id('rest_b'),pg_temp.mp_id('org_b'),pg_temp.mp_id('branch_b'),
  'manual-pilot-foreign','Synthetic Foreign',true,h,true from _mp_hours;
 insert into web_order_channel_settings(organization_id,restaurant_id,branch_id,submission_enabled)
-values(pg_temp.mp_org(),pg_temp.mp_rest(),pg_temp.mp_branch(),true);
+values(pg_temp.mp_org(),pg_temp.mp_rest(),pg_temp.mp_branch(),true) on conflict(branch_id) do update set submission_enabled=excluded.submission_enabled;
 insert into kitchen_print_containment_policies(organization_id,restaurant_id,branch_id,mode,reason,operator_reference)
 values(pg_temp.mp_org(),pg_temp.mp_rest(),pg_temp.mp_branch(),'blocked',
  'Synthetic SQL test; no printer operation','manual-pilot-001-synthetic');
@@ -161,9 +161,12 @@ reset role;
 select app.set_pos_order_alerts(true,'Synthetic notification gate','background-alert-test');
 set local role authenticated;
 select is(pg_temp.alert_register(p_secret=>'wrong')->>'error','invalid_request','malformed delegation rejected');
-select is(pg_temp.alert_register(p_device=>1)->>'error','permission_denied','old HOME denied despite valid independent authentication');
-select is(pg_temp.alert_register(p_device=>2)->>'error','permission_denied','same-branch nonenabled device denied');
-select is(pg_temp.alert_register(p_device=>3)->>'error','permission_denied','foreign tenant/device denied');
+select is(public.pos_register_order_alert(pg_temp.mp_client(700),'synthetic-fcm-token-123456789',repeat('a',64),
+ pg_temp.mp_id('device-1'),pg_temp.mp_id('pin-4'),'synthetic-live-token-1')->>'error','invalid_session','same-branch device cannot borrow another POS PIN');
+select is(public.pos_register_order_alert(pg_temp.mp_client(700),'synthetic-fcm-token-123456789',repeat('a',64),
+ pg_temp.mp_id('device-2'),pg_temp.mp_id('pin-4'),'synthetic-live-token-2')->>'error','invalid_session','independently paired device still needs its own PIN');
+select is(public.pos_register_order_alert(pg_temp.mp_client(700),'synthetic-fcm-token-123456789',repeat('a',64),
+ pg_temp.mp_id('device-3'),pg_temp.mp_id('pin-4'),'synthetic-live-token-3')->>'error','invalid_session','foreign tenant/device cannot borrow HOME authority');
 select is(public.pos_register_order_alert(pg_temp.mp_client(700),'synthetic-fcm-token-123456789',repeat('a',64),
  pg_temp.mp_id('device-4'),pg_temp.mp_id('pin-4'),'wrong-token')->>'error','invalid_session','paired secret must prove device');
 insert into _ao_results values('registered',pg_temp.alert_register());
@@ -179,8 +182,8 @@ create temp table _alert_registration as select id,generation,registered_at from
 set local role authenticated;
 select is(pg_temp.alert_register()->>'ok','true','same foreground registration may refresh');
 reset role;
-select ok((select r.id=old.id and r.generation=old.generation and r.registered_at=old.registered_at
- from app.pos_order_alert_registrations r cross join _alert_registration old),'same identity refresh preserves generation/cutoff');
+select ok((select r.id=old.id and r.generation<>old.generation and r.registered_at=old.registered_at
+ from app.pos_order_alert_registrations r cross join _alert_registration old),'same identity foreground refresh fences native generations and preserves cutoff');
 -- Simulate a nearing-expiry delegation without changing the real PIN/session.
 -- Refresh keeps arrival cutoff but bounds its NEW deadline by refreshed_at.
 update app.pos_order_alert_registrations set registered_at=clock_timestamp()-interval '7 hours 58 minutes',
@@ -189,7 +192,7 @@ create temp table _alert_renewal as select generation,registered_at from app.pos
 set local role authenticated;
 select is(pg_temp.alert_register()->>'ok','true','normal near-eight-hour renewal succeeds');
 reset role;
-select ok((select r.generation=old.generation and r.registered_at=old.registered_at
+select ok((select r.generation<>old.generation and r.registered_at=old.registered_at
  and r.authority_expires_at<=r.refreshed_at+interval '8 hours' and r.authority_expires_at>r.registered_at+interval '8 hours'
  from app.pos_order_alert_registrations r cross join _alert_renewal old),'renewal preserves cutoff and has an independently bounded refreshed deadline');
 set local role service_role;
@@ -212,7 +215,7 @@ select is(public.pos_finish_order_alert_delivery(
 select is(jsonb_array_length(public.pos_claim_order_alert_deliveries()->'deliveries'),0,'finished pending event never repeats every ten seconds');
 reset role;
 select ok(not exists(select 1 from jsonb_object_keys((select r from _ao_results where label='registered')) k
- where k not in ('ok','registration_id','authority_expires_at')),'registration never returns token, device secret or PIN');
+ where k not in ('ok','registration_id','generation','authority_expires_at')),'registration never returns token, device secret or PIN');
 -- Status must remain genuinely read-only, including device heartbeat and expiry.
 create temp table _alert_before as select
  (select md5(jsonb_agg(to_jsonb(ds) order by ds.id)::text) from device_sessions ds) sessions,

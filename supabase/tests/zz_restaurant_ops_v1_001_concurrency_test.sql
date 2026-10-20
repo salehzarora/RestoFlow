@@ -332,6 +332,9 @@ delete from memberships
   where organization_id = '7d000000-0000-0000-0000-0000000000a0';
 delete from app_users
   where id::text like '7d000000%';
+-- Remove only automatically provisioned settings for this synthetic fixture.
+delete from app.pos_order_alert_branch_cursors where branch_id in (select id from branches where organization_id = '7d000000-0000-0000-0000-0000000000a0');
+delete from app.online_order_settings where branch_id in (select id from branches where organization_id = '7d000000-0000-0000-0000-0000000000a0');
 delete from branches
   where organization_id = '7d000000-0000-0000-0000-0000000000a0';
 delete from restaurants

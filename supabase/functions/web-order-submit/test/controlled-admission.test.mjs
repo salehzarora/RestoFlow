@@ -136,7 +136,7 @@ test("uncertain response does not retry writes; capability status still works af
 test("normal checkout uses the persistent admission RPC with the existing argument contract", async () => {
   const h = harness({ env: { WEB_ORDERS_ENABLED: "true", WEB_ORDERS_TEST_ENABLED: "false" }, auth: null });
   assert.equal((await h.invoke()).status, 200);
-  assert.ok(h.calls[0].url.endsWith("/rpc/submit_web_order_live_request"));
+  assert.ok(h.calls[0].url.endsWith("/rpc/submit_web_order_platform_request"));
   assert.equal(Object.keys(h.calls[0].args).length, 4);
 });
 

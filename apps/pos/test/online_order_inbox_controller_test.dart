@@ -36,6 +36,7 @@ ProviderContainer harness(
   List<(String, String)>? printed,
   Future<WebOrderPrintOutcome> Function(String, String)? print,
   Future<WebOrderPrintOutcome?> Function()? readRecovery,
+  DeviceContext deviceContext = _context,
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -43,6 +44,10 @@ ProviderContainer harness(
         RuntimeConfig.test(isDemoMode: false),
       ),
       posSyncSessionProvider.overrideWith((ref) => ref.watch(_session)),
+      _session.overrideWith(
+        (ref) =>
+            SyncSession(pinSessionId: pinId, deviceId: deviceContext.deviceId!),
+      ),
       onlineOrderInboxRepositoryProvider.overrideWithValue(repo),
       onlineOrderInboxPollIntervalProvider.overrideWithValue(interval),
       posSyncClockProvider.overrideWithValue(clock ?? () => inboxNow),
@@ -65,7 +70,7 @@ ProviderContainer harness(
     ],
   );
   addTearDown(container.dispose);
-  container.read(posDeviceContextProvider.notifier).set(_context);
+  container.read(posDeviceContextProvider.notifier).set(deviceContext);
   return container;
 }
 
@@ -78,6 +83,123 @@ Future<OnlineOrderInboxController> ready(ProviderContainer container) async {
 }
 
 void main() {
+  test(
+    'new authenticated POS devices join their own branch without an allowlist',
+    () async {
+      final identities = <String>{};
+      for (var tenant = 1; tenant <= 2; tenant++) {
+        for (var station = 1; station <= 2; station++) {
+          final context = DeviceContext(
+            organizationId: 'synthetic-organization-$tenant',
+            restaurantId: 'synthetic-restaurant-$tenant',
+            branchId: 'synthetic-branch-$tenant',
+            deviceId: 'synthetic-pos-$tenant-$station',
+            deviceType: 'pos',
+            deviceSessionId: 'synthetic-pairing-$tenant-$station',
+          );
+          final repository = FakeInboxRepository();
+          final container = harness(repository, deviceContext: context);
+          await ready(container);
+          final identity = container.read(onlineOrderInboxIdentityProvider);
+          expect(identity, isNotNull);
+          identities.add(identity!);
+          expect(
+            container
+                .read(onlineOrderInboxControllerProvider)
+                .pendingCountAt(inboxNow),
+            1,
+          );
+          expect(repository.fetches, isNotEmpty);
+          expect(repository.decisions, isEmpty);
+        }
+      }
+      expect(identities, hasLength(4));
+    },
+  );
+  test(
+    'another POS observes accepted state without dispatching a second print',
+    () async {
+      var accepted = false;
+      final firstPrints = <(String, String)>[];
+      final secondPrints = <(String, String)>[];
+      FakeInboxRepository repository() {
+        final result = FakeInboxRepository();
+        result.onFetch = (_, _) async =>
+            inboxPage(requests: accepted ? [] : [inboxRequest()]);
+        result.onDecide = (intent) async {
+          if (accepted)
+            throw const OnlineInboxException(
+              OnlineInboxFailure.decisionConflict,
+            );
+          accepted = true;
+          return OnlineInboxDecisionResult.fromJson(decisionJson());
+        };
+        return result;
+      }
+
+      final first = harness(repository(), printed: firstPrints);
+      final secondRepo = repository();
+      final second = harness(
+        secondRepo,
+        printed: secondPrints,
+        deviceContext: _context.copyWith(
+          deviceId: 'another-new-pos',
+          deviceSessionId: 'another-pairing',
+        ),
+      );
+      final firstController = await ready(first);
+      final secondController = await ready(second);
+      expect(
+        first.read(onlineOrderInboxControllerProvider).pendingCountAt(inboxNow),
+        1,
+      );
+      expect(
+        second
+            .read(onlineOrderInboxControllerProvider)
+            .pendingCountAt(inboxNow),
+        1,
+      );
+      await firstController.decide(requestId, OnlineOrderDecision.accept);
+      await secondController.refresh();
+      expect(
+        second
+            .read(onlineOrderInboxControllerProvider)
+            .pendingCountAt(inboxNow),
+        0,
+      );
+      await secondController.decide(requestId, OnlineOrderDecision.accept);
+      expect(firstPrints, [(requestId, canonicalId)]);
+      expect(secondPrints, isEmpty);
+      expect(secondRepo.decisions, isEmpty);
+    },
+  );
+  test(
+    'missing printer retains accepted canonical order without a fallback resend',
+    () async {
+      final refreshed = <String>[];
+      var targetCallbacks = 0;
+      final repo = FakeInboxRepository();
+      final c = harness(
+        repo,
+        refreshed: refreshed,
+        print: (_, __) async {
+          targetCallbacks++;
+          return WebOrderPrintOutcome.blocked;
+        },
+      );
+      final controller = await ready(c);
+      await controller.decide(requestId, OnlineOrderDecision.accept);
+      await controller.decide(requestId, OnlineOrderDecision.accept);
+      expect(refreshed, [canonicalId]);
+      expect(repo.decisions, hasLength(1));
+      expect(targetCallbacks, 1);
+      expect(c.read(onlineOrderInboxControllerProvider).uncertain, isFalse);
+      expect(
+        c.read(onlineOrderInboxControllerProvider).printOutcome,
+        WebOrderPrintOutcome.blocked,
+      );
+    },
+  );
   test(
     'an observed durable recovery view refreshes on existing discovery and resume cadence',
     () async {

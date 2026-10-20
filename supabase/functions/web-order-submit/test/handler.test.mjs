@@ -104,7 +104,7 @@ test("submit uses the exact RPC, only the server credential, and a SHA-256 token
   assert.match(output.response.headers.get("cache-control"), /no-store/);
   assert.equal(calls.length, 1);
   const { url, init, args } = calls[0];
-  assert.equal(url, `${BASE}/rest/v1/rpc/submit_web_order_live_request`);
+  assert.equal(url, `${BASE}/rest/v1/rpc/submit_web_order_platform_request`);
   assert.equal(init.method, "POST");
   assert.equal(init.redirect, "error");
   assert.equal(init.cache, "no-store");
@@ -138,7 +138,7 @@ test("persistent Maps Burger routing admits independent customers without pilot 
     assert.equal(output.body.request_id, body.request_id);
   }
   assert.equal(calls.length, 2);
-  assert.equal(calls.every((call) => call.url === `${BASE}/rest/v1/rpc/submit_web_order_live_request`), true);
+  assert.equal(calls.every((call) => call.url === `${BASE}/rest/v1/rpc/submit_web_order_platform_request`), true);
   assert.notEqual(calls[0].args.p_status_token_hash, calls[1].args.p_status_token_hash);
   assert.deepEqual(calls.map((call) => call.args.p_order.customer), [first.order.customer, second.order.customer]);
   assert.equal(envReads.includes("WEB_ORDERS_TEST_PERMIT"), false);
@@ -146,7 +146,7 @@ test("persistent Maps Burger routing admits independent customers without pilot 
 
 test("persistent Maps Burger database OFF rejects a stale checkout while status remains usable", async () => {
   const { handler, calls } = harness({
-    fetchImpl: async (url) => new Response(JSON.stringify(url.endsWith("/submit_web_order_live_request")
+    fetchImpl: async (url) => new Response(JSON.stringify(url.endsWith("/submit_web_order_platform_request")
       ? { ok: false, error: "ordering_unavailable" }
       : success({ status: "accepted" }))),
   });
@@ -573,7 +573,7 @@ test("missing or invalid server configuration fails closed without fetch or secr
   }
   const { handler, calls } = harness({ env: { SUPABASE_URL: "http://127.0.0.1:54321" } });
   assert.equal((await result(handler)).response.status, 200);
-  assert.equal(calls[0].url, "http://127.0.0.1:54321/rest/v1/rpc/submit_web_order_live_request");
+  assert.equal(calls[0].url, "http://127.0.0.1:54321/rest/v1/rpc/submit_web_order_platform_request");
 });
 
 test("Supabase's exact injected local gateway is allowed while other HTTP network targets stay denied", async () => {
@@ -581,7 +581,7 @@ test("Supabase's exact injected local gateway is allowed while other HTTP networ
     const { handler, calls } = harness({ env: { SUPABASE_URL: base } });
     assert.equal((await result(handler)).response.status, 200);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, "http://kong:8000/rest/v1/rpc/submit_web_order_live_request");
+    assert.equal(calls[0].url, "http://kong:8000/rest/v1/rpc/submit_web_order_platform_request");
     assert.equal(calls[0].init.headers.Authorization, `Bearer ${SERVICE_KEY}`);
   }
   for (const base of [

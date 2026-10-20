@@ -14,12 +14,19 @@ class BackgroundOrderAlertState {
     this.enabled = false,
     this.busy = false,
     this.failed = false,
+    this.authorizationExpired = false,
   });
   final bool available;
   final bool enabled;
   final bool busy;
   final bool failed;
+  final bool authorizationExpired;
 }
+
+final backgroundOrderAlertClockProvider = Provider<DateTime Function()>(
+  (ref) =>
+      () => DateTime.now().toUtc(),
+);
 
 /// Registration adapter uses the very same authenticated transport/secret store
 /// as Inbox. It cannot submit, accept, reject or print an order.
@@ -123,6 +130,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   bool _explicitFailure = false;
   bool _buildEnabled = false;
   bool _waitingForNative = false;
+  bool _tokenRefreshPending = false;
   // The MethodChannel is process-wide, including across provider replacement.
   // A disposed owner's late cleanup must finish before a new owner prepares.
   static _RegistrationAttempt? _nativeOwner;
@@ -134,6 +142,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   Completer<void>? _resume;
   DateTime? _authorityExpiresAt;
   DateTime? _lastRegistrationAttempt;
+  Timer? _authorityRenewal;
 
   @override
   BackgroundOrderAlertState build() {
@@ -153,6 +162,8 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     _explicitFailure = false;
     _authorityExpiresAt = null;
     _lastRegistrationAttempt = null;
+    _authorityRenewal?.cancel();
+    _authorityRenewal = null;
     if (!enabledBuild) return const BackgroundOrderAlertState();
     final bridge = ref.watch(backgroundOrderAlertBridgeProvider);
     _bridge = bridge;
@@ -174,7 +185,9 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     });
     bridge.setHints(
       tokenChanged: () {
-        if (_current(_generation) && _foreground) _kick(force: true);
+        if (!_current(_generation)) return;
+        _tokenRefreshPending = true;
+        if (_foreground) _kick(force: true);
       },
       pendingHint: () {
         if (_current(_generation) && _foreground)
@@ -187,6 +200,8 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       _disposed = true;
       _active?.retainOptInOnExit = false;
       _generation++;
+      _authorityRenewal?.cancel();
+      _authorityRenewal = null;
       _finishIntent();
       _wake();
       // Paused, already-bound delegation remains bounded in native code.
@@ -289,18 +304,25 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     return work;
   }
 
-  Future<void> _cancel({bool failed = false, bool retainOptIn = false}) {
+  Future<void> _cancel({
+    bool failed = false,
+    bool retainOptIn = false,
+    bool authorizationExpired = false,
+  }) {
     _generation++;
     _active?.retainOptInOnExit = retainOptIn;
     _off = !retainOptIn;
     _explicitFailure = failed;
     _authorityExpiresAt = null;
+    _authorityRenewal?.cancel();
+    _authorityRenewal = null;
     _finishIntent();
     _wake();
     if (!_disposed)
       state = BackgroundOrderAlertState(
         available: _buildEnabled,
         failed: failed,
+        authorizationExpired: authorizationExpired,
       );
     final bridge = _bridge;
     return bridge == null
@@ -358,7 +380,15 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       }
       return;
     }
-    final now = DateTime.now().toUtc();
+    final now = ref.read(backgroundOrderAlertClockProvider)();
+    if (_authorityExpiresAt != null && !_authorityExpiresAt!.isAfter(now)) {
+      // Notification delegation cannot outlive the employee authority. Keep
+      // the opt-in only; the ordinary PIN flow must establish a new identity.
+      unawaited(
+        _cancel(failed: true, retainOptIn: true, authorizationExpired: true),
+      );
+      return;
+    }
     if (_intent == null && !force) {
       if (_authorityExpiresAt?.isAfter(now.add(const Duration(minutes: 2))) ??
           false)
@@ -369,6 +399,9 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         return;
     }
     final attempt = _RegistrationAttempt(_generation, _identity!, _bridge!);
+    _tokenRefreshPending = false;
+    _authorityRenewal?.cancel();
+    _authorityRenewal = null;
     _active = attempt;
     _nativeOwner = attempt;
     _lastRegistrationAttempt = now;
@@ -393,7 +426,19 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       // already-enabled result; otherwise ask once, in the SAME native lane.
       if (!explicit && _confirmed(attempt) && prepared['enabled'] != true) {
         explicit = true;
+        // This new SDK lookup starts after any hint already observed during
+        // passive preparation, so only later hints need another reconciliation.
+        _tokenRefreshPending = false;
         prepared = await bridge.prepare(requestPermission: true);
+        if (!await _foregroundFor(attempt)) return;
+      }
+      if (_tokenRefreshPending) {
+        // A token lookup can complete with an older token after onNewToken.
+        // Re-read once in this SAME lane before issuing the RPC. A later hint
+        // remains queued behind the issued registration; uncertainty still
+        // quarantines that lane rather than replaying it.
+        _tokenRefreshPending = false;
+        prepared = await bridge.prepare();
         if (!await _foregroundFor(attempt)) return;
       }
       if (prepared['available'] != true || prepared['enabled'] != true) {
@@ -421,28 +466,36 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
           ? DateTime.tryParse(rawExpiry)?.toUtc()
           : null;
       final registration = result['registration_id'];
+      final registrationGeneration = result['generation'];
       if (result['ok'] != true ||
           registration is! String ||
           !RegExp(
             r'^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$',
           ).hasMatch(registration) ||
+          registrationGeneration is! String ||
+          !RegExp(
+            r'^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$',
+          ).hasMatch(registrationGeneration) ||
           deadline == null ||
-          !deadline.isAfter(DateTime.now().toUtc()))
+          !deadline.isAfter(ref.read(backgroundOrderAlertClockProvider)()))
         throw StateError('alert_registration_unavailable');
       final bound = await bridge.bind({
         'identity': attempt.identity,
         'generation': prepared['generation'],
         'registration_id': registration,
+        'registration_generation': registrationGeneration,
         'endpoint': endpoint,
         'authority_expires_at': deadline.toIso8601String(),
       });
       if (!await _foregroundFor(attempt)) return;
-      if (!bound || !deadline.isAfter(DateTime.now().toUtc()))
+      if (!bound ||
+          !deadline.isAfter(ref.read(backgroundOrderAlertClockProvider)()))
         throw StateError('alert_native_binding_refused');
       _authorityExpiresAt = deadline;
       state = const BackgroundOrderAlertState(available: true, enabled: true);
       _finishIntent();
       _publish(ref.read(onlineOrderInboxControllerProvider));
+      _armAuthorityRenewal();
     } catch (error) {
       if (error is _RegistrationUncertain) _registrationUncertain = true;
       if (_owns(attempt)) {
@@ -472,9 +525,40 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         _active = null;
         if (identical(_nativeOwner, attempt)) _nativeOwner = null;
         if (!attempt.done.isCompleted) attempt.done.complete();
-        if (!_disposed && _intent != null) _kick();
+        if (!_disposed && _tokenRefreshPending) {
+          _kick(force: true);
+        } else if (!_disposed && _intent != null) {
+          _kick();
+        }
       }
     }
+  }
+
+  void _armAuthorityRenewal() {
+    _authorityRenewal?.cancel();
+    _authorityRenewal = null;
+    final deadline = _authorityExpiresAt;
+    if (!_foreground ||
+        !state.enabled ||
+        deadline == null ||
+        !_authorized(_generation) ||
+        _off ||
+        _explicitFailure)
+      return;
+    final now = ref.read(backgroundOrderAlertClockProvider)();
+    var renewalAt = deadline.subtract(const Duration(minutes: 2));
+    final throttled = _lastRegistrationAttempt?.add(const Duration(minutes: 1));
+    if (throttled != null && renewalAt.isBefore(throttled))
+      renewalAt = throttled;
+    if (renewalAt.isAfter(deadline)) renewalAt = deadline;
+    final generation = _generation;
+    _authorityRenewal = Timer(
+      renewalAt.isAfter(now) ? renewalAt.difference(now) : Duration.zero,
+      () {
+        _authorityRenewal = null;
+        if (_current(generation) && _foreground) _kick();
+      },
+    );
   }
 
   void _publish(OnlineOrderInboxState inbox) {
@@ -500,12 +584,15 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
 
   void onPaused() {
     _foreground = false;
+    _authorityRenewal?.cancel();
+    _authorityRenewal = null;
   }
 
   void onResume() {
     _foreground = true;
     _wake();
-    if (_bridge != null) _kick();
+    if (_bridge != null) _kick(force: _tokenRefreshPending);
+    _armAuthorityRenewal();
   }
 
   Future<bool> consumeInboxTap() async {

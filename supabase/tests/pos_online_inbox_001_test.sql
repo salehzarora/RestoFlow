@@ -44,7 +44,7 @@ insert into restaurant_storefront_profiles(restaurant_id,organization_id,storefr
 select pg_temp.pi_id('restaurant_b'),pg_temp.pi_id('org_b'),pg_temp.pi_id('branch_b'),'pi001-bravo','PI001 Bravo',true,h,true from _pi_hours;
 insert into web_order_channel_settings(organization_id,restaurant_id,branch_id,submission_enabled)
 select organization_id,restaurant_id,id,true from branches where id in
- (pg_temp.pi_id('branch'),pg_temp.pi_id('sibling'),pg_temp.pi_id('branch_b'));
+ (pg_temp.pi_id('branch'),pg_temp.pi_id('sibling'),pg_temp.pi_id('branch_b')) on conflict(branch_id) do update set submission_enabled=excluded.submission_enabled;
 
 -- Two POS tills in the same branch, one sibling branch and one foreign tenant.
 create temp table _pi_staff as select n,

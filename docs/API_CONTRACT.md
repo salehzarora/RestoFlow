@@ -1539,6 +1539,39 @@ Intake OFF preserves admitted work; separate emergency print OFF revokes future
 claim/begin authority without deleting identities, outcomes or audit evidence.
 See [scope, operator API, release sequence and OFF procedure](MAPSBURGER_ALWAYS_ON_WEB_ORDERS.md).
 
+### 4.53 Platform online orders (Issue #353; proposed D-049)
+
+- `public.submit_web_order_platform_request(p_slug text, p_client_request_id uuid,
+  p_status_token_hash text, p_order jsonb)`: service-role only, same bounded input,
+  authoritative pricing and capability/idempotency response as §4.48/4.52. The
+  database derives active published branch admission. Only a new successful
+  request is enrolled; historical requests and all legacy receipts remain intact.
+  Normal `web-order-submit` routes here; status/private pilot routes are unchanged.
+- `public.get_online_order_settings(p_organization_id uuid, p_restaurant_id uuid,
+  p_branch_id uuid)` and `public.set_online_order_settings` with the same scope
+  plus `p_ordering_enabled`, `p_printing_enabled`, `p_alerts_enabled` booleans:
+  authenticated scoped manager/owner controls. No anonymous/service-role client
+  access; changes are audited. Ordinary merchant Pickup and temporary pause remain
+  available through existing Storefront settings UI; these additional switches
+  are API controls, not a new Dashboard screen.
+- `pos_kitchen_print_containment` adds `web_order_printing_enabled`. Missing/false
+  is denied. A true value is usable only from fresh credential-bound runtime
+  evidence for exact enrolled web targets, never ordinary imports, ACKs or reprints.
+  Existing claim/begin/finish signatures and irreversible single-send semantics
+  remain; server scope/readiness/hold/lease validation is mandatory.
+- Native POST `/pos-order-alert-status/token/refresh` accepts exactly
+  `{installation_id, fcm_token, generation}` and the existing independent status bearer.
+  The service-only `pos_refresh_order_alert_token` changes token routing only for
+  the same currently authorized registration with matching generation. Genuine
+  foreground registration and token changes rotate generation; stale native
+  writes cannot overwrite a newer binding. The response projects registration
+  ID, new generation, server time and unchanged bounded authority expiry. It cannot enable,
+  register, renew an employee session or access order/print authority.
+- Shared continuous dispatch still requires master ON, independent worker
+  authentication and database authorization. Optional `POS_ORDER_ALERT_MODE=pilot`
+  requires the strict maximum-30-minute UTC window. No tenant identifiers or
+  credentials enter customer notification responses. See the [platform contract](BIZBOT_PLATFORM_ONLINE_ORDERS_353.md).
+
 ## 5. Cross-References
 - Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034, D-037, D-039, D-040, D-041, D-042, D-043, D-044, D-045, D-046, D-047).
 - Open questions: [OPEN_QUESTIONS](OPEN_QUESTIONS.md) (Q-004, Q-007, Q-008, Q-009, Q-010, Q-011, Q-012, Q-014, Q-015, Q-017, Q-028, Q-029, Q-030, Q-031, Q-032, Q-033, Q-034, Q-035, Q-036, Q-039, Q-040, Q-041, Q-042, Q-043, Q-044, Q-045, Q-046).

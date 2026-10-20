@@ -15,7 +15,7 @@ const WORKER = "b".repeat(64);
 const NOW = Date.parse("2026-10-17T09:05:00Z");
 const sha = (s) => createHash("sha256").update(s).digest("hex");
 const values = () => ({ SUPABASE_URL: BASE, SUPABASE_SERVICE_ROLE_KEY: "synthetic-server-key",
-  WEB_ORDERS_ENABLED: "true", POS_ORDER_ALERT_INSTANT_WAKE_ENABLED: "true", POS_ORDER_ALERTS_ENABLED: "true",
+  WEB_ORDERS_ENABLED: "true", POS_ORDER_ALERT_INSTANT_WAKE_ENABLED: "true", POS_ORDER_ALERT_MODE: "pilot", POS_ORDER_ALERTS_ENABLED: "true",
   POS_ORDER_ALERT_WORKER_SECRET: WORKER,
   POS_ALERT_PILOT_START_UTC: "2026-10-17T09:00:00Z", POS_ALERT_PILOT_END_UTC: "2026-10-17T09:30:00Z" });
 const body = () => ({ action: "submit", slug: "mapsburger", request_id: ID, status_token: STATUS,
@@ -75,7 +75,7 @@ test("new committed pending Maps Burger result schedules one private bounded bat
 for (const [label, change, output] of [
   ["replay", {}, success({ replayed: true })],
   ...["accepted", "rejected", "expired"].map((status) => [status, {}, success({ status })]),
-  ["other tenant", { slug: "other-menu" }, success()],
+
   ["status read", { action: "status", order: undefined }, success()],
   ["business denial", {}, { ok: false, error: "ordering_unavailable" }],
   ["invalid result", {}, success({ replayed: undefined })],
@@ -196,3 +196,14 @@ test("late headers from an abort-ignoring transport are discarded safely", async
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(cancelled, true);
 });
+
+for (const slug of ["tenant-a", "tenant-b", "new-restaurant", "mapsburger"]) {
+  test(`continuous committed ${slug} submission wakes the shared dispatcher without pilot/device configuration`, async () => {
+    const h = harness({ env: { POS_ORDER_ALERT_MODE: undefined, POS_ALERT_PILOT_START_UTC: undefined, POS_ALERT_PILOT_END_UTC: undefined },
+      now: () => NOW + 365 * 86400000 });
+    assert.equal((await h.handler(request({ ...body(), slug }))).status, 200);
+    await Promise.all(h.tasks);
+    assert.equal(h.tasks.length, 1); assert.equal(h.wakeCalls().length, 1);
+    assert.ok(h.calls[0].url.endsWith("/submit_web_order_platform_request"));
+  });
+}

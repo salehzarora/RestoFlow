@@ -8686,7 +8686,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get storefrontPickupHelp =>
-      'למידע בלבד: בגרסה הזו דף החנות מיועד לצפייה בלבד, ולכן הזמנה מקוונת כבויה.';
+      'הפעלת איסוף עצמי מאפשרת קבלת בקשות מקוונות כשהתפריט ודף החנות מפורסמים, מוכנים ובשעות הפעילות. כבו את האפשרות או השתמשו בהשהיה זמנית כדי לעצור בקשות חדשות.';
 
   @override
   String get storefrontPauseTitle => 'השהיה זמנית';
@@ -9483,4 +9483,8 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posBackgroundOrderAlertsUnavailable =>
       'התראות הרקע אינן זמינות. רענון תיבת ההזמנות הקיימת ממשיך לפעול.';
+
+  @override
+  String get posBackgroundOrderAlertsSignIn =>
+      'הרשאת ההתראות ברקע הסתיימה. יש להתחבר שוב כדי לחדש אותה.';
 }
