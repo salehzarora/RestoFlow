@@ -123,6 +123,17 @@ test('AR/HE/EN cover all four real states, recovery uncertainty and the same ten
     assert.ok(!url.includes('?') && !url.includes('token'));
   }
 });
+test('AR/HE/EN rejected status exposes only the decoded public field through escaped tenant text', () => {
+  assert.equal(orderMessages('ar').rejectionReasonLabel, 'السبب:');
+  assert.equal(orderMessages('he').rejectionReasonLabel, 'הסיבה:');
+  assert.equal(orderMessages('en').rejectionReasonLabel, 'Reason:');
+  const status = read('ui/storefront/request/LiveRequestRuntime.tsx');
+  assert.ok(status.includes("status === 'rejected' && result?.customer_rejection_reason"));
+  assert.ok(status.includes('<TenantText>{result.customer_rejection_reason}</TenantText>'));
+  assert.ok(status.includes('{copy.rejectionReasonLabel}'));
+  for (const banned of ['dangerouslySetInnerHTML', 'innerHTML', 'result.reason', 'result.rejection_reason']) assert.ok(!status.includes(banned), banned);
+  assert.match(read('ui/storefront/request/liveRequest.module.css'), /\.customerReason\s*\{\s*overflow-wrap:\s*anywhere;/);
+});
 
 test('live checkout uses memory carts and private status; no demo gateway or destructive note sanitization enters its flow', () => {
   const live = read('ui/storefront/checkout/LiveFlowBody.tsx');

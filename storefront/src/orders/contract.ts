@@ -44,6 +44,8 @@ export interface WebOrderResult {
   readonly expires_at: string;
   readonly totals: WebOrderTotals;
   readonly replayed: boolean;
+  /** Future explicitly public decisions only; absent for legacy/private reasons and other states. */
+  readonly customer_rejection_reason?: string;
 }
 export type WebOrderErrorCode =
   | 'invalid_request' | 'not_found' | 'ordering_unavailable' | 'idempotency_conflict'

@@ -19,9 +19,9 @@ export function validateOrderOrigin(origin: string): typeof WEB_ORDER_ORIGIN {
 }
 /** Exact response projection, including rejection of extra customer/credential fields. */
 export function decodeOrderResponse(value: unknown, status: number, identity: OrderIdentity, action: 'submit' | 'status'): OrderOutcome {
-  const object = exactObject(value, ['ok'], ['request_id', 'status', 'expires_at', 'totals', 'replayed', 'error', 'uncertain']);
+  const object = exactObject(value, ['ok'], ['request_id', 'status', 'expires_at', 'totals', 'replayed', 'customer_rejection_reason', 'error', 'uncertain']);
   if (object.ok === true) {
-    exactObject(object, ['ok', 'request_id', 'status', 'expires_at', 'totals', 'replayed']);
+    exactObject(object, ['ok', 'request_id', 'status', 'expires_at', 'totals', 'replayed'], ['customer_rejection_reason']);
     if (status !== 200 || object.request_id !== identity.request_id || typeof object.status !== 'string' || !STATUSES.includes(object.status) || typeof object.replayed !== 'boolean') invalid();
     if (typeof object.expires_at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(object.expires_at) || !Number.isFinite(Date.parse(object.expires_at))) invalid();
     const totals = exactObject(object.totals, ['currency_code', 'subtotal_minor', 'tax_total_minor', 'grand_total_minor']);
@@ -31,7 +31,10 @@ export function decodeOrderResponse(value: unknown, status: number, identity: Or
     const tax_total_minor = totals.tax_total_minor as number;
     const grand_total_minor = totals.grand_total_minor as number;
     if (subtotal_minor + tax_total_minor !== grand_total_minor) invalid();
-    const result: WebOrderResult = Object.freeze({ ok: true, request_id: identity.request_id, status: object.status as WebOrderStatus, expires_at: object.expires_at, totals: Object.freeze({ currency_code: 'ILS', subtotal_minor, tax_total_minor, grand_total_minor }), replayed: object.replayed });
+    const hasReason = Object.hasOwn(object, 'customer_rejection_reason');
+    const reason = object.customer_rejection_reason;
+    if (hasReason && (object.status !== 'rejected' || typeof reason !== 'string' || reason !== reason.trim() || [...reason].length < 1 || [...reason].length > 240 || /[\x00-\x1f\x7f\p{Cs}]/u.test(reason))) invalid();
+    const result: WebOrderResult = Object.freeze({ ok: true, request_id: identity.request_id, status: object.status as WebOrderStatus, expires_at: object.expires_at, totals: Object.freeze({ currency_code: 'ILS', subtotal_minor, tax_total_minor, grand_total_minor }), replayed: object.replayed, ...(hasReason ? { customer_rejection_reason: reason as string } : {}) });
     return { kind: 'known', result };
   }
   exactObject(object, ['ok', 'error'], ['request_id', 'uncertain']);

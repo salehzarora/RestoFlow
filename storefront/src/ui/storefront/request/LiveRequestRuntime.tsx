@@ -37,7 +37,7 @@ export function LiveRequestRuntime({ locale, copy, slug, origin, tenant, onOrder
     <div className={s.body}>
       {current ? <div className={`${s.card} ${tone}`} data-sf-status-card={status}>
         <span className={s.cardIcon} aria-hidden="true">{status === 'accepted' ? <CheckIcon /> : status === 'rejected' ? <CloseIcon /> : <ClockIcon />}</span>
-        <div className={s.cardText} role="status" aria-live="polite"><h1 className={s.cardTitle}>{current.title}</h1><p className={s.cardBody}>{current.body}</p></div>
+        <div className={s.cardText} role="status" aria-live="polite"><h1 className={s.cardTitle}>{current.title}</h1><p className={s.cardBody}>{current.body}</p>{status === 'rejected' && result?.customer_rejection_reason ? <p className={`${s.cardBody} ${s.customerReason}`} data-sf-customer-rejection-reason="">{copy.rejectionReasonLabel} <TenantText>{result.customer_rejection_reason}</TenantText></p> : null}</div>
       </div> : null}
       {message ? <Banner tone="info" icon={<InfoIcon />} title={message} testId={`status-${snapshot.phase}`} alert={!busy} /> : null}
       {controller ? <div className={s.actions}><button className={s.chatOutline} type="button" disabled={busy} onClick={() => { void (snapshot.canRetry ? controller.retry() : controller.refresh()); }} data-sf-status-action={snapshot.canRetry ? 'retry-original' : 'refresh'}>{snapshot.canRetry ? copy.retry : copy.refresh}</button></div> : null}

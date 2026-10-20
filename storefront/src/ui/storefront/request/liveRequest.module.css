@@ -146,6 +146,10 @@
      shipped dark preset, so the body stays at 1 and keeps the walked pair. */
 }
 
+.customerReason {
+  overflow-wrap: anywhere;
+}
+
 .toneInfo {
   background: var(--infobg);
   color: var(--info);
