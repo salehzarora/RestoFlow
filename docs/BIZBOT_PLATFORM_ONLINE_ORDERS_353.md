@@ -56,8 +56,11 @@ the one physical-send reservation. Language, preparation counts, BLE, SQLite,
 encryption keys, renderer and manual reprints are unchanged.
 
 The compatibility target-only projection supports existing installed POS for its
-latest accepting lease. The updated POS also handles distinct concurrent exact
-callbacks without replacing one request's authority with another's. A later
+latest accepting lease. It is at-most-once safe, but v65 can accept a second
+request while the first print callback is delayed; its latest-lease-only adapter
+can then deny the first callback without paper. This is a deployment gate, not
+a reason to retry an accepted order. The updated POS handles distinct concurrent
+exact callbacks without replacing one request's authority with another's. A later
 explicit BLOCKED revision or branch print-disable invalidates platform leases.
 It does not revive prior leases when printing is later re-enabled.
 
@@ -111,19 +114,26 @@ background coverage and must not be bypassed by resetting providers or data.
    `20261020143657_bizbot_platform_online_orders_353.sql` by the approved versioned
    migration process. Independently verify schema AND history before retrying an
    uncertain outcome. Never repair history or replay a COMMIT automatically.
-3. Deploy the reviewed status and dispatcher functions, then web-order-submit
-   (its new RPC must exist first). Verify their exact source and default-OFF
-   responses. Deploy the dedicated scheduler and Storefront through their normal
-   projects, retaining fixed backend destination, authentication and isolation.
+3. Deploy the reviewed status and dispatcher functions and dedicated scheduler
+   with notifications OFF. Verify exact source and default-OFF responses. Keep
+   the current submission function using its legacy normal RPC and retain the
+   current Storefront until the accepting-client gate below is satisfied.
 4. Build/install updated POS through the separate official signed release
-   pipeline when approved. Do not overwrite prior APKs, reset pairing or clear
-   local data. Current production POS and historical receipt compatibility must
-   be verified before broader rollout.
-5. With operating authority confirmed, enable shared notification infrastructure
+   pipeline when approved. Every active web-order accepting POS in printer-only
+   branches must use the updated exact-callback runtime; alternatively the owner
+   must keep older acceptors stopped. Verify this before switching normal
+   submissions. Do not overwrite prior APKs, reset pairing, clear local data or
+   replay accepted orders. Legacy receipt compatibility remains required.
+5. Only after that gate, deploy web-order-submit switching normal submissions to
+   the platform RPC, then the Storefront through its normal project. Verify exact
+   deployed source, live checkout compatibility and fixed backend/authentication
+   boundaries. This is one platform cutover; new restaurants/devices thereafter
+   onboard normally without per-tenant deployment or backend activation.
+6. With operating authority confirmed, enable shared notification infrastructure
    once, then normal device consent/registration. Do not require per-restaurant
    SQL, secrets, allowlists or deployments. Verify a second tenant and a newly
    paired third device without backend changes.
-6. Complete attended end-to-end acceptance before declaring platform readiness:
+7. Complete attended end-to-end acceptance before declaring platform readiness:
    tenant A with A1/A2, tenant B with B1; website submission, authorized Inbox and
    background alerts, one competing Accept winner and one configured physical
    ticket, B isolation, new A3 onboarding, revoked A2, expiry/retry, offline printer
