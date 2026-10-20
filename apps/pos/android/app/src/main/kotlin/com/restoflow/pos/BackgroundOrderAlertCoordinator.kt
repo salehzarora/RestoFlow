@@ -31,6 +31,8 @@ import java.net.URL
 import java.security.SecureRandom
 import java.util.UUID
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /** Process singleton: foreground clip transport and bounded background coordinator share ownership. */
 internal class BackgroundOrderAlertCoordinator private constructor(context: Context) {
@@ -72,16 +74,24 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     private var channel: MethodChannel? = null
     private var service: BackgroundOrderAlertService? = null
     private var pendingInboxTap = false
-    private var lastReconcileAt = -60_000L
-    private var reconciling = false
-    private var reconcileScheduled = false
-    private var hintDuringRead = false
     private var visibilityEpoch = 0L
     private var fallbackWanted = false
     private val tokenLane = BackgroundOrderAlertTokenLane()
     // Visibility expiry must not invalidate an authenticated read already in flight for B.
     private val expireFallback = Runnable { notifications().cancel(FALLBACK_NOTIFICATION_ID) }
-    private val reconcileHint = Runnable { reconcileScheduled = false; reconcile() }
+    private val reconciliation = BackgroundOrderAlertReconciliation(
+        now = { SystemClock.elapsedRealtime() },
+        schedule = { delay, action ->
+            val task = Runnable { action() }
+            handler.postDelayed(task, delay)
+            val cancel: () -> Unit = { handler.removeCallbacks(task) }
+            cancel
+        },
+        eligible = { !foreground && (service != null || fallbackWanted) && authorityValid() },
+        keepPolling = { service != null },
+        read = { readStatus(it) },
+        failClosed = { state.clear(); stopBackground() },
+    )
     private val playback = OnlineOrderAlertPlayback(
         createClip = { BackgroundAlertClip(context) },
         policyAllowsPlayback = { audioAllowed() },
@@ -106,7 +116,6 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                 state.played(now)
             }
             service?.keepAwake()
-            if (now - lastReconcileAt >= 60_000L) reconcile()
             state.nextWake(now)?.let { handler.postDelayed(this, it) }
         }
     }
@@ -205,6 +214,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         // A fresh foreground bind supersedes every older native HTTP completion,
         // including a same-token renewal with a later genuine PIN deadline.
         tokenLane.finishPreparation()
+        reconciliation.cancel()
         record.put("identity", identity).put("endpoint", endpoint).put("registration_id", registration)
             .put("registration_generation", registrationGeneration)
             .put("authority_deadline", SystemClock.elapsedRealtime() + remaining.coerceAtMost(8 * 60 * 60_000L))
@@ -242,8 +252,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         playback.setForeground(true) // Shared clip eligibility; audio policy and ownership remain independently fenced.
         if (value) {
             handler.removeCallbacks(tick)
-            handler.removeCallbacks(reconcileHint)
-            reconcileScheduled = false
+            reconciliation.cancel()
             cancelFallback()
             service?.stopSelf()
             service = null
@@ -405,12 +414,12 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
 
     fun serviceStarted(value: BackgroundOrderAlertService) {
         if (foreground || !authorityValid() || !channelAllowed()) { value.stopSelf(); return }
-        if (service === value) { reconcile(); return }
+        if (service === value) { scheduleReconcile(); return }
         service = value
         cancelFallback()
         state.clear()
         playback.setForeground(true)
-        reconcile() // Fresh authenticated truth before any background clip, including handoff.
+        scheduleReconcile() // Fresh authenticated truth before any background clip, including handoff.
     }
 
     fun serviceStartRefused() { if (service == null) playback.stop(); fallbackNotification() }
@@ -419,16 +428,13 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         if (service !== value) return
         service = null
         handler.removeCallbacks(tick)
-        handler.removeCallbacks(reconcileHint)
-        reconcileScheduled = false
-        hintDuringRead = false
+        reconciliation.cancel()
         playback.stop()
     }
 
     private fun stopBackground() {
         handler.removeCallbacks(tick)
-        handler.removeCallbacks(reconcileHint)
-        reconcileScheduled = false
+        reconciliation.cancel()
         service?.stopSelf()
         service = null
         playback.stop()
@@ -437,71 +443,75 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     }
 
     private fun scheduleReconcile() {
-        if (reconcileScheduled) return
-        reconcileScheduled = true
-        val delay = (5_000 - (SystemClock.elapsedRealtime() - lastReconcileAt)).coerceAtLeast(0)
-        handler.postDelayed(reconcileHint, delay)
+        reconciliation.request()
     }
 
-    private fun reconcile() {
-        if (foreground || (service == null && !fallbackWanted) || !authorityValid()) return
-        if (reconciling) { hintDuringRead = true; return }
-        reconciling = true
-        lastReconcileAt = SystemClock.elapsedRealtime()
+    private fun readStatus(work: BackgroundOrderAlertReconciliation.Read): () -> Unit {
         val expected = generation
         val expectedVisibility = visibilityEpoch
         val expectedService = service
         val startedAt = SystemClock.elapsedRealtime()
         val snapshot = JSONObject(record.toString())
-        network.execute {
+        val cancelled = AtomicBoolean(false)
+        val connection = AtomicReference<HttpURLConnection?>(null)
+        val future = network.submit {
             var denied = false
-            val response = try { request(snapshot, false, if (expectedService == null) 3_000 else 7_000) }
-                catch (_: AuthorityDenied) { denied = true; null } catch (_: Exception) { null }
+            val response = try {
+                request(snapshot, false, if (expectedService == null) 3_000 else 7_000,
+                    cancelled = { cancelled.get() }, opened = {
+                        connection.set(it)
+                        if (cancelled.get()) it.disconnect()
+                    })
+            } catch (_: AuthorityDenied) { denied = true; null } catch (_: Exception) { null }
             handler.post {
-                reconciling = false
-                if (expected != generation || expectedVisibility != visibilityEpoch || foreground ||
-                    service !== expectedService || (service == null && !fallbackWanted) || !authorityValid() ||
-                    snapshot.optString("registration_id") != record.optString("registration_id")) {
-                    if (!foreground && (service != null || fallbackWanted) && authorityValid()) scheduleReconcile()
-                    return@post
-                }
-                if (denied) { clearAuthority(); return@post }
-                try {
-                    check(response != null && response.getBoolean("ok"))
-                    check(response.getString("registration_id") == record.optString("registration_id"))
-                    val serverTime = parseTime(response.getString("server_time")) ?: error("invalid time")
-                    val expiry = parseTime(response.getString("authority_expires_at")) ?: error("invalid expiry")
-                    val array = response.getJSONArray("requests")
-                    check(array.length() <= 50)
-                    val values = linkedMapOf<String, Long>()
-                    for (i in 0 until array.length()) {
-                        val row = array.getJSONObject(i)
-                        val id = row.getString("request_id")
-                        val deadline = parseTime(row.getString("expires_at")) ?: error("invalid deadline")
-                        check(uuid(id) && values.put(id, deadline) == null)
+                reconciliation.complete(work) completion@ {
+                    if (expected != generation || expectedVisibility != visibilityEpoch || foreground ||
+                        service !== expectedService || (service == null && !fallbackWanted) || !authorityValid() ||
+                        snapshot.optString("registration_id") != record.optString("registration_id")) {
+                        if (!foreground && (service != null || fallbackWanted) && authorityValid()) scheduleReconcile()
+                        return@completion
                     }
-                    val conservativeServerNow = serverTime + (SystemClock.elapsedRealtime() - startedAt)
-                    val remaining = minOf(expiry - conservativeServerNow, record.optLong("authority_deadline") - SystemClock.elapsedRealtime())
-                    if (service == null) showVerifiedFallback(values, conservativeServerNow, remaining)
-                    else {
-                        state.replace(values, conservativeServerNow, remaining, SystemClock.elapsedRealtime())
-                        handler.removeCallbacks(tick)
-                        tick.run()
+                    if (denied) { clearAuthority(); return@completion }
+                    try {
+                        check(response != null && response.getBoolean("ok"))
+                        check(response.getString("registration_id") == record.optString("registration_id"))
+                        val serverTime = parseTime(response.getString("server_time")) ?: error("invalid time")
+                        val expiry = parseTime(response.getString("authority_expires_at")) ?: error("invalid expiry")
+                        val array = response.getJSONArray("requests")
+                        check(array.length() <= 50)
+                        val values = linkedMapOf<String, Long>()
+                        for (i in 0 until array.length()) {
+                            val row = array.getJSONObject(i)
+                            val id = row.getString("request_id")
+                            val deadline = parseTime(row.getString("expires_at")) ?: error("invalid deadline")
+                            check(uuid(id) && values.put(id, deadline) == null)
+                        }
+                        val conservativeServerNow = serverTime + (SystemClock.elapsedRealtime() - startedAt)
+                        val remaining = minOf(expiry - conservativeServerNow, record.optLong("authority_deadline") - SystemClock.elapsedRealtime())
+                        if (service == null) showVerifiedFallback(values, conservativeServerNow, remaining)
+                        else {
+                            state.replace(values, conservativeServerNow, remaining, SystemClock.elapsedRealtime())
+                            handler.removeCallbacks(tick)
+                            tick.run()
+                        }
+                    } catch (_: Exception) {
+                        // Unknown state is not permission to continue ringing indefinitely.
+                        state.clear()
+                        stopBackground()
                     }
-                    if (hintDuringRead && (service != null || fallbackWanted)) {
-                        hintDuringRead = false
-                        scheduleReconcile()
-                    }
-                } catch (_: Exception) {
-                    // Unknown state is not permission to continue ringing indefinitely.
-                    state.clear()
-                    stopBackground()
                 }
             }
         }
+        return {
+            cancelled.set(true)
+            try { connection.get()?.disconnect() } catch (_: Exception) { }
+            future.cancel(true)
+        }
     }
 
-    private fun request(snapshot: JSONObject, disable: Boolean, timeoutMs: Int = 7_000, token: String? = null): JSONObject? {
+    private fun request(snapshot: JSONObject, disable: Boolean, timeoutMs: Int = 7_000, token: String? = null,
+        cancelled: () -> Boolean = { false }, opened: (HttpURLConnection) -> Unit = {}): JSONObject? {
+        if (cancelled()) return null
         val endpoint = snapshot.optString("endpoint")
         if (!exactEndpoint(endpoint) || !snapshot.has("status_secret") || !uuid(snapshot.optString("installation_id"))) return null
         if (token != null && (disable || !uuid(snapshot.optString("registration_generation")) ||
@@ -510,6 +520,8 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         val connection = URL(endpoint + path).openConnection() as HttpURLConnection
         val startedAt = SystemClock.elapsedRealtime()
         return try {
+            opened(connection)
+            check(!cancelled())
             connection.instanceFollowRedirects = false
             connection.requestMethod = "POST"
             connection.connectTimeout = timeoutMs
@@ -527,6 +539,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                 val output = java.io.ByteArrayOutputStream()
                 val buffer = ByteArray(1024)
                 while (output.size() <= 16_384) {
+                    check(!cancelled())
                     check(SystemClock.elapsedRealtime() - startedAt <= timeoutMs * 2L)
                     val read = it.read(buffer, 0, minOf(buffer.size, 16_385 - output.size()))
                     if (read < 0) break
