@@ -2,6 +2,7 @@ import { RequestError } from "./errors.mjs";
 import { readRequestJson, readStrictJson } from "./json.mjs";
 import { hashStatusToken, validateRequest } from "./validation.mjs";
 import { authorizeTestSubmission } from "./test-admission.mjs";
+import { scheduleInstantWake } from "./instant-wake.mjs";
 
 const DEFAULT_ORIGIN = "https://menu.bizbot.systems";
 const PUBLIC_STATUSES = new Set(["pending", "expired", "accepted", "rejected"]);
@@ -116,7 +117,8 @@ async function callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, 
 }
 
 /** Dependency injection is only for offline tests; production uses built-in fetch/WebCrypto. */
-export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl = globalThis.crypto, timeoutMs = 10_000, now = Date.now } = {}) {
+export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl = globalThis.crypto, timeoutMs = 10_000, now = Date.now,
+  waitUntil, wakeTimeoutMs = 5000 } = {}) {
   if (typeof getEnv !== "function") throw new TypeError("getEnv is required");
   return async function handler(request) {
     let origin;
@@ -165,7 +167,14 @@ export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl
       if (result.failed) {
         return json({ ok: false, error: input.action === "submit" ? "submission_outcome_unknown" : "status_unavailable", request_id: input.request_id, uncertain: input.action === "submit" }, result.status, origin);
       }
-      return json(result.body, result.status, origin);
+      const response = json(result.body, result.status, origin);
+      // Only a validated, committed NEW normal-live Maps Burger pending result.
+      // Construct the unchanged public response first; never await notification work.
+      if (input.action === "submit" && input.slug === "mapsburger" && !testPermit && !pilotSubmission
+        && result.body.ok === true && result.body.status === "pending" && result.body.replayed === false) {
+        scheduleInstantWake({ getEnv, waitUntil, fetchImpl, now, timeoutMs: wakeTimeoutMs });
+      }
+      return response;
     } catch (error) {
       if (error instanceof RequestError) return json({ ok: false, error: error.code }, error.status, origin);
       return json({ ok: false, error: "service_unavailable" }, 503, origin);

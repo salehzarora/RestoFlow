@@ -65,14 +65,21 @@ hints only for already-recorded notification deliveries. No historical backfill.
 
 `pos_claim_order_alert_deliveries(integer)` leases at most 20 rows (Edge asks 10),
 using SKIP LOCKED, unique registration-generation/request/kind identity, two-minute
-leases (longer than the bounded ten-item worker invocation), and a maximum of three sends. `pos_finish_order_alert_delivery` accepts
+leases, and a maximum of three sends. The existing HTTP timeout covers headers;
+body reads have byte limits but no complete deadline, so worker completion before
+lease expiry is not guaranteed. `pos_finish_order_alert_delivery` accepts
 only the exact lease. Retries wait at least one minute. UNREGISTERED disables only
 the original registration generation; an old send cannot disable a rotated token.
 These RPCs are service-only, never callable by anon/authenticated clients.
 
 Worker POST `/functions/v1/pos-order-alert-dispatch`, empty JSON `{}`, requires its
 own distinct random 256-bit `POS_ORDER_ALERT_WORKER_SECRET` plus
-`POS_ORDER_ALERTS_ENABLED=true`. Status requires the same default-OFF environment
+`POS_ORDER_ALERTS_ENABLED=true`. Every caller must also satisfy the strict Edge-side
+`POS_ALERT_PILOT_START_UTC` / `POS_ALERT_PILOT_END_UTC` gate: valid UTC, start
+inclusive/end exclusive, maximum 30 minutes. Missing/unsafe settings deny before
+OAuth/claims; rechecks before claims/sends prevent window renewal of an in-flight
+invocation. Finish after an already-issued send remains allowed for reconciliation.
+Status requires the same default-OFF environment
 gate. The worker needs `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` server-side and
 `POS_ORDER_ALERT_FCM_SERVICE_ACCOUNT`, a securely installed JSON service-account
 credential. Never put credentials or tokens in Git, URLs, app bundles or chat.
@@ -112,3 +119,12 @@ historical print holds. No printer/queue reset, ACK or resend is a rollback.
 Official references checked for this implementation:
 - https://firebase.google.com/docs/cloud-messaging/send/v1-api
 - https://supabase.com/docs/guides/functions/schedule-functions
+
+## Best-effort instant wake
+
+Normal Maps Burger submissions can opt in to one post-commit batch wake using the
+same authenticated dispatcher. It remains default OFF via
+`POS_ORDER_ALERT_INSTANT_WAKE_ENABLED`. Cron remains required for missed wakes,
+retries, cancellation and expiry. See the [instant wake preparation and shutdown
+gates](../../../docs/BIZBOT_INSTANT_NOTIFICATION_WAKE_001.md).
+No alternate notification or printing authority is added.
