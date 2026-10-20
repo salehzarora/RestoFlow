@@ -1574,11 +1574,15 @@ See [scope, operator API, release sequence and OFF procedure](MAPSBURGER_ALWAYS_
 
 ### 4.54 POS decision wake and explicit customer rejection reason (Issue #356)
 
-- Native POST `pos-web-order-decision` accepts exactly `action` (`accept` or
+- Authenticated POS POST `pos-web-order-decision` accepts exactly `action` (`accept` or
   `reject`), `pin_session_id`, `device_id`, `device_session_token`, `request_id`,
   `decision_id`, plus `reason` for rejection only. Real caller JWT and existing
   employee/PIN/device/tenant checks are mandatory; service-role decision
-  impersonation and browser access are not alternatives.
+  impersonation is not an alternative. Native calls omit Origin; existing real
+  web POS uses exactly `https://app.bizbot.systems` or the documented legacy
+  `https://resto-flow-phi.vercel.app`. Only these origins receive CORS POST/OPTIONS
+  headers for `authorization, apikey, content-type, x-client-info`, without
+  cookies/allow-credentials. Arbitrary origins are denied; OPTIONS never decides.
 - Accept delegates `pos_accept_web_order`; explicit customer rejection delegates
   `pos_reject_web_order_customer`. Existing `pos_reject_web_order` remains a
   backward-compatible staff-private contract. The new rejection records the

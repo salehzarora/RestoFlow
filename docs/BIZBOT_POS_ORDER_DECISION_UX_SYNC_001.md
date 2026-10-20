@@ -16,6 +16,9 @@ There is no new delivery queue or sender, synchronous FCM transaction, or worker
 credential in POS. Replays and failures do not wake; failure to schedule/send does
 not change a successful decision. The controller retains its original decision
 identity for uncertain recovery, with no fallback decision RPC.
+The existing authenticated web POS remains supported through exact product-origin
+CORS (canonical and documented legacy host); native calls omit Origin. Preflight
+never authorizes a decision, and all real POSTs retain JWT/PIN/device checks.
 
 Android already had cancel-hint reconciliation and a 60-second audio tick. The
 structural gap was a shared queued status read without an absolute completion
@@ -67,7 +70,8 @@ does not modify these production records or any operational gate.
 2. Deploy the additive Storefront decoder/status UI first. Older already-open
    browser tabs have a strict decoder and may need a refresh before receiving a
    newly public reason. Older responses with the field omitted remain valid.
-3. Apply only this reviewed additive migration through the governed exact-version
+3. Apply only `20261020212503_bizbot_pos_order_decision_ux_sync_001.sql`
+   through the governed exact-version
    process. Independently verify schema, ACLs/RLS and migration history before any
    retry if the commit outcome is uncertain. No historical reason backfill.
 4. Deploy the new decision Edge function and updated public response whitelist.
