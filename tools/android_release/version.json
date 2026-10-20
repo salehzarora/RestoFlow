@@ -99,6 +99,41 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.66",
+      "versionCode": 66,
+      "signing": "restoflow-production",
+      "status": "BUILT / PRODUCTION-SIGNED / VERIFIED / CONSUMED / NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED",
+      "applicationSourceSha": "281a64319b364b1d4cac0afb1ec8ec724d4e636f",
+      "sourceSha": "281a64319b364b1d4cac0afb1ec8ec724d4e636f",
+      "buildDate": "2026-10-20",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v66-281a643.apk",
+          "packageId": "com.restoflow.pos",
+          "sizeBytes": 76147301,
+          "sha256": "344cca593edf2511c0d88d8804223205fa54cadce0014c96d0def8e02772a177"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v66-281a643.apk",
+          "packageId": "com.restoflow.kds",
+          "sizeBytes": 57938782,
+          "sha256": "a618741799a6635f0b3f9df0534c7b6f074ff7bfe232ddf6691ac34013b4f858"
+        }
+      },
+      "notes": [
+        "BIZBOT-PLATFORM-ONLINE-ORDERS-353 records the completed official synchronized pair for the platform-wide online-order workflow in PR #354. The unchanged production release runner built clean isolated approved main 281a64319b364b1d4cac0afb1ec8ec724d4e636f after main CI 39456915719 completed SUCCESS, including application validation and pgTAP. No application, runner, signing or dependency change is made by this record.",
+        "Both APKs are 0.0.66 / 66 from the same audited source. Source identity is established by the clean checkout, durable build receipt and original BUILD-METADATA.txt, not an independently embedded APK Git field. Production certificate, exact package/version, signatures, non-debuggable release/AOT, RESTOFLOW_DEMO_MODE=false and production oqmevrndtivqxgyvcmwy with public client key only all PASS.",
+        "POS Firebase/background-alert Dart and native build opt-in is ON. Actual manifest/DEX, generated BuildConfig and retained Dart inputs match bizbot-production, sender 31661231890 and app 1:31661231890:android:1856c6d5ac4e64a229adcb. Enabled alert components remain non-exported; messaging auto-init and analytics remain false. No public API-key value or private credential is recorded.",
+        "KDS Firebase/background-alert opt-in is OFF/absent. No Firebase configuration, alert components or messaging integration is packaged into KDS; existing KDS application functionality remains unchanged.",
+        "Independent artifact verification PASS: verification.json SHA-256 96018a75d39232692586c3a951c31c3ebe001100581e12e6d9d1aced7e5ec691. Original SHA256SUMS.txt SHA-256 f518af4284031c6e90f73ce9e9f7cf38c5912c63f917bcfee639405994e01ecc and BUILD-METADATA.txt SHA-256 09303e127638f221a1450b5d4ba14c2072abf185dbcaca08b7ace78a2f461079 reconcile with both preserved APKs and the durable code-66 consumption receipt.",
+        "16-KiB ZIP alignment and checked 64-bit ELF load alignments PASS for both APKs. POS libsqlite3.so for arm64-v8a, armeabi-v7a and x86_64 is byte-identical to v65. Existing 32-bit armeabi-v7a SQLite p_align=4096 remains a limitation; no universal 32-bit 16-KiB ELF or physical-device compatibility claim is made. Six JNI library GNU build-ID notes differ without corresponding code/data changes.",
+        "Original BUILD-METADATA.txt retains the historical Gradle-field separator formatting limitation; no metadata or artifact was repaired or overwritten. Recognized privileged-key/private-credential pattern scans found no matches; this does not prove the absence of every arbitrary unknown secret.",
+        "Code 66 is consumed and must not be reused or rebuilt by this bookkeeping task. POS/KDS v66 are NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED; no Android runtime, FCM delivery, audio, physical printing or end-to-end device acceptance is claimed. Reserve 0.0.67 / 67 as bookkeeping only, NOT approved for building, signing, installing or releasing. Preserve all earlier records and currentOfficialRelease. No hosted, device, ordering or printing operation is performed by this reconciliation."
+      ]
+    },
+    {
       "versionName": "0.0.65",
       "versionCode": 65,
       "signing": "restoflow-production",
@@ -882,15 +917,15 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.66",
-    "versionCode": 66,
+    "versionName": "0.0.67",
+    "versionCode": 67,
     "signing": "restoflow-production",
     "status": "reserved - NOT planned / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "Bookkeeping reservation only after verified official v65; source and scope require separate owner approval. NOT approved for building, signing, installing or releasing.",
+    "intendedSource": "Bookkeeping reservation only after verified official v66; source and scope require separate owner approval. NOT approved for building, signing, installing or releasing.",
     "notes": [
-      "Reserved after reconciliation of the verified official synchronized v65 pair. Code 65 is consumed; preserve its exact artifacts, source and durable local consumption receipt. No v66 build, signing, installation or release is authorized.",
-      "All previous release records, acceptance supplements and currentOfficialRelease remain unchanged. Later owner-reported HOME installations do not rewrite historical build-time facts or constitute ADB verification. v65 remains NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED.",
-      "Follow separate source, signing, synchronized-build and release authorization. No device, hosted, admission, notification, print or commercial offline-policy activation is authorized; uncertain registration requires reconciliation, never restart/reset/data clearing as a shortcut."
+      "Reserved after reconciliation of the verified official synchronized v66 pair. Code 66 is consumed; preserve its exact artifacts, source and durable local consumption receipt. No v67 build, signing, installation or release is authorized.",
+      "Every prior build-time release record, acceptance supplement and currentOfficialRelease remains unchanged. A separate later-owner-report supplement records POS v65 installed on HOME/salehtab, normal launch and preserved settings without inventing an installation date, ADB verification or full FCM/physical acceptance. v66 remains NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED.",
+      "Follow separate source, signing, synchronized-build and release authorization. This reservation authorizes no device, hosted, admission, notification, print or commercial offline-policy change; uncertain registration requires reconciliation, never restart/reset/data clearing as a shortcut."
     ]
   },
   "ownerReportedAcceptanceRecords": [
@@ -951,6 +986,26 @@
         "The owner reported English automatic ticket labels despite Arabic selection and Arabic labels on a manual POS kitchen reprint. This v62 locale discrepancy remained unresolved until the PR #338 source correction; v63 has not been physically tested."
       ],
       "limitations": "Owner testimony is distinct from source/artifact and backend verification. The original v62 build-time NOT INSTALLED record remains unchanged. No full locale acceptance, KDS installation, general commercial rollout or cold-offline imported-spool approval is claimed. No additional print was requested to record this supplement."
+    },
+    {
+      "recordedDate": "2026-10-20",
+      "workId": "BIZBOT-PLATFORM-ONLINE-ORDERS-353",
+      "acceptanceWorkId": "BIZBOT-HOME-POS-V65-INSTALL-001",
+      "versionName": "0.0.65",
+      "versionCode": 65,
+      "packageId": "com.restoflow.pos",
+      "sourceSha": "87a4552a9d344fcc8babaefb2664e34f0055c01d",
+      "artifactSha256": "2c1b72e695f921b22405a6946d9867941da06a763500a223f1adb803cd9bbcf9",
+      "installationDate": null,
+      "evidence": "The owner subsequently reported updating POS on HOME/salehtab in place, Android settings showing 0.65, a normal launch with the existing identity/menu, and matching saved settings. The actual installation date is not established by this record.",
+      "adbVerified": false,
+      "fullyAccepted": false,
+      "observations": [
+        "The owner reported successful update-in-place and normal launch with the expected restaurant/branch identity and menu, without a re-pairing or restoration request.",
+        "The owner reported that printer selection/connection settings and language matched the saved records; background alerts remained OFF and silent, with no unexplained Outbox/print recovery or resend issue.",
+        "Android settings version 0.65 is owner-observed. Installed versionCode, installed signing certificate and device UUID were not independently verified through ADB. This supplement does not establish full FCM/background/audio or physical printing acceptance."
+      ],
+      "limitations": "Owner testimony only; recordedDate is the bookkeeping date, not an invented installation date. Preserve the original v65 build-time NOT INSTALLED record, all earlier release/acceptance records and currentOfficialRelease. No KDS installation, new v66 installation, production notification activation or commercial cold-offline imported-spool approval is inferred."
     }
   ],
   "androidRendererPolicy": {
