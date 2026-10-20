@@ -341,7 +341,11 @@ class RealOnlineOrderInboxRepository implements OnlineOrderInboxRepository {
   final DeviceSessionSecretStore _secretStore;
   final bool Function()? isCurrent;
 
-  Future<Object?> _invoke(String rpc, Map<String, dynamic> params) async {
+  Future<Object?> _invoke(
+    String rpc,
+    Map<String, dynamic> params, {
+    bool decision = false,
+  }) async {
     final credential = await _secretStore.read();
     if (credential == null ||
         credential.deviceId != _session.deviceId ||
@@ -350,14 +354,28 @@ class RealOnlineOrderInboxRepository implements OnlineOrderInboxRepository {
       throw const OnlineInboxException(OnlineInboxFailure.invalidSession);
     }
     try {
+      if (decision) {
+        final transport = _transport;
+        if (transport is! AuthenticatedWebOrderDecisionTransport) {
+          throw const OnlineInboxException(OnlineInboxFailure.unavailable);
+        }
+        return await (transport as AuthenticatedWebOrderDecisionTransport)
+            .decideWebOrder({
+              ...params,
+              'device_id': _session.deviceId,
+              'pin_session_id': _session.pinSessionId,
+              'device_session_token': credential.sessionToken,
+            });
+      }
       return await _transport.invoke(rpc, {
         ...params,
         'p_device_id': _session.deviceId,
         'p_pin_session_id': _session.pinSessionId,
         'p_device_session_token': credential.sessionToken,
       });
+    } on OnlineInboxException {
+      rethrow;
     } on SyncTransportException catch (error) {
-      // Hosted RPCs remain deliberately undeployed in this ticket.
       throw OnlineInboxException(
         error.code == 'PGRST202' || error.code == '42883'
             ? OnlineInboxFailure.unavailable
@@ -398,17 +416,12 @@ class RealOnlineOrderInboxRepository implements OnlineOrderInboxRepository {
       throw const OnlineInboxException(OnlineInboxFailure.invalidRequest);
     }
     return OnlineInboxDecisionResult.fromJson(
-      await _invoke(
-        decision == OnlineOrderDecision.accept
-            ? 'pos_accept_web_order'
-            : 'pos_reject_web_order',
-        {
-          'p_request_id': requestId,
-          'p_decision_id': decisionId,
-          if (decision == OnlineOrderDecision.reject)
-            'p_reason': reason!.trim(),
-        },
-      ),
+      await _invoke('pos-web-order-decision', {
+        'action': decision.name,
+        'request_id': requestId,
+        'decision_id': decisionId,
+        if (decision == OnlineOrderDecision.reject) 'reason': reason!.trim(),
+      }, decision: true),
     );
   }
 }

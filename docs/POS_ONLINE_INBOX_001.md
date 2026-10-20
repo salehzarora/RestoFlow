@@ -42,6 +42,10 @@ All three return JSONB and require `p_pin_session_id uuid`, `p_device_id uuid`,
   (1–240 characters, no controls). Reason is staff-only in this slice; the existing
   customer status projection is unchanged.
 
+Issue #356 adds a separate, explicit customer-public rejection route; it does not
+change that legacy RPC's privacy. See [API §4.54](API_CONTRACT.md#454-pos-decision-wake-and-explicit-customer-rejection-reason-issue-356)
+and the [decision synchronization rollout](BIZBOT_POS_ORDER_DECISION_UX_SYNC_001.md).
+
 Inbox success is `{ok:true,server_time,requests,has_more,next_cursor}`. Each request
 contains only `request_id,status,customer:{name,phone},notes,created_at,expires_at,
 totals:{currency_code,subtotal_minor,tax_total_minor,grand_total_minor},items,

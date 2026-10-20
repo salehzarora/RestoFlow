@@ -69,11 +69,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posOnlineInboxReject => 'Reject order';
 
   @override
-  String get posOnlineInboxReason => 'Rejection reason';
+  String get posOnlineInboxReason => 'Rejection reason — shown to the customer';
 
   @override
   String get posOnlineInboxReasonHint =>
-      'Enter a reason (required, up to 240 characters)';
+      'Required, up to 240 characters. The customer will see this reason.';
 
   @override
   String get posOnlineInboxUncertain =>

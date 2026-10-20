@@ -331,11 +331,9 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
     final selected = state.requests
         .where((r) => r.id == _selectedId)
         .firstOrNull;
-    final height = max(
-      120.0,
-      MediaQuery.sizeOf(context).height * .9 -
-          MediaQuery.viewInsetsOf(context).bottom,
-    );
+    // The rejection route owns keyboard avoidance. Do not shrink the underlying
+    // Inbox a second time when that route's keyboard appears.
+    final height = max(120.0, MediaQuery.sizeOf(context).height * .9);
     return SafeArea(
       child: SizedBox(
         key: const Key('online-inbox-sheet'),
@@ -594,13 +592,19 @@ class _RequestDetail extends ConsumerStatefulWidget {
 }
 
 class _RequestDetailState extends ConsumerState<_RequestDetail> {
-  final _reason = TextEditingController();
   bool _rejecting = false;
-  @override
-  void dispose() {
-    _reason.clear();
-    _reason.dispose();
-    super.dispose();
+
+  Future<void> _confirmRejection() async {
+    if (_rejecting) return;
+    setState(() => _rejecting = true);
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => _RejectOrderDialog(requestId: widget.request.id),
+      );
+    } finally {
+      if (mounted) setState(() => _rejecting = false);
+    }
   }
 
   @override
@@ -621,10 +625,6 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
         request.status == OnlineOrderStatus.pending &&
         state.failure != OnlineInboxFailure.invalidSession &&
         state.failure != OnlineInboxFailure.permissionDenied;
-    final validReason =
-        _reason.text.trim().isNotEmpty &&
-        _reason.text.trim().runes.length <= 240 &&
-        !RegExp(r'[\x00-\x1F\x7F]').hasMatch(_reason.text);
     String money(int minor) =>
         MoneyFormatter.formatMinor(minor, request.currencyCode);
     return SingleChildScrollView(
@@ -710,20 +710,6 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
           ),
           const SizedBox(height: 16),
           if (offline) Text(l10n.posOnlineInboxConnection),
-          if (_rejecting) ...[
-            TextField(
-              key: const Key('online-inbox-rejection-reason'),
-              controller: _reason,
-              maxLength: 240,
-              enabled: enabled,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: l10n.posOnlineInboxReason,
-                hintText: l10n.posOnlineInboxReasonHint,
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
           LayoutBuilder(
             builder: (context, bounds) {
               final actionWidth =
@@ -761,21 +747,9 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
                     child: OutlinedButton.icon(
                       key: const Key('online-inbox-reject'),
                       style: style,
-                      onPressed: !enabled || (_rejecting && !validReason)
-                          ? null
-                          : () {
-                              if (!_rejecting) {
-                                setState(() => _rejecting = true);
-                              } else {
-                                unawaited(
-                                  controller.decide(
-                                    request.id,
-                                    OnlineOrderDecision.reject,
-                                    reason: _reason.text,
-                                  ),
-                                );
-                              }
-                            },
+                      onPressed: enabled && !_rejecting
+                          ? _confirmRejection
+                          : null,
                       icon: const Icon(Icons.close),
                       label: Text(l10n.posOnlineInboxReject),
                     ),
@@ -797,6 +771,128 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
       children: [Text(label), Text(amount)],
     ),
   );
+}
+
+/// A separate route keeps its draft alive across Inbox responsive-layout
+/// changes. Dialog applies MediaQuery.viewInsets exactly once; its scrollable
+/// content keeps the form and actions reachable with a tablet IME/large text.
+class _RejectOrderDialog extends ConsumerStatefulWidget {
+  const _RejectOrderDialog({required this.requestId});
+  final String requestId;
+
+  @override
+  ConsumerState<_RejectOrderDialog> createState() => _RejectOrderDialogState();
+}
+
+class _RejectOrderDialogState extends ConsumerState<_RejectOrderDialog> {
+  final _reason = TextEditingController();
+  bool _submitted = false;
+
+  @override
+  void dispose() {
+    _reason.clear();
+    _reason.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final state = ref.watch(onlineOrderInboxControllerProvider);
+    final controller = ref.read(onlineOrderInboxControllerProvider.notifier);
+    final request = state.requests
+        .where((r) => r.id == widget.requestId)
+        .firstOrNull;
+    final authorized =
+        !_submitted &&
+        ref.watch(posOfflineModeProvider).phase == PosOfflinePhase.online &&
+        state.intent == null &&
+        !state.deciding &&
+        state.failure != OnlineInboxFailure.invalidSession &&
+        state.failure != OnlineInboxFailure.permissionDenied &&
+        request != null &&
+        request.status == OnlineOrderStatus.pending &&
+        !request.expiredAt(controller.now());
+    final reason = _reason.text.trim();
+    final valid =
+        reason.isNotEmpty &&
+        reason.runes.length <= 240 &&
+        !RegExp(r'[\x00-\x1F\x7F]').hasMatch(_reason.text);
+    return Dialog(
+      key: const Key('online-inbox-reject-dialog'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 520),
+        child: SingleChildScrollView(
+          key: const Key('online-inbox-reject-scroll'),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.posOnlineInboxReject,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                key: const Key('online-inbox-rejection-reason'),
+                controller: _reason,
+                enabled: authorized,
+                minLines: 1,
+                maxLines: 4,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText: l10n.posOnlineInboxReason,
+                  hintText: l10n.posOnlineInboxReasonHint,
+                  counterText: '${reason.runes.length}/240',
+                ),
+              ),
+              if (!authorized) ...[
+                const SizedBox(height: 12),
+                Text(l10n.posOnlineInboxConflict),
+              ],
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  TextButton(
+                    key: const Key('online-inbox-reject-cancel'),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      MaterialLocalizations.of(context).cancelButtonLabel,
+                    ),
+                  ),
+                  FilledButton(
+                    key: const Key('online-inbox-reject-confirm'),
+                    onPressed: authorized && valid
+                        ? () {
+                            // The controller revalidates request/auth state at
+                            // the instant of confirmation and retains one ID on
+                            // uncertain responses. No dialog dismissal decides.
+                            setState(() => _submitted = true);
+                            unawaited(
+                              controller.decide(
+                                widget.requestId,
+                                OnlineOrderDecision.reject,
+                                reason: reason,
+                              ),
+                            );
+                            Navigator.of(context).pop();
+                          }
+                        : null,
+                    child: Text(l10n.posOnlineInboxReject),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 int _itemCount(OnlineOrderRequest request) =>

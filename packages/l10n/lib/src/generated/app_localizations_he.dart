@@ -68,10 +68,11 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posOnlineInboxReject => 'דחיית הזמנה';
 
   @override
-  String get posOnlineInboxReason => 'סיבת הדחייה';
+  String get posOnlineInboxReason => 'סיבת הדחייה — מוצגת ללקוח';
 
   @override
-  String get posOnlineInboxReasonHint => 'יש להזין סיבה (חובה, עד 240 תווים)';
+  String get posOnlineInboxReasonHint =>
+      'חובה, עד 240 תווים. הסיבה תוצג ללקוח.';
 
   @override
   String get posOnlineInboxUncertain =>

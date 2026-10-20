@@ -34,6 +34,7 @@ class _Controller extends OnlineOrderInboxController {
   final decisions = <OnlineOrderDecision>[];
   String? reason;
   int refreshes = 0;
+  void replace(OnlineOrderInboxState next) => state = next;
   @override
   OnlineOrderInboxState build() => fixed;
   @override
@@ -273,6 +274,129 @@ Future<_Controller> pumpInbox(
 }
 
 void main() {
+  for (final language in ['ar', 'he', 'en']) {
+    for (final size in [const Size(800, 1100), const Size(1100, 700)]) {
+      testWidgets(
+        '$language rejection keyboard, rotation and large text $size',
+        (tester) async {
+          final controller = await pumpInbox(
+            tester,
+            locale: language,
+            size: size,
+            scale: 1.8,
+          );
+          await tester.tap(
+            find.byKey(const ValueKey('online-request-$requestId')),
+          );
+          await tester.pump();
+          await tester.ensureVisible(
+            find.byKey(const Key('online-inbox-reject')),
+          );
+          await tester.tap(find.byKey(const Key('online-inbox-reject')));
+          await tester.pumpAndSettle();
+          final field = find.byKey(const Key('online-inbox-rejection-reason'));
+          final confirm = find.byKey(const Key('online-inbox-reject-confirm'));
+          final cancel = find.byKey(const Key('online-inbox-reject-cancel'));
+          final l10n = AppLocalizations.of(tester.element(field));
+          expect(
+            tester.widget<TextField>(field).decoration!.labelText,
+            l10n.posOnlineInboxReason,
+          );
+          expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+          await tester.enterText(field, '  نفد المخزون / אזל / sold out  ');
+          tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+          addTearDown(tester.view.resetViewInsets);
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          await tester.ensureVisible(confirm);
+          expect(
+            tester.getRect(confirm).bottom,
+            lessThanOrEqualTo(size.height - 300),
+          );
+          await tester.ensureVisible(cancel);
+          expect(
+            tester.getRect(cancel).bottom,
+            lessThanOrEqualTo(size.height - 300),
+          );
+          tester.view.physicalSize = Size(size.height, size.width);
+          await tester.pumpAndSettle();
+          expect(
+            tester.widget<TextField>(field).controller!.text,
+            '  نفد المخزون / אזל / sold out  ',
+          );
+          expect(tester.takeException(), isNull);
+          await tester.ensureVisible(confirm);
+          await tester.tap(confirm);
+          await tester.pump(const Duration(milliseconds: 300));
+          expect(controller.decisions, [OnlineOrderDecision.reject]);
+          expect(controller.reason, 'نفد المخزون / אזל / sold out');
+        },
+      );
+    }
+  }
+  for (final action in ['cancel', 'dismiss', 'resolved', 'auth']) {
+    testWidgets('rejection $action cannot submit a stale decision', (
+      tester,
+    ) async {
+      final controller = await pumpInbox(tester);
+      await tester.tap(find.byKey(const ValueKey('online-request-$requestId')));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('online-inbox-reject')));
+      await tester.tap(find.byKey(const Key('online-inbox-reject')));
+      await tester.pumpAndSettle();
+      final field = find.byKey(const Key('online-inbox-rejection-reason'));
+      await tester.enterText(field, 'Sold out');
+      await tester.pump();
+      if (action == 'cancel') {
+        await tester.tap(find.byKey(const Key('online-inbox-reject-cancel')));
+      } else if (action == 'dismiss') {
+        await tester.tapAt(const Offset(2, 2));
+      } else {
+        controller.replace(
+          OnlineOrderInboxState(
+            requests: action == 'resolved' ? [] : [inboxRequest()],
+            failure: action == 'auth'
+                ? OnlineInboxFailure.invalidSession
+                : null,
+            serverTime: inboxNow,
+          ),
+        );
+        await tester.pump();
+        expect(
+          tester
+              .widget<FilledButton>(
+                find.byKey(const Key('online-inbox-reject-confirm')),
+              )
+              .onPressed,
+          isNull,
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(controller.decisions, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('reason enforces trimmed Unicode length and controls', (
+    tester,
+  ) async {
+    final controller = await pumpInbox(tester);
+    await tester.tap(find.byKey(const ValueKey('online-request-$requestId')));
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('online-inbox-reject')));
+    await tester.tap(find.byKey(const Key('online-inbox-reject')));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const Key('online-inbox-rejection-reason'));
+    final confirm = find.byKey(const Key('online-inbox-reject-confirm'));
+    for (final invalid in ['   ', '🙂' * 241, 'reason\nprivate']) {
+      await tester.enterText(field, invalid);
+      await tester.pump();
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+    }
+    await tester.enterText(field, '🙂' * 240);
+    await tester.pump();
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+    expect(controller.decisions, isEmpty);
+  });
   for (final language in ['ar', 'he', 'en']) {
     for (final cancel in ['cancel', 'dismiss']) {
       testWidgets(
@@ -872,7 +996,9 @@ void main() {
     await tester.pump();
     expect(
       tester
-          .widget<OutlinedButton>(find.byKey(const Key('online-inbox-reject')))
+          .widget<FilledButton>(
+            find.byKey(const Key('online-inbox-reject-confirm')),
+          )
           .onPressed,
       isNull,
     );
@@ -881,9 +1007,11 @@ void main() {
       'Sold out',
     );
     await tester.pump();
-    await tester.ensureVisible(find.byKey(const Key('online-inbox-reject')));
-    await tester.tap(find.byKey(const Key('online-inbox-reject')));
-    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(const Key('online-inbox-reject-confirm')),
+    );
+    await tester.tap(find.byKey(const Key('online-inbox-reject-confirm')));
+    await tester.pump(const Duration(milliseconds: 300));
     expect(controller.decisions, [OnlineOrderDecision.reject]);
     expect(controller.reason, 'Sold out');
     expect(

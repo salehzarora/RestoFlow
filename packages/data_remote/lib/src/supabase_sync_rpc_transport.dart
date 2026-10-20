@@ -22,7 +22,10 @@ import 'kitchen_ack_http_boundary.dart';
 /// reachable over HTTP) while `app.sync_pull` stays the server source of truth.
 /// The schema is configurable for tests/alternate deployments, but production
 /// targets `public`.
-class SupabaseSyncRpcTransport implements GuardedKitchenAckTransport {
+class SupabaseSyncRpcTransport
+    implements
+        GuardedKitchenAckTransport,
+        AuthenticatedWebOrderDecisionTransport {
   const SupabaseSyncRpcTransport(
     this._client, {
     String schema = 'public',
@@ -80,6 +83,31 @@ class SupabaseSyncRpcTransport implements GuardedKitchenAckTransport {
   /// that into a fast TimeoutException -> transient -> offlineStale + retry, so a
   /// resume-triggered refresh recovers promptly instead of hanging.
   final Duration _timeout;
+
+  @override
+  Future<Object?> decideWebOrder(Map<String, dynamic> body) async {
+    try {
+      final response = await _client.functions
+          .invoke('pos-web-order-decision', body: body)
+          .timeout(_timeout);
+      if (response.status != 200) {
+        throw const SyncTransportException(SyncTransportErrorKind.transient);
+      }
+      return response.data;
+    } on FunctionException catch (error) {
+      // Never retain SDK details: they may contain device credentials or text.
+      throw SyncTransportException(
+        error.status == 401 || error.status == 403
+            ? SyncTransportErrorKind.auth
+            : SyncTransportErrorKind.transient,
+      );
+    } on SyncTransportException {
+      rethrow;
+    } catch (_) {
+      // A timeout is uncertain, not permission to send a second decision.
+      throw const SyncTransportException(SyncTransportErrorKind.transient);
+    }
+  }
 
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) {

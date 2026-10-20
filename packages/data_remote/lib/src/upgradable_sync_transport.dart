@@ -23,10 +23,28 @@ import 'guarded_kitchen_ack_transport.dart';
 
 /// A [SyncRpcTransport] that holds all calls offline until [upgrade]d with the
 /// real authenticated transport, then delegates permanently.
-class UpgradableSyncTransport implements GuardedKitchenAckTransport {
+class UpgradableSyncTransport
+    implements
+        GuardedKitchenAckTransport,
+        AuthenticatedWebOrderDecisionTransport {
   SyncRpcTransport? _real;
   final List<void Function()> _onUpgrade = <void Function()>[];
   int _heldCallCount = 0;
+
+  @override
+  Future<Object?> decideWebOrder(Map<String, dynamic> body) {
+    final real = _real;
+    if (real == null) {
+      _heldCallCount++;
+      throw const SyncTransportException(SyncTransportErrorKind.transient);
+    }
+    if (real is! AuthenticatedWebOrderDecisionTransport) {
+      throw const SyncTransportException(SyncTransportErrorKind.server);
+    }
+    return (real as AuthenticatedWebOrderDecisionTransport).decideWebOrder(
+      body,
+    );
+  }
 
   /// True once [upgrade] installed the real transport.
   bool get isUpgraded => _real != null;
