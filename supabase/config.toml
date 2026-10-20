@@ -455,9 +455,9 @@ verify_jwt = false
 enabled = true
 verify_jwt = false
 
-# Issue356 native decision boundary: caller JWT is mandatory and is validated
+# Issue356 POS decision boundary: caller JWT is mandatory and is validated
 # by PostgREST, never replaced by service_role. Genuine device/PIN SQL checks
-# remain authoritative. No browser/CORS/cookie fallback.
+# remain authoritative. Strict existing product-origin CORS; no cookie fallback.
 [functions.pos-web-order-decision]
 enabled = true
 verify_jwt = false

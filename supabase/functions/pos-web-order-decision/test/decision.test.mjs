@@ -33,7 +33,7 @@ function fixture({ env = {}, result, fetch, waitUntil, timeoutMs = 100, wakeTime
       method: options.method ?? "POST", headers,
       ...((options.method ?? "POST") === "POST" ? { body: typeof input === "string" ? input : JSON.stringify(input) } : {}),
     }));
-    return { status: r.status, body: await r.json(), headers: r.headers };
+    return { status: r.status, body: r.status === 204 ? null : await r.json(), headers: r.headers };
   };
   return { calls, tasks, reads, config, handler, run };
 }
@@ -76,7 +76,7 @@ for (const error of ["invalid_session", "permission_denied", "not_found", "decis
   });
 }
 
-test("POST/native-only, exact path/query, JWT and schema validation deny before network", async () => {
+test("POST, recognized origin, exact path/query, JWT and schema validation deny before network", async () => {
   for (const [input, options, status] of [
     [makeInput(), { method: "GET" }, 405], [makeInput(), { headers: { origin: "https://menu.bizbot.systems" } }, 403],
     [makeInput(), { url: `${BASE}/functions/v1/pos-web-order-decision?token=x` }, 404],
@@ -92,6 +92,67 @@ test("POST/native-only, exact path/query, JWT and schema validation deny before 
     const f = fixture(); assert.equal((await f.run(input, options)).status, status);
     assert.equal(f.calls.length, 0); assert.equal(f.tasks.length, 0);
   }
+});
+
+for (const origin of ["https://app.bizbot.systems", "https://resto-flow-phi.vercel.app"]) {
+  test(`existing product web POS ${origin} preflight and decisions retain real JWT/PIN authority`, async () => {
+    const f = fixture();
+    const preflight = await f.run(undefined, { method: "OPTIONS", headers: { origin, authorization: "",
+      "access-control-request-method": "POST", "access-control-request-headers": "authorization, apikey, content-type, x-client-info" } });
+    assert.equal(preflight.status, 204); assert.equal(preflight.body, null);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
+    assert.equal(preflight.headers.get("access-control-allow-methods"), "POST, OPTIONS");
+    assert.equal(preflight.headers.get("access-control-allow-headers"), "authorization, apikey, content-type, x-client-info");
+    assert.equal(preflight.headers.get("access-control-max-age"), "600");
+    assert.equal(preflight.headers.get("access-control-allow-credentials"), null);
+    assert.equal(preflight.headers.get("vary"), "Origin");
+    assert.equal(f.calls.length, 0); assert.equal(f.tasks.length, 0, "OPTIONS cannot decide or wake");
+    for (const action of ["accept", "reject"]) {
+      const output = await f.run(makeInput(action), { headers: { origin, apikey: "untrusted-caller-key", "x-client-info": "synthetic-sdk" } });
+      assert.equal(output.status, 200); assert.deepEqual(output.body, success(makeInput(action)));
+      assert.equal(output.headers.get("access-control-allow-origin"), origin);
+      assert.equal(output.headers.get("access-control-allow-credentials"), null);
+    }
+    await Promise.all(f.tasks);
+    const decisionCalls = f.calls.filter((call) => call.url.includes("/rpc/")); assert.equal(decisionCalls.length, 2);
+    for (const call of decisionCalls) {
+      assert.equal(call.init.headers.Authorization, `Bearer ${JWT}`); assert.equal(call.init.headers.apikey, ANON);
+      assert.equal(call.init.headers.origin, undefined); assert.equal(call.init.headers.cookie, undefined);
+    }
+  });
+
+  test(`allowed product Origin ${origin} alone or cookies cannot authenticate; errors remain CORS-readable`, async () => {
+    const noAuth = fixture();
+    const denied = await noAuth.run(makeInput(), { headers: { origin, authorization: "", cookie: "session=synthetic-not-authority" } });
+    assert.equal(denied.status, 401); assert.equal(denied.headers.get("access-control-allow-origin"), origin);
+    assert.equal(denied.headers.get("access-control-allow-credentials"), null); assert.equal(noAuth.calls.length, 0);
+    const upstreamAuth = fixture({ fetch: async () => new Response(null, { status: 401 }) });
+    const invalid = await upstreamAuth.run(makeInput(), { headers: { origin } });
+    assert.equal(invalid.status, 401); assert.equal(invalid.headers.get("access-control-allow-origin"), origin);
+    const unavailable = fixture({ env: { SUPABASE_ANON_KEY: "" } });
+    const error = await unavailable.run(makeInput(), { headers: { origin } });
+    assert.equal(error.status, 503); assert.equal(error.headers.get("access-control-allow-origin"), origin);
+    assert.equal(error.headers.get("access-control-allow-credentials"), null);
+  });
+}
+
+test("arbitrary/null/deceptive origins and unsupported preflights never gain CORS or perform work", async () => {
+  for (const origin of ["null", "https://menu.bizbot.systems", "https://attacker.test", "https://app.bizbot.systems.attacker.test",
+    "https://preview-resto-flow.vercel.app", "http://app.bizbot.systems", "https://app.bizbot.systems/", "https://app.bizbot.systems:444"]) {
+    for (const method of ["POST", "OPTIONS"]) {
+      const f = fixture(); const denied = await f.run(makeInput(), { method, headers: { origin,
+        "access-control-request-method": "POST", "access-control-request-headers": "authorization, content-type" } });
+      assert.equal(denied.status, 403); assert.equal(denied.headers.get("access-control-allow-origin"), null);
+      assert.equal(denied.headers.get("access-control-allow-credentials"), null); assert.equal(f.calls.length, 0); assert.equal(f.tasks.length, 0);
+    }
+  }
+  for (const headers of [{ "access-control-request-method": "DELETE" },
+    { "access-control-request-method": "POST", "access-control-request-headers": "authorization,cookie" },
+    { "access-control-request-method": "POST", "access-control-request-headers": "x-admin" }, {}]) {
+    const f = fixture(); const denied = await f.run(undefined, { method: "OPTIONS", headers: { origin: "https://app.bizbot.systems", ...headers } });
+    assert.equal(denied.status, 403); assert.equal(f.calls.length, 0); assert.equal(f.tasks.length, 0);
+  }
+  const native = fixture(); assert.equal((await native.run(undefined, { method: "OPTIONS", headers: { "access-control-request-method": "POST" } })).status, 403);
 });
 
 test("public reason is trimmed, mandatory, bounded by codepoints and excludes controls", async () => {
