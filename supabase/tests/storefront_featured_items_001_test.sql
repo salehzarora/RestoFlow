@@ -43,14 +43,17 @@ select pg_temp.fid('restaurant-'||r),pg_temp.fid('org-'||r),pg_temp.fid('branch-
   'featured-'||r,'Featured '||r,'Existing headline','Existing subline','Existing notice','0521234567',true,10
 from unnest(array['a','b']) r;
 insert into app_users(id,email) select pg_temp.fid('user-'||u),'featured-'||u||'@example.test'
-from unnest(array['manager','cashier','foreign','branch-manager']) u;
+from unnest(array['manager','cashier','foreign','branch-manager','missing-profile-manager']) u;
 insert into memberships(id,app_user_id,organization_id,restaurant_id,branch_id,role) values
   (pg_temp.fid('membership-manager'),pg_temp.fid('user-manager'),pg_temp.fid('org-a'),pg_temp.fid('restaurant-a'),null,'manager'),
   (pg_temp.fid('membership-cashier'),pg_temp.fid('user-cashier'),pg_temp.fid('org-a'),pg_temp.fid('restaurant-a'),null,'cashier'),
   (pg_temp.fid('membership-foreign'),pg_temp.fid('user-foreign'),pg_temp.fid('org-b'),null,null,'org_owner'),
-  (pg_temp.fid('membership-branch-manager'),pg_temp.fid('user-branch-manager'),pg_temp.fid('org-a'),pg_temp.fid('restaurant-a'),pg_temp.fid('branch-a'),'manager');
+  (pg_temp.fid('membership-branch-manager'),pg_temp.fid('user-branch-manager'),pg_temp.fid('org-a'),pg_temp.fid('restaurant-a'),pg_temp.fid('branch-a'),'manager'),
+  (pg_temp.fid('membership-missing-profile-manager'),pg_temp.fid('user-missing-profile-manager'),pg_temp.fid('org-a'),pg_temp.fid('restaurant-missing'),null,'manager');
 create temp table featured_initial as select to_jsonb(p) profile from restaurant_storefront_profiles p
   where restaurant_id=pg_temp.fid('restaurant-a');
+create temp table featured_missing_initial as select to_jsonb(r) restaurant from restaurants r
+  where id=pg_temp.fid('restaurant-missing');
 
 select col_type_is('public','restaurant_storefront_profiles','featured_item_ids','uuid[]','bounded UUID set column');
 select col_not_null('public','restaurant_storefront_profiles','featured_item_ids','non-null default selection');
@@ -96,7 +99,19 @@ select throws_ok($$select pg_temp.save('foreign',10,pg_temp.patch())$$,'42501',n
 select set_config('app.current_app_user_id',pg_temp.fid('user-branch-manager')::text,true);
 select throws_ok($$select pg_temp.save('branch-manager',10,pg_temp.patch())$$,'42501',null,'branch-only authority cannot edit restaurant-wide profile');
 select set_config('app.current_app_user_id',pg_temp.fid('user-manager')::text,true);
-select is(pg_temp.save('missing',0,pg_temp.patch(),'missing')->>'error','not_found','no implicit profile creation');
+select throws_ok($$select pg_temp.save('missing-unauthorized',0,pg_temp.patch(),'missing')$$,'42501',
+  'set_restaurant_storefront_featured_items: no covering membership','unauthorized caller cannot inspect or edit missing-profile restaurant');
+select set_config('app.current_app_user_id',pg_temp.fid('user-missing-profile-manager')::text,true);
+select is(pg_temp.save('missing',0,pg_temp.patch(),'missing')->>'error','not_found','authorized manager gets not_found for absent profile');
+reset role;
+select ok(not exists(select 1 from restaurant_storefront_profiles where restaurant_id=pg_temp.fid('restaurant-missing')),'missing-profile save creates no profile');
+select ok(not exists(select 1 from management_request_results where client_request_id in
+  (pg_temp.fid('request-missing-unauthorized'),pg_temp.fid('request-missing'))),'missing-profile refusals claim no request identity');
+select ok(not exists(select 1 from audit_events where restaurant_id=pg_temp.fid('restaurant-missing')),'missing-profile refusals create no audit event');
+select is((select to_jsonb(r) from restaurants r where id=pg_temp.fid('restaurant-missing')),
+  (select restaurant from featured_missing_initial),'missing-profile refusals leave restaurant unchanged');
+set local role authenticated;
+select set_config('app.current_app_user_id',pg_temp.fid('user-manager')::text,true);
 select is(pg_temp.save('stale',9,pg_temp.patch())->>'error','version_conflict','shared profile expected-version CAS');
 select is(pg_temp.save('shape-'||n,10,p)->>'error','invalid','invalid complete patch shape '||n)
 from (values(1,'null'::jsonb),(2,'[]'::jsonb),(3,'{}'::jsonb),(4,'{"featured_item_ids":[],"price":1}'::jsonb),

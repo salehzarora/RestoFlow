@@ -447,4 +447,6 @@ jobs:
             -c "ALTER DATABASE postgres SET bizbot.featured_ci_ephemeral TO 'BIZBOT-STOREFRONT-FEATURED-ITEMS-001';"
 
       - name: Run pgTAP suites (incl. the RF-019 tenant-isolation harness)
-        run: supabase test db
+        # CLI 2.107.0 adds pg_prove --verbose in debug mode: retain each
+        # completed TAP plan/count without rerunning committed-fixture races.
+        run: supabase test db --debug
