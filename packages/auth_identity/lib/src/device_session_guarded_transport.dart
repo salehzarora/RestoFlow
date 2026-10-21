@@ -3,7 +3,10 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 /// Stops NEW protected RPCs after an unproven or rejected device-session
 /// verdict. Recovery calls remain available. This is retryable transport
 /// evidence, never human-session rejection or POS AUTH_HOLD.
-class DeviceSessionGuardedTransport implements GuardedKitchenAckTransport {
+class DeviceSessionGuardedTransport
+    implements
+        GuardedKitchenAckTransport,
+        AuthenticatedWebOrderDecisionTransport {
   DeviceSessionGuardedTransport(this._inner);
 
   final SyncRpcTransport _inner;
@@ -19,6 +22,29 @@ class DeviceSessionGuardedTransport implements GuardedKitchenAckTransport {
     'heartbeat_device_session',
     'revoke_device_session',
   };
+
+  @override
+  Future<Object?> decideWebOrder(Map<String, dynamic> body) {
+    if (_blocked) {
+      return Future.error(
+        const SyncTransportException(
+          SyncTransportErrorKind.transient,
+          code: 'device_session_unverified',
+        ),
+      );
+    }
+    final inner = _inner;
+    if (inner is! AuthenticatedWebOrderDecisionTransport) {
+      return Future.error(
+        const SyncTransportException(SyncTransportErrorKind.server),
+      );
+    }
+    // No await before handoff: a block during repository credential loading
+    // wins here. Already handed-off outcomes remain uncertain, never retried.
+    return (inner as AuthenticatedWebOrderDecisionTransport).decideWebOrder(
+      body,
+    );
+  }
 
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) {
