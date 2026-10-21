@@ -10,12 +10,12 @@
 | Work-ID scheme | Approved Work IDs (**DECISION D-038**, GOV-001). Jira is no longer used; `RF` is the historical ticket prefix and is never renumbered. |
 | Current milestone | M7 real-wiring → **BIZBOT-PAYMENTS-ZCREDIT-PILOT-001** (card-present POS payments pilot, docs first; **DECISION D-051** / **D-052**) |
 | Active ticket | `BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A` — design and decision packet (docs only: D-051, D-052, Q-047..Q-056, scope carve-out, canon annotations, [BIZBOT_PAYMENTS_ZCREDIT_PILOT_001](BIZBOT_PAYMENTS_ZCREDIT_PILOT_001.md)) |
-| Status | H0 vendor-material housekeeping done locally on 2026-10-21 (no tracked change); 001A written on its branch from `origin/main` `e9aec540`; NOT pushed |
-| Branch | `docs/BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A-design` (worktree `worktrees/BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A`; NOT pushed) |
+| Status | H0 vendor-material housekeeping done locally on 2026-10-21 (no tracked change). PR **#362** (001A → `main`) and PR **#363** (001B → the 001A branch, stacked) are open **Draft** PRs; the 001A branch carries the merge of current `main` (`ec134ded`, PRs #361 / #364) with the `docs/DECISIONS.md` append-adjacency conflict resolved by keeping both blocks; CI runs on the synchronized heads; the #362 command-room content review passed on 2026-10-21 pending the independent Codex review; #363 remains unapproved for merge; 001D remains **blocked** |
+| Branch | `docs/BIZBOT-PAYMENTS-ZCREDIT-PILOT-001B-provider-contract` (PR #363, Draft) stacked on `docs/BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A-design` (PR #362, Draft); worktrees `worktrees/BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A` / `…-001B` |
 | Primary agent | Claude Code |
 | Reviewer | Codex |
-| Next step | Owner approval to push and open the PR; Codex read-only review; merge; then `BIZBOT-PAYMENTS-ZCREDIT-PILOT-001B` (provider contract, docs only), then 001D → 001E → 001C → 001F per the packet |
-| Current blockers | None for 001A / 001B (docs). Code tickets wait for the 001A / 001B merges; the physical test waits for deploy-with-flags-OFF, the owner-approved TEST secret setup and the owner-approved test-card run (packet §8) |
+| Next step | Independent Codex read-only review of #362 (against `main`) and of #363 (against the exact #362 head); separate merge approval for #362 (merge commit, not squash); retarget #363 to `main`, reverify its incremental diff, re-run CI and the exact-head review, separate merge approval; only then an exact-scope approval for 001D (private ledger / RLS) → 001E (Edge adapter) → 001C → 001F per the packet |
+| Current blockers | None for 001A / 001B (docs). 001D is not authorized until both PRs merge and the owner approves its exact scope; the physical test waits for deploy-with-flags-OFF, the owner-approved TEST secret setup and the owner-approved test-card run (packet §8) |
 | Last verification | Docs-only change: CRLF preserved per file; every literal anchor matched exactly once; no secret, credential, identifier or vendor value; `tools/check_secrets.sh` run in the worktree before commit |
 
 ## Authoritative references

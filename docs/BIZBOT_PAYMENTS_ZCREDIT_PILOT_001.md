@@ -1,6 +1,6 @@
 # BIZBOT-PAYMENTS-ZCREDIT-PILOT-001 — card-present POS payments pilot (Z-Credit PIN pad)
 
-Work ID: `BIZBOT-PAYMENTS-ZCREDIT-PILOT-001` (umbrella; tickets 001A–001F below; 001G / 001H are proposed sub-tickets pending Work-ID approval).
+Work ID: `BIZBOT-PAYMENTS-ZCREDIT-PILOT-001` (umbrella; tickets 001A–001H below — 001G-DASHBOARD-VERIFICATION and 001H-PILOT-OPS approved by the owner on 2026-10-21 — plus the independent follow-ups `BIZBOT-PAYMENTS-ZCREDIT-HYGIENE-001` and `DASHBOARD-COLLECTED-LABEL-001`).
 Decisions: **DECISION D-051** (scope, architecture, gates) and **D-052** (lifecycle, identity, money, data).
 Open questions: **Q-047..Q-056**. Base of this packet: `origin/main` `e9aec540` (merge of PR #359, 2026-10-21).
 Evidence (outside git): the read-only handoff and preflight folders under the owner's `evidence/` root.
