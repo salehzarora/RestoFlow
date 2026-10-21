@@ -55,7 +55,7 @@ export function LiveFlowBody(props: FlowProps & { orderCopy: OrderMessages }) {
   }, [controller, snapshot, draftApi?.reset, ready, screen, tenant.orderingEnabled, withinLimits, quote, details?.ok, router, locale, slug]);
 
   if (screen === 'review' && (snapshot.result !== null || snapshot.recovered || ['unknown', 'not_found', 'unavailable'].includes(snapshot.phase))) {
-    return <LiveRequestRuntime locale={locale} copy={copy} slug={slug} origin={orderEndpointOrigin} tenant={{ name: tenant.name, logo: tenant.logo ?? null }} onOrderAgain={() => {
+    return <LiveRequestRuntime locale={locale} copy={copy} slug={slug} origin={orderEndpointOrigin} tenant={{ name: tenant.name, logo: tenant.logo ?? null }} publicPhone={tenant.publicPhone} onOrderAgain={() => {
       if (controller?.startNewOrder().phase !== 'idle') return;
       leaving.current = true;
       cart?.clear();

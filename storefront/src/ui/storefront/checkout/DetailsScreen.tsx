@@ -18,9 +18,8 @@
  * would remove the control from the tab order and make the reason unreachable
  * exactly for the visitors who most need it.
  *
- * EVERY VISIBLE MESSAGE IS AN EXISTING LABEL. The approved pack has no
- * "this field is required" copy, and the design reuses the label, the section
- * heading or the format mask instead. No new sentence is invented here.
+ * Field errors appear after a blocked continuation attempt. The phone error
+ * has no persistent format guidance or example and never rewrites the draft.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CheckoutDraft } from './CheckoutDraftProvider';
@@ -41,7 +40,7 @@ import s from './flow.module.css';
 /* Stable ids: one checkout per document, so there is nothing to disambiguate. */
 const ID = {
   nameError: 'sf-co-name-error',
-  phoneHelp: 'sf-co-phone-help',
+  phoneError: 'sf-co-phone-error',
   addrError: 'sf-co-addr-error',
   service: 'sf-co-service',
 } as const;
@@ -51,6 +50,8 @@ export interface FlowTenant {
   readonly name: string;
   readonly city: string;
   readonly address: string;
+  /** Published restaurant contact only; never the customer's draft number. */
+  readonly publicPhone?: string;
   readonly opensAt: string;
   readonly pickupEnabled: boolean;
   readonly deliveryEnabled: boolean;
@@ -292,20 +293,17 @@ export function DetailsScreen({
                  and nothing else (CONTENT_AND_LOCALIZATION.md:225). */
               inputMode="tel"
               autoComplete="tel"
-              placeholder={pickupCopy?.phoneHint ?? m.phoneHint}
               aria-invalid={bad('phone') ? 'true' : undefined}
-              aria-describedby={ID.phoneHelp}
+              aria-describedby={bad('phone') ? ID.phoneError : undefined}
               data-sf-field="phone"
             />
           </label>
-          {/* Live checkout explains the accepted formats; the fixture keeps its mask. */}
-          <span
-            className={`${s.help} ${bad('phone') ? s.helpBad : ''}`}
-            id={ID.phoneHelp}
-            data-sf-phone-help=""
-          >
-            {pickupCopy ? (bad('phone') ? pickupCopy.phoneError : pickupCopy.phoneHelp) : bad('phone') ? m.phoneHint : m.phoneHelp}
-          </span>
+          {/* No persistent example/help; only an invalid field gets a description. */}
+          {bad('phone') ? (
+            <span className={`${s.help} ${s.helpBad}`} id={ID.phoneError} role="alert" data-sf-phone-error="">
+              {pickupCopy?.phoneError ?? m.phoneError}
+            </span>
+          ) : null}
         </section>
 
         {pickupCopy ? <section className={s.section}>
