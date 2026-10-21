@@ -340,25 +340,40 @@ queries + expected results instead. Prints **PASS/FAIL**.
   `last_lookup_at`, resolution metadata. Run `status` with `source='operator'` for each
   `unknown` / `released` attempt — from the originating till, or from any POS of the branch as a
   `manager`+ (an operator call is never refused with `poll_limit`).
-- **Recovery — approved:** record under the same identity on the original order (POS Resume on the
-  originating till; by a manager once the refusal's cause is cleared — shift reopened, revision
-  refreshed) only while `orders.grand_total_minor = attempt.amount_minor` and the currency matches.
-  Never charge again, never move the approval to another order, never free the order for another
-  tender (**D-053** point 1).
+- **Recovery — approved:** record under the same identity on the original order. If the first
+  recording leg never reached the server (no sync ledger row) the POS resends the same operation
+  through its existing durable `payment.create` dispatch. If it was memoized as rejected with a
+  recoverable refusal (`precondition_failed` — no open shift / active drawer on the till —,
+  `revoked_employee`, `revoked_device`), repair the cause first (reopen a shift on that till,
+  reinstate the membership, or return a `suspended` pairing of that same device to `active` — a
+  management-revoked device cannot be reinstated for this purpose and leaves the attempt
+  `orphan_approved`), then a `manager`+ on that same till performs the explicit **Resume recording**
+  of **D-054** (§4.55.7): the identical `payment.create` is re-dispatched once, never a new
+  operation and never a new charge, at most 3 times per attempt. Any other memoized refusal is not
+  resumable: the attempt is `approved_unrecorded` / `orphan_approved` and goes to the orphan
+  procedure below. Never charge again, never move the approval to another order, never free the
+  order for another tender (**D-053** point 1).
 - **Recovery — declined:** the cashier takes another tender (the claim ends with the decline).
-- **Recovery — unknown / released:** repeat the operator lookup; if it stays inconclusive, obtain an
-  explicit confirmation that no approved charge exists — the provider's transaction report or back
-  office, or a command-room-approved evidence step — then `free_order` (§4.55.6) with the
-  confirmation source, its reference and a reason; the attempt stays `unknown` / `released`.
-  Poll-cap exhaustion or "still inconclusive" alone never frees the order (**D-053** point 1). A
-  later approval of a freed attempt is an `approved_unrecorded` incident (reason `order_freed`).
+- **Recovery — unknown / released:** repeat the operator lookup; if it stays inconclusive, obtain
+  documented provider evidence that no approved charge exists — the provider's transaction report
+  (`provider_report`) or its back office (`provider_back_office`) — then `free_order` (§4.55.6) with
+  that source, its sanitized evidence reference and a reason; the attempt stays `unknown` /
+  `released`. Poll-cap exhaustion, a provider outage, "still inconclusive" or any self-attestation
+  never frees the order, and no command-room override exists in phase 1 (**D-053** point 1). A
+  later approval of a freed attempt is an `orphan_approved` incident (reason `order_freed`) handled
+  only by the orphan procedure below — never recorded in-app.
 - **Recovery — orphan_approved (the original payment can no longer be legally recorded):** the
-  order stays blocked. Open an incident under a Work ID; the owner decides. A same-day provider
+  order stays blocked for every tender, void, edit, discount and new attempt while the standing
+  charge is unresolved (an `order_freed` orphan's order was already freed by the manager and is
+  listed for reconciliation only). Open an incident under a Work ID; the owner decides. A same-day provider
   void, when needed, is performed manually in the provider's back office only after explicit owner
-  approval — never by the application. The operator then records the sanitized resolution through
-  `app.card_attempt_resolve_orphan` (§4.55.10): `provider_voided` / `provider_refunded` free the
-  order for another tender or a void; `owner_reconciled` closes the incident and admits a manager
-  void only, never a tender. No automatic void, refund or release; no in-app reversal in phase 1.
+  approval — never by the application. Only documented provider confirmation that the charge was
+  actually voided or refunded lets the operator record the resolution through
+  `app.card_attempt_resolve_orphan` (§4.55.10) as `provider_voided` / `provider_refunded`, which
+  frees the order for another tender or a void. A standing charge the owner wants to keep but
+  RestoFlow cannot legally record stays an open incident until a future, separately designed,
+  audited financial-adjustment workflow exists. No automatic void, refund or release; no in-app
+  reversal in phase 1.
 - **Verification:** the provider's transaction report against the ledger's `approved` / `recorded`
   rows for the pilot branch every day; every difference becomes an incident row; every
   `orphan_approved` row has an open incident; the pilot branch's `payments` count equals the

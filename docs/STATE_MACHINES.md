@@ -424,7 +424,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 ## 10. Sync operation
 
 **Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `created → pending → in_flight → applied`; plus `rejected` (permanent), `dead` (poison after max retries), `conflict → resolved`.
-**Terminal:** `applied`, `rejected`, `dead`.
+**Terminal:** `applied`, `rejected`, `dead`. *(`rejected` admits the single **D-054** server-only reopen noted under the forbidden transitions below.)*
 > Mechanics (outbox/inbox, idempotency, backoff, conflict policy) owned by [OFFLINE_SYNC_SPEC.md](OFFLINE_SYNC_SPEC.md); this section owns the operation lifecycle states.
 
 ### 10.1 Allowed transitions
@@ -442,16 +442,17 @@ Each transition row carries these columns. The legend applies to all 10 machines
 | in_flight → pending | device | transient network failure; retry with backoff (< max retries) | No | Local log | No-online-only | n/a (re-attempt) |
 | pending → dead | server / device | **poison operation: max retries exceeded** (permanent-rejection / poison handling) | Reason auto-captured | Yes | Server-only / local | Terminal |
 | in_flight → dead | server | repeated failures exhaust retry budget | Reason auto-captured | Yes | Server-only | Terminal |
+| rejected → in_flight (**D-054** only) | server (`app.card_recording_resume_guard` inside `app.sync_push`) | the single carve-out: a `payment.create` row whose identity is a provider-approved live card attempt; explicit `manager`+ Resume recording on the same device; identical operation type / fingerprint; stored refusal `precondition_failed` / `revoked_employee` / `revoked_device`; active claim; amount / currency equal; `recording_resume` = the stored count; at most 3 | Explicit operator action (never automatic) | Yes (`card_attempt.recording_resume_requested`, sensitive) | Server-only | n/a (one re-dispatch; the row then reaches `applied` or `rejected` again) |
 
 > **`dead` = poison-operation after max retries.** A `dead` op is parked for human inspection (sync status visible to cashier per **D-010**), never silently dropped. `rejected` = permanent business/authorization rejection (distinct from `dead` which is exhausted-retry). `resolved` is the successful exit of a `conflict`, after which the op proceeds to `applied`. Retry/backoff constants (**Q-018**), poison/dead operation tooling & handling (**Q-020**), reconciliation order (**Q-021**), and clock-skew handling for last-writer-wins tie-breaks (**Q-024**) are open questions owned by [OFFLINE_SYNC_SPEC.md](OFFLINE_SYNC_SPEC.md) / [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 ### 10.2 Forbidden / invalid transitions
 
-- `applied → *`, `rejected → *`, `dead → *` — terminal; **FORBIDDEN**. A correction is a *new* sync operation with a new `local_operation_id`, never re-running a terminal op (idempotency, **D-022**).
+- `applied → *`, `rejected → *`, `dead → *` — terminal; **FORBIDDEN**. A correction is a *new* sync operation with a new `local_operation_id`, never re-running a terminal op (idempotency, **D-022**). *(**DECISION D-054**, 2026-10-22, BIZBOT-PAYMENTS-ZCREDIT-PILOT-001B — one server-only exception: a `rejected` `payment.create` row whose identity is a provider-approved live card attempt may be reopened `rejected → in_flight` and re-dispatched once under the SAME `local_operation_id` by an explicit `manager`+ Resume recording, at most 3 times, only when its stored refusal is `precondition_failed` / `revoked_employee` / `revoked_device`; every other terminal row stays terminal — [API_CONTRACT](API_CONTRACT.md) §4.55.7.)*
 - `created → in_flight` (skipping `pending`) — **FORBIDDEN**.
 - `created → applied` (client self-applying authoritatively) — **FORBIDDEN**; only the server moves an op to `applied`.
 - `conflict → applied` directly (skipping `resolved`) — **FORBIDDEN**.
-- Re-using a terminal op's `local_operation_id` to resurrect it — **FORBIDDEN** (would break idempotency / duplicate-prevention).
+- Re-using a terminal op's `local_operation_id` to resurrect it — **FORBIDDEN** (would break idempotency / duplicate-prevention). *(Except the single server-only **D-054** reopen noted above, which re-dispatches the SAME row under the SAME identity and never mints or reuses an identity for a different operation.)*
 - Device transitioning an op to `applied`/`rejected`/`dead`(server-side) — **FORBIDDEN**; those are server-authoritative (**D-010**).
 
 ---
