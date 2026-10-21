@@ -110,8 +110,8 @@ test('AR/HE/EN cover all four real states, recovery uncertainty and the same ten
     const m = orderMessages(locale);
     assert.deepEqual(Object.keys(m).sort(), keys);
     assert.ok(m.payAtPickup.length > 0 && m.orderNotes.length > 0 && m.itemNotesLimit.length > 0);
-    assert.equal(m.phoneHint, '0521234567');
-    assert.ok(m.phoneHelp.includes('0521234567') && m.phoneError.includes('0521234567'));
+    assert.ok(!('phoneHint' in m) && !('phoneHelp' in m));
+    assert.ok(m.phoneError.length > 0 && !/\d/.test(m.phoneError));
     for (const state of ['pending', 'accepted', 'rejected', 'expired']) {
       const copy = orderStatusCopy(state, m);
       assert.ok(copy.title.length > 0 && copy.body.length > 0);

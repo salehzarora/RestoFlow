@@ -98,6 +98,9 @@ try {
       rpcCalls.push(slug);
       if (typeof slug !== 'string' || !/^sf-browser-[a-z0-9-]+$/.test(slug)) { res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(NOT_FOUND_ENVELOPE)); return; }
       const envelope = syntheticEnvelope({ restaurant: { slug, display_name: 'Synthetic Pickup Kitchen', tagline: 'Offline checkout verification', motion: 'calm' }, service: { ordering_enabled: !slug.endsWith('-off'), pickup_enabled: true, delivery_enabled: false } });
+      if (slug.endsWith('-contact-b')) envelope.restaurant.phone = '+447700900123';
+      if (slug.endsWith('-contact-empty')) envelope.restaurant.phone = null;
+      if (slug.endsWith('-contact-invalid')) envelope.restaurant.phone = 'javascript:alert(1)';
       envelope.home_content = { hero_headline: null, hero_subline: null, announcement_text: null };
       if (slug.endsWith('-home')) {
         envelope.restaurant.display_name = 'Synthetic Long Restaurant Name مطعم تجريبي ארוך';

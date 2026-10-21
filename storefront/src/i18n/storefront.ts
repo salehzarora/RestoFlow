@@ -115,8 +115,7 @@ export interface StorefrontMessages {
   readonly yourDetails: string;
   readonly fullName: string;
   readonly phone: string;
-  readonly phoneHint: string;
-  readonly phoneHelp: string;
+  readonly phoneError: string;
   readonly address: string;
   readonly city: string;
   readonly chooseCity: string;

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { brotliCompressSync, constants } from 'node:zlib';
 import { SYNTH_IDS } from '../support/envelope.mjs';
 import { orderMessages } from '../../src/i18n/orders';
+import { storefrontMessages } from '../../src/i18n/storefront';
 
 const BASE = process.env.SF_WEB_ORDER_BASE ?? '';
 const RUN = process.env.SF_WEB_ORDER_RUN_DIR ?? '';
@@ -72,7 +73,7 @@ function root(locale: string) { return locale === 'ar' ? '' : `/${locale}`; }
 function routeFor(locale: string, slug: string, leaf: string) { return `${root(locale)}/s/${slug}/${leaf}`; }
 
 /** No raw capability is emitted to evidence files or user-visible diagnostics. */
-async function offlineEdge(context: BrowserContext, page: Page, initial: 'normal' | 'lost-commit' | 'missing' = 'normal') {
+async function offlineEdge(context: BrowserContext, page: Page, initial: 'normal' | 'lost-commit' | 'missing' | 'unavailable' = 'normal') {
   const ledger = new Map<string, Entry>();
   const submissions: RequestBody[] = [];
   const actions: { action: string; slug: string; requestId: string }[] = [];
@@ -100,10 +101,11 @@ async function offlineEdge(context: BrowserContext, page: Page, initial: 'normal
     const key = `${body.slug}:${body.request_id}`;
     if (body.action === 'submit') {
       writes++; submissions.push(body);
-      if (mode === 'missing' && writes === 1) { await route.abort('failed'); return; }
+      if ((mode === 'missing' || mode === 'unavailable') && writes === 1) { await route.abort('failed'); return; }
       if (!ledger.has(key)) ledger.set(key, { body, state: 'pending', expires: new Date(Date.now() + 900_000).toISOString() });
       if (mode === 'lost-commit' && writes === 1) { await route.abort('failed'); return; }
     }
+    if (body.action === 'status' && mode === 'unavailable') { await route.fulfill({ status: 503, headers: cors, body: JSON.stringify({ ok: false, error: 'unavailable' }) }); return; }
     const entry = ledger.get(key);
     if (!entry || entry.body.status_token !== body.status_token) { await route.fulfill({ status: 404, headers: cors, body: JSON.stringify({ ok: false, error: 'not_found' }) }); return; }
     await route.fulfill({ status: 200, headers: cors, body: JSON.stringify({ ok: true, request_id: body.request_id, status: entry.state, expires_at: entry.expires, totals: TOTALS, replayed: body.action === 'status' || writes > 1, ...(entry.state === 'rejected' && entry.customerReason !== undefined ? { customer_rejection_reason: entry.customerReason } : {}) }) });
@@ -115,6 +117,16 @@ async function assertPage(page: Page, locale: string) {
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
   await expect(page.locator('html')).toHaveAttribute('dir', locale === 'en' ? 'ltr' : 'rtl');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no horizontal document overflow').toBe(true);
+}
+/** Inspect the target only. Browser tests must never open the system dialer. */
+async function assertPublicContact(page: Page, locale: 'ar' | 'he' | 'en', raw = '052-000-0000', href = 'tel:0520000000') {
+  const contact = page.locator('[data-sf-restaurant-contact]');
+  await expect(contact).toHaveCount(1);
+  await expect(contact).toHaveAttribute('href', href);
+  await expect(contact).toHaveAccessibleName(`${storefrontMessages(locale).callRestaurant} ${raw}`);
+  await expect(contact.locator('[dir="ltr"]')).toHaveText(raw);
+  const box = await contact.boundingBox();
+  expect(box?.width).toBeGreaterThanOrEqual(44); expect(box?.height).toBeGreaterThanOrEqual(44);
 }
 async function picture(page: Page, filename: string) {
   const dir = path.join(RUN, 'screenshots'); mkdirSync(dir, { recursive: true });
@@ -151,15 +163,20 @@ async function prepare(page: Page, locale: 'ar' | 'he' | 'en', slug: string, two
   await expect(page.locator('[data-sf-web-order="details"]')).toBeVisible();
   await expect(page.locator('[data-sf-address]')).toHaveCount(0);
   await page.locator('[data-sf-field="fullName"]').fill(NAME);
-  await expect(page.locator('[data-sf-field="phone"]')).toHaveAttribute('placeholder', '0521234567');
-  await expect(page.locator('[data-sf-phone-help]')).toHaveText(orderMessages(locale).phoneHelp);
+  await expect(page.locator('[data-sf-field="phone"]')).not.toHaveAttribute('placeholder');
+  await expect(page.locator('[data-sf-field="phone"]')).not.toHaveAttribute('aria-describedby');
+  await expect(page.locator('[data-sf-phone-error], [data-sf-phone-help]')).toHaveCount(0);
   await page.locator('[data-sf-field="phone"]').fill('050123456');
   await expect(page.locator('[data-sf-cta="to-review"]')).toHaveAttribute('aria-disabled', 'true');
   // The aria-disabled CTA intentionally remains keyboard-activatable to explain errors.
   await page.locator('[data-sf-cta="to-review"]').press('Enter');
   await expect(page.locator('[data-sf-field="phone"]')).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.locator('[data-sf-phone-help]')).toHaveText(orderMessages(locale).phoneError);
+  await expect(page.locator('[data-sf-phone-error]')).toHaveText(orderMessages(locale).phoneError);
+  await expect(page.locator('[data-sf-field="phone"]')).toBeFocused();
+  await expect(page.locator('[data-sf-field="phone"]')).toHaveAttribute('aria-describedby', 'sf-co-phone-error');
   await page.locator('[data-sf-field="phone"]').fill(phone);
+  await expect(page.locator('[data-sf-phone-error]')).toHaveCount(0);
+  await expect(page.locator('[data-sf-field="phone"]')).not.toHaveAttribute('aria-describedby');
   await page.locator('[data-sf-field="orderNotes"]').fill(ORDER_NOTE);
   await page.locator('[data-sf-cta="to-review"]').click();
   await expect(page.locator('[data-sf-web-order="review"]')).toBeVisible();
@@ -215,6 +232,19 @@ test.beforeAll(() => {
 });
 
 for (const locale of ['ar', 'he', 'en'] as const) {
+  test(`${locale}: public restaurant contact stays tenant-scoped and absent or unsafe numbers are not callable`, async ({ page, context }) => {
+    const edge = await offlineEdge(context, page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(routeFor(locale, `sf-browser-${locale}-contact-a`, 'menu'), { waitUntil: 'networkidle' });
+    await assertPublicContact(page, locale);
+    await page.goto(routeFor(locale, `sf-browser-${locale}-contact-b`, 'menu'), { waitUntil: 'networkidle' });
+    await assertPublicContact(page, locale, '+447700900123', 'tel:+447700900123');
+    for (const suffix of ['contact-empty', 'contact-invalid']) {
+      await page.goto(routeFor(locale, `sf-browser-${locale}-${suffix}`, 'menu'), { waitUntil: 'networkidle' });
+      await expect(page.locator('[data-sf-restaurant-contact], a[href^="tel:"]')).toHaveCount(0);
+    }
+    expect(edge.writes).toBe(0); expect(edge.remote).toEqual([]); expect(edge.pageErrors).toEqual([]);
+  });
   test(`${locale}: published Home content stays text and header controls never overlap at phone/tablet/desktop widths`, async ({ page, context }) => {
     const edge = await offlineEdge(context, page);
     const slug = `sf-browser-${locale}-home`;
@@ -224,6 +254,7 @@ for (const locale of ['ar', 'he', 'en'] as const) {
       await page.setViewportSize({ width, height: 844 });
       await page.goto(routeFor(locale, slug, 'menu'), { waitUntil: 'networkidle' });
       await assertPage(page, locale);
+      await assertPublicContact(page, locale);
       const hero = page.locator('[data-sf-module="hero"]');
       await expect(hero.locator('h1')).toHaveText(headline);
       await expect(hero.locator('p')).toHaveText(subline);
@@ -277,6 +308,7 @@ for (const locale of ['ar', 'he', 'en'] as const) {
       await assertPage(page, locale); await picture(page, `${locale}-${width}-review.png`);
       await page.locator('[data-sf-cta="send"]').click();
       await expect(page.locator('[data-sf-live-status="pending"]')).toBeVisible();
+      await assertPublicContact(page, locale);
       expect(edge.writes).toBe(1); expect(edge.ledger.size).toBe(1); assertPayload(edge.submissions[0], true, PHONE_CASES[index].canonical);
       await expect(page.locator('[data-sf-server-totals]')).toContainText('₪145.67');
       await expect(page.locator('[data-sf-status-action="order-again"]')).toHaveCount(0);
@@ -284,6 +316,7 @@ for (const locale of ['ar', 'he', 'en'] as const) {
       edge.setState(terminal, terminal === 'rejected' ? PUBLIC_REASONS[locale] : undefined);
       await page.locator('[data-sf-status-action="refresh"]').click();
       await expect(page.locator(`[data-sf-live-status="${terminal}"]`)).toBeVisible();
+      await assertPublicContact(page, locale);
       const publicReason = page.locator('[data-sf-customer-rejection-reason]');
       if (terminal === 'rejected') {
         await expect(publicReason).toHaveText(`${orderMessages(locale).rejectionReasonLabel} ${PUBLIC_REASONS[locale]}`);
@@ -292,6 +325,7 @@ for (const locale of ['ar', 'he', 'en'] as const) {
       } else await expect(publicReason).toHaveCount(0);
       await page.reload({ waitUntil: 'networkidle' });
       await expect(page.locator(`[data-sf-live-status="${terminal}"]`)).toBeVisible();
+      await assertPublicContact(page, locale);
       if (terminal === 'rejected') {
         await expect(publicReason).toHaveText(`${orderMessages(locale).rejectionReasonLabel} ${PUBLIC_REASONS[locale]}`);
         const storage = await page.evaluate(() => [...Object.values(localStorage), ...Object.values(sessionStorage)]);
@@ -300,6 +334,12 @@ for (const locale of ['ar', 'he', 'en'] as const) {
       await expect(page).toHaveURL(`${BASE}${routeFor(locale, slug, 'review')}`);
       expect(edge.writes).toBe(1); expect(edge.ledger.size).toBe(1); expect(edge.actions.filter((action) => action.action === 'status').length).toBeLessThan(10);
       await assertPrivateStorage(page, slug); await assertPage(page, locale); await picture(page, `${locale}-${width}-${terminal}-reloaded.png`);
+      edge.setMode('unavailable');
+      await page.locator('[data-sf-status-action="refresh"]').click();
+      await expect(page.locator('[data-sf-banner="status-unavailable"]')).toBeVisible();
+      await assertPublicContact(page, locale);
+      edge.setMode('normal');
+      await page.locator('[data-sf-status-action="refresh"]').click();
       await page.locator('[data-sf-status-action="order-again"]').click();
       await expect(page).toHaveURL(`${BASE}${routeFor(locale, slug, 'menu')}`);
       expect(await page.evaluate((owner) => sessionStorage.getItem(`bizbot:web-order:${owner}`), slug)).toBeNull();
@@ -342,11 +382,30 @@ test('not-found reconciliation permits only an explicit exact original retry; re
   const edge = await offlineEdge(context, page, 'missing'); const slug = 'sf-browser-missing-retry';
   await prepare(page, 'en', slug, false); await page.locator('[data-sf-cta="send"]').click();
   await expect(page.locator('[data-sf-status-action="retry-original"]')).toBeVisible(); expect(edge.writes).toBe(1);
+  await assertPublicContact(page, 'en');
   await page.locator('[data-sf-status-action="retry-original"]').click();
   await expect(page.locator('[data-sf-live-status="pending"]')).toBeVisible(); expect(edge.writes).toBe(2); expect(edge.ledger.size).toBe(1);
   expect(JSON.stringify(edge.submissions[0]) === JSON.stringify(edge.submissions[1]), 'retry must retain the exact private body').toBe(true);
   await page.reload({ waitUntil: 'networkidle' }); await expect(page.locator('[data-sf-live-status="pending"]')).toBeVisible();
   expect(edge.writes).toBe(2); await expect(page.locator('[data-sf-status-action="retry-original"]')).toHaveCount(0);
+});
+
+test('unknown and recovered unavailable status retain public contact without a repeated write', async ({ page, context }) => {
+  const edge = await offlineEdge(context, page, 'unavailable'); const slug = 'sf-browser-contact-unknown';
+  await prepare(page, 'en', slug, false);
+  await page.locator('[data-sf-cta="send"]').click();
+  await expect(page.locator('[data-sf-live-status="unknown"]')).toBeVisible();
+  await assertPublicContact(page, 'en');
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.locator('[data-sf-live-status="unknown"]')).toBeVisible();
+  await assertPublicContact(page, 'en');
+  expect(edge.writes).toBe(1); expect(edge.ledger.size).toBe(0);
+  edge.setMode('normal');
+  await page.locator('[data-sf-status-action="refresh"]').click();
+  await expect(page.locator('[data-sf-live-status="not_found"]')).toBeVisible();
+  await assertPublicContact(page, 'en');
+  await expect(page.locator('[data-sf-status-action="retry-original"]')).toHaveCount(0);
+  expect(edge.writes).toBe(1); expect(edge.remote).toEqual([]); expect(edge.pageErrors).toEqual([]);
 });
 test('tenant and capability separation prevents cross-tenant or substituted-token status reads', async ({ page, context }) => {
   const edge = await offlineEdge(context, page); const slug = 'sf-browser-owner-a';
