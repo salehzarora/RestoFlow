@@ -8,6 +8,7 @@ import { formatMoney } from '@/money/format';
 import type { PromoModule, ServiceState, StoryModule, Tenant } from '@/source/types';
 import { ChevronIcon, ClockIcon, DeliveryIcon, MapMotif, StoreIcon } from '../icons';
 import { TenantText } from '../TenantText';
+import { RestaurantContact } from '../RestaurantContact';
 import { closedNoticeBody, hoursLabel } from './hoursCopy';
 import styles from './home.module.css';
 
@@ -193,6 +194,7 @@ export function ServiceStatusStrip({ tenant, m }: { tenant: Tenant; m: Storefron
           </span>
         </div>
       </div>
+      <RestaurantContact publicPhone={tenant.phone} label={m.callRestaurant} className={styles.promoCta} />
     </div>
   );
 }

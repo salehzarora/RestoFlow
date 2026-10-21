@@ -7,7 +7,8 @@
 --      search_path pinned, EXECUTE authenticated-only on BOTH layers, anon
 --      refused as the REAL role at the GRANT layer (message pinned, so a body
 --      refusal cannot pass for it), the anon allowlist and the public DEFINER set
---      still exactly {storefront_menu(text)}, the LIVE-only live-source index.
+--      exactly the legacy + HOME-CONTENT-001 versioned storefront readers,
+--      the LIVE-only live-source index.
 --   B. stage: exact enumerations (prototype-style names, case variants),
 --      item-image snapshot requirement, content address, source proof (missing / foreign
 --      scope / wrong bucket), authority (rank 1 audited, rank 0 / cross-tenant
@@ -140,13 +141,13 @@ select is(
   (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by 1)
      from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
       and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  'storefront_menu(text)',
-  'A7. the anon-executable public set is still EXACTLY {storefront_menu(text)} (no new anon RPC)');
+  'storefront_menu(text), storefront_menu_v2(text)',
+  'A7. the anon-executable public set is EXACTLY the two versioned storefront readers');
 select is(
   (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by 1)
      from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and p.prosecdef),
-  'storefront_menu(text)',
-  'A8. the public SECURITY DEFINER set is still EXACTLY {storefront_menu(text)}');
+  'storefront_menu(text), storefront_menu_v2(text)',
+  'A8. the public SECURITY DEFINER set is EXACTLY the two versioned storefront readers');
 select ok(not has_schema_privilege('anon', 'app', 'USAGE'), 'A9. anon still has no USAGE on schema app');
 select is((select provolatile::text from pg_proc where oid = 'app.list_storefront_media(uuid,uuid)'::regprocedure), 's',
   'A10. list is STABLE (read-only)');

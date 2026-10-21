@@ -9639,4 +9639,49 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posBackgroundOrderAlertsSignIn =>
       'Background notification authorization ended. Sign in again to renew it.';
+
+  @override
+  String get storefrontHomeContentTitle => 'Home page text';
+
+  @override
+  String get storefrontHeroHeadlineLabel => 'Hero headline';
+
+  @override
+  String get storefrontHeroSublineLabel => 'Hero subline';
+
+  @override
+  String get storefrontAnnouncementLabel => 'Announcement';
+
+  @override
+  String get storefrontHomeContentHelp =>
+      'Optional plain text: headline 120, subline 180, announcement 240 characters. Empty headline uses the saved tagline/name; empty subline and announcement stay hidden.';
+
+  @override
+  String get storefrontHomeContentUnavailable =>
+      'Home text editing requires the updated backend. Ordinary profile editing remains available.';
+
+  @override
+  String get storefrontHomeContentInvalid =>
+      'Enter plain text within the displayed field limits, without control characters.';
+
+  @override
+  String get storefrontHomeContentSaveAction => 'Save Home text';
+
+  @override
+  String get storefrontHomeContentSaved => 'Home text saved.';
+
+  @override
+  String get storefrontHomeContentSeparateEdits =>
+      'Save or discard the other profile edits before saving Home text. Discard one section if both have unsaved edits.';
+
+  @override
+  String get storefrontHomeContentUncertain =>
+      'The save result is unknown. Your exact draft and request are kept. Use Try again to reconcile the same request; do not start a different save.';
+
+  @override
+  String get storefrontHomeContentPreviewTitle => 'Text preview';
+
+  @override
+  String get storefrontHomeContentProfileMissing =>
+      'The profile is no longer available. Reload and create it through normal profile setup first.';
 }

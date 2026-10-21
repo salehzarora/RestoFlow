@@ -1298,6 +1298,10 @@ class StorefrontProfile {
     this.publicCity,
     this.publicAddress,
     this.publicPhone,
+    this.heroHeadline,
+    this.heroSubline,
+    this.announcementText,
+    this.supportsHomeContent = false,
     required this.primaryColor,
     required this.accentColor,
     required this.visualPreset,
@@ -1348,6 +1352,35 @@ class StorefrontProfile {
   final String? publicAddress;
   final String? publicPhone;
 
+  /// Present only when all three additive columns were served by the backend.
+  /// An older backend can still edit the ordinary profile without pretending
+  /// that the separately versioned Home-content writer is available.
+  final bool supportsHomeContent;
+  final String? heroHeadline;
+  final String? heroSubline;
+  final String? announcementText;
+
+  static const Map<String, int> homeContentLimits = {
+    'hero_headline': 120,
+    'hero_subline': 180,
+    'announcement_text': 240,
+  };
+
+  static bool isValidHomeContentValue(String key, Object? value) {
+    final max = homeContentLimits[key];
+    if (max == null) return false;
+    if (value == null) return true;
+    return value is String &&
+        !RegExp(r'[\x00-\x1f\x7f]').hasMatch(value) &&
+        value.trim().runes.length <= max;
+  }
+
+  Map<String, Object?> toHomeContentFields() => {
+    'hero_headline': heroHeadline,
+    'hero_subline': heroSubline,
+    'announcement_text': announcementText,
+  };
+
   /// `#rrggbb` (the writer lower-cases it).
   final String primaryColor;
   final String accentColor;
@@ -1376,6 +1409,18 @@ class StorefrontProfile {
 
   factory StorefrontProfile.fromJson(Object? json, {String path = 'profile'}) {
     final j = _Json.of(json, path);
+    final present = homeContentLimits.keys.where(j.map.containsKey).length;
+    if (present != 0 && present != homeContentLimits.length) {
+      throw StorefrontDecodeException(
+        path,
+        'incomplete Home-content capability',
+      );
+    }
+    for (final key in homeContentLimits.keys) {
+      if (!isValidHomeContentValue(key, j[key])) {
+        throw StorefrontDecodeException(j.at(key), 'invalid Home content');
+      }
+    }
     return StorefrontProfile(
       restaurantId: j.string('restaurant_id'),
       storefrontBranchId: j.string('storefront_branch_id'),
@@ -1385,6 +1430,10 @@ class StorefrontProfile {
       publicCity: j.optString('public_city'),
       publicAddress: j.optString('public_address'),
       publicPhone: j.optString('public_phone'),
+      heroHeadline: j.optString('hero_headline'),
+      heroSubline: j.optString('hero_subline'),
+      announcementText: j.optString('announcement_text'),
+      supportsHomeContent: present == homeContentLimits.length,
       primaryColor: j.string('primary_color'),
       accentColor: j.string('accent_color'),
       visualPreset: j.enumValue('visual_preset', StorefrontVisualPreset.values),

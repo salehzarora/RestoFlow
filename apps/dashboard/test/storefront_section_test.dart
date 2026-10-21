@@ -143,6 +143,55 @@ class _FakeProfileRepo implements StorefrontProfileRepository {
   }
 }
 
+class _HomeProfileRepo extends _FakeProfileRepo
+    implements StorefrontHomeContentRepository {
+  _HomeProfileRepo({Map<String, Object?>? content})
+    : super(
+        profile: {
+          ..._profileJson(),
+          'hero_headline': null,
+          'hero_subline': null,
+          'announcement_text': null,
+          ...?content,
+        },
+      );
+
+  final List<_Save> homeSaves = [];
+  final List<StorefrontWriteResult> homeResults = [];
+  Completer<StorefrontWriteResult>? pending;
+
+  @override
+  Future<StorefrontWriteResult> saveHomeContent({
+    required int expectedVersion,
+    required Map<String, Object?> content,
+    String? requestId,
+  }) async {
+    homeSaves.add(_Save(expectedVersion, Map.of(content), requestId));
+    if (pending != null) return pending!.future;
+    if (homeResults.isNotEmpty) return homeResults.removeAt(0);
+    final version = profile!['version']! as int;
+    if (version != expectedVersion) {
+      return StorefrontWriteResult(
+        StorefrontWriteStatus.conflict,
+        requestId: requestId,
+        version: version,
+      );
+    }
+    for (final e in content.entries) {
+      final value = e.value as String?;
+      profile![e.key] = value == null || value.trim().isEmpty
+          ? null
+          : value.trim();
+    }
+    profile!['version'] = version + 1;
+    return StorefrontWriteResult(
+      StorefrontWriteStatus.ok,
+      requestId: requestId,
+      version: version + 1,
+    );
+  }
+}
+
 class _FakeMediaRepo implements StorefrontMediaRepository {
   int lists = 0;
 
@@ -351,6 +400,380 @@ void _expectPublishedWithNote(
 }
 
 void main() {
+  group('Home content editor', () {
+    testWidgets('disposed scope cannot start a save from a retained callback', (
+      tester,
+    ) async {
+      final first = _HomeProfileRepo();
+      await _pump(tester, StorefrontSection(seams: _seams(first)));
+      await tester.enterText(
+        find.byKey(const Key('storefront-home-headline')),
+        'Old scope draft',
+      );
+      await tester.pump();
+      final callback = tester
+          .widget<FilledButton>(find.byKey(const Key('storefront-home-save')))
+          .onPressed!;
+      final second = _HomeProfileRepo();
+      await _pump(
+        tester,
+        StorefrontSection(seams: _seams(second, identity: 'scope-B')),
+      );
+      callback();
+      await tester.pumpAndSettle();
+      expect(first.homeSaves, isEmpty);
+      expect(second.homeSaves, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('missing profile uses normal creation rather than Home save', (
+      tester,
+    ) async {
+      final repo = _HomeProfileRepo()..profile = null;
+      await _pump(tester, StorefrontSection(seams: _seams(repo)));
+      expect(find.byKey(const Key('storefront-slug')), findsOneWidget);
+      expect(find.byKey(const Key('storefront-home-save')), findsNothing);
+      expect(repo.homeSaves, isEmpty);
+    });
+
+    testWidgets(
+      'duplicate callback during an in-flight save never sends twice',
+      (tester) async {
+        final repo = _HomeProfileRepo()
+          ..pending = Completer<StorefrontWriteResult>();
+        await _pump(tester, StorefrontSection(seams: _seams(repo)));
+        await tester.enterText(
+          find.byKey(const Key('storefront-home-headline')),
+          'One save',
+        );
+        await tester.pump();
+        final callback = tester
+            .widget<FilledButton>(find.byKey(const Key('storefront-home-save')))
+            .onPressed!;
+        callback();
+        await tester.pump();
+        callback();
+        await tester.pump();
+        expect(repo.homeSaves, hasLength(1));
+        expect(_enabled(tester, const Key('storefront-home-save')), isFalse);
+        repo.pending!.complete(
+          const StorefrontWriteResult(StorefrontWriteStatus.unavailable),
+        );
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'authorization loss on replay retains the original uncertainty',
+      (tester) async {
+        final repo = _HomeProfileRepo()
+          ..homeResults.addAll(const [
+            StorefrontWriteResult(StorefrontWriteStatus.uncertain),
+            StorefrontWriteResult(StorefrontWriteStatus.denied),
+          ]);
+        await _pump(tester, StorefrontSection(seams: _seams(repo)));
+        await tester.enterText(
+          find.byKey(const Key('storefront-home-headline')),
+          'Preserve me',
+        );
+        await _tap(tester, find.byKey(const Key('storefront-home-save')));
+        await _tap(tester, find.byKey(const Key('storefront-home-retry')));
+        expect(repo.homeSaves, hasLength(2));
+        expect(repo.homeSaves[1].requestId, repo.homeSaves[0].requestId);
+        expect(find.byKey(const Key('storefront-home-retry')), findsOneWidget);
+        expect(
+          tester
+              .widget<TextField>(
+                find.byKey(const Key('storefront-home-headline')),
+              )
+              .enabled,
+          isFalse,
+        );
+        expect(
+          tester
+              .widget<TextField>(
+                find.byKey(const Key('storefront-home-headline')),
+              )
+              .controller!
+              .text,
+          'Preserve me',
+        );
+      },
+    );
+
+    testWidgets('profile removal refreshes the normal create workflow', (
+      tester,
+    ) async {
+      final repo = _HomeProfileRepo()
+        ..homeResults.add(
+          const StorefrontWriteResult(
+            StorefrontWriteStatus.invalid,
+            reason: 'not_found',
+          ),
+        );
+      await _pump(tester, StorefrontSection(seams: _seams(repo)));
+      await tester.enterText(
+        find.byKey(const Key('storefront-home-headline')),
+        'Before removal',
+      );
+      repo.profile = null;
+      await _tap(tester, find.byKey(const Key('storefront-home-save')));
+      expect(find.byKey(const Key('storefront-slug')), findsOneWidget);
+      expect(find.byKey(const Key('storefront-home-save')), findsNothing);
+      final l10n = await _l10n();
+      expect(
+        find.text(l10n.storefrontHomeContentProfileMissing),
+        findsOneWidget,
+      );
+      expect(repo.homeSaves, hasLength(1));
+    });
+
+    testWidgets('older backend remains honestly unavailable', (tester) async {
+      final repo = _FakeProfileRepo(profile: _profileJson());
+      await _pump(tester, StorefrontSection(seams: _seams(repo)));
+      expect(
+        find.byKey(const Key('storefront-home-unsupported')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('storefront-home-save')), findsNothing);
+      expect(find.byKey(const Key('storefront-display-name')), findsOneWidget);
+    });
+
+    for (final locale in ['ar', 'he', 'en']) {
+      testWidgets('$locale labels and empty preview use only real fallback', (
+        tester,
+      ) async {
+        final repo = _HomeProfileRepo();
+        final l10n = await _l10n(locale);
+        await _pump(
+          tester,
+          StorefrontSection(seams: _seams(repo)),
+          locale: locale,
+        );
+        tester.view.physicalSize = const Size(390, 2000);
+        await tester.pumpAndSettle();
+        expect(find.text(l10n.storefrontHomeContentTitle), findsOneWidget);
+        expect(find.text(l10n.storefrontHeroHeadlineLabel), findsOneWidget);
+        expect(
+          tester
+              .widget<Text>(
+                find.byKey(const Key('storefront-home-preview-headline')),
+              )
+              .data,
+          'Cafe Roma',
+        );
+        expect(
+          find.byKey(const Key('storefront-home-preview-subline')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('storefront-home-preview-announcement')),
+          findsNothing,
+        );
+        expect(_enabled(tester, const Key('storefront-home-save')), isFalse);
+        expect(
+          Directionality.of(
+            tester.element(
+              find.byKey(const Key('storefront-home-preview-headline')),
+            ),
+          ),
+          locale == 'en' ? TextDirection.ltr : TextDirection.rtl,
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets(
+      'dedicated save sends all three fields with shared version and refreshes',
+      (tester) async {
+        final repo = _HomeProfileRepo();
+        await _pump(tester, StorefrontSection(seams: _seams(repo)));
+        await tester.enterText(
+          find.byKey(const Key('storefront-home-headline')),
+          '  <b>اسم المطعم</b>  ',
+        );
+        await tester.enterText(
+          find.byKey(const Key('storefront-home-announcement')),
+          'إعلان حقيقي',
+        );
+        await _tap(tester, find.byKey(const Key('storefront-home-save')));
+        expect(repo.homeSaves, hasLength(1));
+        expect(repo.saves, isEmpty);
+        expect(repo.homeSaves.single.expectedVersion, 1);
+        expect(repo.homeSaves.single.requestId, isNotNull);
+        expect(repo.homeSaves.single.patch, {
+          'hero_headline': '  <b>اسم المطعم</b>  ',
+          'hero_subline': '',
+          'announcement_text': 'إعلان حقيقي',
+        });
+        expect(repo.profile!['version'], 2);
+        expect(
+          tester
+              .widget<Text>(
+                find.byKey(const Key('storefront-home-preview-headline')),
+              )
+              .data,
+          '<b>اسم المطعم</b>',
+        );
+        expect(_enabled(tester, const Key('storefront-home-save')), isFalse);
+        final l10n = await _l10n();
+        expect(find.text(l10n.storefrontHomeContentSaved), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'control/bounds reject and separate unsaved edits cannot be lost',
+      (tester) async {
+        final repo = _HomeProfileRepo();
+        await _pump(tester, StorefrontSection(seams: _seams(repo)));
+        await tester.enterText(
+          find.byKey(const Key('storefront-home-headline')),
+          'x' * 121,
+        );
+        await tester.pump();
+        expect(_enabled(tester, const Key('storefront-home-save')), isFalse);
+        await tester.enterText(
+          find.byKey(const Key('storefront-home-headline')),
+          'New headline',
+        );
+        await tester.enterText(
+          find.byKey(const Key('storefront-display-name')),
+          'Other profile draft',
+        );
+        await tester.pump();
+        expect(_enabled(tester, const Key('storefront-home-save')), isFalse);
+        expect(_enabled(tester, const Key('storefront-save')), isFalse);
+        expect(
+          find.byKey(const Key('storefront-home-separate-edits')),
+          findsOneWidget,
+        );
+        await _tap(tester, find.byKey(const Key('storefront-home-discard')));
+        expect(_enabled(tester, const Key('storefront-save')), isTrue);
+        expect(repo.homeSaves, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'unknown write locks draft and explicit retry keeps original identity',
+      (tester) async {
+        final repo = _HomeProfileRepo()
+          ..homeResults.add(
+            const StorefrontWriteResult(StorefrontWriteStatus.uncertain),
+          );
+        await _pump(tester, StorefrontSection(seams: _seams(repo)));
+        await tester.enterText(
+          find.byKey(const Key('storefront-home-headline')),
+          'Keep exact draft',
+        );
+        await _tap(tester, find.byKey(const Key('storefront-home-save')));
+        expect(repo.homeSaves, hasLength(1));
+        expect(
+          tester
+              .widget<TextField>(
+                find.byKey(const Key('storefront-home-headline')),
+              )
+              .enabled,
+          isFalse,
+        );
+        await tester.pump(const Duration(seconds: 5));
+        expect(repo.homeSaves, hasLength(1));
+        await _tap(tester, find.byKey(const Key('storefront-home-retry')));
+        expect(repo.homeSaves, hasLength(2));
+        expect(repo.homeSaves[1].requestId, repo.homeSaves[0].requestId);
+        expect(
+          repo.homeSaves[1].expectedVersion,
+          repo.homeSaves[0].expectedVersion,
+        );
+        expect(repo.homeSaves[1].patch, repo.homeSaves[0].patch);
+        expect(repo.profile!['hero_headline'], 'Keep exact draft');
+      },
+    );
+
+    testWidgets(
+      'known conflict refreshes; failed refresh locks stale profile',
+      (tester) async {
+        final repo = _HomeProfileRepo()
+          ..homeResults.add(
+            const StorefrontWriteResult(
+              StorefrontWriteStatus.conflict,
+              version: 2,
+            ),
+          );
+        await _pump(tester, StorefrontSection(seams: _seams(repo)));
+        await tester.enterText(
+          find.byKey(const Key('storefront-home-headline')),
+          'Losing edit',
+        );
+        repo.profile!['hero_headline'] = 'Other manager';
+        repo.profile!['version'] = 2;
+        await _tap(tester, find.byKey(const Key('storefront-home-save')));
+        expect(
+          tester
+              .widget<TextField>(
+                find.byKey(const Key('storefront-home-headline')),
+              )
+              .controller!
+              .text,
+          'Other manager',
+        );
+        await tester.enterText(
+          find.byKey(const Key('storefront-home-headline')),
+          'Another edit',
+        );
+        repo.readOverrides.add(const StorefrontProfileRead.unavailable());
+        await _tap(tester, find.byKey(const Key('storefront-home-save')));
+        expect(find.byKey(const Key('storefront-stale')), findsOneWidget);
+        expect(
+          tester
+              .widget<TextField>(
+                find.byKey(const Key('storefront-home-headline')),
+              )
+              .enabled,
+          isFalse,
+        );
+      },
+    );
+
+    testWidgets(
+      'scope change drops previous draft and pending response without retry',
+      (tester) async {
+        final first = _HomeProfileRepo()
+          ..pending = Completer<StorefrontWriteResult>();
+        await _pump(tester, StorefrontSection(seams: _seams(first)));
+        await tester.enterText(
+          find.byKey(const Key('storefront-home-headline')),
+          'Tenant A',
+        );
+        await tester.pump();
+        await tester.ensureVisible(
+          find.byKey(const Key('storefront-home-save')),
+        );
+        await tester.tap(find.byKey(const Key('storefront-home-save')));
+        await tester.pump();
+        final second = _HomeProfileRepo(content: {'hero_headline': 'Tenant B'});
+        await _pump(
+          tester,
+          StorefrontSection(seams: _seams(second, identity: 'restaurant-B')),
+        );
+        first.pending!.complete(
+          const StorefrontWriteResult(StorefrontWriteStatus.ok),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<TextField>(
+                find.byKey(const Key('storefront-home-headline')),
+              )
+              .controller!
+              .text,
+          'Tenant B',
+        );
+        expect(first.homeSaves, hasLength(1));
+        expect(second.homeSaves, isEmpty);
+      },
+    );
+  });
+
   group('read before edit', () {
     testWidgets('unwired: an honest note, no fields', (tester) async {
       final l10n = await _l10n();

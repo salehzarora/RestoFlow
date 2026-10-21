@@ -52,6 +52,7 @@
 .announceText {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .announceClose {
@@ -151,7 +152,9 @@
   position: relative;
   z-index: 4;
   display: grid;
-  grid-template-columns: 84px 1fr 84px;
+  /* Two 44px controls plus their 6px gap must fit without intruding into
+     the merchant's name. Both sides stay equal for an optically centred logo. */
+  grid-template-columns: 94px minmax(0, 1fr) 94px;
   align-items: center;
   padding: 12px;
 }
@@ -245,6 +248,11 @@
   margin: 0;
   font: 900 27px / 1.1 var(--font);
   color: var(--onhero);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .heroRule {
@@ -259,6 +267,11 @@
   margin: 0;
   font: 500 12.5px / 1.35 var(--font);
   color: var(--onhero2);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 /* ---------------------------------------------------------- service strip */

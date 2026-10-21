@@ -9488,4 +9488,49 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posBackgroundOrderAlertsSignIn =>
       'הרשאת ההתראות ברקע הסתיימה. יש להתחבר שוב כדי לחדש אותה.';
+
+  @override
+  String get storefrontHomeContentTitle => 'טקסט דף הבית';
+
+  @override
+  String get storefrontHeroHeadlineLabel => 'כותרת ראשית';
+
+  @override
+  String get storefrontHeroSublineLabel => 'כותרת משנה';
+
+  @override
+  String get storefrontAnnouncementLabel => 'הודעה';
+
+  @override
+  String get storefrontHomeContentHelp =>
+      'טקסט רגיל ורשות: כותרת עד 120 תווים, כותרת משנה עד 180 והודעה עד 240. כותרת ריקה משתמשת בתיאור או בשם השמור; כותרת משנה והודעה ריקות מוסתרות.';
+
+  @override
+  String get storefrontHomeContentUnavailable =>
+      'עריכת טקסט הבית דורשת שרת מעודכן. עריכת הפרופיל הרגילה עדיין זמינה.';
+
+  @override
+  String get storefrontHomeContentInvalid =>
+      'יש להזין טקסט רגיל בגבולות השדות, ללא תווי בקרה.';
+
+  @override
+  String get storefrontHomeContentSaveAction => 'שמירת טקסט הבית';
+
+  @override
+  String get storefrontHomeContentSaved => 'טקסט הבית נשמר.';
+
+  @override
+  String get storefrontHomeContentSeparateEdits =>
+      'יש לשמור או לבטל את שינויי הפרופיל האחרים לפני שמירת טקסט הבית. אם שני החלקים השתנו, בטלו תחילה אחד מהם.';
+
+  @override
+  String get storefrontHomeContentUncertain =>
+      'תוצאת השמירה אינה ידועה. הטיוטה ומזהה הבקשה נשמרו. נסו שוב כדי לבדוק את אותה בקשה, ואל תתחילו שמירה אחרת.';
+
+  @override
+  String get storefrontHomeContentPreviewTitle => 'תצוגת טקסט מקדימה';
+
+  @override
+  String get storefrontHomeContentProfileMissing =>
+      'הפרופיל אינו זמין עוד. יש לרענן וליצור אותו תחילה דרך הגדרת הפרופיל הרגילה.';
 }

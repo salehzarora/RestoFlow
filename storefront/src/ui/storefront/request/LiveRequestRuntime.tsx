@@ -11,11 +11,12 @@ import { useLiveOrder } from '../checkout/LiveOrderProvider';
 import { BackLink, Banner, Money } from '../checkout/flowParts';
 import { ClockIcon, CheckIcon, CloseIcon, InfoIcon } from '../icons';
 import { TenantText } from '../TenantText';
+import { RestaurantContact } from '../RestaurantContact';
 import type { RequestTenant } from './requestParts';
 import s from './liveRequest.module.css';
 
 /** Private status reads only; no cancellation, kitchen timeline or demo state. */
-export function LiveRequestRuntime({ locale, copy, slug, origin, tenant, onOrderAgain }: { locale: Locale; copy: OrderMessages; slug: string; origin?: string; tenant: RequestTenant; onOrderAgain: () => void }) {
+export function LiveRequestRuntime({ locale, copy, slug, origin, tenant, publicPhone, onOrderAgain }: { locale: Locale; copy: OrderMessages; slug: string; origin?: string; tenant: RequestTenant; publicPhone?: string; onOrderAgain: () => void }) {
   const m = storefrontMessages(locale);
   const { controller, snapshot } = useLiveOrder(origin);
   const result = snapshot.result;
@@ -40,6 +41,7 @@ export function LiveRequestRuntime({ locale, copy, slug, origin, tenant, onOrder
         <div className={s.cardText} role="status" aria-live="polite"><h1 className={s.cardTitle}>{current.title}</h1><p className={s.cardBody}>{current.body}</p>{status === 'rejected' && result?.customer_rejection_reason ? <p className={`${s.cardBody} ${s.customerReason}`} data-sf-customer-rejection-reason="">{copy.rejectionReasonLabel} <TenantText>{result.customer_rejection_reason}</TenantText></p> : null}</div>
       </div> : null}
       {message ? <Banner tone="info" icon={<InfoIcon />} title={message} testId={`status-${snapshot.phase}`} alert={!busy} /> : null}
+      <RestaurantContact publicPhone={publicPhone} label={m.callRestaurant} className={s.chatOutline} />
       {controller ? <div className={s.actions}><button className={s.chatOutline} type="button" disabled={busy} onClick={() => { void (snapshot.canRetry ? controller.retry() : controller.refresh()); }} data-sf-status-action={snapshot.canRetry ? 'retry-original' : 'refresh'}>{snapshot.canRetry ? copy.retry : copy.refresh}</button></div> : null}
       {result ? <div className={s.statusSummary} data-sf-server-totals=""><div className={s.lineRow}><span>{m.subtotal}</span><Money minor={result.totals.subtotal_minor} /></div><div className={s.lineRow}><span>{copy.taxTotal}</span><Money minor={result.totals.tax_total_minor} /></div><div className={s.totalRow}><span>{m.total} · {copy.payAtPickup}</span><Money minor={result.totals.grand_total_minor} /></div></div> : null}
       {status && status !== 'pending' ? <div className={s.actions}><button className={s.chatOutline} type="button" disabled={busy} onClick={onOrderAgain} data-sf-status-action="order-again">{m.orderAgain}</button></div> : null}

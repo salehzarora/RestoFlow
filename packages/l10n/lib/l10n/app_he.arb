@@ -2874,5 +2874,18 @@
   "posBackgroundOrderAlertsExplanation": "אפשרו התראות על בקשות איסוף ממתינות. הצליל חוזר רק כל עוד נותרו בקשות מורשות וממתינות. פרטי הלקוחות אינם מוצגים במסך הנעילה. עוצמת ההתראות, מצב שקט ונא לא להפריע נשמרים.",
   "posBackgroundOrderAlertsEnable": "הפעלת התראות",
   "posBackgroundOrderAlertsUnavailable": "התראות הרקע אינן זמינות. רענון תיבת ההזמנות הקיימת ממשיך לפעול.",
-  "posBackgroundOrderAlertsSignIn": "הרשאת ההתראות ברקע הסתיימה. יש להתחבר שוב כדי לחדש אותה."
+  "posBackgroundOrderAlertsSignIn": "הרשאת ההתראות ברקע הסתיימה. יש להתחבר שוב כדי לחדש אותה.",
+  "storefrontHomeContentTitle": "טקסט דף הבית",
+  "storefrontHeroHeadlineLabel": "כותרת ראשית",
+  "storefrontHeroSublineLabel": "כותרת משנה",
+  "storefrontAnnouncementLabel": "הודעה",
+  "storefrontHomeContentHelp": "טקסט רגיל ורשות: כותרת עד 120 תווים, כותרת משנה עד 180 והודעה עד 240. כותרת ריקה משתמשת בתיאור או בשם השמור; כותרת משנה והודעה ריקות מוסתרות.",
+  "storefrontHomeContentUnavailable": "עריכת טקסט הבית דורשת שרת מעודכן. עריכת הפרופיל הרגילה עדיין זמינה.",
+  "storefrontHomeContentInvalid": "יש להזין טקסט רגיל בגבולות השדות, ללא תווי בקרה.",
+  "storefrontHomeContentSaveAction": "שמירת טקסט הבית",
+  "storefrontHomeContentSaved": "טקסט הבית נשמר.",
+  "storefrontHomeContentSeparateEdits": "יש לשמור או לבטל את שינויי הפרופיל האחרים לפני שמירת טקסט הבית. אם שני החלקים השתנו, בטלו תחילה אחד מהם.",
+  "storefrontHomeContentUncertain": "תוצאת השמירה אינה ידועה. הטיוטה ומזהה הבקשה נשמרו. נסו שוב כדי לבדוק את אותה בקשה, ואל תתחילו שמירה אחרת.",
+  "storefrontHomeContentPreviewTitle": "תצוגת טקסט מקדימה",
+  "storefrontHomeContentProfileMissing": "הפרופיל אינו זמין עוד. יש לרענן וליצור אותו תחילה דרך הגדרת הפרופיל הרגילה."
 }
