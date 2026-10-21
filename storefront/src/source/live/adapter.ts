@@ -14,8 +14,9 @@
  *   - min/max count distinct choices; per-option quantities retain their own
  *     published bounds. Impossible required groups remain visible and block.
  *   - old catalog envelopes have quantity selection off until rollout
- *   - the campaign hero falls back to the tagline, else the display name, with
- *     an EMPTY subline the hero omits (D11); every other optional module is off
+ *   - approved public Home copy comes from the versioned profile projection;
+ *     absent headline keeps the tagline/name fallback and absent optional copy
+ *     stays absent. No promo/story/ranking is invented.
  *   - every tenant follows its server-admitted Pickup configuration and
  *     current service state. Delivery stays OFF and zones stay empty.
  *
@@ -35,7 +36,8 @@ import type {
 } from '../types';
 import { isValidSlug } from '@/theme/sanitize';
 import { fetchStorefrontMenu, liveConfig, type LiveConfig } from './client';
-import { decodeStorefrontMenu, type StorefrontMenuOk } from './decode';
+import type { StorefrontMenuOk } from './decode';
+import { decodeStorefrontMenuV2, type StorefrontMenuV2Ok } from './decodeHomeContent';
 import { iconPathFor } from './icons';
 import { liveOrderingEnabled, orderEndpointOrigin } from './ordering';
 
@@ -77,8 +79,9 @@ export function nextOpenParts(iso: string | null, timeZone: string): NextOpenAt 
   }
 }
 
-export function adaptStorefront(envelope: StorefrontMenuOk, origin: string): StorefrontResolution {
+export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok, origin: string): StorefrontResolution {
   const r = envelope.restaurant;
+  const home = 'home_content' in envelope ? envelope.home_content : null;
   const tenant: Tenant = {
     slug: r.slug,
     displayName: r.display_name,
@@ -168,8 +171,8 @@ export function adaptStorefront(envelope: StorefrontMenuOk, origin: string): Sto
   const view: HomeView = {
     tenant,
     modules: {
-      announcement: null,
-      campaign: { title: r.tagline ?? r.display_name, subline: '' },
+      announcement: home?.announcement_text == null ? null : { text: home.announcement_text },
+      campaign: { title: home?.hero_headline ?? r.tagline ?? r.display_name, subline: home?.hero_subline ?? '' },
       promo: null,
       story: null,
       popular: { enabled: items.some((i) => i.signature && !i.soldOut), ready: false },
@@ -197,7 +200,7 @@ export function liveStorefrontSource(config?: LiveConfig): StorefrontSource {
     async getStorefront(slug: string): Promise<StorefrontResolution | null> {
       if (!isValidSlug(slug)) return null;
       const cfg = config ?? liveConfig();
-      const envelope = decodeStorefrontMenu(await fetchStorefrontMenu(slug, cfg));
+      const envelope = decodeStorefrontMenuV2(await fetchStorefrontMenu(slug, cfg));
       if (!envelope.ok) {
         if (envelope.error === 'not_found') return null;
         throw new Error(`storefront_menu answered ${envelope.error}`);

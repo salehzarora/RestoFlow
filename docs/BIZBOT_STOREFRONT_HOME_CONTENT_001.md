@@ -80,8 +80,9 @@ semantics. The existing menu exposes no internal scope identifiers: use its
 validated returned slug with the full published organization/restaurant/branch
 ancestry checks under that same snapshot, not a second independently refreshed
 read. Refuse an inconsistent/missing scoped profile instead of mixing results.
-Public-read execution ACLs must match the current menu's intended anonymous and
-authenticated access, without granting table access or mutation authority.
+Public-read execution ACLs must exactly match the current menu: anonymous and
+service-role execution, with authenticated execution still denied. Do not grant
+table access or mutation authority.
 
 New Storefront code uses the companion read after the backend is installed. Its
 decoder validates the exact additive object and maps only these fields to the
