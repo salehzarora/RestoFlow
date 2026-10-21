@@ -110,7 +110,7 @@ The ticket backlog itself is owned by [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATI
 | Kitchen ticket printing | printing-kds | M3 |
 | Customer receipt printing | printing-receipt | M3 |
 | Cash payment | payments-cash | M1→M2 |
-| Card-present POS payment (Z-Credit PIN pad pilot, **DECISION D-051**) | payments-card-pilot (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A–001F; 001G / 001H proposed) | pilot (post-M7, flag-gated) |
+| Card-present POS payment (Z-Credit PIN pad pilot, **DECISION D-051**) | payments-card-pilot (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A–001F; 001G-DASHBOARD-VERIFICATION and 001H-PILOT-OPS approved by the owner on 2026-10-21) | pilot (post-M7, flag-gated) |
 | Shift open/close; opening cash; cash reconciliation | shifts-cash | M2→M3 |
 | Discounts | money-discounts | M1→M2 |
 | Voids with reason + authorization | void-authz, audit | M2 |

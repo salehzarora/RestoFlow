@@ -19,7 +19,7 @@ import { syntheticEnvelope, SYNTH_IDS, NOT_FOUND_ENVELOPE } from '../tests/suppo
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WORKTREE = path.dirname(ROOT);
 const PROJECT = 'https://oqmevrndtivqxgyvcmwy.supabase.co';
-const RPC = `${PROJECT}/rest/v1/rpc/storefront_menu`;
+const RPC = `${PROJECT}/rest/v1/rpc/storefront_menu_v2`;
 const SYNTHETIC_KEY = 'sb_publishable_SYNTHETIC_browser_local_only_000000';
 const GATE = path.join(ROOT, 'src/source/live/ordering.ts');
 const gateSource = readFileSync(GATE, 'utf8');
@@ -93,11 +93,24 @@ try {
     req.on('end', () => {
       let input;
       try { input = JSON.parse(body); } catch { res.writeHead(400).end(); return; }
-      if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu' || Object.keys(input).join(',') !== 'p_slug' || req.headers.apikey !== SYNTHETIC_KEY || req.headers.authorization !== `Bearer ${SYNTHETIC_KEY}`) { res.writeHead(400).end(); return; }
+      if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu_v2' || Object.keys(input).join(',') !== 'p_slug' || req.headers.apikey !== SYNTHETIC_KEY || req.headers.authorization !== `Bearer ${SYNTHETIC_KEY}`) { res.writeHead(400).end(); return; }
       const slug = input.p_slug;
       rpcCalls.push(slug);
       if (typeof slug !== 'string' || !/^sf-browser-[a-z0-9-]+$/.test(slug)) { res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(NOT_FOUND_ENVELOPE)); return; }
       const envelope = syntheticEnvelope({ restaurant: { slug, display_name: 'Synthetic Pickup Kitchen', tagline: 'Offline checkout verification', motion: 'calm' }, service: { ordering_enabled: !slug.endsWith('-off'), pickup_enabled: true, delivery_enabled: false } });
+      if (slug.endsWith('-contact-b')) envelope.restaurant.phone = '+447700900123';
+      if (slug.endsWith('-contact-empty')) envelope.restaurant.phone = null;
+      if (slug.endsWith('-contact-invalid')) envelope.restaurant.phone = 'javascript:alert(1)';
+      envelope.home_content = { hero_headline: null, hero_subline: null, announcement_text: null };
+      if (slug.endsWith('-home')) {
+        envelope.restaurant.display_name = 'Synthetic Long Restaurant Name مطعم تجريبي ארוך';
+        envelope.home_content = {
+          hero_headline: 'عنوان المطعم כותרת Restaurant <img src=x onerror=alert(1)> '.repeat(2).slice(0, 120),
+          hero_subline: 'تفاصيل المطعم פרטים Restaurant details '.repeat(5).slice(0, 180),
+          announcement_text: 'إعلان הודעה Announcement <script>alert(1)</script>',
+        };
+        if (slug.includes('-unbroken-')) envelope.home_content.announcement_text = 'x'.repeat(240);
+      }
       envelope.items = envelope.items.map((item) => ({ ...item, image_url: null }));
       envelope.modifiers = envelope.modifiers.map((group) => group.id === SYNTH_IDS.extras ? { ...group, allow_quantity: true, max_quantity: 20, max_select: null } : group);
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(envelope));
@@ -106,7 +119,7 @@ try {
   const stubPort = await listen(stub);
   const nextPort = await sparePort();
   const preload = path.join(run, 'local-only-fetch.mjs');
-  writeFileSync(preload, `// Generated offline-only process boundary. No real service is contacted.\nconst originalFetch = globalThis.fetch;\nglobalThis.fetch = (input, init) => {\n const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;\n if (url === ${JSON.stringify(RPC)}) return originalFetch(${JSON.stringify(`http://127.0.0.1:${stubPort}/rest/v1/rpc/storefront_menu`)}, init);\n const parsed = new URL(url);\n if (parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1') return originalFetch(input, init);\n throw new Error('offline_verification_remote_fetch_blocked');\n};\n`);
+  writeFileSync(preload, `// Generated offline-only process boundary. No real service is contacted.\nconst originalFetch = globalThis.fetch;\nglobalThis.fetch = (input, init) => {\n const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;\n if (url === ${JSON.stringify(RPC)}) return originalFetch(${JSON.stringify(`http://127.0.0.1:${stubPort}/rest/v1/rpc/storefront_menu_v2`)}, init);\n const parsed = new URL(url);\n if (parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1') return originalFetch(input, init);\n throw new Error('offline_verification_remote_fetch_blocked');\n};\n`);
   const env = { NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', STOREFRONT_SOURCE: 'live', STOREFRONT_SUPABASE_URL: PROJECT, STOREFRONT_SUPABASE_ANON_KEY: SYNTHETIC_KEY, NODE_OPTIONS: `--import=${pathToFileURL(preload).href}` };
   console.log(`Offline browser evidence: ${run}`);
   console.log('Building an isolated LIVE-mode copy with identical tenant-scoped admission source.');
@@ -132,7 +145,7 @@ try {
   const config = path.join(run, 'playwright.config.mjs');
   // Traces capture POST bodies and storage evaluations, including capabilities.
   // Screenshots/results prove the flow without recording those private bodies.
-  writeFileSync(config, `import { defineConfig } from ${JSON.stringify(pathToFileURL(path.join(ROOT, 'node_modules/@playwright/test/index.mjs')).href)};\nexport default defineConfig({ testDir: ${JSON.stringify(path.join(ROOT, 'tests/browser'))}, testMatch: 'web-orders-checkout-001.spec.ts', workers: 1, fullyParallel: false, retries: 0, timeout: 60000, expect: { timeout: 12000 }, outputDir: ${JSON.stringify(path.join(run, 'test-results'))}, reporter: [['list'], ['json', { outputFile: ${JSON.stringify(path.join(run, 'results.json'))} }], ['html', { outputFolder: ${JSON.stringify(path.join(run, 'report'))}, open: 'never' }]], use: { baseURL: ${JSON.stringify(baseURL)}, headless: true, serviceWorkers: 'block', trace: 'off', screenshot: 'only-on-failure', video: 'off' }, projects: [{name:'chromium',use:{browserName:'chromium'}}] });\n`);
+  writeFileSync(config, `import { defineConfig } from ${JSON.stringify(pathToFileURL(path.join(ROOT, 'node_modules/@playwright/test/index.mjs')).href)};\nexport default defineConfig({ testDir: ${JSON.stringify(path.join(ROOT, 'tests/browser'))}, testMatch: 'web-orders-checkout-001.spec.ts', workers: 1, fullyParallel: false, retries: 0, timeout: 60000, expect: { timeout: 12000 }, outputDir: ${JSON.stringify(path.join(run, 'test-results'))}, reporter: [['list'], ['json', { outputFile: ${JSON.stringify(path.join(run, 'results.json'))} }], ['html', { outputFolder: ${JSON.stringify(path.join(run, 'report'))}, open: 'never' }]], use: { baseURL: ${JSON.stringify(baseURL)}, headless: true, serviceWorkers: 'block', trace: 'off', screenshot: 'only-on-failure', video: 'off', launchOptions: ${JSON.stringify(process.env.SF_BROWSER_EXECUTABLE ? { executablePath: process.env.SF_BROWSER_EXECUTABLE } : {})} }, projects: [{name:'chromium',use:{browserName:'chromium'}}] });\n`);
   console.log('Running Chromium against loopback with the committed CSP.');
   await completion(launch([path.join(ROOT, 'node_modules/@playwright/test/cli.js'), 'test', '--config', config], ROOT, { ...safeEnv, SF_WEB_ORDER_BASE: baseURL, SF_WEB_ORDER_RUN_DIR: run, SF_WEB_ORDER_ORIGINAL: ROOT, SF_WEB_ORDER_APP_DIR: app, NEXT_TELEMETRY_DISABLED: '1', NODE_OPTIONS: env.NODE_OPTIONS }, path.join(run, 'browser.log')));
   const results = JSON.parse(readFileSync(path.join(run, 'results.json'), 'utf8'));

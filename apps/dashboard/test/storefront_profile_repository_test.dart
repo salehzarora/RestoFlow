@@ -14,13 +14,19 @@ const _branch = '33333333-3333-4333-8333-333333333333';
 /// Scripted per-function replies: a Map/other value is RETURNED, a
 /// [SyncTransportException] is THROWN. The last reply repeats.
 class _FakeTransport implements SyncRpcTransport {
-  _FakeTransport({this.reads = const [], this.writes = const []});
+  _FakeTransport({
+    this.reads = const [],
+    this.writes = const [],
+    this.homeWrites = const [],
+  });
 
   final List<Object?> reads;
   final List<Object?> writes;
+  final List<Object?> homeWrites;
 
   final List<Map<String, dynamic>> readCalls = [];
   final List<Map<String, dynamic>> writeCalls = [];
+  final List<Map<String, dynamic>> homeCalls = [];
 
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
@@ -33,6 +39,9 @@ class _FakeTransport implements SyncRpcTransport {
       case 'set_restaurant_storefront_profile':
         script = writes;
         calls = writeCalls;
+      case 'set_restaurant_storefront_home_content':
+        script = homeWrites;
+        calls = homeCalls;
       default:
         throw StateError('unexpected $function');
     }
@@ -149,6 +158,230 @@ SupabaseStorefrontProfileRepository _repo(_FakeTransport t, {int nonce = 7}) =>
     );
 
 void main() {
+  group('additive Home content', () {
+    const content = <String, Object?>{
+      'hero_headline': '  عنوان <b>merchant</b>  ',
+      'hero_subline': 'תיאור',
+      'announcement_text': null,
+    };
+    Map<String, dynamic> current({int version = 3}) => _read(
+      version: version,
+      profile: {
+        ..._profile(version: version),
+        ...content,
+      },
+    );
+
+    test(
+      'old getter is readable but does not advertise Home editing',
+      () async {
+        final profile = (await _repo(
+          _FakeTransport(reads: [_read()]),
+        ).read()).profile!;
+        expect(profile.supportsHomeContent, isFalse);
+        expect(profile.heroHeadline, isNull);
+        expect(
+          profile.toWireFields().keys.toSet(),
+          StorefrontProfile.patchableKeys.toSet(),
+        );
+        expect(StorefrontProfile.patchableKeys, hasLength(20));
+      },
+    );
+
+    test(
+      'new getter requires all three fields and validates their values',
+      () async {
+        final profile = (await _repo(
+          _FakeTransport(reads: [current()]),
+        ).read()).profile!;
+        expect(profile.supportsHomeContent, isTrue);
+        expect(profile.toHomeContentFields(), content);
+        for (final invalid in [
+          {..._profile(), 'hero_headline': 'incomplete'},
+          {..._profile(), ...content, 'hero_subline': 7},
+          {..._profile(), ...content, 'hero_subline': 'x' * 181},
+          {..._profile(), ...content, 'hero_subline': 'line\nbreak'},
+        ]) {
+          final read = await _repo(
+            _FakeTransport(reads: [_read(profile: invalid)]),
+          ).read();
+          expect(read.status, StorefrontReadStatus.malformed);
+        }
+      },
+    );
+
+    test(
+      'one exact narrow scoped CAS request; generic writer untouched',
+      () async {
+        final transport = _FakeTransport(homeWrites: [_ok(4)]);
+        final result = await _repo(
+          transport,
+        ).saveHomeContent(expectedVersion: 3, content: content);
+        expect(result.status, StorefrontWriteStatus.ok);
+        expect(transport.homeCalls, hasLength(1));
+        expect(transport.writeCalls, isEmpty);
+        expect(transport.homeCalls.single, {
+          'p_client_request_id': result.requestId,
+          'p_organization_id': _org,
+          'p_restaurant_id': _rest,
+          'p_expected_version': 3,
+          'p_patch': content,
+        });
+        expect(isCanonicalUuid(result.requestId!), isTrue);
+      },
+    );
+
+    test(
+      'explicit replay retains the exact raw body, identity and version',
+      () async {
+        final transport = _FakeTransport(
+          homeWrites: [
+            _ok(4),
+            {..._ok(4), 'idempotent_replay': true},
+          ],
+        );
+        final repository = _repo(transport);
+        final first = await repository.saveHomeContent(
+          expectedVersion: 3,
+          content: content,
+        );
+        final second = await repository.saveHomeContent(
+          expectedVersion: 3,
+          content: content,
+          requestId: first.requestId,
+        );
+        expect(second.idempotentReplay, isTrue);
+        expect(transport.homeCalls, hasLength(2));
+        expect(transport.homeCalls[1], transport.homeCalls[0]);
+      },
+    );
+
+    test(
+      'lost response never retries POST or infers its own commit from state',
+      () async {
+        final transport = _FakeTransport(
+          homeWrites: [_timeout],
+          reads: [current(version: 4)],
+        );
+        final result = await _repo(
+          transport,
+        ).saveHomeContent(expectedVersion: 3, content: content);
+        expect(result.status, StorefrontWriteStatus.uncertain);
+        expect(result.requestId, isNotNull);
+        expect(result.expectedVersion, 3);
+        expect(result.readback!.version, 4);
+        expect(transport.homeCalls, hasLength(1));
+        expect(transport.readCalls, hasLength(1));
+      },
+    );
+
+    test('malformed or other-scope success remains uncertain', () async {
+      for (final response in [
+        {'ok': true},
+        {..._ok(4), 'restaurant_id': _branch},
+        {..._ok(4), 'version': 9},
+        {..._ok(4), 'version': 4.0},
+        {..._ok(4), 'slug': ''},
+        {..._ok(4), 'idempotent_replay': 'true'},
+      ]) {
+        final transport = _FakeTransport(
+          homeWrites: [response],
+          reads: [current()],
+        );
+        final result = await _repo(
+          transport,
+        ).saveHomeContent(expectedVersion: 3, content: content);
+        expect(result.status, StorefrontWriteStatus.uncertain);
+        expect(transport.homeCalls, hasLength(1));
+      }
+    });
+
+    test(
+      'missing backend and typed refusals never fake a successful save',
+      () async {
+        final transport = _FakeTransport(
+          homeWrites: [
+            const SyncTransportException(
+              SyncTransportErrorKind.server,
+              code: 'PGRST202',
+              message: 'unavailable',
+            ),
+          ],
+        );
+        final missing = await _repo(
+          transport,
+        ).saveHomeContent(expectedVersion: 3, content: content);
+        expect(missing.status, StorefrontWriteStatus.unavailable);
+        expect(missing.code, 'PGRST202');
+        expect(transport.homeCalls, hasLength(1));
+        for (final entry in {
+          'version_conflict': StorefrontWriteStatus.conflict,
+          'permission_denied': StorefrontWriteStatus.denied,
+          'not_found': StorefrontWriteStatus.invalid,
+        }.entries) {
+          final t = _FakeTransport(
+            homeWrites: [
+              {'ok': false, 'error': entry.key, 'version': 4},
+            ],
+          );
+          expect(
+            (await _repo(
+              t,
+            ).saveHomeContent(expectedVersion: 3, content: content)).status,
+            entry.value,
+          );
+          expect(t.homeCalls, hasLength(1));
+        }
+      },
+    );
+
+    test(
+      'exact key/type/control/codepoint bounds are guarded before POST',
+      () async {
+        final transport = _FakeTransport();
+        for (final invalid in <Map<String, Object?>>[
+          {},
+          {...content, 'price': 1},
+          {...content}..remove('hero_subline'),
+          {...content, 'hero_headline': true},
+          {...content, 'hero_headline': 'x' * 121},
+          {...content, 'hero_subline': 'x' * 181},
+          {...content, 'announcement_text': 'x' * 241},
+          {...content, 'announcement_text': '\tbad'},
+          {...content, 'announcement_text': 'bad\u007f'},
+        ]) {
+          expect(
+            (await _repo(transport).saveHomeContent(
+              expectedVersion: 3,
+              content: invalid,
+            )).refusedLocally,
+            isTrue,
+          );
+        }
+        expect(
+          (await _repo(
+            transport,
+          ).saveHomeContent(expectedVersion: 0, content: content)).reason,
+          'not_found',
+        );
+        expect(transport.homeCalls, isEmpty);
+        final unicode = <String, Object?>{
+          'hero_headline': '\u00a0\u2003\ufeff${'😀' * 120}\ufeff\u2003\u00a0',
+          'hero_subline': 'א' * 180,
+          'announcement_text': 'ع' * 240,
+        };
+        final t = _FakeTransport(homeWrites: [_ok(4)]);
+        expect(
+          (await _repo(
+            t,
+          ).saveHomeContent(expectedVersion: 3, content: unicode)).isOk,
+          isTrue,
+        );
+        expect(t.homeCalls.single['p_patch'], unicode);
+      },
+    );
+  });
+
   group('read', () {
     test('ok + exists decodes the profile and the derived facts', () async {
       final t = _FakeTransport(reads: [_read()]);

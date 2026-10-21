@@ -282,6 +282,9 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   final _primary = TextEditingController();
   final _accent = TextEditingController();
   final _pauseReason = TextEditingController();
+  final _heroHeadline = TextEditingController();
+  final _heroSubline = TextEditingController();
+  final _announcement = TextEditingController();
   late final List<TextEditingController> _controllers = [
     _slug,
     _displayName,
@@ -292,6 +295,9 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     _primary,
     _accent,
     _pauseReason,
+    _heroHeadline,
+    _heroSubline,
+    _announcement,
   ];
   String? _branchId;
   StorefrontVisualPreset _preset = StorefrontVisualPreset.dark;
@@ -314,6 +320,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   /// Editing stays locked until a reload succeeds — a further save would go
   /// out with a stale version and read as someone else's conflict.
   bool _stale = false;
+  _PendingSave? _homePending;
 
   /// C12 (CRIT-2): the receipt logo the publish function REFUSED for the
   /// logo slot (a deterministic source refusal). The logo slot's only source
@@ -325,7 +332,30 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
 
   bool get _wired => widget.seams != null;
   StorefrontProfile? get _profile => _read?.profile;
-  bool get _busy => _saving || _mediaBusy || _stale;
+  bool get _busy => _saving || _mediaBusy || _stale || _homePending != null;
+
+  bool get _homeSupported =>
+      (_profile?.supportsHomeContent ?? false) &&
+      widget.seams?.profileRepository is StorefrontHomeContentRepository;
+
+  Map<String, Object?> _homeContent() => {
+    'hero_headline': _heroHeadline.text,
+    'hero_subline': _heroSubline.text,
+    'announcement_text': _announcement.text,
+  };
+
+  bool get _homeDirty {
+    final p = _profile;
+    if (p == null || !_homeSupported) return false;
+    final saved = p.toHomeContentFields();
+    return _homeContent().entries.any(
+      (e) => _blankToNull(e.value! as String) != saved[e.key],
+    );
+  }
+
+  bool get _homeValid => _homeContent().entries.every(
+    (e) => StorefrontProfile.isValidHomeContentValue(e.key, e.value),
+  );
 
   @override
   void initState() {
@@ -491,6 +521,9 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     _primary.text = p?.primaryColor ?? kStorefrontNeutralPrimary;
     _accent.text = p?.accentColor ?? '#e07b2c';
     _pauseReason.text = p?.pauseReason ?? '';
+    _heroHeadline.text = p?.heroHeadline ?? '';
+    _heroSubline.text = p?.heroSubline ?? '';
+    _announcement.text = p?.announcementText ?? '';
     _branchId = p?.storefrontBranchId;
     _preset = p?.visualPreset ?? StorefrontVisualPreset.dark;
     _locale = p?.localeDefault ?? StorefrontLocale.ar;
@@ -622,7 +655,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       isValidStorefrontSlug(_slug.text.trim()) &&
       !_hasErrors(l10n);
 
-  bool _canSave(AppLocalizations l10n) => !_busy && _dirty && !_hasErrors(l10n);
+  bool _canSave(AppLocalizations l10n) =>
+      !_busy && _dirty && !_homeDirty && !_hasErrors(l10n);
 
   // ---------------------------------------------------------------------------
   // Writes
@@ -676,7 +710,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   Future<void> _onSave() async {
     final l10n = AppLocalizations.of(context);
     final read = _read;
-    if (read == null || !read.isOk || _busy) return;
+    if (read == null || !read.isOk || _busy || _homeDirty) return;
     // The button may predate a check that changes with time (a pause end
     // that has passed since it was picked): re-check at the press.
     if (_hasErrors(l10n)) {
@@ -702,6 +736,127 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       draftPatch: patch,
       okMessage: l10n.storefrontSaved,
     );
+  }
+
+  Future<void> _onSaveHome({_PendingSave? replay}) async {
+    if (!mounted) return;
+    final p = _profile;
+    final repository = widget.seams?.profileRepository;
+    if (p == null ||
+        repository is! StorefrontHomeContentRepository ||
+        !_homeSupported ||
+        _saving ||
+        _mediaBusy ||
+        _stale)
+      return;
+    if (replay == null &&
+        (_homePending != null || _dirty || !_homeDirty || !_homeValid))
+      return;
+    if (replay != null && !identical(replay, _homePending)) return;
+    final homeRepository = repository as StorefrontHomeContentRepository;
+    final l10n = AppLocalizations.of(context);
+    final patch =
+        replay?.patch ?? Map<String, Object?>.unmodifiable(_homeContent());
+    final version = replay?.expectedVersion ?? p.version;
+    final requestId =
+        replay?.requestId ??
+        storefrontRequestId(
+          'pbl:storefront:home:',
+          [widget.seams!.scopeIdentity, version.toString(), jsonEncode(patch)],
+          widget.nonce?.call() ?? DateTime.now().microsecondsSinceEpoch,
+        );
+    setState(() {
+      _saving = true;
+      _banner = null;
+    });
+    StorefrontWriteResult result;
+    try {
+      result = await homeRepository.saveHomeContent(
+        expectedVersion: version,
+        content: patch,
+        requestId: requestId,
+      );
+    } catch (_) {
+      // A seam that throws after sending cannot prove a rollback. Keep the
+      // existing retry identity if one exists; never mint an automatic POST.
+      result = StorefrontWriteResult(
+        StorefrontWriteStatus.uncertain,
+        requestId: requestId,
+        expectedVersion: version,
+      );
+    }
+    if (!mounted) return;
+    if (replay != null &&
+        result.status != StorefrontWriteStatus.ok &&
+        result.status != StorefrontWriteStatus.conflict) {
+      // Losing authorization during an explicit retry says nothing about
+      // the original unknown write. Keep its exact identity and draft.
+      result = StorefrontWriteResult(
+        StorefrontWriteStatus.uncertain,
+        requestId: requestId,
+        expectedVersion: version,
+        readback: result.readback,
+      );
+    }
+    var stale = false;
+    late final _Banner banner;
+    switch (result.status) {
+      case StorefrontWriteStatus.ok:
+        _homePending = null;
+        stale = !await _refreshAll();
+        banner = _Banner(
+          l10n.storefrontHomeContentSaved,
+          RestoflowTone.success,
+        );
+      case StorefrontWriteStatus.conflict:
+        _homePending = null;
+        stale = !await _refreshAll();
+        banner = _Banner(
+          stale
+              ? l10n.storefrontErrorConflictNotReloaded
+              : l10n.storefrontErrorConflict,
+          RestoflowTone.warning,
+        );
+      case StorefrontWriteStatus.uncertain:
+        _homePending = _PendingSave(
+          patch: patch,
+          expectedVersion: version,
+          requestId: requestId,
+          draftPatch: patch,
+          okMessage: l10n.storefrontHomeContentSaved,
+        );
+        banner = _Banner(
+          l10n.storefrontHomeContentUncertain,
+          RestoflowTone.warning,
+        );
+      case StorefrontWriteStatus.denied:
+        _homePending = null;
+        banner = _Banner(l10n.storefrontErrorDenied, RestoflowTone.danger);
+      case StorefrontWriteStatus.invalid:
+        _homePending = null;
+        if (result.reason == 'not_found') stale = !await _refreshAll();
+        banner = _Banner(
+          result.reason == 'not_found'
+              ? l10n.storefrontHomeContentProfileMissing
+              : l10n.storefrontHomeContentInvalid,
+          RestoflowTone.danger,
+        );
+      case StorefrontWriteStatus.unavailable:
+        _homePending = null;
+        banner = _Banner(l10n.storefrontErrorUnavailable, RestoflowTone.danger);
+      case StorefrontWriteStatus.notCommitted:
+        _homePending = null;
+        banner = _Banner(
+          l10n.storefrontErrorNotCommitted,
+          RestoflowTone.danger,
+        );
+    }
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _banner = banner;
+      if (stale) _stale = true;
+    });
   }
 
   Future<void> _onPublishToggle(bool publish) async {
@@ -1274,6 +1429,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           ltr: true,
         ),
       ]),
+      ..._homeContentEditor(l10n, theme, profile),
       const Divider(height: RestoflowSpacing.xl),
       Text(l10n.storefrontLookTitle, style: theme.textTheme.titleSmall),
       const SizedBox(height: RestoflowSpacing.sm),
@@ -1557,9 +1713,147 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       if (_banner != null) ..._bannerView(l10n, theme),
       if (_stale) ..._staleView(l10n, theme),
       const Divider(height: RestoflowSpacing.xl),
-      ..._publishArea(l10n, theme, profile, derived, dirty),
+      ..._publishArea(l10n, theme, profile, derived, dirty || _homeDirty),
       const Divider(height: RestoflowSpacing.xl),
-      ..._mediaArea(l10n, theme, profile, dirty),
+      ..._mediaArea(l10n, theme, profile, dirty || _homeDirty),
+    ];
+  }
+
+  List<Widget> _homeContentEditor(
+    AppLocalizations l10n,
+    ThemeData theme,
+    StorefrontProfile profile,
+  ) {
+    final pending = _homePending;
+    final headline =
+        _blankToNull(_heroHeadline.text) ??
+        profile.tagline ??
+        profile.displayName;
+    final subline = _blankToNull(_heroSubline.text);
+    final announcement = _blankToNull(_announcement.text);
+    return [
+      const Divider(height: RestoflowSpacing.xl),
+      Text(l10n.storefrontHomeContentTitle, style: theme.textTheme.titleSmall),
+      const SizedBox(height: RestoflowSpacing.xs),
+      if (!_homeSupported)
+        Text(
+          l10n.storefrontHomeContentUnavailable,
+          key: const Key('storefront-home-unsupported'),
+        )
+      else ...[
+        Text(l10n.storefrontHomeContentHelp, style: theme.textTheme.bodySmall),
+        const SizedBox(height: RestoflowSpacing.sm),
+        _grid([
+          _textField(
+            key: const Key('storefront-home-headline'),
+            controller: _heroHeadline,
+            label: l10n.storefrontHeroHeadlineLabel,
+            error:
+                StorefrontProfile.isValidHomeContentValue(
+                  'hero_headline',
+                  _heroHeadline.text,
+                )
+                ? null
+                : l10n.storefrontHomeContentInvalid,
+          ),
+          _textField(
+            key: const Key('storefront-home-subline'),
+            controller: _heroSubline,
+            label: l10n.storefrontHeroSublineLabel,
+            error:
+                StorefrontProfile.isValidHomeContentValue(
+                  'hero_subline',
+                  _heroSubline.text,
+                )
+                ? null
+                : l10n.storefrontHomeContentInvalid,
+          ),
+          _textField(
+            key: const Key('storefront-home-announcement'),
+            controller: _announcement,
+            label: l10n.storefrontAnnouncementLabel,
+            error:
+                StorefrontProfile.isValidHomeContentValue(
+                  'announcement_text',
+                  _announcement.text,
+                )
+                ? null
+                : l10n.storefrontHomeContentInvalid,
+          ),
+        ]),
+        const SizedBox(height: RestoflowSpacing.sm),
+        Wrap(
+          spacing: RestoflowSpacing.sm,
+          children: [
+            FilledButton.icon(
+              key: const Key('storefront-home-save'),
+              onPressed: !_busy && !_dirty && _homeDirty && _homeValid
+                  ? () => _onSaveHome()
+                  : null,
+              icon: const Icon(Icons.save_outlined),
+              label: Text(l10n.storefrontHomeContentSaveAction),
+            ),
+            if (_homeDirty)
+              TextButton(
+                key: const Key('storefront-home-discard'),
+                onPressed: _busy
+                    ? null
+                    : () => setState(() {
+                        _heroHeadline.text = profile.heroHeadline ?? '';
+                        _heroSubline.text = profile.heroSubline ?? '';
+                        _announcement.text = profile.announcementText ?? '';
+                      }),
+                child: Text(l10n.storefrontDiscardAction),
+              ),
+            if (pending?.requestId != null)
+              TextButton.icon(
+                key: const Key('storefront-home-retry'),
+                onPressed: _saving || _mediaBusy || _stale
+                    ? null
+                    : () => _onSaveHome(replay: pending),
+                icon: const Icon(Icons.refresh),
+                label: Text(l10n.storefrontRetry),
+              ),
+          ],
+        ),
+        if (_dirty && _homeDirty)
+          Text(
+            l10n.storefrontHomeContentSeparateEdits,
+            key: const Key('storefront-home-separate-edits'),
+          ),
+        const SizedBox(height: RestoflowSpacing.sm),
+        Text(
+          l10n.storefrontHomeContentPreviewTitle,
+          style: theme.textTheme.labelMedium,
+        ),
+        // Plain Text only: merchant copy is never interpreted as markup or a
+        // link. Empty optional rows remain absent, including in this preview.
+        Card(
+          key: const Key('storefront-home-preview'),
+          child: Padding(
+            padding: const EdgeInsets.all(RestoflowSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  headline,
+                  key: const Key('storefront-home-preview-headline'),
+                ),
+                if (subline != null)
+                  Text(
+                    subline,
+                    key: const Key('storefront-home-preview-subline'),
+                  ),
+                if (announcement != null)
+                  Text(
+                    announcement,
+                    key: const Key('storefront-home-preview-announcement'),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
     ];
   }
 

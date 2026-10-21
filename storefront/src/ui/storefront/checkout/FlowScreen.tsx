@@ -66,6 +66,7 @@ export function FlowScreen({
           name: tenant.displayName,
           city: tenant.city,
           address: tenant.address,
+          publicPhone: tenant.phone,
           opensAt: tenant.hours.opens,
           pickupEnabled: tenant.service.pickupEnabled,
           deliveryEnabled: tenant.service.deliveryEnabled,

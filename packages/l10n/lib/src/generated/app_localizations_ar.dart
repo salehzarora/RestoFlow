@@ -9554,4 +9554,49 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posBackgroundOrderAlertsSignIn =>
       'انتهى تفويض إشعارات الخلفية. سجّل الدخول مجددًا لتجديده.';
+
+  @override
+  String get storefrontHomeContentTitle => 'نص الصفحة الرئيسية';
+
+  @override
+  String get storefrontHeroHeadlineLabel => 'عنوان الواجهة';
+
+  @override
+  String get storefrontHeroSublineLabel => 'النص الفرعي للواجهة';
+
+  @override
+  String get storefrontAnnouncementLabel => 'إعلان';
+
+  @override
+  String get storefrontHomeContentHelp =>
+      'نص عادي اختياري: العنوان 120 حرفًا، النص الفرعي 180، والإعلان 240. عند ترك العنوان فارغًا يُستخدم الوصف أو الاسم المحفوظ؛ ويُخفى النص الفرعي والإعلان الفارغان.';
+
+  @override
+  String get storefrontHomeContentUnavailable =>
+      'يتطلب تعديل نص الصفحة الرئيسية تحديث الخادم. يظل تعديل الملف المعتاد متاحًا.';
+
+  @override
+  String get storefrontHomeContentInvalid =>
+      'أدخل نصًا عاديًا ضمن حدود الحقول، بدون محارف تحكم.';
+
+  @override
+  String get storefrontHomeContentSaveAction => 'حفظ نص الرئيسية';
+
+  @override
+  String get storefrontHomeContentSaved => 'تم حفظ نص الرئيسية.';
+
+  @override
+  String get storefrontHomeContentSeparateEdits =>
+      'احفظ تعديلات الملف الأخرى أو تجاهلها قبل حفظ نص الرئيسية. إذا عُدّل القسمان، تجاهل تعديلات أحدهما أولًا.';
+
+  @override
+  String get storefrontHomeContentUncertain =>
+      'نتيجة الحفظ غير معروفة. احتفظنا بالنص ومعرّف الطلب نفسه. استخدم إعادة المحاولة لمراجعة الطلب نفسه، ولا تبدأ حفظًا مختلفًا.';
+
+  @override
+  String get storefrontHomeContentPreviewTitle => 'معاينة النص';
+
+  @override
+  String get storefrontHomeContentProfileMissing =>
+      'لم يعد الملف متاحًا. أعد التحميل وأنشئه أولًا من إعداد الملف المعتاد.';
 }

@@ -2874,5 +2874,18 @@
   "posBackgroundOrderAlertsExplanation": "السماح بإشعارات طلبات الاستلام المعلقة. يتكرر الصوت فقط ما دامت الطلبات المصرح بها معلقة. لا تظهر بيانات العملاء على شاشة القفل. تُحترم إعدادات صوت الإشعارات والوضع الصامت وعدم الإزعاج.",
   "posBackgroundOrderAlertsEnable": "تفعيل التنبيهات",
   "posBackgroundOrderAlertsUnavailable": "تنبيهات الخلفية غير متاحة. يستمر تحديث صندوق الطلبات الحالي.",
-  "posBackgroundOrderAlertsSignIn": "انتهى تفويض إشعارات الخلفية. سجّل الدخول مجددًا لتجديده."
+  "posBackgroundOrderAlertsSignIn": "انتهى تفويض إشعارات الخلفية. سجّل الدخول مجددًا لتجديده.",
+  "storefrontHomeContentTitle": "نص الصفحة الرئيسية",
+  "storefrontHeroHeadlineLabel": "عنوان الواجهة",
+  "storefrontHeroSublineLabel": "النص الفرعي للواجهة",
+  "storefrontAnnouncementLabel": "إعلان",
+  "storefrontHomeContentHelp": "نص عادي اختياري: العنوان 120 حرفًا، النص الفرعي 180، والإعلان 240. عند ترك العنوان فارغًا يُستخدم الوصف أو الاسم المحفوظ؛ ويُخفى النص الفرعي والإعلان الفارغان.",
+  "storefrontHomeContentUnavailable": "يتطلب تعديل نص الصفحة الرئيسية تحديث الخادم. يظل تعديل الملف المعتاد متاحًا.",
+  "storefrontHomeContentInvalid": "أدخل نصًا عاديًا ضمن حدود الحقول، بدون محارف تحكم.",
+  "storefrontHomeContentSaveAction": "حفظ نص الرئيسية",
+  "storefrontHomeContentSaved": "تم حفظ نص الرئيسية.",
+  "storefrontHomeContentSeparateEdits": "احفظ تعديلات الملف الأخرى أو تجاهلها قبل حفظ نص الرئيسية. إذا عُدّل القسمان، تجاهل تعديلات أحدهما أولًا.",
+  "storefrontHomeContentUncertain": "نتيجة الحفظ غير معروفة. احتفظنا بالنص ومعرّف الطلب نفسه. استخدم إعادة المحاولة لمراجعة الطلب نفسه، ولا تبدأ حفظًا مختلفًا.",
+  "storefrontHomeContentPreviewTitle": "معاينة النص",
+  "storefrontHomeContentProfileMissing": "لم يعد الملف متاحًا. أعد التحميل وأنشئه أولًا من إعداد الملف المعتاد."
 }
