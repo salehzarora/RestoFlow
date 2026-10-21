@@ -88,7 +88,7 @@ Operational rules. Security ownership of secrets-as-controls lives in [SECURITY_
 | Database direct connection string (per env) | Secret manager + CI secret store | Migration runner only | Used by forward-only migration tooling |
 | Device enrollment/pairing secrets | Server-issued, short-lived | Device during pairing only | Expiring enrollment codes (**DECISION D-006**) |
 | Third-party/payment credentials | Secret manager (per env) | Server only | Payments scope per [API_CONTRACT](API_CONTRACT.md) |
-| Card-present provider terminal credentials, PIN-pad identifiers and environment (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001, **DECISION D-051**) | Supabase Edge secret store, by NAME (one JSON configuration secret) | The Edge provider adapter only | Runtime configuration — never source, clients, migrations, CI, docs or logs; rotation per §3.3; compromise is SEV-1 ([RUNBOOKS](RUNBOOKS.md) §8) |
+| Card-present provider merchant credentials, PIN-pad identifiers and environment (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001, **DECISION D-051** / **D-053**) | Supabase Edge secret store, by NAME (one JSON configuration secret holding per-merchant credential records keyed by opaque `credential_ref`; the TEST record belongs to the BIZBOT development environment only; LIVE records are per restaurant — the merchant of record — never one shared LIVE record) | The Edge provider adapter only | Runtime configuration — never source, clients, migrations, CI, docs or logs; the tenant-scoped mapping table holds only opaque references for one exact device; rotation per §3.3; compromise is SEV-1 ([RUNBOOKS](RUNBOOKS.md) §8) |
 | Signing / CI tokens | CI secret store | CI only | No push without human approval (D-016) |
 
 **ASSUMPTION**: the secret store is the cloud provider's managed secret manager plus the CI provider's encrypted secrets (GitHub Actions secrets, per **DECISION D-009**). Local development uses an untracked, machine-local `.env` that is `.gitignore`d.
@@ -226,7 +226,7 @@ On shared (`staging`) and `prod`:
 | Severity | Definition | Example | Response |
 |---|---|---|---|
 | **SEV-1** | Cross-tenant data exposure, secret/service-role leak, prod data loss, prod down | RLS bug leaks Org B data to Org A (**R-003**); service-role key exposed | Immediate: contain, rotate, restore if needed, audit, notify |
-| **SEV-2** | Major function broken, no data loss | Sync stuck; payments failing for a branch | Same-day mitigation |
+| **SEV-2** | Major function broken, no data loss | Sync stuck; payments failing for a branch; a card-present attempt stuck `unknown` or an `orphan_approved` charge — [RUNBOOKS](RUNBOOKS.md) §8 (**D-053** point 1) | Same-day mitigation |
 | **SEV-3** | Degraded/non-critical | Realtime lag (enhancement only, **D-010**); single printer flaky (**R-001/R-006**) | Scheduled fix |
 
 **Runbook skeleton (per incident)**:

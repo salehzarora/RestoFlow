@@ -318,37 +318,56 @@ queries + expected results instead. Prints **PASS/FAIL**.
 
 ---
 
-## 8. Incident runbook 5 — card provider outage, unknown outcome, approved-unrecorded (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001)
+## 8. Incident runbook 5 — card provider outage, unknown outcome, approved-unrecorded, orphaned approval (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001)
 
-- **Scope:** the card-present provider leg of **DECISION D-051 / D-052** ([API_CONTRACT](API_CONTRACT.md)
+- **Scope:** the card-present provider leg of **DECISION D-051 / D-052 / D-053** ([API_CONTRACT](API_CONTRACT.md)
   §4.55). Agents never operate the terminal or call the provider; every step below is an operator /
   manager action.
 - **Trigger:** attempts stuck `unknown` or `released`; the provider rejecting the configured
   credentials or environment; a customer charged while the order still reads unpaid
-  (`approved_unrecorded`); the pad never prompting; a credential suspected exposed.
+  (`approved_unrecorded` / `orphan_approved`); an order refusing every tender with
+  `payment_in_progress`; the pad never prompting; a credential suspected exposed.
 - **Severity:** **SEV-2** on the shared ladder above ("payments failing for a branch",
   [OPERATIONS_AND_RECOVERY](OPERATIONS_AND_RECOVERY.md) §7.4); **SEV-1** the moment a provider
   credential is suspected exposed.
 - **Containment:** if the provider misbehaves broadly, master flag OFF; otherwise operator revision
   OFF for the branch. The flag gates `start` only, so status reads and recording keep working.
-  Never delete, edit or replay ledger rows.
+  The `app.sync_push` guard keeps every claimed order blocked for competing tenders, edits and voids
+  until its attempt is resolved — never work around it with another tender or a hand-recorded card.
+  Never delete, edit or replay LIVE ledger rows (TEST rows leave only through the audited purge below).
 - **Diagnosis:** list the branch's open attempts with `public.owner_card_attempts` (§4.55.10):
-  state, `approved_unrecorded` reason, `refusal_code`, amount rule, device. Run `status` for each
+  state, `approved_unrecorded` / `orphan_approved` reason, `refusal_code`, amount rule, device,
+  `last_lookup_at`, resolution metadata. Run `status` with `source='operator'` for each
   `unknown` / `released` attempt — from the originating till, or from any POS of the branch as a
   `manager`+ (an operator call is never refused with `poll_limit`).
-- **Recovery:** approved → record under the same identity (POS Resume on the originating till; by a
-  manager once the refusal's cause is cleared) only while `orders.grand_total_minor =
-  attempt.amount_minor`; otherwise an `amount_mismatch` incident (**Q-051**). Declined → the cashier
-  takes another tender. Still inconclusive after the lookups → the manager confirms with the customer
-  and the provider back office, then `free_order` (§4.55.6) frees the order for a new attempt or
-  another tender (**Q-048** interim; the attempt stays `unknown`). `approved_unrecorded` that cannot
-  be re-recorded (refusal not clearable, till revoked) → `free_order` on the approved attempt and an
-  operational refund outside the application per the provider's procedure, recorded as an incident;
-  the application makes no void or refund call (**D-023**; **Q-051** interim default, revisited before
-  production enablement).
+- **Recovery — approved:** record under the same identity on the original order (POS Resume on the
+  originating till; by a manager once the refusal's cause is cleared — shift reopened, revision
+  refreshed) only while `orders.grand_total_minor = attempt.amount_minor` and the currency matches.
+  Never charge again, never move the approval to another order, never free the order for another
+  tender (**D-053** point 1).
+- **Recovery — declined:** the cashier takes another tender (the claim ends with the decline).
+- **Recovery — unknown / released:** repeat the operator lookup; if it stays inconclusive, obtain an
+  explicit confirmation that no approved charge exists — the provider's transaction report or back
+  office, or a command-room-approved evidence step — then `free_order` (§4.55.6) with the
+  confirmation source, its reference and a reason; the attempt stays `unknown` / `released`.
+  Poll-cap exhaustion or "still inconclusive" alone never frees the order (**D-053** point 1). A
+  later approval of a freed attempt is an `approved_unrecorded` incident (reason `order_freed`).
+- **Recovery — orphan_approved (the original payment can no longer be legally recorded):** the
+  order stays blocked. Open an incident under a Work ID; the owner decides. A same-day provider
+  void, when needed, is performed manually in the provider's back office only after explicit owner
+  approval — never by the application. The operator then records the sanitized resolution through
+  `app.card_attempt_resolve_orphan` (§4.55.10): `provider_voided` / `provider_refunded` free the
+  order for another tender or a void; `owner_reconciled` closes the incident and admits a manager
+  void only, never a tender. No automatic void, refund or release; no in-app reversal in phase 1.
 - **Verification:** the provider's transaction report against the ledger's `approved` / `recorded`
-  rows for the pilot branch every day; every difference becomes an incident row; the pilot branch's
-  `payments` count equals the recorded attempts plus the other tenders.
+  rows for the pilot branch every day; every difference becomes an incident row; every
+  `orphan_approved` row has an open incident; the pilot branch's `payments` count equals the
+  recorded attempts plus the other tenders.
+- **TEST evidence retention (D-053 point 4):** TEST rows expire 90 days after creation; set an
+  incident hold (`app.card_attempt_set_incident_hold`, operator only, audited) before expiry when a TEST
+  run belongs to an open incident; the operator purge
+  (`app.purge_expired_test_card_attempts`) deletes only expired, unheld TEST rows and is audited
+  with counts only; LIVE rows are never deleted by any role or RPC (retention per **D-013** / **Q-005**).
 - **Credential exposure (SEV-1):** master flag OFF → resolve or list every open attempt → rotate the
   terminal credentials with the provider → replace the configuration secret → redeploy the adapter
   only if 001E caches configuration at worker start → review `card_attempt.*` audit rows and the
@@ -356,4 +375,4 @@ queries + expected results instead. Prints **PASS/FAIL**.
   test-terminal credential that reaches any commit, stash, bundle, report or chat is treated as
   exposed and reset.
 - **Postmortem:** in git under the incident's Work ID (**D-038**); no credential, terminal number,
-  identifier or card data in it.
+  identifier, device UUID or card data in it.
