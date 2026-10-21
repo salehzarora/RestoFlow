@@ -2,7 +2,7 @@
 // `next start` of a LIVE-MODE build (STOREFRONT_SOURCE=live at build time - the
 // spec refuses a fixture build). Two sources of truth, one contract:
 //
-//   STUB   an in-process HTTP server that answers `/rest/v1/rpc/storefront_menu_v2`
+//   STUB   an in-process HTTP server that answers `/rest/v1/rpc/storefront_menu_v3`
 //          with the SAME synthetic envelope the unit tests use
 //          (tests/support/envelope.mjs). Always runs. Proves the served
 //          contract without a database: cache segregation and the ISR header
@@ -192,7 +192,7 @@ test.describe('STOREFRONT-READ-001 live read against a STUB envelope server', ()
       let body = '';
       req.on('data', (c) => (body += c));
       req.on('end', () => {
-        if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu_v2') {
+        if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu_v3') {
           res.writeHead(404, { 'content-type': 'application/json' });
           res.end('{"message":"not found"}');
           return;
@@ -207,7 +207,7 @@ test.describe('STOREFRONT-READ-001 live read against a STUB envelope server', ()
         }
         res.writeHead(200, { 'content-type': 'application/json' });
         const envelope = mode === 'not_found' ? NOT_FOUND_ENVELOPE : envelopeFor(slug);
-        res.end(JSON.stringify(envelope.ok ? { ...envelope, home_content: { hero_headline: null, hero_subline: null, announcement_text: null } } : envelope));
+        res.end(JSON.stringify(envelope.ok ? { ...envelope, home_content: { hero_headline: null, hero_subline: null, announcement_text: null }, featured_item_ids: [] } : envelope));
       });
     });
     await new Promise<void>((r) => stub.listen(STUB_PORT, '127.0.0.1', r));

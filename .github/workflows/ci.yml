@@ -434,5 +434,17 @@ jobs:
       - name: Tests — platform web-order acceptance and single-send races (local only)
         run: node supabase/tests/support/run_platform_online_orders_353_concurrency.mjs --container supabase_db_RestoFlow
 
+      # Only this ephemeral Actions database may run the committed-fixture
+      # Featured races. The SQL suite cannot set or manufacture this marker.
+      - name: Authorize Featured races in the ephemeral CI database only
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$CI" = true
+          docker exec supabase_db_RestoFlow psql -X --no-password \
+            -h /var/run/postgresql -p 5432 -U supabase_admin -d postgres \
+            -v ON_ERROR_STOP=1 \
+            -c "ALTER DATABASE postgres SET bizbot.featured_ci_ephemeral TO 'BIZBOT-STOREFRONT-FEATURED-ITEMS-001';"
+
       - name: Run pgTAP suites (incl. the RF-019 tenant-isolation harness)
         run: supabase test db
