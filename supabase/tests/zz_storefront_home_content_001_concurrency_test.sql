@@ -34,8 +34,8 @@ begin
   perform * from extensions.dblink_get_result(conn) as t(x text);
   return v::jsonb;
 end; $$;
-select dblink_connect('home_a','host=127.0.0.1 port='||current_setting('port')||' dbname='||current_database()||' user=postgres password=postgres');
-select dblink_connect('home_b','host=127.0.0.1 port='||current_setting('port')||' dbname='||current_database()||' user=postgres password=postgres');
+select dblink_connect('home_a','host='||host(inet_server_addr())||' port='||inet_server_port()||' dbname='||current_database()||' user=postgres password=postgres');
+select dblink_connect('home_b','host='||host(inet_server_addr())||' port='||inet_server_port()||' dbname='||current_database()||' user=postgres password=postgres');
 select dblink_exec('home_a','set role authenticated');
 select dblink_exec('home_b','set role authenticated');
 select dblink_exec('home_a','set app.current_app_user_id=''0036c001-0000-4000-8000-000000000004''');
