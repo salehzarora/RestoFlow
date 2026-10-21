@@ -1572,6 +1572,37 @@ See [scope, operator API, release sequence and OFF procedure](MAPSBURGER_ALWAYS_
   requires the strict maximum-30-minute UTC window. No tenant identifiers or
   credentials enter customer notification responses. See the [platform contract](BIZBOT_PLATFORM_ONLINE_ORDERS_353.md).
 
+### 4.54 POS decision wake and explicit customer rejection reason (Issue #356)
+
+- Authenticated POS POST `pos-web-order-decision` accepts exactly `action` (`accept` or
+  `reject`), `pin_session_id`, `device_id`, `device_session_token`, `request_id`,
+  `decision_id`, plus `reason` for rejection only. Real caller JWT and existing
+  employee/PIN/device/tenant checks are mandatory; service-role decision
+  impersonation is not an alternative. Native calls omit Origin; existing real
+  web POS uses exactly `https://app.bizbot.systems` or the documented legacy
+  `https://resto-flow-phi.vercel.app`. Only these origins receive CORS POST/OPTIONS
+  headers for `authorization, apikey, content-type, x-client-info`, without
+  cookies/allow-credentials. Arbitrary origins are denied; OPTIONS never decides.
+- Accept delegates `pos_accept_web_order`; explicit customer rejection delegates
+  `pos_reject_web_order_customer`. Existing `pos_reject_web_order` remains a
+  backward-compatible staff-private contract. The new rejection records the
+  actual committed decision's public reason atomically and only when not replayed.
+  Historical/legacy reasons are never backfilled or promoted by retry.
+- Decision response and idempotency semantics remain unchanged. Only a validated
+  new committed terminal result (`replayed=false`) schedules one bounded
+  `EdgeRuntime.waitUntil` wake through the existing authenticated dispatcher.
+  Missing runtime support, scheduling/network/FCM failure cannot fail a committed
+  decision. Cron recovery and database delivery uniqueness/leases remain intact.
+- Capability-authenticated `web-order-submit` status results may contain
+  `customer_rejection_reason` only for rejected requests with explicit public
+  consent. It is omitted (never null) for historical, legacy and non-rejected
+  requests. Text is trimmed, 1–240 Unicode code points, no U+0000–001F/U+007F.
+  Storefront renders escaped plain text, never HTML or a fallback to private data.
+  Deploy its additive decoder before enabling new public-reason writes.
+- Android cancel hints remain untrusted: reconcile the full authorized pending
+  set, preserving any other pending request. Independent bounded reconciliation
+  and generation fencing must not depend on a new order or an audio callback.
+
 ## 5. Cross-References
 - Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034, D-037, D-039, D-040, D-041, D-042, D-043, D-044, D-045, D-046, D-047).
 - Open questions: [OPEN_QUESTIONS](OPEN_QUESTIONS.md) (Q-004, Q-007, Q-008, Q-009, Q-010, Q-011, Q-012, Q-014, Q-015, Q-017, Q-028, Q-029, Q-030, Q-031, Q-032, Q-033, Q-034, Q-035, Q-036, Q-039, Q-040, Q-041, Q-042, Q-043, Q-044, Q-045, Q-046).

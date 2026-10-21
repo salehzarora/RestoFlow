@@ -98,6 +98,24 @@ test('status transitions truthfully expose pending then accepted/rejected/expire
     assert.equal((await controller.refresh()).result.status, status);
   }
 });
+test('public rejection reason survives capability-only recovery without persistence or a repeated submission', async () => {
+  const reason = 'Synthetic public reason الصنف غير متوفر';
+  const storage = memoryStorage(); const actions = [];
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body); actions.push(body);
+    return response(body.action === 'submit' ? result() : result('rejected', { replayed: true, customer_rejection_reason: reason }));
+  };
+  const first = setup(fetchImpl, { storage }).controller;
+  assert.equal((await first.submit(order())).result.status, 'pending');
+  const rejected = await first.refresh();
+  assert.equal(rejected.result.customer_rejection_reason, reason); assert.equal(rejected.canRetry, false);
+  await first.retry();
+  const reloaded = setup(fetchImpl, { storage }).controller;
+  assert.equal((await reloaded.recover()).result.customer_rejection_reason, reason);
+  assert.equal(actions.filter((body) => body.action === 'submit').length, 1);
+  assert.ok(actions.filter((body) => body.action === 'status').every((body) => Object.keys(body).sort().join(',') === 'action,request_id,slug,status_token'));
+  assert.equal([...storage.map.values()].some((value) => value.includes(reason)), false);
+});
 test('confirmed terminal status never regresses and known requests never become write retries', async () => {
   let calls = 0;
   const { controller } = setup(async () => { calls++; return calls === 1 ? response(result('accepted')) : calls === 2 ? response(result('pending')) : response({ ok: false, error: 'not_found' }, 404); });

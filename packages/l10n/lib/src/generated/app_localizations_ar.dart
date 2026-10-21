@@ -68,10 +68,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posOnlineInboxReject => 'رفض الطلب';
 
   @override
-  String get posOnlineInboxReason => 'سبب الرفض';
+  String get posOnlineInboxReason => 'سبب الرفض — يظهر للزبون';
 
   @override
-  String get posOnlineInboxReasonHint => 'أدخل السبب (مطلوب، حتى 240 حرفًا)';
+  String get posOnlineInboxReasonHint =>
+      'مطلوب، حتى 240 حرفًا. سيظهر هذا السبب للزبون.';
 
   @override
   String get posOnlineInboxUncertain =>

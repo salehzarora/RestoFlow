@@ -24,9 +24,10 @@ const NAME = 'Synthetic Browser Guest';
 const ITEM_NOTES = ['First line בלי בצל بدون بصل', 'Second line extra onion'];
 const ORDER_NOTE = 'Synthetic pickup note ملاحظة הערה';
 const TOTALS = { currency_code: 'ILS', subtotal_minor: 12345, tax_total_minor: 2222, grand_total_minor: 14567 };
+const PUBLIC_REASONS = { ar: 'الصنف غير متوفر <img src=x onerror="alert(1)">', he: 'הפריט אזל <img src=x onerror="alert(1)">', en: 'Item unavailable <img src=x onerror="alert(1)">' };
 type State = 'pending' | 'accepted' | 'rejected' | 'expired';
 type RequestBody = { action: 'submit' | 'status'; slug: string; request_id: string; status_token: string; order?: { order_type: string; customer: { name: string; phone: string }; items: { menu_item_id: string; quantity: number; modifiers: { modifier_option_id: string; quantity: number }[]; notes?: string }[]; notes: string } };
-type Entry = { body: RequestBody; state: State; expires: string };
+type Entry = { body: RequestBody; state: State; expires: string; customerReason?: string };
 type JsAsset = { path: string; rawBytes: number; brotliBytes: number };
 const jsSizes = new Map<string, JsAsset>();
 const jsBudgets = new Map<string, { route: string; rawBytes: number; brotliBytes: number; assets: JsAsset[] }>();
@@ -105,9 +106,9 @@ async function offlineEdge(context: BrowserContext, page: Page, initial: 'normal
     }
     const entry = ledger.get(key);
     if (!entry || entry.body.status_token !== body.status_token) { await route.fulfill({ status: 404, headers: cors, body: JSON.stringify({ ok: false, error: 'not_found' }) }); return; }
-    await route.fulfill({ status: 200, headers: cors, body: JSON.stringify({ ok: true, request_id: body.request_id, status: entry.state, expires_at: entry.expires, totals: TOTALS, replayed: body.action === 'status' || writes > 1 }) });
+    await route.fulfill({ status: 200, headers: cors, body: JSON.stringify({ ok: true, request_id: body.request_id, status: entry.state, expires_at: entry.expires, totals: TOTALS, replayed: body.action === 'status' || writes > 1, ...(entry.state === 'rejected' && entry.customerReason !== undefined ? { customer_rejection_reason: entry.customerReason } : {}) }) });
   });
-  return { ledger, submissions, actions, remote, pageErrors, get writes() { return writes; }, setMode(value: typeof mode) { mode = value; }, setState(value: State) { for (const entry of ledger.values()) entry.state = value; } };
+  return { ledger, submissions, actions, remote, pageErrors, get writes() { return writes; }, setMode(value: typeof mode) { mode = value; }, setState(value: State, customerReason?: string) { for (const entry of ledger.values()) { entry.state = value; entry.customerReason = customerReason; } } };
 }
 
 async function assertPage(page: Page, locale: string) {
@@ -228,11 +229,22 @@ for (const locale of ['ar', 'he', 'en'] as const) {
       await expect(page.locator('[data-sf-server-totals]')).toContainText('₪145.67');
       await expect(page.locator('[data-sf-status-action="order-again"]')).toHaveCount(0);
       await assertPrivateStorage(page, slug); await picture(page, `${locale}-${width}-pending.png`);
-      edge.setState(terminal);
+      edge.setState(terminal, terminal === 'rejected' ? PUBLIC_REASONS[locale] : undefined);
       await page.locator('[data-sf-status-action="refresh"]').click();
       await expect(page.locator(`[data-sf-live-status="${terminal}"]`)).toBeVisible();
+      const publicReason = page.locator('[data-sf-customer-rejection-reason]');
+      if (terminal === 'rejected') {
+        await expect(publicReason).toHaveText(`${orderMessages(locale).rejectionReasonLabel} ${PUBLIC_REASONS[locale]}`);
+        await expect(publicReason.locator('img,script,iframe')).toHaveCount(0);
+        await expect(publicReason.locator('span[dir="auto"]')).toHaveText(PUBLIC_REASONS[locale]);
+      } else await expect(publicReason).toHaveCount(0);
       await page.reload({ waitUntil: 'networkidle' });
       await expect(page.locator(`[data-sf-live-status="${terminal}"]`)).toBeVisible();
+      if (terminal === 'rejected') {
+        await expect(publicReason).toHaveText(`${orderMessages(locale).rejectionReasonLabel} ${PUBLIC_REASONS[locale]}`);
+        const storage = await page.evaluate(() => [...Object.values(localStorage), ...Object.values(sessionStorage)]);
+        expect(storage.some((value) => value.includes(PUBLIC_REASONS[locale]))).toBe(false);
+      }
       await expect(page).toHaveURL(`${BASE}${routeFor(locale, slug, 'review')}`);
       expect(edge.writes).toBe(1); expect(edge.ledger.size).toBe(1); expect(edge.actions.filter((action) => action.action === 'status').length).toBeLessThan(10);
       await assertPrivateStorage(page, slug); await assertPage(page, locale); await picture(page, `${locale}-${width}-${terminal}-reloaded.png`);
@@ -243,6 +255,22 @@ for (const locale of ['ar', 'he', 'en'] as const) {
     });
   }
 }
+
+test('older rejected response without public reason remains usable and recovers without a new submission', async ({ page, context }) => {
+  const edge = await offlineEdge(context, page); const slug = 'sf-browser-private-reason';
+  await prepare(page, 'ar', slug, false);
+  await page.locator('[data-sf-cta="send"]').click();
+  await expect(page.locator('[data-sf-live-status="pending"]')).toBeVisible();
+  edge.setState('rejected');
+  await page.locator('[data-sf-status-action="refresh"]').click();
+  await expect(page.locator('[data-sf-live-status="rejected"]')).toBeVisible();
+  await expect(page.locator('[data-sf-customer-rejection-reason]')).toHaveCount(0);
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.locator('[data-sf-live-status="rejected"]')).toBeVisible();
+  await expect(page.locator('[data-sf-customer-rejection-reason]')).toHaveCount(0);
+  expect(edge.writes).toBe(1); expect(edge.ledger.size).toBe(1);
+  expect(edge.remote).toEqual([]); expect(edge.pageErrors).toEqual([]);
+});
 
 test('lost response after commit reconciles before reload and never repeats the saved request', async ({ page, context }) => {
   await page.setViewportSize({ width: 390, height: 844 });

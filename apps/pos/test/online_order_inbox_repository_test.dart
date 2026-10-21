@@ -14,11 +14,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'online_order_inbox_fixtures.dart';
 
-class _Transport extends SyncRpcTransport {
+class _Transport extends SyncRpcTransport
+    implements AuthenticatedWebOrderDecisionTransport {
   Object? result = inboxPageJson();
   SyncTransportException? error;
   String? function;
   Map<String, dynamic>? params;
+  @override
+  Future<Object?> decideWebOrder(Map<String, dynamic> body) =>
+      invoke('pos-web-order-decision', body);
+
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
     this.function = function;
@@ -214,8 +219,15 @@ void main() {
         decision: OnlineOrderDecision.reject,
         reason: '  Sold out  ',
       );
-      expect(transport.function, 'pos_reject_web_order');
-      expect(transport.params!['p_reason'], 'Sold out');
+      expect(transport.function, 'pos-web-order-decision');
+      expect(transport.params!['action'], 'reject');
+      expect(transport.params!['device_id'], deviceId);
+      expect(transport.params!['pin_session_id'], pinId);
+      expect(
+        transport.params!['device_session_token'],
+        'test-only-device-token',
+      );
+      expect(transport.params!['reason'], 'Sold out');
     },
   );
   test(

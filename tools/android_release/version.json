@@ -99,6 +99,40 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.67",
+      "versionCode": 67,
+      "signing": "restoflow-production",
+      "status": "BUILT / PRODUCTION-SIGNED / VERIFIED / CONSUMED / NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED",
+      "applicationSourceSha": "04445fdf019b4184ee0ce9fb9bbd8473b157db64",
+      "sourceSha": "04445fdf019b4184ee0ce9fb9bbd8473b157db64",
+      "buildDate": "2026-10-21",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v67-04445fd.apk",
+          "packageId": "com.restoflow.pos",
+          "sizeBytes": 76147301,
+          "sha256": "e306f27c7d763a63585523086a8d606b1d5d1a9ab3c0484392cf84375e13afd5"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v67-04445fd.apk",
+          "packageId": "com.restoflow.kds",
+          "sizeBytes": 57938786,
+          "sha256": "eaf7de4e5a892417347d2490e7cbf921dd5564aca10900233abe4b18cd2c5774"
+        }
+      },
+      "notes": [
+        "BIZBOT-POS-ORDER-DECISION-UX-SYNC-001 records the completed official synchronized pair for Issue #356 from clean isolated audited UNMERGED PR #357 source 04445fdf019b4184ee0ce9fb9bbd8473b157db64. Full exact-source CI 39502152659 completed SUCCESS, including application validation, 310 SQL suites / 9451 pgTAP assertions and existing race tests. The unchanged runner used its documented -SourceSha and -AllowNonMain audited-source exception. This is not a claim that the build source was main or merged.",
+        "Both APKs are 0.0.67 / 67, with the pinned production certificate, exact package IDs, valid signatures, non-debuggable release/AOT, RESTOFLOW_DEMO_MODE=false and the expected oqmevrndtivqxgyvcmwy backend. POS Firebase/background-alert Dart/native opt-in is ON with the approved production identity; KDS Firebase opt-in/configuration is OFF/absent and KDS application functionality is unchanged.",
+        "The POS artifact includes the new decision endpoint and keyboard-safe public-reason dialog indicators in AOT; actual R8 mapping includes the bounded independent background-reconciliation implementation. These are binary/source build checks, not measured two-device cancellation or physical notification acceptance. Server migration/Edge/Storefront rollout and owner device acceptance remain separate.",
+        "Actual APK sizes and hashes reconcile with original SHA256SUMS.txt (04db19421f72542a9bf804d4e945474780b5232f2cd3023268f706b92fed03e6) and BUILD-METADATA.txt (1d336b0896aaa74ae41a3b08669f5183663ab9d3d777e34631e45def48ac6400). Verification summary SHA-256: 4450af95dba8e34ab9a0df4bae68b60240f110b973c3aba4dac1529654910b4d. Source identity is clean Git checkout plus build trace and original metadata, not an independently embedded cryptographic source attestation.",
+        "Both APKs pass supplemental 16-KiB ZIP alignment. POS packages libsqlite3.so for arm64-v8a, armeabi-v7a and x86_64. This record makes no new all-ABI ELF alignment or physical Android compatibility claim.",
+        "Build date is 2026-10-21 in Asia/Jerusalem; the durable one-use receipt records 2026-10-20T22:00:21.0330412Z through 2026-10-20T22:04:18.7509149Z. Original metadata timestamps are local without offsets and its Gradle field contains the historical separator banner; the pinned wrapper is 9.1.0. Metadata and artifacts were not repaired or overwritten.",
+        "Code 67 is consumed and must not be reused or rebuilt by this reconciliation. POS/KDS v67 are NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED; no actual background FCM, cross-device cancellation, audio or physical-print acceptance is claimed. Owner Issue #356 source/build authorization supersedes the old v67 reservation only; reserve 0.0.68 / 68 as bookkeeping with no build, signing, installation or release authorization. Preserve all prior build-time records, later owner reports, v66 artifacts and currentOfficialRelease. No hosted, notification, device, ordering or printing mutation is performed by this release record."
+      ]
+    },
+    {
       "versionName": "0.0.66",
       "versionCode": 66,
       "signing": "restoflow-production",
@@ -917,15 +951,15 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.67",
-    "versionCode": 67,
+    "versionName": "0.0.68",
+    "versionCode": 68,
     "signing": "restoflow-production",
     "status": "reserved - NOT planned / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "Bookkeeping reservation only after verified official v66; source and scope require separate owner approval. NOT approved for building, signing, installing or releasing.",
+    "intendedSource": "Bookkeeping reservation only after verified official v67; source and scope require separate owner approval. NOT approved for building, signing, installing or releasing.",
     "notes": [
-      "Reserved after reconciliation of the verified official synchronized v66 pair. Code 66 is consumed; preserve its exact artifacts, source and durable local consumption receipt. No v67 build, signing, installation or release is authorized.",
-      "Every prior build-time release record, acceptance supplement and currentOfficialRelease remains unchanged. A separate later-owner-report supplement records POS v65 installed on HOME/salehtab, normal launch and preserved settings without inventing an installation date, ADB verification or full FCM/physical acceptance. v66 remains NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED.",
-      "Follow separate source, signing, synchronized-build and release authorization. This reservation authorizes no device, hosted, admission, notification, print or commercial offline-policy change; uncertain registration requires reconciliation, never restart/reset/data clearing as a shortcut."
+      "Reserved after reconciliation of the verified official synchronized v67 pair. Code 67 is consumed; preserve its exact audited unmerged source, artifacts and durable local consumption receipt. No v68 build, signing, installation or release is authorized.",
+      "Every previous build-time release object, historical acceptance supplement and currentOfficialRelease remains unchanged. Preserved v66 build-time NOT INSTALLED statements are historical records, not a new assertion about the owner-reported current device installation.",
+      "Follow separate source, signing, synchronized-build and release authorization. This reservation authorizes no device, hosted, notification, order or printing operation and no acceptance claim; uncertain registration requires reconciliation, never restart/reset/data clearing as a shortcut."
     ]
   },
   "ownerReportedAcceptanceRecords": [

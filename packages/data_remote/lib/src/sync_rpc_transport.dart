@@ -67,6 +67,12 @@ abstract class SyncRpcTransport {
   Future<Object?> invoke(String function, Map<String, dynamic> params);
 }
 
+/// Narrow decision boundary over the SAME authenticated device client. It never
+/// constructs a new anonymous principal or falls back to a second decision RPC.
+abstract interface class AuthenticatedWebOrderDecisionTransport {
+  Future<Object?> decideWebOrder(Map<String, dynamic> body);
+}
+
 /// [POS-OFFLINE-OPERATIONS-002 Pass B] The stable, lower-cased fragments of
 /// OUR OWN session-class 42501 raise messages (see [SyncTransportErrorKind.auth]
 /// for the full rationale and the owning migration file). Matched with a

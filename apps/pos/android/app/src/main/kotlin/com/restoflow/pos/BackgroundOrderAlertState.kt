@@ -88,6 +88,91 @@ internal class BackgroundOrderAlertOwnership {
     }
 }
 
+/** Full-set freshness is independent of sound cadence and UI callbacks. Main-thread owned. */
+internal class BackgroundOrderAlertReconciliation(
+    private val now: () -> Long,
+    private val schedule: (Long, () -> Unit) -> (() -> Unit),
+    private val eligible: () -> Boolean,
+    private val keepPolling: () -> Boolean,
+    private val read: (Read) -> (() -> Unit),
+    private val failClosed: () -> Unit,
+) {
+    companion object {
+        const val HINT_FLOOR_MS = 5_000L
+        const val PERIOD_MS = 60_000L
+        // Includes executor queueing, headers, body and main-thread completion.
+        const val READ_BUDGET_MS = 20_000L
+    }
+
+    class Read internal constructor(internal val startedAt: Long)
+    private var flight: Read? = null
+    private var cancelRead: (() -> Unit)? = null
+    private var cancelWatchdog: (() -> Unit)? = null
+    private var cancelScheduled: (() -> Unit)? = null
+    private var lastReadAt = -PERIOD_MS
+    private var again = false
+
+    fun request() {
+        if (!eligible()) { cancel(); return }
+        if (flight != null) { again = true; return }
+        // A terminal hint replaces a later periodic wake, but never bypasses the floor.
+        queue((HINT_FLOOR_MS - (now() - lastReadAt)).coerceAtLeast(0))
+    }
+
+    private fun queue(delay: Long) {
+        cancelScheduled?.invoke()
+        cancelScheduled = schedule(delay) {
+            cancelScheduled = null
+            if (!eligible()) { cancel(); return@schedule }
+            val work = Read(now())
+            flight = work
+            lastReadAt = now()
+            again = false
+            cancelWatchdog = schedule(READ_BUDGET_MS) {
+                if (flight === work) { cancel(); failClosed() }
+            }
+            try {
+                val cancellation = read(work)
+                if (flight === work) cancelRead = cancellation else cancellation()
+            } catch (_: Exception) {
+                if (flight === work) { cancel(); failClosed() }
+            }
+        }
+    }
+
+    /** Stale completions cannot apply state, cancel a newer read or revive an old service. */
+    fun complete(work: Read, apply: () -> Unit): Boolean {
+        if (flight !== work) return false
+        // A delayed main looper may deliver the completion before its queued watchdog.
+        if (now() - work.startedAt >= READ_BUDGET_MS) { cancel(); failClosed(); return false }
+        cancelWatchdog?.invoke()
+        cancelWatchdog = null
+        cancelRead = null
+        flight = null
+        if (!eligible()) { cancel(); return false }
+        val followUp = again
+        again = false
+        try { apply() } catch (_: Exception) { cancel(); failClosed(); return false }
+        if (!eligible()) { cancel(); return true }
+        if (cancelScheduled != null) return true
+        if (followUp) request()
+        else if (keepPolling()) queue((PERIOD_MS - (now() - lastReadAt)).coerceAtLeast(0))
+        return true
+    }
+
+    fun cancel() {
+        flight = null
+        again = false
+        cancelScheduled?.invoke()
+        cancelScheduled = null
+        cancelWatchdog?.invoke()
+        cancelWatchdog = null
+        val abort = cancelRead
+        cancelRead = null
+        abort?.invoke()
+    }
+}
+
 /** Native Stop is authoritative; automatic prepare can only retain an existing explicit opt-in. */
 internal class BackgroundOrderAlertOptIn(initial: Boolean) {
     var enabled = initial

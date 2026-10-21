@@ -303,5 +303,223 @@ fun main() {
         restarted.finishPreparation()
         check(restarted.canComplete(restarted.offer("B", "G1", false)!!, "G1"))
     }
+    scenario("background periodic full-set reconciliation stops accepted or rejected A without a later order or hint") {
+        for (decision in listOf("accept", "reject")) {
+            val fixture = ReconciliationFixture()
+            fixture.server = pending(decision)
+            fixture.loop.request()
+            fixture.clock.advanceTo(0)
+            check(fixture.state.count(0) == 1 && fixture.reads == 1)
+            fixture.server = emptyMap()
+            // No audio tick, UI resume, FCM hint or new order drives this read.
+            fixture.clock.advanceTo(60_000)
+            check(fixture.reads == 2 && !fixture.state.active(60_000))
+        }
+    }
+    scenario("resolving A in the background preserves B and the retained ten-second cadence") {
+        val fixture = ReconciliationFixture()
+        fixture.server = pending("A", "B")
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        fixture.state.played(0)
+        fixture.server = pending("B")
+        fixture.clock.advanceTo(1_000)
+        fixture.loop.request() // terminal FCM is only a reason to read ALL pending requests.
+        fixture.clock.advanceTo(5_000)
+        check(fixture.reads == 2 && fixture.state.count(5_000) == 1)
+        check(!fixture.state.shouldPlay(5_000) && fixture.state.shouldPlay(10_000))
+    }
+    scenario("terminal hint replaces the periodic timer while duplicate hints retain the five-second floor") {
+        val fixture = ReconciliationFixture()
+        fixture.server = pending("A")
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        fixture.clock.advanceTo(1_000)
+        repeat(20) { fixture.loop.request() }
+        fixture.clock.advanceTo(4_999)
+        check(fixture.reads == 1)
+        fixture.clock.advanceTo(5_000)
+        check(fixture.reads == 2)
+        fixture.clock.advanceTo(64_999)
+        check(fixture.reads == 2)
+        fixture.clock.advanceTo(65_000)
+        check(fixture.reads == 3)
+    }
+    scenario("queued or stalled status work cannot retain stale ringing past its absolute budget") {
+        val fixture = ReconciliationFixture()
+        fixture.state.replace(pending("A"), 0, 100_000, 0)
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        val stale = fixture.held.single()
+        repeat(50) { fixture.loop.request() }
+        fixture.clock.advanceTo(19_999)
+        check(fixture.reads == 1 && fixture.state.active(19_999))
+        fixture.clock.advanceTo(20_000)
+        check(fixture.failed == 1 && fixture.aborted == 1 && !fixture.state.active(20_000))
+        check(!fixture.loop.complete(stale) { error("late status must not resurrect A") })
+        fixture.clock.advanceTo(90_000)
+        check(fixture.reads == 1)
+    }
+    scenario("an in-flight hint coalesces one fresh read without concurrent reads or duplicate cadence") {
+        val fixture = ReconciliationFixture()
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        repeat(20) { fixture.loop.request() }
+        fixture.clock.advanceTo(1_000)
+        val first = fixture.held.single()
+        fixture.loop.complete(first) { }
+        fixture.clock.advanceTo(4_999)
+        check(fixture.reads == 1)
+        fixture.clock.advanceTo(5_000)
+        check(fixture.reads == 2)
+    }
+    scenario("a delayed main looper cannot accept stale completion ahead of its queued watchdog") {
+        val fixture = ReconciliationFixture()
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        fixture.clock.now = 20_000 // Simulate looper suspension without executing queued tasks.
+        check(!fixture.loop.complete(fixture.held.single()) { error("late full set") })
+        check(fixture.failed == 1 && fixture.aborted == 1)
+    }
+    scenario("malformed completion handling fails closed without escaping or scheduling more reads") {
+        val fixture = ReconciliationFixture()
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        check(!fixture.loop.complete(fixture.held.single()) { error("synthetic invalid full set") })
+        fixture.clock.advanceTo(120_000)
+        check(fixture.failed == 1 && fixture.reads == 1)
+    }
+    scenario("foreground bind or service replacement invalidates old success without cancelling the new flight") {
+        for (transition in listOf("foreground", "new-bind", "service-replaced", "logout")) {
+            val fixture = ReconciliationFixture()
+            fixture.holdRead = true
+            fixture.loop.request()
+            fixture.clock.advanceTo(0)
+            val old = fixture.held.single()
+            fixture.loop.cancel()
+            fixture.clock.advanceTo(5_000)
+            fixture.loop.request()
+            fixture.clock.advanceTo(5_000)
+            val newer = fixture.held.last()
+            check(old !== newer && fixture.aborted == 1)
+            check(!fixture.loop.complete(old) { error("$transition stale result") })
+            check(fixture.loop.complete(newer) { fixture.applied++ })
+            check(fixture.applied == 1)
+        }
+    }
+    scenario("authority loss rejects a completed status and schedules no new work") {
+        val fixture = ReconciliationFixture()
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        fixture.authorized = false
+        check(!fixture.loop.complete(fixture.held.single()) { error("expired or revoked PIN") })
+        fixture.clock.advanceTo(120_000)
+        check(fixture.reads == 1)
+    }
+    scenario("service destruction cancels the periodic timer and late network work") {
+        val fixture = ReconciliationFixture()
+        fixture.server = pending("A")
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        fixture.loop.cancel()
+        fixture.clock.advanceTo(120_000)
+        check(fixture.reads == 1 && fixture.failed == 0)
+    }
+    scenario("fallback performs one bounded authenticated read and does not create another polling owner") {
+        val fixture = ReconciliationFixture()
+        fixture.polling = false
+        fixture.server = pending("A")
+        fixture.loop.request()
+        fixture.clock.advanceTo(120_000)
+        check(fixture.reads == 1)
+    }
+    scenario("synchronous network scheduling failure fails closed and leaves no periodic work") {
+        val fixture = ReconciliationFixture()
+        fixture.throwRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(120_000)
+        check(fixture.failed == 1 && fixture.reads == 1)
+    }
+    scenario("process restart carries no pending authority until its independent fresh status completes") {
+        val fixture = ReconciliationFixture()
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        check(!fixture.state.active(0))
+        fixture.loop.complete(fixture.held.single()) {
+            fixture.state.replace(pending("verified B"), 0, 100_000, 0)
+        }
+        check(fixture.state.active(0))
+    }
+    scenario("natural request expiry still stops between independent status reads") {
+        val fixture = ReconciliationFixture()
+        fixture.server = mapOf("A" to 12_300)
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        check(fixture.state.active(12_299) && !fixture.state.active(12_300))
+    }
     println("$passed native background state scenarios passed")
+}
+
+private class ReconciliationClock {
+    var now = 0L
+    private class Task(val at: Long, val action: () -> Unit) { var cancelled = false }
+    private val tasks = mutableListOf<Task>()
+    fun schedule(delay: Long, action: () -> Unit): () -> Unit {
+        val task = Task(now + delay, action)
+        tasks.add(task)
+        return { task.cancelled = true }
+    }
+    fun advanceTo(target: Long) {
+        check(target >= now)
+        var runs = 0
+        while (true) {
+            val next = tasks.filter { !it.cancelled && it.at <= target }.minByOrNull { it.at } ?: break
+            check(++runs < 1_000)
+            tasks.remove(next)
+            now = next.at
+            next.action()
+        }
+        now = target
+    }
+}
+
+private class ReconciliationFixture {
+    val clock = ReconciliationClock()
+    val state = BackgroundOrderAlertState()
+    var authorized = true
+    var polling = true
+    var holdRead = false
+    var throwRead = false
+    var reads = 0
+    var failed = 0
+    var aborted = 0
+    var applied = 0
+    var server = emptyMap<String, Long>()
+    val held = mutableListOf<BackgroundOrderAlertReconciliation.Read>()
+    val loop: BackgroundOrderAlertReconciliation = BackgroundOrderAlertReconciliation(
+        now = { clock.now },
+        schedule = clock::schedule,
+        eligible = { authorized },
+        keepPolling = { polling },
+        read = { work ->
+            reads++
+            if (throwRead) error("synthetic executor rejection")
+            held.add(work)
+            if (!holdRead) clock.schedule(0) {
+                loop.complete(work) {
+                    state.replace(server, clock.now, 100_000 - clock.now, clock.now)
+                    applied++
+                }
+            }
+            val cancel: () -> Unit = { aborted++ }
+            cancel
+        },
+        failClosed = { failed++; state.clear(); authorized = false },
+    )
 }

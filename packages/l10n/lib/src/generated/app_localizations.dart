@@ -193,13 +193,13 @@ abstract class AppLocalizations {
   /// No description provided for @posOnlineInboxReason.
   ///
   /// In en, this message translates to:
-  /// **'Rejection reason'**
+  /// **'Rejection reason — shown to the customer'**
   String get posOnlineInboxReason;
 
   /// No description provided for @posOnlineInboxReasonHint.
   ///
   /// In en, this message translates to:
-  /// **'Enter a reason (required, up to 240 characters)'**
+  /// **'Required, up to 240 characters. The customer will see this reason.'**
   String get posOnlineInboxReasonHint;
 
   /// No description provided for @posOnlineInboxUncertain.

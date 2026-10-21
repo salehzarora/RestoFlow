@@ -43,6 +43,28 @@ test('all real states and authoritative integer totals decode without local arit
     assert.ok(Object.isFrozen(decoded.result) && Object.isFrozen(decoded.result.totals));
   }
 });
+test('future customer-designated rejection reasons decode unchanged, while old responses stay field-free', () => {
+  for (const reason of ['الصنف غير متوفر', 'הפריט אזל', 'Item unavailable', '🍔'.repeat(240), '<img src=x onerror="alert(1)">']) {
+    const decoded = decodeOrderResponse(result('rejected', { customer_rejection_reason: reason }), 200, identity(), 'status');
+    assert.equal(decoded.result.customer_rejection_reason, reason);
+    assert.ok(Object.isFrozen(decoded.result));
+  }
+  for (const state of ['pending', 'accepted', 'rejected', 'expired']) {
+    assert.equal(Object.hasOwn(decodeOrderResponse(result(state), 200, identity(), 'status').result, 'customer_rejection_reason'), false);
+  }
+});
+test('customer rejection reason is rejected outside its exact bounded, rejected-only contract', () => {
+  for (const customer_rejection_reason of [null, undefined, 1, true, {}, [], '', ' ', ' untrimmed', 'untrimmed ', '🍔'.repeat(241), 'x'.repeat(241), 'A\nB', 'A\tB', 'A\rB', 'A\x00B', 'A\x7fB', '\ud800']) {
+    assert.throws(() => decodeOrderResponse(result('rejected', { customer_rejection_reason }), 200, identity(), 'status'), WebOrderValidationError);
+  }
+  for (const state of ['pending', 'accepted', 'expired']) {
+    assert.throws(() => decodeOrderResponse(result(state, { customer_rejection_reason: 'Do not expose here' }), 200, identity(), 'status'), WebOrderValidationError);
+  }
+  for (const extra of [{ reason: 'Staff only' }, { rejection_reason: 'Staff only' }, { customer_rejection_reason: 'Public', reason: 'Staff only' }]) {
+    assert.throws(() => decodeOrderResponse(result('rejected', extra), 200, identity(), 'status'), WebOrderValidationError);
+  }
+  assert.throws(() => decodeOrderResponse({ ok: false, error: 'not_found', customer_rejection_reason: 'Private' }, 404, identity(), 'status'), WebOrderValidationError);
+});
 test('strict response decoding rejects mismatched IDs, unknown state, noninteger/invalid money and extras', () => {
   for (const value of [result('saved'), result('pending', { request_id: '22222222-2222-4222-8222-222222222222' }), result('pending', { expires_at: 'tomorrow' }), result('pending', { replayed: 'yes' }), result('pending', { customer: 'PRIVATE' }), result('pending', { totals: { currency_code: 'USD', subtotal_minor: 1000, tax_total_minor: 180, grand_total_minor: 1180 } }), result('pending', { totals: { currency_code: 'ILS', subtotal_minor: 1000.5, tax_total_minor: 180, grand_total_minor: 1180 } }), result('pending', { totals: { currency_code: 'ILS', subtotal_minor: 1000, tax_total_minor: 180, grand_total_minor: 1000 } }), result('pending', { totals: { currency_code: 'ILS', subtotal_minor: 10_000_001, tax_total_minor: 0, grand_total_minor: 10_000_001 } }), result('pending', { totals: { ...result().totals, service_key: 'PRIVATE' } })]) assert.throws(() => decodeOrderResponse(value, 200, identity(), 'submit'), WebOrderValidationError);
   assert.throws(() => decodeOrderResponse(result(), 503, identity(), 'submit'), WebOrderValidationError);
