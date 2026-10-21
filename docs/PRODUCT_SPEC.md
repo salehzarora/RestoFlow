@@ -229,7 +229,7 @@ Product implications:
 
 The authoritative in-scope / out-of-scope and DEFERRED list is owned by [MVP_SCOPE.md](MVP_SCOPE.md). This section only points to representative non-goals so product readers understand the boundaries; it does not define scope.
 
-- **DEFERRED** — Non-cash/card payments and integrated payment processors.
+- **DEFERRED** — Non-cash/card payments and integrated payment processors. *(2026-10-21: externally recorded non-cash tenders ship since RF-117, and one card-present PIN-pad pilot for a single tenant is carved out by **DECISION D-051** — see [MVP_SCOPE.md](MVP_SCOPE.md) §2.5 / §3.)*
 - **DEFERRED** — Tips (**OPEN QUESTION Q-011**) and elaborate service-charge handling (**OPEN QUESTION Q-012**).
 - **DEFERRED** — Refunds (the `refunded` payment state is deferred per the PROPOSED state enumerations (approved into the frozen M0A baseline (RF-004)) in [STATE_MACHINES.md](STATE_MACHINES.md)).
 - **DEFERRED** — Self-serve signup, billing/subscriptions (**OPEN QUESTION Q-016**), and full platform-admin tooling (M4).

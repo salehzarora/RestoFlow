@@ -26,6 +26,7 @@ Rules:
 3. **SECURITY REQUIREMENT** — No client may submit a pre-computed authoritative total that the server trusts blindly. The server (PostgreSQL RPC) recomputes order totals from snapshot line data and validates client-supplied totals; a mismatch is rejected. This protects against tampering and floating-point drift originating in any client.
 4. Percentages (tax rate, discount rate) are NOT money and may be stored as integer basis points (1% = 100 basis points) to avoid floating point in rate math as well. **PROPOSED DECISION — pending ChatGPT + Codex review + Saleh approval; not frozen** — basis-point representation for rates is proposed to keep all financial arithmetic in integers; this is a PROPOSED candidate (not ratified in this pass), flagged for review when Q-002 resolves.
 5. All intermediate arithmetic is performed in integer minor units. Where a multiplication/division produces a fractional minor unit (e.g. percentage discounts, tax extraction), a defined rounding step (§5) converts back to an integer minor unit at a defined point in the calculation order (§9).
+6. **Provider adapter decimal boundary (DECISION D-052, BIZBOT-PAYMENTS-ZCREDIT-PILOT-001).** A card-payment provider that takes amounts in major currency units with two decimals is served by exactly one server-side adapter that formats the integer minor amount by integer division and modulo into a two-decimal text and emits that text; no floating-point arithmetic or parsing touches money anywhere, and amounts returned by the provider are compared as text converted back to minor units with strict equality. No other decimal boundary exists.
 
 > **RISK R-008** — Money/rounding/tax errors before the jurisdiction is frozen. Mitigation: integer minor units (this section) plus keeping tax behaviour OPEN until Q-001..Q-004 resolve. See §6.
 
@@ -41,6 +42,8 @@ Rules:
 - The order's currency is snapshotted onto the order at creation time so a later change to the restaurant's configured currency does not retroactively alter historical orders.
 
 > **OPEN QUESTION Q-007** — Default currency and whether multi-currency (per-order or cross-restaurant settlement) is ever required. Until resolved, MVP assumes one currency per organization/restaurant and one currency per order.
+
+> **Card-present pilot binding (DECISION D-052):** the pilot charges only in the order currency and refuses any order whose currency is not the tenant's configured single currency (ILS for the pilot tenant — the **Q-007** interim); the provider's currency type must match or recording is blocked.
 
 Multi-tenant note: currency configuration is tenant-scoped by `organization_id` (and `restaurant_id` for overrides). No part of money handling assumes a single organization, restaurant, or branch.
 
@@ -153,6 +156,8 @@ Design intent (structural, not a frozen rate):
 
 > **DEFERRED** — **OPEN QUESTION Q-011.** Tips are explicitly **out of MVP scope**. No tip field is collected, computed, taxed, or reported in MVP. The schema should not bake in assumptions that would prevent adding a tips model later, but no tips behaviour ships now. Tip handling (pooling, per-employee attribution, taxability) is a future decision.
 
+> **PIN-pad tip screen (DECISION D-052):** the card-present pilot omits the provider's tip object entirely and fails closed if a provider reply carries a non-zero tip amount, so the charged total always equals the order's `grand_total_minor`.
+
 ---
 
 ## 9. Canonical order total composition (calculation order)
@@ -263,6 +268,8 @@ Money-affecting payment actions are bound to the **Payment** state machine (DECI
 
 **DECISION D-023** — `completed` is **TERMINAL** in MVP. Payment **void exists ONLY pre-completion**: the only permitted void transitions are `pending -> voided` and `tendered -> voided`. The transition `completed -> voided` is **FORBIDDEN** — there is no post-completion void/reversal mechanism in MVP. A `tendered -> voided` void (a pre-completion void) must account for any cash physically received before finalization (see §12.2). Refunds/reversals/post-completion corrections are **DEFERRED** (§12.3); MVP provides no hidden refund path and no "post-completion reversal via `completed -> voided`".
 
+> **Provider attempts (DECISION D-051 / D-052):** a card-present provider attempt (`sent → approved | declined | unknown | released`, `approved → recorded | approved_unrecorded`; `released` resolves by a later status lookup) is not a Payment status; it lives in a private ledger and in the POS attempt journal. A `payments` row appears only on a verified approval, written as `completed` by `record_payment` with `method='card'`, `amount_minor = tendered_minor = grand_total_minor`, `change_minor = 0`.
+
 Money totals attach to the order; payment rows attach to the order and record method, `amount_minor`, currency, and status. Sensitive payment mutations (pre-completion void, future refund) go through RPC (D-011) and are audited (D-013).
 
 ---
@@ -294,6 +301,8 @@ These three are **distinct** and must never be conflated. They map to the PROPOS
 - **No hidden reversal:** Per **DECISION D-023**, MVP has **no** post-completion money-reversal path. A refund is **NOT** implemented as a `completed -> voided` transition (that transition is FORBIDDEN — §11, §12.2) and there is no other hidden refund mechanism. Historical `completed` payment and order records are **never rewritten** to simulate a refund or reversal.
 - **Why deferred:** Refunds depend on the frozen payment/settlement model and on jurisdiction fiscal rules (Q-002/Q-003/Q-004). Do not implement refunds before those freeze.
 - **Interim guidance:** In MVP, money already *completed* cannot be returned through the app; correcting a completed payment is out of scope and must be handled operationally until the refund model is designed.
+
+> **Card-present pilot (DECISION D-052):** the application makes no provider void or refund call; a gateway-side void or refund outside the application is a reconciliation incident, not a payment transition. An approval that could not be recorded is handled by a manager procedure that re-records under the same attempt identity and never re-charges (**OPEN QUESTION Q-051**).
 
 ---
 
@@ -378,6 +387,7 @@ Mandatory audited money actions:
 7. Reprinting a receipt (with reason, §16).
 8. Any override above a role threshold (comp, large discount, manual price override if ever introduced).
 9. (Future) Refunds — DEFERRED with the refund model (§12.3).
+10. Card-present provider attempts (**DECISION D-052**): starting a live attempt, each provider outcome (approved / declined / unknown / released), recording after approval, an unrecorded approval and a cashier release request — as the `card_attempt.*` family; the safe-detail allowlist carries state tokens only and the money fields are integer minor amounts with currency; never PAN, tokens or raw provider payloads. TEST-mode runs write no tenant Activity-log entry and are evidenced only in the private ledger and the sealed test report (**Q-055** interim).
 
 Each audit event records at minimum (per D-013): actor (user identity + membership), device, `organization_id`, `restaurant_id`, `branch_id`, timestamp (client and server), action, reason (where applicable), old values, and new values. Money values in audit events are integer minor units.
 
@@ -406,6 +416,9 @@ Each audit event records at minimum (per D-013): actor (user identity + membersh
 - **OPEN QUESTION Q-017** — Whether `accountant` (read-only) ships in MVP (affects money-report visibility, never authorization).
 - **OPEN QUESTION Q-042** — Persisted percentage-discount basis, so a sent-order edit can re-apply a percentage (v1 keeps the stored absolute amount; §4.4, §9.2 M6).
 - **OPEN QUESTION Q-043** — Tax-rate snapshot on orders, and `inclusive` tax for sent-order edits (v1 refuses with `tax_mode_unsupported`; §6, §9.2 M7).
+- **OPEN QUESTION Q-048** — Provider status-lookup semantics for a card-present attempt that never reached the provider, was declined or is still pending (**D-052** treats all as UNKNOWN).
+- **OPEN QUESTION Q-051** — Orphan-approval and same-day void policy for a card-present attempt approved but not recorded (no provider void/refund call in the pilot).
+- **OPEN QUESTION Q-052** — Receipt/voucher requirements for card-present sales (no card line on the receipt in phase 1).
 - **DEFERRED** — Tips (Q-011), Refunds (payment `refunded`), multi-currency orders, cash rounding (until jurisdiction frozen), partial/split tender beyond single-tender + change.
 
 ## 20. PROPOSED DECISION candidates raised here (for ratification in DECISIONS.md)
