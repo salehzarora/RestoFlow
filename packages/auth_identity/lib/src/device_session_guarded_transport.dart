@@ -41,7 +41,9 @@ class DeviceSessionGuardedTransport
     }
     // No await before handoff: a block during repository credential loading
     // wins here. Already handed-off outcomes remain uncertain, never retried.
-    return (inner as AuthenticatedWebOrderDecisionTransport).decideWebOrder(body);
+    return (inner as AuthenticatedWebOrderDecisionTransport).decideWebOrder(
+      body,
+    );
   }
 
   @override
