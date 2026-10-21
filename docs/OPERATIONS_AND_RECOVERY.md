@@ -88,6 +88,7 @@ Operational rules. Security ownership of secrets-as-controls lives in [SECURITY_
 | Database direct connection string (per env) | Secret manager + CI secret store | Migration runner only | Used by forward-only migration tooling |
 | Device enrollment/pairing secrets | Server-issued, short-lived | Device during pairing only | Expiring enrollment codes (**DECISION D-006**) |
 | Third-party/payment credentials | Secret manager (per env) | Server only | Payments scope per [API_CONTRACT](API_CONTRACT.md) |
+| Card-present provider terminal credentials, PIN-pad identifiers and environment (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001, **DECISION D-051**) | Supabase Edge secret store, by NAME (one JSON configuration secret) | The Edge provider adapter only | Runtime configuration — never source, clients, migrations, CI, docs or logs; rotation per §3.3; compromise is SEV-1 ([RUNBOOKS](RUNBOOKS.md) §8) |
 | Signing / CI tokens | CI secret store | CI only | No push without human approval (D-016) |
 
 **ASSUMPTION**: the secret store is the cloud provider's managed secret manager plus the CI provider's encrypted secrets (GitHub Actions secrets, per **DECISION D-009**). Local development uses an untracked, machine-local `.env` that is `.gitignore`d.
@@ -97,6 +98,7 @@ Operational rules. Security ownership of secrets-as-controls lives in [SECURITY_
 - Each environment has independent secrets; rotating one tier never reuses another tier's value.
 - Rotation triggers: scheduled rotation cadence, suspected exposure, personnel/device change, or any commit-scan hit.
 - **Service-role key compromise is a SEV-1 incident** (§7): rotate immediately, invalidate sessions, audit `audit_events`, review for cross-tenant access (**RISK R-003**).
+- **Card-present provider credential compromise is a SEV-1 incident** (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001): in this order — master flag OFF, resolve or list every open attempt, rotate the terminal credentials with the provider, replace the configuration secret, redeploy the adapter only if it caches configuration at worker start, review the attempt ledger and `card_attempt.*` audit rows for the exposure window ([RUNBOOKS](RUNBOOKS.md) §8). A test-terminal credential that reaches any commit, stash, bundle, report or chat is treated as exposed and reset.
 - Device/employee credential revocation is an identity operation: revoking must remove FUTURE access including the offline window (**DECISION D-006**, **RISK R-007**, validity window is **OPEN QUESTION Q-009**; mechanics owned by [OFFLINE_SYNC_SPEC](OFFLINE_SYNC_SPEC.md)).
 - **ASSUMPTION**: default rotation cadence is quarterly for long-lived secrets and immediate on exposure; final cadence is set during M0B/M2 hardening.
 

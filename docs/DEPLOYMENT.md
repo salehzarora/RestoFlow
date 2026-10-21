@@ -1637,3 +1637,37 @@ Items 1–11 are all required before any production release or publication. Any 
 If `main` has moved when the branch is first pushed, the hosted baseline is the newer `main`, and the figures are recomputed then.
 
 Whatever the figures, `resto-flow` builds **one Preview per push that changes product inputs** (the Dashboard and `packages/l10n` runtime paths) and one Production build on merge, and the first such Preview runs the Storefront editor in real mode against the hosted backend (§17.1 step 0). Nothing is pushed or deployed under this Work ID until the owner approves (§17.1 step 0).
+
+## 18. BIZBOT-PAYMENTS-ZCREDIT-PILOT-001 — hosted prerequisites (NOT executed)
+
+> Docs-only plan under **DECISION D-051 / D-052** ([API_CONTRACT](API_CONTRACT.md) §4.55; [execution packet](BIZBOT_PAYMENTS_ZCREDIT_PILOT_001.md)). Nothing here is executed by an agent; every step is owner-approved separately after code review. Secret VALUES, terminal numbers, PIN-pad identifiers and serials never appear in this repository. The function name `pos-card-charge` is the proposed name of §4.55.1 (fixed by 001E). 001G and 001H are proposed sub-tickets (Work-ID approval pending).
+
+### 18.1 Order (hard — the packet §1 sequencing governs)
+1. 001A and 001B merged (decisions and contract).
+2. 001D, 001E, 001C, 001F and 001G merged (code with fakes only; nothing deployed).
+3. The 001D migration applied with PRE / POST (§18.2).
+4. The 001E function deployed dark: `POS_CARD_PAYMENTS_ENABLED` unset (OFF) and no provider configuration secret (§18.3).
+5. Any Android build follows the release ledger under its own Work ID.
+6. Owner-approved TEST secret setup (§18.4).
+7. Owner-approved QD3 test-card run in TEST mode (§18.4).
+8. Evidence review.
+9. Production enablement is a separate approval (per-tenant credentials **Q-054**, orphan policy **Q-051**).
+
+### 18.2 Migration PRE / POST (001D)
+- PRE: `supabase migration list --linked` equals the repository; `information_schema.tables` has neither `app.card_provider_attempts` nor `app.payment_terminals`; record the pilot branch's `payments` count by method and status; T-023 green on the ephemeral local stack.
+- POST: both tables exist with RLS enabled + forced, the `deny_client` policy and no grant to any app role; the grant posture of §4.55.10 holds — `app.card_attempt_start` / `_status` / `_release` / `_free_order` and `app.owner_card_attempts` **and** their `public.*` wrappers EXECUTE-granted to `authenticated` only (PUBLIC, `anon`, `service_role` revoked on both layers); `public.card_attempt_finish` and `app.card_attempt_finish` granted to `service_role` only; `app.set_card_payments_pilot` with no app-role grant; the REPORT-123 family guard passes (no `public.*` INVOKER wrapper granted to `authenticated` whose `app.*` counterpart is not); no row exists; the pilot branch's `payments` count is unchanged.
+
+### 18.3 Function deploy (001E) — dark
+- `supabase functions deploy pos-card-charge --project-ref <confirmed ref>` (proposed name, §4.55.1) from the linked checkout with the CLI's local Docker bundling; never `--use-api`, never `--prune`; `verify_jwt=false` per `config.toml` (the handler's JWT check and the SQL proof are the boundary); record the `ezbr_sha256`.
+- Probe: a POST without a JWT → 401; a well-formed `start` with the flag OFF → `card_payments_disabled` with no ledger row and no outbound provider request (verified by the ledger count and the function's refusal order of §4.55.4).
+
+### 18.4 TEST secret setup and the test-card run (owner-approved, owner-present)
+- Secret NAMES (Supabase Edge secret store only — never Vercel, never a client build, never a file in the repository; installed through the Management API secrets endpoint from an in-memory process; metadata verified, values never read back): `POS_CARD_PAYMENTS_ENABLED` (exact `true` to enable), `POS_CARD_PROVIDER_CONFIG` (one shape-validated JSON blob: `environment` ∈ `test` | `production`, `base_url`, `terminals` keyed by opaque reference → terminal credential and PIN-pad identifier).
+- PRE (before the configuration secret is installed): the pilot branch's `payments`, receipts, shifts and orders counts; the pilot organization's `audit_events` counts under `payment.%`, `receipt_number.%`, `shift.%`, `card_attempt.%` and `settings.%`; `app.card_provider_attempts` empty.
+- Order: configuration secret with `environment=test` → the `payment_terminals` row for one till (001D procedure) → master flag `true` → operator revision ON for the pilot organization / branch with `mode='test'`, a bounded window and `max_test_amount_minor` → the per-device toggle on that one till → the protocol of the execution packet §5 → operator revision OFF and master flag OFF unless a later phase is separately approved.
+- POST (after the run): `payments`, receipts, shifts and orders counts unchanged; `payment.%`, `receipt_number.%` and `shift.%` audit rows unchanged; `card_attempt.%` rows unchanged except `card_attempt.denied` rows attributable to the run, each a stop condition recorded in the evidence; `settings.%` rows changed only by the `settings.card_payments_pilot_updated` entries of the revision changes; only `app.card_provider_attempts` rows appear. Evidence is sealed outside git with attempt identities, states, return codes and timings only.
+
+### 18.5 Kill switch, rotation and rollback
+- Kill order: `POS_CARD_PAYMENTS_ENABLED` unset / not `true` → operator revision OFF → per-device toggles OFF. The flag gates `start` only (§4.55.5): `status`, `release` and `free_order` keep working, so every `sent` / `unknown` / `released` attempt is resolved or listed **before** the configuration secret is replaced or removed (credential rotation, [RUNBOOKS](RUNBOOKS.md) §8).
+- Keep every ledger row and audit event; never delete, replay or reverse; migrations are forward-only; a failed §18.3 probe deletes the function (`supabase functions delete`), never the tables or secrets by an agent.
+- Credential exposure: [OPERATIONS_AND_RECOVERY](OPERATIONS_AND_RECOVERY.md) §3.3 (SEV-1) and [RUNBOOKS](RUNBOOKS.md) §8.

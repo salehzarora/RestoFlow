@@ -315,3 +315,45 @@ queries + expected results instead. Prints **PASS/FAIL**.
   retention, MFA policy, and the human RLS sign-off are **HUMAN DECISION**.
 - **Go-live remains BLOCKED** until the [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) §6 checklist
   is fully green and Saleh records a GO.
+
+---
+
+## 8. Incident runbook 5 — card provider outage, unknown outcome, approved-unrecorded (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001)
+
+- **Scope:** the card-present provider leg of **DECISION D-051 / D-052** ([API_CONTRACT](API_CONTRACT.md)
+  §4.55). Agents never operate the terminal or call the provider; every step below is an operator /
+  manager action.
+- **Trigger:** attempts stuck `unknown` or `released`; the provider rejecting the configured
+  credentials or environment; a customer charged while the order still reads unpaid
+  (`approved_unrecorded`); the pad never prompting; a credential suspected exposed.
+- **Severity:** **SEV-2** on the shared ladder above ("payments failing for a branch",
+  [OPERATIONS_AND_RECOVERY](OPERATIONS_AND_RECOVERY.md) §7.4); **SEV-1** the moment a provider
+  credential is suspected exposed.
+- **Containment:** if the provider misbehaves broadly, master flag OFF; otherwise operator revision
+  OFF for the branch. The flag gates `start` only, so status reads and recording keep working.
+  Never delete, edit or replay ledger rows.
+- **Diagnosis:** list the branch's open attempts with `public.owner_card_attempts` (§4.55.10):
+  state, `approved_unrecorded` reason, `refusal_code`, amount rule, device. Run `status` for each
+  `unknown` / `released` attempt — from the originating till, or from any POS of the branch as a
+  `manager`+ (an operator call is never refused with `poll_limit`).
+- **Recovery:** approved → record under the same identity (POS Resume on the originating till; by a
+  manager once the refusal's cause is cleared) only while `orders.grand_total_minor =
+  attempt.amount_minor`; otherwise an `amount_mismatch` incident (**Q-051**). Declined → the cashier
+  takes another tender. Still inconclusive after the lookups → the manager confirms with the customer
+  and the provider back office, then `free_order` (§4.55.6) frees the order for a new attempt or
+  another tender (**Q-048** interim; the attempt stays `unknown`). `approved_unrecorded` that cannot
+  be re-recorded (refusal not clearable, till revoked) → `free_order` on the approved attempt and an
+  operational refund outside the application per the provider's procedure, recorded as an incident;
+  the application makes no void or refund call (**D-023**; **Q-051** interim default, revisited before
+  production enablement).
+- **Verification:** the provider's transaction report against the ledger's `approved` / `recorded`
+  rows for the pilot branch every day; every difference becomes an incident row; the pilot branch's
+  `payments` count equals the recorded attempts plus the other tenders.
+- **Credential exposure (SEV-1):** master flag OFF → resolve or list every open attempt → rotate the
+  terminal credentials with the provider → replace the configuration secret → redeploy the adapter
+  only if 001E caches configuration at worker start → review `card_attempt.*` audit rows and the
+  ledger for the exposure window ([OPERATIONS_AND_RECOVERY](OPERATIONS_AND_RECOVERY.md) §3.3). A
+  test-terminal credential that reaches any commit, stash, bundle, report or chat is treated as
+  exposed and reset.
+- **Postmortem:** in git under the incident's Work ID (**D-038**); no credential, terminal number,
+  identifier or card data in it.

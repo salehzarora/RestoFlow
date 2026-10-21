@@ -9,12 +9,12 @@
 | --- | --- |
 | Work-ID scheme | Approved Work IDs (**DECISION D-038**, GOV-001). Jira is no longer used; `RF` is the historical ticket prefix and is never renumbered. |
 | Current milestone | M7 real-wiring → **BIZBOT-PAYMENTS-ZCREDIT-PILOT-001** (card-present POS payments pilot, docs first; **DECISION D-051** / **D-052**) |
-| Active ticket | `BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A` — design and decision packet (docs only: D-051, D-052, Q-047..Q-056, scope carve-out, canon annotations, [BIZBOT_PAYMENTS_ZCREDIT_PILOT_001](BIZBOT_PAYMENTS_ZCREDIT_PILOT_001.md)) |
-| Status | H0 vendor-material housekeeping done locally on 2026-10-21 (no tracked change); 001A written on its branch from `origin/main` `e9aec540`; NOT pushed |
-| Branch | `docs/BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A-design` (worktree `worktrees/BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A`; NOT pushed) |
+| Active ticket | `BIZBOT-PAYMENTS-ZCREDIT-PILOT-001B` — provider contract (docs only: [API_CONTRACT](API_CONTRACT.md) §4.55 + §4.7 / §4.7a / §4.14 / §4.30b / §4.30c / §4.33 / §4.35 notes, DOMAIN_MODEL §8.4 / §8.5, OFFLINE_SYNC §10.1, TESTING_STRATEGY §6, DEPLOYMENT §18, RUNBOOKS §8, OPERATIONS §3.2 / §3.3); 001A (D-051 / D-052 / Q-047..Q-056) precedes it |
+| Status | H0 vendor-material housekeeping done locally on 2026-10-21 (no tracked change); 001A and 001B written on stacked branches from `origin/main` `e9aec540`; NOT pushed |
+| Branch | `docs/BIZBOT-PAYMENTS-ZCREDIT-PILOT-001B-provider-contract` stacked on `docs/BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A-design` (worktrees `worktrees/BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A` / `…-001B`; NOT pushed) |
 | Primary agent | Claude Code |
 | Reviewer | Codex |
-| Next step | Owner approval to push and open the PR; Codex read-only review; merge; then `BIZBOT-PAYMENTS-ZCREDIT-PILOT-001B` (provider contract, docs only), then 001D → 001E → 001C → 001F per the packet |
+| Next step | Owner approval to push both branches and open the PRs (001B targets 001A, then main); Codex read-only review; merge in order; then 001D (private ledger / RLS) → 001E (Edge adapter) → 001C → 001F per the packet |
 | Current blockers | None for 001A / 001B (docs). Code tickets wait for the 001A / 001B merges; the physical test waits for deploy-with-flags-OFF, the owner-approved TEST secret setup and the owner-approved test-card run (packet §8) |
 | Last verification | Docs-only change: CRLF preserved per file; every literal anchor matched exactly once; no secret, credential, identifier or vendor value; `tools/check_secrets.sh` run in the worktree before commit |
 

@@ -108,7 +108,7 @@ physical-test blockers.
 ## 7. Scope allowlist and forbidden paths
 
 - Allowed by ticket: 001A/001B docs; 001C `packages/data_remote`, `packages/auth_identity`,
-  `packages/l10n` ARBs; 001D one forward-only migration + pgTAP; 001E one new function directory, an
+  `packages/l10n` ARBs; 001D one forward-only migration + pgTAP plus the Dashboard `kAuditActionRegistry` entries, `_displayableKeys` labels and ar / he / en audit titles under the ORDER-EDIT-001A owner-approved exception pattern (API §4.33); 001E one new function directory, an
   additive `config.toml` block and one explicit CI test step; 001F `apps/pos` payment files listed in
   the preflight; 001G tests only.
 - Forbidden: `storefront/**`, `supabase/functions/web-order-submit/**`,
@@ -130,9 +130,9 @@ physical-test blockers.
 | Shared transport | both boot compositions forward the capability; blocked session refuses; late response after timeout causes no second transmission; dedicated timeout independent of the 15 s default. |
 | Edge adapter | exact environment-read allow-list and `config.toml` pin; JWT forwarding; closed-set projection; timeout → UNKNOWN; no body logging; static guard against float parsing on money. |
 | T-023 (pgTAP + the Edge test lane + static guard) | role denies, forced RLS, immutability, proof-derived tenant context, TEST mode never writes `payments` / receipt / shift / order history / Activity log (**Q-055** default), one in-progress attempt per order, kitchen exclusion, accountant read-only, support mode denied. |
-| Deploy (001H) | migration PRE/POST per OPERATIONS §4.2 and the DEPLOYMENT §17.2 PRE / POST recipe; function deployed with every flag OFF; secret NAMES verified, values never read back. |
+| Deploy (001H) | migration PRE/POST per OPERATIONS §4.2 and DEPLOYMENT §18.2 (patterned on §17.2); function deployed with every flag OFF; secret NAMES verified, values never read back. |
 | Physical test (001H) | TEST mode per §5 only, owner present; hosted PRE/POST queries prove no Maps Burger production row changed. |
-| Rollback | master flag OFF → operator revision OFF → poller off; keep every ledger row; no replay; forward-only migrations. |
+| Rollback | master flag OFF → operator revision OFF → per-device toggles OFF (status reads and recording keep working so in-flight attempts resolve); keep every ledger row; no replay; forward-only migrations. |
 
 ## 9. Owner decisions still open and targeted escalation list
 
