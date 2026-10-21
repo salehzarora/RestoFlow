@@ -215,6 +215,58 @@ test.beforeAll(() => {
 });
 
 for (const locale of ['ar', 'he', 'en'] as const) {
+  test(`${locale}: published Home content stays text and header controls never overlap at phone/tablet/desktop widths`, async ({ page, context }) => {
+    const edge = await offlineEdge(context, page);
+    const slug = `sf-browser-${locale}-home`;
+    const headline = 'عنوان المطعم כותרת Restaurant <img src=x onerror=alert(1)> '.repeat(2).slice(0, 120);
+    const subline = 'تفاصيل المطعم פרטים Restaurant details '.repeat(5).slice(0, 180);
+    for (const width of [360, 390, 430, 834, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(routeFor(locale, slug, 'menu'), { waitUntil: 'networkidle' });
+      await assertPage(page, locale);
+      const hero = page.locator('[data-sf-module="hero"]');
+      await expect(hero.locator('h1')).toHaveText(headline);
+      await expect(hero.locator('p')).toHaveText(subline);
+      await expect(page.locator('[data-sf-module="announce"]')).toContainText('إعلان הודעה Announcement <script>alert(1)</script>');
+      await expect(hero.locator('img[src="x"],script')).toHaveCount(0);
+      await expect(page.locator('[data-sf-module="announce"] script')).toHaveCount(0);
+      const geometry = await hero.locator('[class*="heroRow"]').evaluate((row) => {
+        const rect = (element: Element) => {
+          const box = element.getBoundingClientRect();
+          return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+        };
+        const [start, brand, end] = [...row.children];
+        const copy = row.parentElement!.querySelector('[class*="heroCopy"]')!;
+        // Only the three header controls: a closed disclosure's menu anchors
+        // are not header cells (their hidden layout boxes may still exist).
+        const controls = row.querySelectorAll(':scope > div > a, :scope > div > button, :scope > div > details > summary');
+        return { row: rect(row), brand: rect(brand), copy: rect(copy), sides: [rect(start), rect(end)], controls: [...controls].map(rect) };
+      });
+      expect(geometry.controls).toHaveLength(3);
+      const noOverlap = (a: typeof geometry.brand, b: typeof geometry.brand) => a.right <= b.left + 1 || b.right <= a.left + 1;
+      for (const control of geometry.controls) {
+        expect(control.width).toBeGreaterThanOrEqual(44);
+        expect(control.height).toBeGreaterThanOrEqual(44);
+        expect(noOverlap(control, geometry.brand), `${width}px: control must not enter merchant name column ${JSON.stringify(geometry)}`).toBe(true);
+      }
+      for (const side of geometry.sides) expect(noOverlap(side, geometry.brand)).toBe(true);
+      expect(geometry.copy.top, `${width}px: long copy must remain below header controls`).toBeGreaterThanOrEqual(geometry.row.bottom);
+      await picture(page, `${locale}-${width}-home-content.png`);
+    }
+    // No cart or decision action is needed to prove Home rendering.
+    expect(edge.writes).toBe(0); expect(edge.remote).toEqual([]); expect(edge.pageErrors).toEqual([]);
+    await page.setViewportSize({ width: 360, height: 844 });
+    await page.goto(routeFor(locale, `sf-browser-${locale}-unbroken-home`, 'menu'), { waitUntil: 'networkidle' });
+    await assertPage(page, locale);
+    const announcement = page.locator('[data-sf-module="announce"] [class*="announceText"]');
+    await expect(announcement).toHaveText('x'.repeat(240));
+    expect(await announcement.evaluate((element) => element.scrollWidth <= element.clientWidth + 1), 'valid unbroken announcement must fit its text column').toBe(true);
+    await page.goto(routeFor(locale, `sf-browser-${locale}-fallback`, 'menu'), { waitUntil: 'networkidle' });
+    await expect(page.locator('[data-sf-module="announce"]')).toHaveCount(0);
+    await expect(page.locator('[data-sf-module="hero"] h1')).toHaveText('Offline checkout verification');
+    await expect(page.locator('[data-sf-module="hero"] p')).toHaveCount(0);
+    expect(await page.content()).not.toContain(headline);
+  });
   for (const [index, width] of [390, 1024, 1440].entries()) {
     const terminal = (['accepted', 'rejected', 'expired'] as const)[index];
     test(`${locale} ${width}px: quantity + distinct notes → pending → ${terminal} → status reload`, async ({ page, context }) => {

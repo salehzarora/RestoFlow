@@ -111,8 +111,8 @@ enum StorefrontWriteStatus {
   /// advanced: the write did not commit.
   notCommitted,
 
-  /// The outcome is UNKNOWN: both attempts were lost and the readback failed
-  /// too. Refresh, and let the user try again.
+  /// The outcome is UNKNOWN. A readback alone may not establish which request
+  /// committed; preserve the identity for an explicit same-request replay.
   uncertain,
 }
 
@@ -170,7 +170,8 @@ class StorefrontWriteResult {
 
   /// The authoritative read taken while reconciling a lost response (ok /
   /// conflict / notCommitted after reconciliation; the failed read for
-  /// uncertain).
+  /// uncertain; Home-content reconciliation also retains a readable state
+  /// without inferring which manager committed it).
   final StorefrontProfileRead? readback;
 
   bool get isOk => status == StorefrontWriteStatus.ok;
@@ -195,11 +196,20 @@ abstract interface class StorefrontProfileRepository {
   });
 }
 
+/// Optional additive capability; the ordinary profile writer stays unchanged.
+abstract interface class StorefrontHomeContentRepository {
+  Future<StorefrontWriteResult> saveHomeContent({
+    required int expectedVersion,
+    required Map<String, Object?> content,
+    String? requestId,
+  });
+}
+
 /// The real, Supabase-backed [StorefrontProfileRepository] over
 /// `public.get_restaurant_storefront_profile` /
 /// `public.set_restaurant_storefront_profile`.
 class SupabaseStorefrontProfileRepository
-    implements StorefrontProfileRepository {
+    implements StorefrontProfileRepository, StorefrontHomeContentRepository {
   SupabaseStorefrontProfileRepository({
     required SyncRpcTransport transport,
     required this.organizationId,
@@ -210,6 +220,8 @@ class SupabaseStorefrontProfileRepository
 
   static const String readFunction = 'get_restaurant_storefront_profile';
   static const String writeFunction = 'set_restaurant_storefront_profile';
+  static const String homeContentFunction =
+      'set_restaurant_storefront_home_content';
 
   /// The idempotency-key namespace of a profile save.
   static const String requestIdPrefix = 'pbl:storefront:';
@@ -283,6 +295,110 @@ class SupabaseStorefrontProfileRepository
       version: version,
       profile: profile,
       derived: StorefrontDerived.fromJson(raw['derived']),
+    );
+  }
+
+  @override
+  Future<StorefrontWriteResult> saveHomeContent({
+    required int expectedVersion,
+    required Map<String, Object?> content,
+    String? requestId,
+  }) async {
+    if (requestId != null && !isCanonicalUuid(requestId)) {
+      throw ArgumentError.value(requestId, 'requestId', 'not a canonical uuid');
+    }
+    if (expectedVersion < 1) {
+      return const StorefrontWriteResult(
+        StorefrontWriteStatus.invalid,
+        reason: 'not_found',
+        refusedLocally: true,
+      );
+    }
+    final keys = StorefrontProfile.homeContentLimits.keys;
+    if (content.length != keys.length || !keys.every(content.containsKey)) {
+      return const StorefrontWriteResult(
+        StorefrontWriteStatus.invalid,
+        reason: 'home_content_keys_invalid',
+        refusedLocally: true,
+      );
+    }
+    for (final key in keys) {
+      if (!StorefrontProfile.isValidHomeContentValue(key, content[key])) {
+        return StorefrontWriteResult(
+          StorefrontWriteStatus.invalid,
+          reason: '${key}_invalid',
+          field: key,
+          refusedLocally: true,
+        );
+      }
+    }
+    // Freeze the exact raw three-field body before the first await. Explicit
+    // retries bind the same identity/version/body; this path never auto-POSTs.
+    final patch = Map<String, Object?>.unmodifiable({
+      for (final key in keys) key: content[key],
+    });
+    final id =
+        requestId ??
+        storefrontRequestId('pbl:storefront:home:', [
+          organizationId,
+          restaurantId,
+          expectedVersion.toString(),
+          jsonEncode(patch),
+        ], _nonce());
+    final attempt = await invokeStorefrontRpc(_t, homeContentFunction, {
+      'p_client_request_id': id,
+      'p_organization_id': organizationId,
+      'p_restaurant_id': restaurantId,
+      'p_expected_version': expectedVersion,
+      'p_patch': patch,
+    });
+    if (attempt.isRefused) {
+      return StorefrontWriteResult(
+        StorefrontWriteStatus.unavailable,
+        requestId: id,
+        expectedVersion: expectedVersion,
+        code: attempt.code,
+      );
+    }
+    if (attempt.isResponded) {
+      final raw = attempt.response!;
+      if (raw['ok'] == true &&
+          raw['entity'] == 'restaurant_storefront_profile' &&
+          raw['restaurant_id'] is String &&
+          (raw['restaurant_id'] as String).toLowerCase() ==
+              restaurantId.toLowerCase() &&
+          raw['version'] is int &&
+          raw['version'] == expectedVersion + 1 &&
+          raw['is_published'] is bool &&
+          raw['idempotent_replay'] is bool &&
+          raw['slug'] is String &&
+          (raw['slug'] as String).isNotEmpty) {
+        return _classify(raw, id, expectedVersion);
+      }
+      if (raw['ok'] == false &&
+          const {
+            'version_conflict',
+            'permission_denied',
+            'invalid',
+          }.contains(raw['error'])) {
+        return _classify(raw, id, expectedVersion);
+      }
+      if (raw['ok'] == false && raw['error'] == 'not_found') {
+        return StorefrontWriteResult(
+          StorefrontWriteStatus.invalid,
+          requestId: id,
+          expectedVersion: expectedVersion,
+          reason: 'not_found',
+        );
+      }
+    }
+    // A matching profile alone cannot prove which manager committed it.
+    // Preserve uncertainty and identity even after a readable readback.
+    return StorefrontWriteResult(
+      StorefrontWriteStatus.uncertain,
+      requestId: id,
+      expectedVersion: expectedVersion,
+      readback: await read(),
     );
   }
 

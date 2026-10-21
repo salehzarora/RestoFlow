@@ -71,7 +71,7 @@ export function Home({
   const firstCategoryId = categories[0] === undefined ? '' : `sf-cat-${categories[0].id}`;
 
   // The hero's own header row: menu button on the start side, the brand lockup
-  // centred, search + language on the end side. Fixed 84px side groups keep the
+  // centred, search + language on the end side. Fixed 94px side groups keep the
   // lockup optically centred whatever the name's length.
   const heroHeader = (
     <div className={styles.heroRow}>

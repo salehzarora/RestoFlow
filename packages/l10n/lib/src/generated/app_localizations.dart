@@ -17121,6 +17121,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Background notification authorization ended. Sign in again to renew it.'**
   String get posBackgroundOrderAlertsSignIn;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Home page text'**
+  String get storefrontHomeContentTitle;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Hero headline'**
+  String get storefrontHeroHeadlineLabel;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Hero subline'**
+  String get storefrontHeroSublineLabel;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Announcement'**
+  String get storefrontAnnouncementLabel;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional plain text: headline 120, subline 180, announcement 240 characters. Empty headline uses the saved tagline/name; empty subline and announcement stay hidden.'**
+  String get storefrontHomeContentHelp;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Home text editing requires the updated backend. Ordinary profile editing remains available.'**
+  String get storefrontHomeContentUnavailable;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter plain text within the displayed field limits, without control characters.'**
+  String get storefrontHomeContentInvalid;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Home text'**
+  String get storefrontHomeContentSaveAction;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Home text saved.'**
+  String get storefrontHomeContentSaved;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Save or discard the other profile edits before saving Home text. Discard one section if both have unsaved edits.'**
+  String get storefrontHomeContentSeparateEdits;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'The save result is unknown. Your exact draft and request are kept. Use Try again to reconcile the same request; do not start a different save.'**
+  String get storefrontHomeContentUncertain;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Text preview'**
+  String get storefrontHomeContentPreviewTitle;
+
+  /// BIZBOT-STOREFRONT-HOME-CONTENT-001: existing profile required; no implicit creation.
+  ///
+  /// In en, this message translates to:
+  /// **'The profile is no longer available. Reload and create it through normal profile setup first.'**
+  String get storefrontHomeContentProfileMissing;
 }
 
 class _AppLocalizationsDelegate

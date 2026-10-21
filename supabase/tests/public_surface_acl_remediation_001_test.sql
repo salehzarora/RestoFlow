@@ -12,6 +12,8 @@
 --      {public.storefront_menu(text)}, the one SECURITY DEFINER function
 --      `public` may carry, and the one public function `authenticated` may
 --      NOT execute; A1 / A5 / D1 pin that set by equality;
+--      HOME-CONTENT-001 adds only its explicitly reviewed versioned reader;
+--      both remain the exact enumerated read-only exception set below.
 --   B. `anon` has no USAGE on schema `app` and keeps USAGE on `public`;
 --   C. `anon` holds no privilege on any `public` table, view or sequence;
 --   D. `authenticated` is untouched — every wrapper stays executable and the
@@ -41,12 +43,12 @@ set local timezone to 'UTC';
 
 select plan(62);
 
--- The D-037 allowlist as amended by STOREFRONT-READ-001: exactly one function,
+-- The D-037 allowlist includes the reviewed HOME-CONTENT-001 versioned read:
 -- named by identity. Every A1 / A5 / D1 assertion below compares against THIS
--- literal, so a second anon-callable or DEFINER public function fails here
+-- literal, so any further anon-callable or DEFINER public function fails here
 -- until it is enumerated in its own migration + suite (D-037 point 2).
 create temp table sec001_allowlist (identity text primary key);
-insert into sec001_allowlist values ('storefront_menu(text)');
+insert into sec001_allowlist values ('storefront_menu(text)'), ('storefront_menu_v2(text)');
 
 -- ----------------------------------------------------------------------------
 -- A. anon function family guard (effective privileges, dynamic) ............ (6)
@@ -58,7 +60,7 @@ select is(
       and p.prokind in ('f', 'p')
       and has_function_privilege('anon', p.oid, 'EXECUTE')),
   (select string_agg(identity, ', ' order by identity) from sec001_allowlist),
-  'A1. anon-executable public function set EQUALS the enumerated allowlist {storefront_menu(text)} — any extra culprit prints here');
+  'A1. anon-executable public function set EQUALS the two enumerated versioned readers — any extra culprit prints here');
 
 select cmp_ok(
   (select count(*)::int from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')),
@@ -86,7 +88,7 @@ select is(
      from pg_proc p
     where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and p.prosecdef),
   (select string_agg(identity, ', ' order by identity) from sec001_allowlist),
-  'A5. the ONLY public SECURITY DEFINER function is the enumerated allowlist (D-037 amendment) — no wrapper can carry anon into app.*');
+  'A5. public SECURITY DEFINER routines EQUAL the enumerated versioned readers — no other wrapper carries anon into app.*');
 
 select is(
   (select coalesce(string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text), '')
