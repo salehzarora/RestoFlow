@@ -35,6 +35,9 @@ test('offline boundary denies unknown/remote/UNC network shapes and unsafe nativ
   assert.doesNotThrow(() => assertChildOptions({ ...options, env: { ...options.env, PLAYWRIGHT_TEST: '1' } }, settings.preload));
   assert.throws(() => assertChildOptions({ ...options, env: { ...options.env, PLAYWRIGHT_TEST: '2' } }, settings.preload));
   assert.throws(() => assertChildOptions({ ...options, env: { ...options.env, PLAYWRIGHT_TEST: 'false' } }, settings.preload));
+  assert.doesNotThrow(() => assertChildOptions({ ...options, env: { ...options.env, BROWSERSLIST_IGNORE_OLD_DATA: 'true' } }, settings.preload));
+  for (const value of ['false', '1']) assert.throws(() => assertChildOptions({ ...options, env: { ...options.env, BROWSERSLIST_IGNORE_OLD_DATA: value } }, settings.preload));
+  assert.throws(() => assertChildOptions({ ...options, env: { ...options.env, BROWSERSLIST_IGNORE_OLD_DATA_EXTRA: 'true' } }, settings.preload));
   // Windows libuv 24.19.0 inserts these exact required OS names even when
   // spawn supplies an explicit sanitized environment. No arbitrary prefix.
   for (const key of ['HOMEDRIVE', 'HOMEPATH', 'LOGONSERVER', 'SYSTEMDRIVE', 'USERDOMAIN', 'USERNAME', 'WINDIR']) {
