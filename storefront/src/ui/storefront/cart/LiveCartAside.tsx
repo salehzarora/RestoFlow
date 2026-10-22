@@ -130,7 +130,7 @@ export function LiveCartAside({
                   <span className={`${styles.asideThumb} ${productFrameClass(line.item, contentStyles.wholeFrame)}`}>
                     {line.item.image === null ? line.item.name.slice(0, 1) : (
                       /* eslint-disable-next-line @next/next/no-img-element */
-                      <img className={productImageClass(line.item, contentStyles.wholeImage)} src={line.item.image} alt="" width={70} height={87} loading="lazy" decoding="async" />
+                      <img className={`${styles.imageCover} ${productImageClass(line.item, contentStyles.wholeImage)}`} src={line.item.image} alt="" width={70} height={87} loading="lazy" decoding="async" />
                     )}
                   </span>
                   <div className={styles.asideLineMain}>

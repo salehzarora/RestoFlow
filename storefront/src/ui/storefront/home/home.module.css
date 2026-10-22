@@ -57,8 +57,9 @@
 .heroMedia{position:absolute;inset-inline-end:45px;inset-block-start:12px;width:345px;height:440px;border-radius:150px 150px 13px 13px;overflow:hidden;background:var(--hero);box-shadow:0 16px 28px #19292213;transform:rotate(-4deg)}
 .heroMedia:not([data-sf-product])::after{content:'';position:absolute;inset:60% 0 0;background:linear-gradient(transparent,#080a05c7);pointer-events:none}
 
-.heroImg,.cardImg,.promoImg,.asideThumb img{width:100%;height:100%;object-fit:cover}
-.heroImg{object-position:50% 44%;transform:scale(1.52);transform-origin:50% 123%}
+.imageCover{width:100%;height:100%;object-fit:cover}
+.promoImg{composes:imageCover}
+.heroImg{composes:imageCover;object-position:50% 44%;transform:scale(1.52);transform-origin:50% 123%}
 .heroGhost{position:absolute;inset-inline-end:82px;inset-block-start:100px;font-size:120px;font-weight:900;letter-spacing:-8px;transform:rotate(90deg);color:transparent;-webkit-text-stroke:1px var(--hair);z-index:-1;width:420px;line-height:1;white-space:nowrap;overflow:hidden}
 .heroMotif{position:absolute;inset-inline-start:-10px;inset-block-start:0;width:100%;height:100%;stroke:var(--tx3)!important;stroke-width:1.2!important;stroke-dasharray:4 5;opacity:.65;z-index:-1}
 .announce{composes:flexRow;position:relative;min-height:49px;justify-content:center;gap:36px;background:var(--acc);color:var(--onacc);padding:10px 60px;font:500 12px/1.8 var(--font)}
@@ -120,7 +121,7 @@
 .listWrap{display:grid;gap:18px}
 .card,.row{min-width:0;cursor:pointer;outline-offset:4px}
 .cardMediaGrid{position:relative;overflow:hidden;background:var(--sf2);border-radius:9px;width:100%;aspect-ratio:1.15}
-.cardImg{object-position:50% 66%;transition:transform .55s cubic-bezier(.22,.68,0,1.01)}
+.cardImg{composes:imageCover;object-position:50% 66%;transition:transform .55s cubic-bezier(.22,.68,0,1.01)}
 .motionFull{}
 .motionLively{composes:motionFull}
 .motionFull .card:hover .cardImg{transform:scale(1.045)}

@@ -22,9 +22,10 @@
  * 360px the aside takes and never forces a horizontal scrollbar. `min-width: 0`
  * is what allows its own children to shrink rather than overflow.
  */
-.screen,.list,.empty{display:flex;flex-direction:column}
-.screen,.field,.input,.rowBody{flex:1;min-width:0}
-.screen {
+.flexColumn{display:flex;flex-direction:column}
+.flexItem{flex:1;min-width:0}
+.rowBody{composes:flexItem}
+.screen {composes:flexColumn flexItem;
   min-height: 100dvh;
 }
 
@@ -32,8 +33,8 @@
 
 /* "Sticky" in the handoff's sense: the header is pinned by being the non-
    growing child of a full-height column whose sibling scrolls. */
-.header,.field,.row{display:flex;align-items:center}
-.header {
+.flexRow{display:flex;align-items:center}
+.header {composes:flexRow;
   flex: none;
   gap: 6px;
   padding: 10px 8px;
@@ -41,17 +42,16 @@
   background: var(--sf);
 }
 
-.back,.clear,.thumbNone{display:grid;place-items:center}
-.back,.clear{flex:none;border:0;color:inherit;cursor:pointer}
-.back {
+.gridCenter{display:grid;place-items:center}
+.plainButton{flex:none;border:0;color:inherit;cursor:pointer}
+.back {composes:gridCenter plainButton;
   width: 44px;
   height: 44px;
   border-radius: var(--r-control);
   background: transparent;
 }
 
-.back svg,.field > svg,.clear svg{fill:none;stroke-linecap:round}
-.back svg {
+.back svg {fill:none;stroke-linecap:round;
   width: 22px;
   height: 22px;
   stroke: currentColor;
@@ -64,7 +64,7 @@
   transform: scaleX(-1);
 }
 
-.field {
+.field {composes:flexRow flexItem;
   gap: 8px;
   height: 44px;
   padding: 0 12px;
@@ -75,7 +75,7 @@
 
 /* The magnifier. `SearchIcon` takes no className, so it is reached by
    position - it is the field's only leading svg. */
-.field > svg {
+.field > svg {fill:none;stroke-linecap:round;
   flex: none;
   width: 18px;
   height: 18px;
@@ -83,7 +83,7 @@
   stroke-width: 2.2;
 }
 
-.input {
+.input {composes:flexItem;
   border: 0;
   background: transparent;
   color: inherit;
@@ -108,7 +108,7 @@
  * an `::before` that overflows it symmetrically. No inline style, so the
  * committed `style-src 'self'` CSP is unaffected.
  */
-.clear {
+.clear {composes:gridCenter plainButton;
   position: relative;
   width: 28px;
   height: 28px;
@@ -124,7 +124,7 @@
   border-radius: var(--r-pill);
 }
 
-.clear svg {
+.clear svg {fill:none;stroke-linecap:round;
   width: 12px;
   height: 12px;
   stroke: currentColor;
@@ -133,7 +133,7 @@
 
 /* --- results -------------------------------------------------------------- */
 
-.list {
+.list {composes:flexColumn;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -143,7 +143,7 @@
 }
 
 /* 10 + 56 + 10 + 2 = 78px tall. */
-.row {
+.row {composes:flexRow;
   gap: 12px;
   width: 100%;
   padding: 10px;
@@ -181,7 +181,7 @@
 /* A flat --sf2 bed with the initial in accent at 20/900. Deliberately NOT
    home's .cardNoImage, whose 26px type and gradient wash are drawn for a much
    larger tile. */
-.thumbNone {
+.thumbNone {composes:gridCenter;
   position: absolute;
   inset: 0;
   font-size: 20px;
@@ -189,14 +189,14 @@
   color: var(--acct);
 }
 
-.rowName,.rowCat{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rowName {
+.ellipsis{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rowName {composes:ellipsis;
   font-size: 15px;
   font-weight: 700;
 }
 
 /* The CATEGORY name, not the description. */
-.rowCat {
+.rowCat {composes:ellipsis;
   font-size: 12.5px;
   color: var(--tx3);
 }
@@ -231,7 +231,7 @@
    with a 64px icon tile and an optional action, but the canonical screenshot
    named in DESIGN_HANDOFF.md:88 has neither, and neither does the prototype.
    The named proof wins; the divergence is recorded in the Phase C report. */
-.empty {
+.empty {composes:flexColumn;
   padding: 48px 20px;
   align-items: center;
   gap: 6px;
