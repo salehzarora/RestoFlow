@@ -320,13 +320,14 @@ queries + expected results instead. Prints **PASS/FAIL**.
 
 ## 8. Incident runbook 5 — card provider outage, unknown outcome, approved-unrecorded, orphaned approval (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001)
 
-- **Scope:** the card-present provider leg of **DECISION D-051 / D-052 / D-053** ([API_CONTRACT](API_CONTRACT.md)
+- **Scope:** the card-present provider leg of **DECISION D-051 / D-052 / D-053 / D-054 / D-055** ([API_CONTRACT](API_CONTRACT.md)
   §4.55). Agents never operate the terminal or call the provider; every step below is an operator /
   manager action.
 - **Trigger:** attempts stuck `unknown` or `released`; the provider rejecting the configured
   credentials or environment; a customer charged while the order still reads unpaid
   (`approved_unrecorded` / `orphan_approved`); an order refusing every tender with
-  `payment_in_progress`; the pad never prompting; a credential suspected exposed.
+  `payment_in_progress`; a shift refusing to close (`card_payment_in_progress`); the pad never
+  prompting; a credential suspected exposed.
 - **Severity:** **SEV-2** on the shared ladder above ("payments failing for a branch",
   [OPERATIONS_AND_RECOVERY](OPERATIONS_AND_RECOVERY.md) §7.4); **SEV-1** the moment a provider
   credential is suspected exposed.
@@ -340,19 +341,36 @@ queries + expected results instead. Prints **PASS/FAIL**.
   `last_lookup_at`, resolution metadata. Run `status` with `source='operator'` for each
   `unknown` / `released` attempt — from the originating till, or from any POS of the branch as a
   `manager`+ (an operator call is never refused with `poll_limit`).
-- **Recovery — approved:** record under the same identity on the original order. If the first
-  recording leg never reached the server (no sync ledger row) the POS resends the same operation
-  through its existing durable `payment.create` dispatch. If it was memoized as rejected with a
-  recoverable refusal (`precondition_failed` — no open shift / active drawer on the till —,
-  `revoked_employee`, `revoked_device`), repair the cause first (reopen a shift on that till,
-  reinstate the membership, or return a `suspended` pairing of that same device to `active` — a
-  management-revoked device cannot be reinstated for this purpose and leaves the attempt
-  `orphan_approved`), then a `manager`+ on that same till performs the explicit **Resume recording**
-  of **D-054** (§4.55.7): the identical `payment.create` is re-dispatched once, never a new
-  operation and never a new charge, at most 3 times per attempt. Any other memoized refusal is not
-  resumable: the attempt is `approved_unrecorded` / `orphan_approved` and goes to the orphan
-  procedure below. Never charge again, never move the approval to another order, never free the
-  order for another tender (**D-053** point 1).
+- **Recovery — approved:** record under the same identity on the original order, inside the shift and
+  drawer frozen at the claim (**D-055**: the attempt's `shift_id` must still be OPEN and its
+  `cash_drawer_session_id` still ACTIVE on that till — the shift-close guard keeps them so while the
+  attempt is unresolved; a new shift or drawer never absorbs the approval). If the first recording
+  leg never reached the server (no sync ledger row) the POS resends the same operation through its
+  existing durable `payment.create` dispatch. If it was memoized as rejected with a recoverable
+  refusal (`precondition_failed` — a defensive token, pre-empted by the context check in practice —,
+  `revoked_employee`, `revoked_device`), repair the cause first (reinstate the membership, or return
+  a `suspended` pairing of that same device to `active` — a management-revoked device cannot be
+  reinstated for this purpose and leaves the attempt `orphan_approved`), confirm the frozen shift
+  and drawer are still open and active (the POS re-sends the pending refusal report once a proven
+  session exists; the Resume action does it first if still pending), then a `manager`+ on that same
+  till performs the explicit **Resume recording** of **D-054** (§4.55.7): the same `payment.create` row is re-dispatched once,
+  never a new operation and never a new charge, at most 3 times per attempt. Any other memoized
+  refusal, or a frozen context that cannot be restored (`context_lost`), is not resumable: the
+  attempt is `approved_unrecorded` / `orphan_approved` and goes to the orphan procedure below. Never
+  charge again, never move the approval to another order or shift, never free the order for another
+  tender (**D-053** point 1).
+- **Shift close refused (`card_payment_in_progress`, D-055):** the shift cannot close while a LIVE
+  attempt frozen to it is `sent`, `unknown` or `released` (not yet freed on provider evidence),
+  approved-unrecorded or orphaned without a provider void / refund. Resolve each such attempt first —
+  operator status lookup, the provider-evidence `free_order`, Resume recording, or the orphan
+  procedure — then close; declined, recorded and provider-voided / refunded attempts never
+  block; an evidence-freed `unknown` / `released` attempt does not block (an approval found later makes
+  it an `order_freed` orphan, which blocks until resolved). A close queued offline is refused the same way when it syncs and is terminal: the POS
+  rolls back its provisional local close (the server shift never left `open`) and, once every attempt is
+  resolved, pushes a new `shift.close` with a fresh `local_operation_id`. Never force a close and never open a second shift to work around it; a kept
+  standing charge (an orphan the owner will not void or refund) holds that shift and station open until
+  the future audited financial-adjustment workflow exists. TEST attempts carry no shift and never
+  block.
 - **Recovery — declined:** the cashier takes another tender (the claim ends with the decline).
 - **Recovery — unknown / released:** repeat the operator lookup; if it stays inconclusive, obtain
   documented provider evidence that no approved charge exists — the provider's transaction report

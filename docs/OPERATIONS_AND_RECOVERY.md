@@ -226,7 +226,7 @@ On shared (`staging`) and `prod`:
 | Severity | Definition | Example | Response |
 |---|---|---|---|
 | **SEV-1** | Cross-tenant data exposure, secret/service-role leak, prod data loss, prod down | RLS bug leaks Org B data to Org A (**R-003**); service-role key exposed | Immediate: contain, rotate, restore if needed, audit, notify |
-| **SEV-2** | Major function broken, no data loss | Sync stuck; payments failing for a branch; a card-present attempt stuck `unknown` or an `orphan_approved` charge — [RUNBOOKS](RUNBOOKS.md) §8 (**D-053** point 1) | Same-day mitigation |
+| **SEV-2** | Major function broken, no data loss | Sync stuck; payments failing for a branch; a card-present attempt stuck `unknown` or an `orphan_approved` charge, or a shift refusing to close because of an unresolved LIVE attempt (`card_payment_in_progress`) — [RUNBOOKS](RUNBOOKS.md) §8 (**D-053** point 1, **D-055**) | Same-day mitigation |
 | **SEV-3** | Degraded/non-critical | Realtime lag (enhancement only, **D-010**); single printer flaky (**R-001/R-006**) | Scheduled fix |
 
 **Runbook skeleton (per incident)**:
