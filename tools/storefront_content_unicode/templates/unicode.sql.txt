@@ -1,0 +1,97 @@
+CREATE OR REPLACE FUNCTION app.storefront_content_property_v1(p_cp integer,p_property text)
+RETURNS boolean LANGUAGE plpgsql IMMUTABLE SET search_path='' AS $unicode$
+DECLARE v_ranges integer[]; lo integer:=0; hi integer; mid integer;
+BEGIN
+ IF p_cp IS NULL OR p_cp<0 OR p_cp>1114111 THEN RETURN false; END IF;
+ CASE p_property
+ /*RANGES*/
+ ELSE RETURN false;
+ END CASE;
+ hi:=array_length(v_ranges,1)/2-1;
+ WHILE lo<=hi LOOP
+  mid:=(lo+hi)/2;
+  IF p_cp<v_ranges[mid*2+1] THEN hi:=mid-1;
+  ELSIF p_cp>v_ranges[mid*2+2] THEN lo:=mid+1;
+  ELSE RETURN true; END IF;
+ END LOOP;
+ RETURN false;
+END $unicode$;
+CREATE OR REPLACE FUNCTION app.storefront_content_gcb_v1(p_cp integer)
+RETURNS text LANGUAGE plpgsql IMMUTABLE SET search_path='' AS $unicode$
+DECLARE k text;
+BEGIN
+ IF p_cp BETWEEN 44032 AND 55203 THEN RETURN CASE WHEN (p_cp-44032)%28=0 THEN 'LV' ELSE 'LVT' END; END IF;
+ FOREACH k IN ARRAY ARRAY['CR','LF','Control','L','V','T','Extend','ZWJ','Regional_Indicator','Prepend','SpacingMark'] LOOP
+  IF app.storefront_content_property_v1(p_cp,k) THEN RETURN k; END IF;
+ END LOOP;
+ RETURN 'Other';
+END $unicode$;
+CREATE OR REPLACE FUNCTION app.storefront_content_grapheme_boundaries_v1(p_text text)
+RETURNS integer[] LANGUAGE plpgsql IMMUTABLE SET search_path='' AS $unicode$
+DECLARE c integer[]:='{}'; g text[]:='{}'; result integer[]:=ARRAY[0]; n integer; i integer; j integer; a text; b text; join_cluster boolean; link boolean; cnt integer;
+BEGIN
+ IF p_text IS NULL THEN RETURN NULL; END IF;
+ n:=char_length(p_text);IF n=0 THEN RETURN result;END IF;
+ FOR i IN 1..n LOOP c:=array_append(c,ascii(substr(p_text,i,1)));g:=array_append(g,app.storefront_content_gcb_v1(c[i]));END LOOP;
+ FOR i IN 2..n LOOP
+  a:=g[i-1];b:=g[i];join_cluster:=false;
+  IF a='CR' AND b='LF' THEN join_cluster:=true;
+  ELSIF a=ANY(ARRAY['Control','CR','LF']) OR b=ANY(ARRAY['Control','CR','LF']) THEN join_cluster:=false;
+  ELSIF a='L' AND b=ANY(ARRAY['L','V','LV','LVT']) THEN join_cluster:=true;
+  ELSIF a=ANY(ARRAY['LV','V']) AND b=ANY(ARRAY['V','T']) THEN join_cluster:=true;
+  ELSIF a=ANY(ARRAY['LVT','T']) AND b='T' THEN join_cluster:=true;
+  ELSIF b=ANY(ARRAY['Extend','ZWJ','SpacingMark']) OR a='Prepend' THEN join_cluster:=true;
+  ELSE
+   IF app.storefront_content_property_v1(c[i],'InCB_Consonant') THEN
+    j:=i-1;link:=false;
+    WHILE j>=1 AND (app.storefront_content_property_v1(c[j],'InCB_Extend') OR app.storefront_content_property_v1(c[j],'InCB_Linker')) LOOP link:=link OR app.storefront_content_property_v1(c[j],'InCB_Linker');j:=j-1;END LOOP;
+    join_cluster:=link AND j>=1 AND app.storefront_content_property_v1(c[j],'InCB_Consonant');
+   END IF;
+   IF NOT join_cluster AND a='ZWJ' AND app.storefront_content_property_v1(c[i],'Extended_Pictographic') THEN
+    j:=i-2;WHILE j>=1 AND g[j]='Extend' LOOP j:=j-1;END LOOP;
+    join_cluster:=j>=1 AND app.storefront_content_property_v1(c[j],'Extended_Pictographic');
+   END IF;
+   IF NOT join_cluster AND a='Regional_Indicator' AND b=a THEN
+    j:=i-1;cnt:=0;WHILE j>=1 AND g[j]='Regional_Indicator' LOOP cnt:=cnt+1;j:=j-1;END LOOP;join_cluster:=cnt%2=1;
+   END IF;
+  END IF;
+  IF NOT join_cluster THEN result:=array_append(result,i-1);END IF;
+ END LOOP;
+ RETURN array_append(result,n);
+END $unicode$;
+CREATE OR REPLACE FUNCTION app.storefront_content_space_v1(p_cp integer)
+RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path='' AS $unicode$
+ SELECT coalesce(p_cp IN(32,133,160,5760,8232,8233,8239,8287,12288,65279) OR p_cp BETWEEN 8192 AND 8202,false)
+$unicode$;
+CREATE OR REPLACE FUNCTION app.storefront_content_text_v1(p_text text,p_max integer,p_legacy boolean)
+RETURNS boolean LANGUAGE plpgsql IMMUTABLE SET search_path='' AS $unicode$
+DECLARE n integer; cp integer; i integer;
+BEGIN
+ IF p_max IS NULL OR p_max<1 OR p_legacy IS NULL THEN RETURN false;END IF;
+ IF p_text IS NULL THEN RETURN true;END IF;
+ n:=char_length(p_text);IF n<1 OR n>p_max THEN RETURN false;END IF;
+ FOR i IN 1..n LOOP cp:=ascii(substr(p_text,i,1));
+  IF cp<=31 OR cp=127 OR (NOT p_legacy AND (cp BETWEEN 128 AND 159 OR cp IN(8232,8233))) THEN RETURN false;END IF;
+ END LOOP;
+ RETURN NOT app.storefront_content_space_v1(ascii(substr(p_text,1,1))) AND NOT app.storefront_content_space_v1(ascii(substr(p_text,n,1)));
+END $unicode$;
+CREATE OR REPLACE FUNCTION app.storefront_content_hero_format_valid_v1(p_text text,p_start integer,p_end integer,p_break integer)
+RETURNS boolean LANGUAGE plpgsql IMMUTABLE SET search_path='' AS $unicode$
+DECLARE n integer; bounds integer[];
+BEGIN
+ IF p_start IS NULL AND p_end IS NULL AND p_break IS NULL THEN RETURN true;END IF;
+ IF p_text IS NULL OR NOT app.storefront_content_text_v1(p_text,120,true) THEN RETURN false;END IF;
+ IF position(chr(133) IN p_text)>0 OR position(chr(8232) IN p_text)>0 OR position(chr(8233) IN p_text)>0 THEN RETURN false;END IF;
+ n:=char_length(p_text);bounds:=app.storefront_content_grapheme_boundaries_v1(p_text);
+ IF (p_start IS NULL)<>(p_end IS NULL) THEN RETURN false;END IF;
+ IF p_start IS NOT NULL THEN
+  IF p_start<0 OR p_end<=p_start OR p_end>n OR p_end-p_start>60 THEN RETURN false;END IF;
+  IF app.storefront_content_space_v1(ascii(substr(p_text,p_start+1,1))) OR app.storefront_content_space_v1(ascii(substr(p_text,p_end,1))) OR (p_start>0 AND NOT app.storefront_content_space_v1(ascii(substr(p_text,p_start,1)))) OR (p_end<n AND NOT app.storefront_content_space_v1(ascii(substr(p_text,p_end+1,1)))) OR NOT(p_start=ANY(bounds)) OR NOT(p_end=ANY(bounds)) THEN RETURN false;END IF;
+ END IF;
+ IF p_break IS NOT NULL THEN
+  IF p_break<1 OR p_break>=n THEN RETURN false;END IF;
+  IF app.storefront_content_space_v1(ascii(substr(p_text,p_break+1,1))) OR NOT app.storefront_content_space_v1(ascii(substr(p_text,p_break,1))) OR NOT(p_break=ANY(bounds)) OR (p_start IS NOT NULL AND p_start<p_break AND p_break<p_end) THEN RETURN false;END IF;
+ END IF;
+ RETURN true;
+END $unicode$;
+REVOKE ALL ON FUNCTION app.storefront_content_property_v1(integer,text),app.storefront_content_gcb_v1(integer),app.storefront_content_grapheme_boundaries_v1(text),app.storefront_content_space_v1(integer),app.storefront_content_text_v1(text,integer,boolean),app.storefront_content_hero_format_valid_v1(text,integer,integer,integer) FROM PUBLIC,anon,authenticated,service_role;
