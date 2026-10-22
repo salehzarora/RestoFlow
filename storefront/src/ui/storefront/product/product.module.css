@@ -17,7 +17,7 @@
 .media { grid-column: 2; grid-row: 1 / span 2; position: static; min-block-size: 0; overflow: hidden; background: var(--sf2); }
 .mediaImg { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; object-position: center; }
 .mediaFade, .handle { display: none; }
-.gridCenter{display:grid;place-items:center}
+.gridCenter{composes:gridCenter from '../storefront.module.css'}
 .mediaNone {composes:gridCenter; block-size: 100%; min-block-size: 170px; background: var(--sf2); color: var(--acct); font-size: 56px; font-weight: 900; }
 .controlInk{color:var(--tx);cursor:pointer}
 .close {composes:gridCenter controlInk; position: absolute; inset-block-start: 28px; inset-inline-end: calc(36% + 28px); z-index: 2; inline-size: 38px; block-size: 38px; border: 1px solid var(--hair2); border-radius: 50%; padding: 0; background: var(--bg); transition: background 200ms, transform 200ms; }
@@ -36,7 +36,7 @@
 .basePrice {composes:tabular fixed; color: var(--tx); font-size: 14px; font-weight: 600; }
 .desc { margin-block-start: 5px; font-size: 14px; line-height: 1.6; color: var(--tx3); }
 .desc:empty { display: none; }
-.flexColumn{display:flex;flex-direction:column}
+.flexColumn{composes:flexColumn from '../storefront.module.css'}
 .group {composes:flexColumn; gap: 12px; margin: 0; padding-block: 0 22px; padding-inline: 28px; border: 0; min-inline-size: 0; }
 .groupHead {composes:wrapRow; align-items: center; gap: 6px 10px; }
 .noteHead { composes: groupHead; }
@@ -70,7 +70,7 @@
 .noteField {composes:inheritFont; display: block; box-sizing: border-box; inline-size: 100%; min-block-size: 68px; max-block-size: 150px; padding: 12px 14px; border: 1px solid var(--hair2); border-radius: 10px; resize: vertical; background: var(--sf); color: var(--tx); font-size: 12px; }
 .noteField::placeholder { color: var(--tx3); }
 .noteField:focus { border-color: var(--acc); }
-.flexRow{display:flex;align-items:center}
+.flexRow{composes:flexRow from '../storefront.module.css'}
 .foot {composes:flexRow; grid-column: 1; grid-row: 2; flex: none; gap: 12px; min-inline-size: 0; padding-block: 18px 24px; padding-inline: 28px; margin-block-start: auto; border-block-start: 1px solid var(--hair2); background: var(--bg); }
 .stepper {composes:flexRow fixed; direction: ltr; border: 1px solid var(--hair2); border-radius: 10px; background: transparent; }
 .step {composes:gridCenter controlInk; position: relative; inline-size: 32px; block-size: 46px; padding: 0; border: 0; background: transparent; }

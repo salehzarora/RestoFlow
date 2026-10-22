@@ -150,6 +150,10 @@
 }
 
 /* Closed merchant presentation choices. No arbitrary styles or inline props. */
+.flexRow{display:flex;align-items:center}
+.gridCenter{display:grid;place-items:center}
+.flexColumn{display:flex;flex-direction:column}
+.imageCover{width:100%;height:100%;object-fit:cover}
 .wholeImage.wholeImage{object-fit:contain;object-position:center;transform:none!important;clip-path:none;mask-image:none;border-radius:0;inline-size:100%;block-size:100%}
 .wholeFrame.wholeFrame{overflow:visible;border-radius:0;transform:none}
 .cutout.cutout{background:none;box-shadow:none}

@@ -22,7 +22,7 @@
  * 360px the aside takes and never forces a horizontal scrollbar. `min-width: 0`
  * is what allows its own children to shrink rather than overflow.
  */
-.flexColumn{display:flex;flex-direction:column}
+.flexColumn{composes:flexColumn from '../storefront.module.css'}
 .flexItem{flex:1;min-width:0}
 .rowBody{composes:flexItem}
 .screen {composes:flexColumn flexItem;
@@ -33,7 +33,7 @@
 
 /* "Sticky" in the handoff's sense: the header is pinned by being the non-
    growing child of a full-height column whose sibling scrolls. */
-.flexRow{display:flex;align-items:center}
+.flexRow{composes:flexRow from '../storefront.module.css'}
 .header {composes:flexRow;
   flex: none;
   gap: 6px;
@@ -42,7 +42,7 @@
   background: var(--sf);
 }
 
-.gridCenter{display:grid;place-items:center}
+.gridCenter{composes:gridCenter from '../storefront.module.css'}
 .plainButton{flex:none;border:0;color:inherit;cursor:pointer}
 .back {composes:gridCenter plainButton;
   width: 44px;
@@ -172,9 +172,7 @@
 }
 
 .thumbImg {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  composes: imageCover from '../storefront.module.css';
   display: block;
 }
 
