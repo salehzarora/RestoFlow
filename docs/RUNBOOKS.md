@@ -318,94 +318,131 @@ queries + expected results instead. Prints **PASS/FAIL**.
 
 ---
 
-## 8. Incident runbook 5 — card provider outage, unknown outcome, approved-unrecorded, orphaned approval (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001)
+## 8. Incident runbook 5 — card provider outage, unknown outcome, provider anomaly, approved-unrecorded, orphaned approval (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001)
 
-- **Scope:** the card-present provider leg of **DECISION D-051 / D-052 / D-053 / D-054 / D-055** ([API_CONTRACT](API_CONTRACT.md)
-  §4.55). Agents never operate the terminal or call the provider; every step below is an operator /
-  manager action.
-- **Trigger:** attempts stuck `unknown` or `released`; the provider rejecting the configured
-  credentials or environment; a customer charged while the order still reads unpaid
-  (`approved_unrecorded` / `orphan_approved`); an order refusing every tender with
-  `payment_in_progress`; a shift refusing to close (`card_payment_in_progress`); the pad never
-  prompting; a credential suspected exposed.
+- **Scope:** the card-present provider leg of **DECISION D-051 / D-052 / D-053 / D-054 / D-055 / D-056**
+  ([API_CONTRACT](API_CONTRACT.md) §4.55). Agents never operate the terminal or call the provider; every
+  step below is an operator / manager action. TEST attempts are never financial incidents: they are
+  projected `test_<state>`, never `approved_unrecorded` / `orphan_approved`, and appear only under the
+  explicit TEST filter of `owner_card_attempts` (**D-056** point 6).
+- **Trigger:** LIVE attempts stuck `unknown` or `released`; a `provider_anomaly` (a lookup reporting a
+  possible charge without an exact result); the provider rejecting the configured credentials or
+  environment; a customer charged while the order still reads unpaid (`approved_unrecorded` /
+  `orphan_approved`); an order refusing every tender with `payment_in_progress`; a shift refusing to
+  close (`card_payment_in_progress`); the pad never prompting; a credential suspected exposed.
 - **Severity:** **SEV-2** on the shared ladder above ("payments failing for a branch",
   [OPERATIONS_AND_RECOVERY](OPERATIONS_AND_RECOVERY.md) §7.4); **SEV-1** the moment a provider
   credential is suspected exposed.
 - **Containment:** if the provider misbehaves broadly, master flag OFF; otherwise operator revision
-  OFF for the branch. The flag gates `start` only, so status reads and recording keep working.
-  The `app.sync_push` guard keeps every claimed order blocked for competing tenders, edits and voids
-  until its attempt is resolved — never work around it with another tender or a hand-recorded card.
-  Never delete, edit or replay LIVE ledger rows (TEST rows leave only through the audited purge below).
-- **Diagnosis:** list the branch's open attempts with `public.owner_card_attempts` (§4.55.10):
-  state, `approved_unrecorded` / `orphan_approved` reason, `refusal_code`, amount rule, device,
-  `last_lookup_at`, resolution metadata. Run `status` with `source='operator'` for each
+  OFF for the branch. The flag gates `start` only, so status reads and recording keep working, always
+  with each attempt's own frozen credential and terminal records — a kill switch never switches
+  credentials. The `app.sync_push` guard keeps every claimed order blocked for competing tenders, edits
+  and voids until its attempt is resolved — never work around it with another tender or a
+  hand-recorded card. Never delete, edit or replay LIVE ledger rows (TEST rows leave only through the
+  operator purge below).
+- **Diagnosis:** list the branch's open LIVE attempts with `public.owner_card_attempts` (§4.55.10, the
+  default LIVE filter): state, `classification`, reason, `provider_anomaly_code` /
+  `charge_may_exist`, `refusal_code`, `amount_minor` / `currency_code`, device, `last_lookup_at`,
+  resolution metadata. Run `status` with `source='operator'` for each
   `unknown` / `released` attempt — from the originating till, or from any POS of the branch as a
-  `manager`+ (an operator call is never refused with `poll_limit`).
+  `manager`+ (an operator call is never refused with `poll_limit`). A `provider_unavailable` answer for
+  one attempt means its frozen credential or terminal record is missing or no longer matches: restore
+  that exact record; never re-point the reference (**D-056** point 7).
 - **Recovery — approved:** record under the same identity on the original order, inside the shift and
   drawer frozen at the claim (**D-055**: the attempt's `shift_id` must still be OPEN and its
   `cash_drawer_session_id` still ACTIVE on that till — the shift-close guard keeps them so while the
-  attempt is unresolved; a new shift or drawer never absorbs the approval). If the first recording
-  leg never reached the server (no sync ledger row) the POS resends the same operation through its
-  existing durable `payment.create` dispatch. If it was memoized as rejected with a recoverable
-  refusal (`precondition_failed` — a defensive token, pre-empted by the context check in practice —,
-  `revoked_employee`, `revoked_device`), repair the cause first (reinstate the membership, or return
-  a `suspended` pairing of that same device to `active` — a management-revoked device cannot be
-  reinstated for this purpose and leaves the attempt `orphan_approved`), confirm the frozen shift
-  and drawer are still open and active (the POS re-sends the pending refusal report once a proven
-  session exists; the Resume action does it first if still pending), then a `manager`+ on that same
-  till performs the explicit **Resume recording** of **D-054** (§4.55.7): the same `payment.create` row is re-dispatched once,
-  never a new operation and never a new charge, at most 3 times per attempt. Any other memoized
-  refusal, or a frozen context that cannot be restored (`context_lost`), is not resumable: the
-  attempt is `approved_unrecorded` / `orphan_approved` and goes to the orphan procedure below. Never
-  charge again, never move the approval to another order or shift, never free the order for another
-  tender (**D-053** point 1).
-- **Shift close refused (`card_payment_in_progress`, D-055):** the shift cannot close while a LIVE
-  attempt frozen to it is `sent`, `unknown` or `released` (not yet freed on provider evidence),
-  approved-unrecorded or orphaned without a provider void / refund. Resolve each such attempt first —
-  operator status lookup, the provider-evidence `free_order`, Resume recording, or the orphan
-  procedure — then close; declined, recorded and provider-voided / refunded attempts never
-  block; an evidence-freed `unknown` / `released` attempt does not block (an approval found later makes
-  it an `order_freed` orphan, which blocks until resolved). A close queued offline is refused the same way when it syncs and is terminal: the POS
-  rolls back its provisional local close (the server shift never left `open`) and, once every attempt is
-  resolved, pushes a new `shift.close` with a fresh `local_operation_id`. Never force a close and never open a second shift to work around it; a kept
+  attempt is unresolved; a new shift or drawer never absorbs the approval). If the first recording leg
+  never reached the server (no sync ledger row) or was answered `transient_failure`, the POS resends the
+  same operation, alone in its call, through its existing durable `payment.create` dispatch. If it was
+  memoized with a recoverable refusal — `revoked_employee` (the pushing employee was removed),
+  `permission_denied` (it was pushed under a kitchen or accountant PIN session) or the defensive
+  `precondition_failed` — nobody is reinstated: a `manager`+ signs in on that same till, confirms the
+  frozen shift and drawer are still open and active (the POS sends the pending refusal report first
+  when it is still pending) and performs the explicit **Resume recording** of **D-054** (§4.55.7): the
+  same `payment.create` row is re-dispatched once, never a new operation and never a new charge, at most
+  3 times per attempt; the manager becomes the payment's actor and the ledger keeps the initiator. A
+  recording memoized `revoked_device`, any other memoized refusal, a lost frozen context
+  (`context_lost`), an exhausted Resume limit, or a dead or permanently revoked pilot device is not
+  resumable — no cross-device recording exists in phase 1, and a dead device is first revoked through
+  device management (`revoke_device_management`) so that its approvals classify `device_revoked`:
+  the attempt is `orphan_approved` and goes to the orphan procedure below. Never charge again, never
+  move the approval to another order or shift,
+  never free the order for another tender (**D-053** point 1, **D-056** point 2).
+- **Recovery — provider anomaly (D-056 point 3):** a lookup reported an amount or currency mismatch, a
+  pre-authorization, a partial refund, a refund or void, another out-of-contract charge-bearing status
+  or an unreadable amount: the attempt keeps its state with `charge_may_exist`, the order stays claimed
+  and the frozen shift cannot close while open. `free_order` is refused (`charge_may_exist`). Repeat the
+  operator lookup — on an order that was not freed, a later exact approved result records normally
+  and a later exact declined result ends the claim; otherwise open an incident, reconcile against the
+  provider's report and, only with documented provider confirmation of a void or refund, record
+  `provider_voided` / `provider_refunded` through `app.card_attempt_resolve_orphan` exactly as for an
+  orphan below. An anomaly found after an evidence-based free never re-blocks the freed order: a later
+  exact declined result ends it, a later exact approved result makes it an `order_freed` orphan (never
+  recorded in-app; the orphan procedure below), and after its frozen shift closed it is a
+  reconciliation incident only.
+- **Shift close refused (`card_payment_in_progress`, D-055 / D-056):** the shift cannot close while the
+  canonical close predicate of §4.55.3 holds for a LIVE attempt frozen to it — a `sent`, `unknown` or
+  `released` attempt not freed on provider evidence, any unresolved provider anomaly, or an `approved`
+  attempt without its payment, each without a provider void / refund resolution. Resolve each such
+  attempt first — operator status lookup, the provider-evidence `free_order`, Resume recording, or the
+  orphan procedure — then close; declined, recorded and provider-voided / refunded attempts never block;
+  an evidence-freed `unknown` / `released` attempt without an anomaly does not block, while an approval
+  or anomaly found later blocks the close of its frozen shift while that shift is still open. The pilot
+  POS closes online only: a refused close changes nothing on the till or the server, and a later close,
+  once every attempt is resolved, uses a fresh `local_operation_id` (a `transient_failure` is resent
+  under the same identity). Never force a close and never open a second shift to work around it; a kept
   standing charge (an orphan the owner will not void or refund) holds that shift and station open until
-  the future audited financial-adjustment workflow exists. TEST attempts carry no shift and never
-  block.
+  the future audited financial-adjustment workflow exists. TEST attempts carry no shift and never block.
 - **Recovery — declined:** the cashier takes another tender (the claim ends with the decline).
-- **Recovery — unknown / released:** repeat the operator lookup; if it stays inconclusive, obtain
-  documented provider evidence that no approved charge exists — the provider's transaction report
-  (`provider_report`) or its back office (`provider_back_office`) — then `free_order` (§4.55.6) with
-  that source, its sanitized evidence reference and a reason; the attempt stays `unknown` /
-  `released`. Poll-cap exhaustion, a provider outage, "still inconclusive" or any self-attestation
-  never frees the order, and no command-room override exists in phase 1 (**D-053** point 1). A
-  later approval of a freed attempt is an `orphan_approved` incident (reason `order_freed`) handled
-  only by the orphan procedure below — never recorded in-app.
-- **Recovery — orphan_approved (the original payment can no longer be legally recorded):** the
-  order stays blocked for every tender, void, edit, discount and new attempt while the standing
-  charge is unresolved (an `order_freed` orphan's order was already freed by the manager and is
-  listed for reconciliation only). Open an incident under a Work ID; the owner decides. A same-day provider
-  void, when needed, is performed manually in the provider's back office only after explicit owner
-  approval — never by the application. Only documented provider confirmation that the charge was
-  actually voided or refunded lets the operator record the resolution through
-  `app.card_attempt_resolve_orphan` (§4.55.10) as `provider_voided` / `provider_refunded`, which
-  frees the order for another tender or a void. A standing charge the owner wants to keep but
-  RestoFlow cannot legally record stays an open incident until a future, separately designed,
-  audited financial-adjustment workflow exists. No automatic void, refund or release; no in-app
-  reversal in phase 1.
-- **Verification:** the provider's transaction report against the ledger's `approved` / `recorded`
-  rows for the pilot branch every day; every difference becomes an incident row; every
-  `orphan_approved` row has an open incident; the pilot branch's `payments` count equals the
-  recorded attempts plus the other tenders.
-- **TEST evidence retention (D-053 point 4):** TEST rows expire 90 days after creation; set an
-  incident hold (`app.card_attempt_set_incident_hold`, operator only, audited) before expiry when a TEST
-  run belongs to an open incident; the operator purge
-  (`app.purge_expired_test_card_attempts`) deletes only expired, unheld TEST rows and is audited
-  with counts only; LIVE rows are never deleted by any role or RPC (retention per **D-013** / **Q-005**).
+- **Start refused `order_already_settled` / `order_not_chargeable` (D-056 point 1):** the order is
+  already paid by some tender, or its total is zero; no attempt row and no provider request exist.
+  Confirm the existing payment (or the zero total) and never charge the card again on any till or
+  record a hand-recorded card; no incident unless the provider reports a charge.
+- **Recovery — unknown / released (no anomaly):** repeat the operator lookup; if it stays
+  inconclusive, obtain documented provider evidence that no approved charge exists — the provider's
+  transaction report (`provider_report`) or its back office (`provider_back_office`) — then `free_order`
+  (§4.55.6) with that source, its sanitized evidence reference and a reason; the attempt stays
+  `unknown` / `released`. Poll-cap exhaustion, a provider outage, "still inconclusive" or any
+  self-attestation never frees the order, and no command-room override exists in phase 1 (**D-053**
+  point 1). A later approval of a freed attempt is an `orphan_approved` incident (reason `order_freed`),
+  never recorded in-app and handled by the orphan procedure below; a later anomaly is a
+  `provider_anomaly` incident handled as in the anomaly bullet above.
+- **Recovery — orphan_approved (the original payment can no longer be legally recorded):** the order
+  stays blocked for every tender, void, edit, discount and new attempt while the standing charge is
+  unresolved (an `order_freed` orphan's order was already freed by the manager; it blocks only its
+  frozen shift's close while that shift is open). Open an incident under a Work ID; the owner decides.
+  A same-day provider void, when needed, is performed manually in the provider's back office only after
+  explicit owner approval — never by the application. Only documented provider confirmation that the
+  charge was actually voided or refunded lets the operator — an active `org_owner` /
+  `restaurant_owner` of the pilot scope, identified by `actor_app_user_id` with a non-empty
+  `operator_reference` — record the resolution through `app.card_attempt_resolve_orphan` (§4.55.10) as
+  `provider_voided` / `provider_refunded`, which frees the order for another tender or a void and is
+  kept as a private operator event, not an Activity-log row (**D-056** point 5). A standing charge the
+  owner wants to keep but RestoFlow cannot legally record stays an open incident until a future,
+  separately designed, audited financial-adjustment workflow exists. No automatic void, refund or
+  release; no in-app reversal in phase 1.
+- **Verification:** the provider's transaction report against the ledger's LIVE `approved` / `recorded`
+  rows and anomalies for the pilot branch every day; every difference becomes an incident row; every
+  `orphan_approved` row and every `provider_anomaly` has an open incident; the pilot branch's `payments`
+  count equals the recorded attempts plus the other tenders. TEST rows are excluded from this
+  reconciliation.
+- **TEST evidence retention (D-053 point 4, D-056 point 6):** TEST attempt rows and TEST private events
+  expire 90 days after creation; set an incident hold (`app.card_attempt_set_incident_hold`, operator
+  only, a private operator event) before expiry when a TEST run belongs to an open incident; the
+  operator purge (`app.purge_expired_test_card_attempts`) deletes only expired, unheld TEST rows and
+  every `mode='test'` private event past its own `retention_until` whose attempt, if any, is unheld
+  (never an `operator.*` event) and records counts only, as a private operator event; no phase-1
+  application role, RPC or the TEST purge deletes LIVE evidence (final legal retention per **D-013** /
+  **Q-005**).
 - **Credential exposure (SEV-1):** master flag OFF → resolve or list every open attempt → rotate the
-  terminal credentials with the provider → replace the configuration secret → redeploy the adapter
-  only if 001E caches configuration at worker start → review `card_attempt.*` audit rows and the
-  ledger for the exposure window ([OPERATIONS_AND_RECOVERY](OPERATIONS_AND_RECOVERY.md) §3.3). A
-  test-terminal credential that reaches any commit, stash, bundle, report or chat is treated as
-  exposed and reset.
+  terminal credentials with the provider → add the new configuration records under new references
+  (never re-point or remove an existing reference: the revoked credential's record stays in the
+  configuration while any `sent` / `unknown` / `released` attempt references it, so their lookups
+  fail as ordinary lookup failures with `last_lookup_at` stamped and each is closed through the
+  provider-evidence `free_order` or the operator resolution below, **D-056** point 7) → redeploy the
+  adapter only if 001E caches configuration at worker start → review the ledger, the
+  private events and the `card_attempt.*` audit rows for the exposure window
+  ([OPERATIONS_AND_RECOVERY](OPERATIONS_AND_RECOVERY.md) §3.3). A test-terminal credential that reaches
+  any commit, stash, bundle, report or chat is treated as exposed and reset.
 - **Postmortem:** in git under the incident's Work ID (**D-038**); no credential, terminal number,
   identifier, device UUID or card data in it.

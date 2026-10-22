@@ -98,7 +98,7 @@ Operational rules. Security ownership of secrets-as-controls lives in [SECURITY_
 - Each environment has independent secrets; rotating one tier never reuses another tier's value.
 - Rotation triggers: scheduled rotation cadence, suspected exposure, personnel/device change, or any commit-scan hit.
 - **Service-role key compromise is a SEV-1 incident** (§7): rotate immediately, invalidate sessions, audit `audit_events`, review for cross-tenant access (**RISK R-003**).
-- **Card-present provider credential compromise is a SEV-1 incident** (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001): in this order — master flag OFF, resolve or list every open attempt, rotate the terminal credentials with the provider, replace the configuration secret, redeploy the adapter only if it caches configuration at worker start, review the attempt ledger and `card_attempt.*` audit rows for the exposure window ([RUNBOOKS](RUNBOOKS.md) §8). A test-terminal credential that reaches any commit, stash, bundle, report or chat is treated as exposed and reset.
+- **Card-present provider credential compromise is a SEV-1 incident** (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001): in this order — master flag OFF, resolve or list every open attempt, rotate the terminal credentials with the provider, replace the configuration secret, redeploy the adapter only if it caches configuration at worker start, review the attempt ledger, the private events and the `card_attempt.*` audit rows for the exposure window ([RUNBOOKS](RUNBOOKS.md) §8). A rotation never re-points an existing `credential_ref` / `terminal_ref`: it adds new records under new references, and an old record stays in the configuration secret while any attempt referencing it is `sent`, `unknown` or `released` (one freed by `free_order` included), because `status` and `release` use only an attempt's frozen references and re-validate them on every provider call; a credential revoked at the provider keeps its record, so its attempts' lookups fail as ordinary lookup failures (`last_lookup_at` stamped) and they are freed through the provider-evidence `free_order` or resolved by the operator — `provider_unavailable` means only a missing or mismatched record, which is restored (**D-056** point 7). A test-terminal credential that reaches any commit, stash, bundle, report or chat is treated as exposed and reset.
 - Device/employee credential revocation is an identity operation: revoking must remove FUTURE access including the offline window (**DECISION D-006**, **RISK R-007**, validity window is **OPEN QUESTION Q-009**; mechanics owned by [OFFLINE_SYNC_SPEC](OFFLINE_SYNC_SPEC.md)).
 - **ASSUMPTION**: default rotation cadence is quarterly for long-lived secrets and immediate on exposure; final cadence is set during M0B/M2 hardening.
 
@@ -184,6 +184,7 @@ On shared (`staging`) and `prod`:
 
 - **OPEN QUESTION Q-005**: data retention and privacy obligations are NOT yet frozen and depend on the target jurisdiction (**OPEN QUESTION Q-001**). No retention/deletion automation ships until Q-005 is resolved.
 - Until then: retain operational and audit data; do not auto-purge. `audit_events` are append-only and never updatable/deletable by app roles (**DECISION D-013**).
+- **Card-present pilot carve-out (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001, **DECISION D-053** point 4 / **D-056**):** the only pre-Q-005 deletion is the operator-only purge — itself recorded as a private operator event — of `mode='test'` card-attempt rows and TEST private events past `retention_until` (90 days) and not under an incident hold; never automatic, never a LIVE row, a LIVE or operator private event or an `audit_events` row. No phase-1 application role or RPC deletes LIVE card evidence, whose final legal retention follows the Q-005 outcome.
 - Deletions that matter to sync use tombstones (`deleted_at`, **DECISION D-020**), not hard deletes, so offline clients reconcile correctly.
 - **SECURITY REQUIREMENT**: lower environments use synthetic/anonymized data only; real tenant PII never leaves `prod` (§2.1).
 - Backups inherit the same retention obligations as live data; backup expiry policy is **DEFERRED** to the Q-005 resolution.
@@ -201,6 +202,7 @@ On shared (`staging`) and `prod`:
 
 - Central application/server logs, structured, scoped where possible by `organization_id`/`restaurant_id`/`branch_id`/`device_id` for triage (consistent with naming **DECISION D-017**).
 - **SECURITY REQUIREMENT**: logs are **redacted** — no secrets, no service-role keys, no PINs, no full payment credentials, minimal PII. Money appears only as integer `_minor` (**DECISION D-007**); never log raw credentials or tokens.
+- **SECURITY REQUIREMENT — card-present provider data (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001, **DECISION D-052** point 6):** provider request bodies (they carry the terminal password), raw provider payloads, card data and the vendor's free-text return message are never logged; the Edge adapter logs only allowlisted tokens, integer codes, attempt identities and timings ([SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md) §12).
 - Privileged/sensitive mutations are recorded in append-only `audit_events` with actor, device, organization, restaurant, branch, timestamp, action, reason, old/new values (**DECISION D-013**). Platform-admin access is an explicitly audited, separate path ([SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md)).
 
 ### 7.2 Metrics
@@ -226,7 +228,7 @@ On shared (`staging`) and `prod`:
 | Severity | Definition | Example | Response |
 |---|---|---|---|
 | **SEV-1** | Cross-tenant data exposure, secret/service-role leak, prod data loss, prod down | RLS bug leaks Org B data to Org A (**R-003**); service-role key exposed | Immediate: contain, rotate, restore if needed, audit, notify |
-| **SEV-2** | Major function broken, no data loss | Sync stuck; payments failing for a branch; a card-present attempt stuck `unknown` or an `orphan_approved` charge, or a shift refusing to close because of an unresolved LIVE attempt (`card_payment_in_progress`) — [RUNBOOKS](RUNBOOKS.md) §8 (**D-053** point 1, **D-055**) | Same-day mitigation |
+| **SEV-2** | Major function broken, no data loss | Sync stuck; payments failing for a branch; a card-present attempt stuck `unknown`, a `provider_anomaly` or an `orphan_approved` charge, or a shift refusing to close because of an unresolved LIVE attempt (`card_payment_in_progress`) — [RUNBOOKS](RUNBOOKS.md) §8 (**D-053** point 1, **D-055**) | Same-day mitigation |
 | **SEV-3** | Degraded/non-critical | Realtime lag (enhancement only, **D-010**); single printer flaky (**R-001/R-006**) | Scheduled fix |
 
 **Runbook skeleton (per incident)**:
