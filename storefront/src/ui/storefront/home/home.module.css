@@ -1039,15 +1039,13 @@
 
 .cardMediaFeatured {
   position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  max-height: 360px;
+  height: 172px;
   background: var(--sf2);
 }
 
 .cardMediaPopular {
   position: relative;
-  aspect-ratio: 4 / 3;
+  height: 124px;
   background: var(--sf2);
 }
 
