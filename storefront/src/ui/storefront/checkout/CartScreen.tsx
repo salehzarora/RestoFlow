@@ -292,7 +292,7 @@ export function CartScreen({
               ))}
             </ul>
 
-            <Totals quote={quote} m={m} />
+
             {estimateCopy ? <p className={s.help} data-sf-estimate="">{estimateCopy}</p> : null}
             {checkoutBlock ? <Banner tone="warn" icon={<InfoIcon />} title={checkoutBlock} alert={false} testId="checkout-block" /> : null}
           </>
@@ -303,7 +303,7 @@ export function CartScreen({
 
       {/* The totals block and the footer BOTH disappear with the last line
           (Storefront.dc.html:398, :407). */}
-      {lines.length === 0 ? null : (
+      {lines.length === 0 ? null : (<><div className={s.cartSummary}><Totals quote={quote} m={m} /></div>
         <FooterCta
           label={reason ?? m.checkout}
           onActivate={reason === null && !pending ? onCheckout : () => undefined}
@@ -313,7 +313,7 @@ export function CartScreen({
           live={motion !== 'calm'}
           tall
           testId="cart-checkout"
-        />
+        /></>
       )}
     </div>
   );

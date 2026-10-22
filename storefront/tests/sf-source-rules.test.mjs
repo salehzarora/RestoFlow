@@ -788,16 +788,7 @@ const TENANT_TEXT_RUN = /<span dir="auto">/g;
  * that rule still exists - a stale exemption fails instead of quietly widening
  * the guard.
  */
-const NEUTRAL_BIDI_BLOCKS = [
-  { cls: 'brandName', sheet: 'home.module.css', neutraliser: '.lockupText', why: 'centred lockup' },
-  { cls: 'brandCity', sheet: 'home.module.css', neutraliser: '.lockupText', why: 'centred lockup' },
-  { cls: 'chipLabel', sheet: 'home.module.css', neutraliser: '.chip', why: 'inline-flex chip, shrink-wrapped' },
-  { cls: 'orbLabel', sheet: 'home.module.css', neutraliser: '.orbLabel', why: 'own text-align: center' },
-  { cls: 'emptyBody', sheet: 'home.module.css', neutraliser: '.empty', why: 'centred empty card' },
-  { cls: 'fact', sheet: 'home.module.css', neutraliser: '.fact', why: 'inline-flex pill, shrink-wrapped' },
-  { cls: 'name', sheet: 'Intro.module.css', neutraliser: '.centre', why: 'centred intro block' },
-  { cls: 'tagline', sheet: 'Intro.module.css', neutraliser: '.centre', why: 'centred intro block' },
-];
+const NEUTRAL_BIDI_BLOCKS = [];
 
 /** Every `dir="auto"` that is NOT a bare isolation run, as [file, snippet]. */
 function structuralBidiSites(files) {

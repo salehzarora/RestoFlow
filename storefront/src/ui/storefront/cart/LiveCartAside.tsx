@@ -1,43 +1,18 @@
 'use client';
 
 /**
- * THE FUNCTIONAL WIDE CART ASIDE - 360px, container >= 900px, home and search.
+ * Shared live cart content: a persistent aside on Search at container >=900px,
+ * and content inside Home's native cart dialog at every supported width.
+ * Host CSS owns width and visibility; this component owns no cart persistence.
  *
- * WHY THIS IS A SEPARATE FILE FROM CartParts.tsx, AGAIN. `CartParts.tsx` is
- * guarded as PRESENTATION ONLY - no state, no store, no handlers - and that
- * guard is still correct and still enforced. Phase D does not route around it:
- * the boundary is widened deliberately to name this file, exactly as
- * LiveCartDock.tsx already is, so the rule stays written down.
+ * Lines include published thumbnails (or initials), option summaries, quantity,
+ * delegated Edit and explicit Remove. Decrementing below one also removes a
+ * line. Edit keeps the existing product/line trigger and modifier validation.
  *
- * HOW IT DIFFERS FROM THE CART PAGE, by design and not by omission:
- *   no back chevron        - it is a panel, not a route
- *   no thumbnails          - the page has 64px thumbs, the aside has none
- *   no kitchen note        - shown on the page only
- *   no Edit, no Remove     - removal is by decrementing to zero
- *   34px steppers          - the page's are 40px
- *   no cart notices        - they have no wide surface at all
- *   a 50px CTA, no total   - the page's 56px CTA carries the total
- *   no dashed total rule   - the page has one
- *
- * ONE DELIBERATE DEPARTURE FROM THE PROTOTYPE: the delivery-fee row.
- * The prototype's aside renders subtotal, tax and total only (:636) while its
- * tax is computed on `subtotal + fee` (:695). Once a zone has been chosen on
- * checkout - reachable at wide, because Back from checkout returns to the menu
- * with the aside visible - that panel reads 110 + 21.60 = 141.60, with ten
- * shekels invisible. A totals block that does not add up is a money defect, so
- * the fee row is rendered here on the same `feeApplies` rule every other
- * surface uses. Recorded in PHASE_D_DECISIONS.md.
- *
- * THE CHECKOUT CONTROL IS ONE ELEMENT FOR ITS WHOLE LIFE (E-stage repair of the
- * D1 keyboard regression). D1 rendered a `<button aria-disabled>` while the
- * quote was pending and swapped in a `<Link>` once it settled. The swap
- * destroyed the focused node, so a keyboard visitor who had reached the control
- * during the pending window was dropped to `<body>` the moment it became
- * usable. The control is now a single `<button>` - the element the prototype
- * uses (:636) - that stays inert while blocked and performs the same SOFT
- * navigation a Link click would once a matching total exists. Its identity
- * never changes, so focus survives settlement without anything having to
- * restore it, and nothing ever moves focus that the visitor did not move.
+ * All amounts use the current shared quote, including any applicable fee.
+ * No amounts appear before a quote exists, and missing/pending/blocked quotes
+ * cannot progress. Checkout uses one persistent button and soft navigation so
+ * quote settlement cannot replace the focused control.
  */
 import { useRouter } from 'next/navigation';
 import type { CartSummary } from '@/cart/cartModel';
@@ -150,6 +125,12 @@ export function LiveCartAside({
                   key={line.line.lineId}
                   data-sf-aside-line={line.line.lineId}
                 >
+                  <span className={styles.asideThumb}>
+                    {line.item.image === null ? line.item.name.slice(0, 1) : (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={line.item.image} alt="" width={70} height={87} loading="lazy" decoding="async" />
+                    )}
+                  </span>
                   <div className={styles.asideLineMain}>
                     <span className={styles.asideLineName}>
                       <TenantText>{line.item.name}</TenantText>
@@ -183,6 +164,10 @@ export function LiveCartAside({
                       >
                         {'+'}
                       </button>
+                    </span>
+                    <span className={styles.asideActions}>
+                      <button type="button" data-sf-item={line.item.id} data-sf-line={line.line.lineId}>{m.edit}</button>
+                      <button type="button" onClick={() => remove?.(line.line.lineId)}>{m.remove}</button>
                     </span>
                   </div>
                   <span className={`${styles.asideLinePrice} ${styles.ltr}`} dir="ltr">

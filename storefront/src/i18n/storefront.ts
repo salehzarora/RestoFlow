@@ -12,6 +12,10 @@ import en from '../../messages/storefront.en.json';
 import type { Locale } from './locales';
 
 export interface StorefrontMessages {
+  readonly menuHeading: string;
+  readonly discoverMenu: string;
+  readonly findUs: string;
+  readonly yourChoices: string;
   readonly welcome: string;
   readonly explore: string;
   readonly poweredBy: string;

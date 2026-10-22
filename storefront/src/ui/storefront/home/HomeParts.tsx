@@ -6,7 +6,7 @@ import { type Locale } from '@/i18n/locales';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
 import type { PromoModule, ServiceState, StoryModule, Tenant } from '@/source/types';
-import { ChevronIcon, ClockIcon, DeliveryIcon, MapMotif, StoreIcon } from '../icons';
+import { ChevronIcon, ClockIcon, DeliveryIcon, StoreIcon } from '../icons';
 import { TenantText } from '../TenantText';
 import { RestaurantContact } from '../RestaurantContact';
 import { closedNoticeBody, hoursLabel } from './hoursCopy';
@@ -24,70 +24,31 @@ export function Price({ minor, from }: { minor: number; from?: string }) {
   );
 }
 
-export function CampaignHero({
-  tenant,
-  m,
-  title,
-  subline,
-  children,
-}: {
-  tenant: Tenant;
-  m: StorefrontMessages;
-  title: string;
-  subline: string;
-  children: React.ReactNode;
+/** Hero media always comes from the published tenant hero; no inferred product relation. */
+export function CampaignHero({ tenant, m, title, subline, eyebrow, ctaHref, ctaLabel }: {
+  tenant: Tenant; m: StorefrontMessages; title: string; subline: string;
+  /** Intro is a derived composition; Home keeps its existing in-page action. */
+  eyebrow?: string; ctaHref?: string; ctaLabel?: string;
 }) {
-  return (
-    <div className={styles.hero} data-sf-module="hero">
-      <div className={styles.heroMedia}>
-        {/* A tenant that published no hero keeps the brand-colour panel with no
-            photo (owner decision D11): the media box stays, the img does not. */}
-        {tenant.heroImage === null ? null : (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            className={styles.heroImg}
-            src={tenant.heroImage}
-            alt=""
-            width={1600}
-            height={1067}
-            decoding="async"
-            fetchPriority="high"
-          />
-        )}
-      </div>
-      <div className={styles.heroShade} />
-      {/* The motif is unconditional: INTERACTIONS.md:124 and STATE_MATRIX.json:104
-          say calm suppresses the motif DRAW, not the motif. There is no draw
-          animation in this build, so calm needs no gate at all. */}
-      <div className={styles.heroMotif}>
-        <MapMotif />
-      </div>
-      {children}
-      <div className={styles.heroCopy}>
-        {/* dir="auto" isolates the RUN on an inner span, never the block: the
-            block must keep the page direction so the title, the accent rule and
-            the subline share one alignment edge even when tenant copy is in a
-            different script than the interface (prototype Storefront.dc.html
-            :140/:142; CONTENT_AND_LOCALIZATION.md:211, :223). */}
-        <h1 className={styles.heroTitle}>
-          <span dir="auto">{title}</span>
-        </h1>
-        {/* The rule and the subline exist only when there IS a second line:
-            a live tenant's campaign is its tagline alone (D11). */}
-        {subline === '' ? null : (
-          <>
-            <div className={styles.heroRule} />
-            <p className={styles.heroSub}>
-              <span dir="auto">{subline}</span>
-            </p>
-          </>
-        )}
-      </div>
-      <span className={styles.srOnly}>{fill(m.hours, {})}</span>
+  const headlineLines = title.split('\n');
+  const eyebrowText = eyebrow ?? tenant.city;
+  return <section className={`${styles.inner} ${styles.hero}`} data-sf-module="hero" aria-labelledby="sf-hero-title">
+    <div className={styles.heroCopy}>
+      {eyebrowText ? <p className={styles.eyebrow}><span className={styles.littlePin} aria-hidden="true">⌖</span><TenantText>{eyebrowText}</TenantText></p> : null}
+      <h1 className={styles.heroTitle} id="sf-hero-title"><span dir="auto">{headlineLines.map((line, index) => <span className={headlineLines.length > 1 && index === headlineLines.length - 1 ? styles.heroWord : undefined} key={index}>{line}{index < headlineLines.length - 1 ? <br /> : null}</span>)}</span></h1>
+      {subline === '' ? null : <p className={styles.heroSub}><span dir="auto">{subline}</span></p>}
+      <div className={styles.heroActions}><a className={styles.promoCta} href={ctaHref ?? '#sf-menu'}>{ctaLabel ?? m.discoverMenu}<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6" /></svg></a></div>
     </div>
-  );
+    <div className={styles.heroVisual}>
+      <div className={styles.heroGhost} aria-hidden="true"><TenantText>{tenant.displayName}</TenantText></div>
+      <svg className={styles.heroMotif} viewBox="0 0 560 460" fill="none" aria-hidden="true"><path d="M465 40c110 80 45 165-9 167S380 110 471 111c106 0 65 216-15 251S254 428 164 426" /><circle cx="466" cy="40" r="5"/><path d="m167 413-14 16 24 1"/></svg>
+      <div className={styles.heroMedia}>{tenant.heroImage === null ? null : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img className={styles.heroImg} src={tenant.heroImage} alt="" width={720} height={960} decoding="async" fetchPriority="high" />
+      )}</div>
+    </div>
+  </section>;
 }
-
 export function BrandLockup({ tenant, small = false }: { tenant: Tenant; small?: boolean }) {
   return (
     <div className={styles.lockup}>
@@ -103,11 +64,11 @@ export function BrandLockup({ tenant, small = false }: { tenant: Tenant; small?:
         />
       )}
       <span className={styles.lockupText}>
-        <span className={styles.brandName} dir="auto">
-          {tenant.displayName}
+        <span className={styles.brandName}>
+          <TenantText>{tenant.displayName}</TenantText>
         </span>
-        <span className={styles.brandCity} dir="auto">
-          {tenant.city}
+        <span className={styles.brandCity}>
+          <TenantText>{tenant.city}</TenantText>
         </span>
       </span>
     </div>
@@ -327,9 +288,9 @@ export function StoryCard({ story }: { story: StoryModule }) {
         </p>
         <ul className={styles.facts}>
           {story.facts.slice(0, 3).map((fact) => (
-            <li className={styles.fact} key={fact} dir="auto">
+            <li className={styles.fact} key={fact}>
               <span className={styles.factDot} aria-hidden="true" />
-              {fact}
+              <TenantText>{fact}</TenantText>
             </li>
           ))}
         </ul>
@@ -340,50 +301,24 @@ export function StoryCard({ story }: { story: StoryModule }) {
 
 export function SiteFooter({ tenant, m }: { tenant: Tenant; m: StorefrontMessages }) {
   const hoursText = hoursLabel(tenant, m);
-  return (
-    <footer className={styles.footer} data-sf-module="footer">
-      <div className={styles.footerRow}>
-        <TenantText>{tenant.address}</TenantText>
+  return <footer className={styles.footer} data-sf-module="footer">
+    <section className={`${styles.inner} ${styles.findUs}`} id="sf-find" aria-label={m.callRestaurant}>
+      <div className={styles.findCopy}><p className={styles.eyebrow}>{m.callRestaurant}</p><h2><TenantText>{tenant.displayName}</TenantText></h2><p><TenantText>{tenant.address}</TenantText></p>
+        <RestaurantContact publicPhone={tenant.phone} label={m.callRestaurant} className={styles.phoneLink} />
+        <p className={styles.footerRow}><span>{m.hours}</span><bdi dir={hoursText.numeric ? 'ltr' : 'auto'}>{hoursText.text}</bdi></p>
       </div>
-      <div className={styles.footerRow}>
-        <span>{m.hours}</span>
-        {hoursText.numeric ? (
-          <span className={styles.ltr} dir="ltr">
-            {hoursText.text}
-          </span>
-        ) : (
-          <span>{hoursText.text}</span>
-        )}
-      </div>
-      <div className={styles.footerRow}>
-        <span>{m.callRestaurant}</span>
-        <span className={styles.ltr} dir="ltr">
-          {tenant.phone}
-        </span>
-      </div>
-      <p className={styles.footerCredit}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className={styles.footerMark}
-          src="/bizbot-symbol-256.png"
-          alt=""
-          width={16}
-          height={16}
-          loading="lazy"
-          decoding="async"
-        />
-        {m.poweredBy} <span className={styles.footerBrand}>BIZBOT</span>
-      </p>
-    </footer>
-  );
+      {/* Decorative illustration only: no geographic pin or navigation promise. */}
+      <div className={styles.brandMap} aria-hidden="true"><svg viewBox="0 0 500 240" className={styles.mapLines}><path d="M-20 40h200l35 40h305M60-20v100l100 60v120M320-20v75l-70 75v150M-20 200l130-80 85 30 140-30 200 100M420-20l-50 110 70 80v100M-20 92l90 25 60-80"/><path className={styles.mapRoute} d="M65 187c52-125 144 61 219-65s144 44 106-83"/><circle cx="65" cy="187" r="7"/></svg><span className={styles.mapBrand}><TenantText>{tenant.displayName}</TenantText></span></div>
+    </section>
+    <div className={styles.footerBand}><div className={`${styles.inner} ${styles.footerInner}`}><BrandLockup tenant={tenant} small /><TenantText>{tenant.tagline}</TenantText><p className={styles.footerCredit}>{m.poweredBy} <span className={styles.footerBrand}>BIZBOT</span></p></div></div>
+  </footer>;
 }
-
 export function EmptyMenu({ tenant, m }: { tenant: Tenant; m: StorefrontMessages }) {
   return (
     <div className={styles.empty} role="status">
       <p className={styles.emptyTitle}>{m.emptyMenu}</p>
-      <p className={styles.emptyBody} dir="auto">
-        {fill(m.emptyMenuBody, { r: tenant.displayName })}
+      <p className={styles.emptyBody}>
+        <TenantText>{fill(m.emptyMenuBody, { r: tenant.displayName })}</TenantText>
       </p>
     </div>
   );
