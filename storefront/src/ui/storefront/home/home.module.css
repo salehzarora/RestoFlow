@@ -120,7 +120,9 @@
 .card,.row{min-width:0;cursor:pointer;outline-offset:4px}
 .cardMediaGrid{position:relative;overflow:hidden;background:var(--sf2);border-radius:9px;width:100%;aspect-ratio:1.15}
 .cardImg{width:100%;height:100%;object-fit:cover;object-position:50% 66%;transition:transform .55s cubic-bezier(.22,.68,0,1.01)}
-.motionFull .card:hover .cardImg,.motionLively .card:hover .cardImg{transform:scale(1.045)}
+.motionFull{}
+.motionLively{composes:motionFull}
+.motionFull .card:hover .cardImg{transform:scale(1.045)}
 .cardNoImage{composes:gridCenter;width:100%;height:100%;color:var(--tx2);font-size:40px}
 .cardBody{padding:15px 2px 0;min-width:0}
 .cardMain{composes:flexRow;justify-content:space-between;gap:12px}
@@ -201,7 +203,7 @@
 @media(max-width:900px){.page{--header-height:79px}.inner{width:calc(100% - 44px)}.headerInner{gap:16px}.headerNav{gap:18px;font-size:11px}.headerActions{gap:10px}.announce{min-height:43px;gap:27px}.headerPhone{display:none}.brandName{font-size:20px}.hero{gap:5px;min-height:490px;padding-block:30px 39px}.heroTitle{font-size:73px}.heroVisual{height:413px}.heroMedia{width:270px;height:370px;inset-inline-end:8px}.heroSub{font-size:12px}.menu{padding-block:49px 50px}.gridWrap{gap:25px 17px}.cardName{font-size:16px}.cardMain{gap:6px}.price{font-size:18px}.findUs{gap:35px}.findCopy h2{font-size:32px}}
 @media(max-width:650px){
 .page{--header-height:72px}.inner{width:calc(100% - 36px)}.topline>.inner{min-height:29px;font-size:9px}.topline>.inner>span:nth-child(2){display:none}
-.headerInner{gap:10px}.headerNav,.headerPhone{display:none}.headerActions{gap:7px}.brandLogo{width:39px;height:41px}.lockup{gap:8px}.brandName{max-width:128px}.brandCity{font-size:9px;margin-block-start:4px}
+.headerInner{gap:10px}.headerNav{display:none}.headerActions{gap:7px}.brandLogo{width:39px;height:41px}.lockup{gap:8px}.brandName{max-width:128px}.brandCity{font-size:9px;margin-block-start:4px}
 .cartTrigger{font-size:10px;padding:8px 11px;gap:8px;min-height:37px}.cartTrigger svg{height:16px;width:16px}.cartTrigger b{height:20px;width:20px;font-size:9px}
 .hero{grid-template-columns:1.12fr 1fr;gap:0 10px;padding:23px 0 25px;min-height:0}
 .heroCopy{display:contents}.hero .eyebrow{grid-column:1/-1;grid-row:1;margin-block-end:9px;font-size:9px}.littlePin{width:21px;height:21px}
@@ -227,7 +229,7 @@
 .promo{width:calc(100% - 36px);grid-template-columns:1fr;margin-block-end:39px;border-radius:9px}.promoBody{padding:27px 25px 28px}.promoTitle{font-size:30px}.promoMediaWrap{height:210px;min-height:0}.storyMedia{grid-row:2}
 .findUs{grid-template-columns:1fr;gap:27px;padding-block-end:38px;scroll-margin-block-start:90px}.findCopy h2{font-size:29px;line-height:1.5}.brandMap{min-height:220px}
 .footerBand{padding-block:25px 30px}.footerInner{flex-wrap:wrap;gap:21px}.footerCredit{width:100%;font-size:8px}
-.cartDialog{inset-block-start:auto;inset-block-end:0;margin:0;width:100%;max-width:none;max-height:90dvh;border-radius:16px 16px 0 0}
+.cartDialog{inset-block-start:auto;inset-block-end:0;margin:0;width:100%;max-width:none;border-radius:16px 16px 0 0}
 .picksChip{display:flex}.heroWord>svg{height:12px;inset-block-end:-8px}.suggest{font-size:10px}
 }
 @media(max-width:365px){.inner{width:calc(100% - 28px)}.hero{grid-template-columns:1.05fr 1fr;gap:0 7px}.heroTitle{font-size:43px}.heroMedia{width:139px;height:204px}.heroVisual{height:219px}.heroActions .promoCta{min-width:145px}.brandName{font-size:15px;max-width:97px}.cartTrigger>span{display:none}}

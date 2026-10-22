@@ -245,3 +245,59 @@ Apply the owner's Oct22 approved Storefront design to the existing tenant-contro
 Before any future push/merge: obtain authorization, refresh current main and all open heads/file reservations, review the exact final diff and semantic #366 CSS integration, run affected integration/required CI, and obtain the repository's exact-head human merge approval. No auto-merge or force push.
 
 Before proposing any later Storefront release, independently verify the dedicated `bizbot-storefront` project `prj_Vc9MCCeYw96l5lYtbn9qbVQ7djap`, team `team_yynO6ARGc6VsRrAB69hOTTZy`, root `storefront`, actual `menu.bizbot.systems` binding and tested source. Do not reconnect Git, deploy a different project, or infer menu readiness from `resto-flow`/Dashboard results. No release action is part of this task.
+
+## Owner follow-up002 — CSS gate closed; R3 remains a draft
+
+This local continuation preserves foundation `039a318404f1ed3b4d0c6655db9a0b9bad33f9d6`, reviewed follow-up HEAD `7d837c5f9cb3099ed8ea12b377c30dc427f0ac3c` and base `fe78bbcd4de5befb91c09bd9161380f151fc7c6b`. The final local HEAD is bound externally after commit, without a self-referential source hash. Earlier reports, failed runs, captures and review ZIP remain preserved and attributed to their own sources.
+
+The bounded pre-edit overlap check confirmed the own branch/tree clean and the five relevant PR heads/file inventories unchanged. The three CSS paths and this task document overlap none of the82 reserved paths. A later read-only scope appendix separately checked the focused `sf-home.test.mjs` update: also zero overlap. Claude's payment-B worktree now contains15 dirty shared-document paths; those, payment/POS/card work, printer314/315, notification/ETA overlap and all shared API/decision/security/money documents remain untouched. Missing/prunable printing aliases remain UNVERIFIED, with no cleanup or repair. A read-only `ls-remote` confirmed main still at the base; no fetch/reset/push was performed.
+
+### Exact correction and equivalence limits
+
+Production changes are confined to `checkout/flow.module.css`, `product/product.module.css` and `home/home.module.css`:
+
+- Share the identical Flow stepper pseudo-element base declaration while keeping its RTL override list unchanged. The stepper remains LTR, with44px outward targets. Remove duplicate mobile cart90dvh and Home650px phone-hide/cart90dvh declarations only where the unconditional or900px rule already supplies the same value.
+- Remove the three unread Product duration definitions; retain `--d-option`. Reuse identical same-file Product rules through local CSS Module compositions, including group/note heads, radio/check decoration and Full/Lively animation parents. Reuse existing Flow text/reset/layout declarations while retaining every field, row, selected/error, dim/centre and responsive override.
+- For Product badge variants/free deltas and the Flow tall CTA, the component already always applies the shared base token. Local composition replaces only duplicated values; exact current-consumer unions were independently reviewed. Do not generalize this evidence to unsupported standalone variant markup.
+- Remove the unread Product `--sf-motion` marker while retaining its empty Full composition target and all actual keyframes/animation/reduced-motion rules. Home already co-applies Full with Lively; its duplicate hover now composes Full. Compiled exports retain all127 Flow,53 Product and162 Home classes, all seven keyframes and all62 compositions. No cross-module dependency, functional declaration, translation, merchant content, ordering/price logic, private runtime or API/schema/shared type was changed.
+
+The initial candidate was not sufficient. Actual results remain explicit:
+
+| Local canonical lane | Build / TypeScript / snapshot / source pins | Output suite | Worst HE Brotli | Overall |
+| --- | --- | --- | --- | --- |
+|011, reviewed7d837c5f | PASS |25/28 |14,061B | FAIL, preserved baseline |
+|012, owner A–C duplicate cleanup | PASS |25/28 |14,040B | FAIL |
+|013, four Product aliases | PASS |25/28 |14,019B | FAIL |
+|014, ten Flow aliases | PASS |25/28 |14,008B | FAIL |
+|015, already-coapplied variant/base reuse | PASS |25/28 |14,003B | FAIL |
+|016, final motion reuse/unread-marker cleanup | **PASS** |**28/28** |**13,998B /14,000B** | **PASS, all seven stages** |
+
+Canonical016 measures all36 routes using the unchanged default Next/Turbopack build and per-response Brotli text/quality11 method, including every Hebrew route. Other affected routes measure13,988B; maximum raw CSS is92,926B under the unchanged pre-existing `CSS-UI001-01` raw exception. There are zero budget problems. All203 application and8 original gate pins remain unchanged through execution;37 actual local HTML/RSC/404 documents and direct owned-child cleanup are recorded. No compressor, budget, exception, output assertion or compiler was weakened. **Only2B compressed headroom remains**; later CSS changes must rerun the actual gate. In-memory estimates are preserved separately and are not build evidence.
+
+### Fresh focused verification and visual limits
+
+The final app source exposed one obsolete unit expectation demanding the duplicate Lively selector literally (unit005:391/392). Its failure is preserved. The narrow test correction requires the actual Full scale1.045, Lively→Full composition and reduced-motion reset, with five planted negative controls. Missing/wrong alias, missing/wrong Full hover and missing reduced reset must fail; all previous continuous-animation and motif guards remain. Final unit006 is **392/392 PASS**, no skipped/cancelled tests. The test is outside the203 application inputs and8 output-gate inputs, so it does not relabel a different app build as canonical016.
+
+| Fresh local evidence | Actual result | Scope |
+| --- | --- | --- |
+| `followup-002/unit-006.log` |392/392 PASS | Current unit/contract/source tests, including strengthened motion guard |
+| `ci-harness-016/evidence/summary.json` and `output-tests-summary.json` | Seven stages PASS;28/28 | Original fixture, all36 routes, unchanged gates |
+| `visual-final-005/evidence/summary.json` |58/58 PASS; zero skip/unexpected/flaky; cleanupErrors empty | Preserved50 cases plus8 AR/EN650/651/900/901 header/phone/native-cart geometry and focus cases; build `osh1lQ7C88EKWSC0DlnTF` |
+| `extension-harness-005/evidence/summary.json` |141/141 PASS; zero skip/unexpected/flaky; cleanupErrors empty | Preserved137 cases plus4 AR/EN390/1440 required ProductSheet/head/cart/quantity/Edit/focus and LTR pseudo-target cases; build `sskvJJeTbX9KpyXsdSPue` |
+| `visual-review-final-005/inventory.json` |65 fresh unscaled pairs,175 original captures including45 unpaired interaction/breakpoint images | Reference left, local fixture right;16px gap/40px label band. No old images relabelled as new |
+
+Root inspected current390/1440 Home,390 ProductSheet/drinks and1440 filled-cart pairs. These confirm new evidence collection and preserve the visible residuals; they do not establish pixel equality or owner visual/content approval. Language/status/full-logo/contrast adaptations remain; Home product name/price/link/stamp, editable title emphasis/break, explicit drink fit/cutout grid, structured optional announcement segments and merchant promo/story/category controls remain unimplemented content-contract work. Current full announcement text wraps instead of being guessed into reference fragments. ProductSheet/cart retain real required choices, canonical data, edit/keyboard/focus behavior and production copy rather than preview-only commerce controls.
+
+### R3 proposal and resumption
+
+External draft `followup-002/content-proposal/CONTENT_COMPLETION_PROPOSAL_R3.md`, SHA-256 `4eccad1a5d1241e2f66a9834085b9faea2c6ba636cd7f347ee78a899eb1e0da4`, belongs to proposed `BIZBOT-STOREFRONT-CONTENT-CONTRACT-001`. V1/R2 are unchanged. Independent review approves it **as a reviewable draft only**, not an adopted contract or implementation authority. It defines:
+
+1. Optional bounded highlight/break metadata bound to the exact saved Hero text, retaining control validation, null fallback and atomic reset on text change. The real editor cannot save the synthetic newline used by existing visual fixtures.
+2. A closed category/item promotion target, same-snapshot authority, invalid-target handling and real enabled CTA acceptance; Dashboard data alone is insufficient.
+3. Explicit editorial/item Hero mode and image/fact precedence, with honest missing-photo handling and no mismatched product image/name/price.
+4. Separate item→category→default image fit/layout, complete-image crop/zoom reset, retained list/grid authority, cutout4/3/2 at900/650 and explicit mixed-result behavior.
+5. Optional bounded announcement segments with clear priority; absence preserves every word of the existing wrapping free text.
+
+The draft retains tenant/branch/manager/ACL/RLS/CAS/audit, owned published-media lifecycle, canonical price/options/availability and strict versioned public projection alongside unchangedv3. Proposed ownership/overlaps and future acceptance are recorded; no SQL/RPC/API/Dashboard/shared-type or reserved shared-document implementation is included. #360 remains open for remaining controls, content, full journey/multi-restaurant and owner visual acceptance. Live private tracking stays coordinated with #366; no ETA/LiveRequestRuntime changes enter this follow-up.
+
+The portable review package contains full sources, complete patches (including reviewed7d→newHEAD), actual before/after36-route measurements, fresh images, R3, independent reviews, updated overlap/resume evidence and hashes. The external final receipt binds these to the final local commit and clean tree. Local tests do not establish remote CI/provider live/CDN/hosted behavior, current production holds readback or physical acceptance. No production order, call, print, notification/Cron, migration, deployment, APK or device action occurred; no push/PR/merge is authorized. Operational protections are preserved by no changes. The earlier incident's connectivity remains UNKNOWN_UNCHANGED, and the old incident-prone harness was not reused.

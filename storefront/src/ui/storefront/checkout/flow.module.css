@@ -21,12 +21,13 @@
 .stepNow .stepBar{background:var(--acct);}
 .body{display:flex;flex:1;flex-direction:column;min-height:0;gap:16px;padding:24px;}
 .bodySteps{gap:22px;}
-.section, .field, .methods{display:flex;flex-direction:column;gap:10px;}
+.section{display:flex;flex-direction:column;gap:10px;}
+.methods{composes:section;}
 .sectionTitle{margin:0;font:700 16px / 1.5 var(--font);color:var(--tx);}
 
 /* Cart-only content:one final geometry, including the narrow-screen grid. */
-.lines, .summaryList{margin:0;padding:0;list-style:none;}
-.lines{display:flex;flex-direction:column;gap:0;}
+.summaryList{margin:0;padding:0;list-style:none;}
+.lines{composes:summaryList;display:flex;flex-direction:column;gap:0;}
 .line{display:flex;gap:14px;padding:22px 0;border-block-end:1px dashed var(--hair2);}
 .line:last-child{border-block-end:0;}
 .lineMedia{position:relative;flex:none;inline-size:70px;block-size:87px;border-radius:9px;overflow:hidden;background:var(--sf2);}
@@ -41,7 +42,6 @@
 .stepper{display:inline-flex;align-items:center;grid-column:1;grid-row:4;margin-block-start:6px;direction:ltr;block-size:32px;border:1px solid var(--hair2);border-radius:10px;background:transparent;overflow:visible;}
 .stepBtn{position:relative;inline-size:25px;block-size:30px;padding:0;border:0;display:grid;place-items:center;cursor:pointer;}
 .stepBtn, .stepPlus{background:transparent;color:var(--tx);}
-.stepBtn::after{content:'';position:absolute;inset-block-start:50%;inset-inline-start:50%;min-width:44px;min-height:44px;width:100%;height:100%;transform:translate(-50%, -50%);}
 .stepBtn svg{inline-size:13px;block-size:13px;stroke-width:1.7;}
 .stepValue{inline-size:22px;min-inline-size:22px;text-align:center;font-size:11px;font-weight:600;}
 .linePrice{grid-column:2;grid-row:4;align-self:center;justify-self:end;margin-block-start:6px;font-size:14px;font-weight:700;white-space:nowrap;}
@@ -58,7 +58,10 @@
 .noticePlain{background:var(--sf);border-color:var(--hair);color:var(--tx2);font-size:13.5px;}
 .noticeIcon{flex:none;inline-size:20px;block-size:20px;margin-block-start:1px;}
 .noticeIconSm{inline-size:18px;block-size:18px;}
-.noticeText, .summaryText, .blockText, .methodText{flex:1;min-width:0;}
+.noticeText{flex:1;min-width:0;}
+.summaryText{composes:noticeText;}
+.blockText{composes:noticeText;}
+.methodText{composes:noticeText;}
 .noticeTitle{font:700 14px / 1.5 var(--font);}
 .noticeBody{margin-block-start:2px;font:400 13px / 1.5 var(--font);}
 .noticeAction{position:relative;display:inline-flex;align-items:center;margin-block-start:8px;min-block-size:34px;padding:6px 12px;border:1px solid currentColor;border-radius:8px;background:transparent;color:inherit;font:700 13px / 1.2 var(--font);cursor:pointer;text-decoration:none;}
@@ -66,7 +69,7 @@
 .noticeBad .noticeActionSolid > span{color:var(--badbg);}
 .noticeWarn .noticeActionSolid > span{color:var(--warnbg);}
 .noticeInfo .noticeActionSolid > span{color:var(--infobg);}
-.back::after, .lineAction::after, .noticeAction::after{content:'';position:absolute;inset-block-start:50%;inset-inline-start:50%;min-width:44px;min-height:44px;width:100%;height:100%;transform:translate(-50%, -50%);}
+.back::after, .lineAction::after, .noticeAction::after, .stepBtn::after{content:'';position:absolute;inset-block-start:50%;inset-inline-start:50%;min-width:44px;min-height:44px;width:100%;height:100%;transform:translate(-50%, -50%);}
 [dir='rtl'] .back::after, [dir='rtl'] .lineAction::after, [dir='rtl'] .noticeAction::after{transform:translate(50%, -50%);}
 
 .totals{display:flex;flex-direction:column;gap:8px;padding:16px 0;border-block-start:1px solid var(--hair2);font-size:13px;}
@@ -84,16 +87,19 @@
 .choiceOn{background:var(--accs);border-color:var(--acc);}
 .choiceOff{opacity:.5;cursor:default;}
 .choiceBad{border-color:var(--bad);}
-.choiceTop, .methodTitleRow{display:flex;align-items:center;gap:8px;}
-.choiceTop{justify-content:space-between;}
+.methodTitleRow{display:flex;align-items:center;gap:8px;}
+.choiceTop{composes:methodTitleRow;justify-content:space-between;}
 .choiceIcon{inline-size:22px;block-size:22px;color:var(--acct);}
 .choiceMark{flex:none;display:grid;place-items:center;inline-size:22px;block-size:22px;border:2px solid var(--hair2);border-radius:50%;color:var(--onacc);}
 .choiceOn .choiceMark{border-color:var(--acc);background:var(--acc);}
 .choiceMark svg{inline-size:12px;block-size:12px;stroke-width:3.5;visibility:hidden;}
 .choiceOn .choiceMark svg{visibility:visible;}
-.choiceName, .methodName{font:700 15px / 1.5 var(--font);}
-.choiceDesc, .summaryMods, .summaryNote{font:400 12.5px / 1.5 var(--font);color:var(--tx2);}
-.field{gap:6px;}
+.choiceName{font:700 15px / 1.5 var(--font);}
+.methodName{composes:choiceName;}
+.choiceDesc{font:400 12.5px / 1.5 var(--font);color:var(--tx2);}
+.summaryMods{composes:choiceDesc;}
+.summaryNote{composes:choiceDesc;}
+.field{composes:section;gap:6px;}
 .label{font:600 13px / 1.4 var(--font);color:var(--tx2);}
 .fieldError, .helpBad{color:var(--bad);}
 .fieldError{font:600 13px / 1.4 var(--font);}
@@ -145,7 +151,7 @@
 
 .foot{flex:none;position:sticky;inset-block-end:0;z-index:20;padding:16px 24px max(20px, env(safe-area-inset-bottom));background:var(--bg);border-block-start:1px solid var(--hair2);}
 .cta{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:49px;border:0;border-radius:10px;padding:14px 18px;background:var(--acc);color:var(--onacc);font:700 13px / 1.6 var(--font);cursor:pointer;text-decoration:none;}
-.ctaCart{min-height:49px;}
+.ctaCart{composes:cta;}
 .ctaCentre{justify-content:center;}
 .ctaDim{background:var(--sf2);color:var(--tx2);}
 .ctaLabel{position:relative;display:inline-flex;align-items:center;gap:8px;min-width:0;white-space:normal;}
@@ -195,7 +201,7 @@
   .steps{padding-inline:18px;}
   .body{padding:20px 18px;}
   .foot{padding-inline:18px;}
-  .screen[data-sf-screen='cart']{inline-size:100%;max-block-size:90dvh;margin-block:auto 0;border-radius:22px 22px 0 0;}
+  .screen[data-sf-screen='cart']{inline-size:100%;margin-block:auto 0;border-radius:22px 22px 0 0;}
   .screen[data-sf-screen='cart'] .headRow{padding:20px 22px 14px;}
   .screen[data-sf-screen='cart'] .title{font-size:23px;}
   .screen[data-sf-screen='cart'] .body{padding-inline:22px;}

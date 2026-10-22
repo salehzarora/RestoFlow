@@ -3,8 +3,9 @@
  * All ordering, required-choice, quantity, notes and focus logic stays in TSX.
  * Uses the existing semantic tenant theme tokens.
  */
-.host { --d-sheet: 250ms; --d-shake: 400ms; --d-toast: 200ms; --d-option: 150ms; }
-.motionFull, .motionLively { --sf-motion: 1; }
+.host { --d-option: 150ms; }
+.motionFull {}
+.motionLively { composes: motionFull; }
 .bodyLock { overflow: hidden; }
 .scrim { position: fixed; inset: 0; z-index: 40; display: block; inline-size: 100%; border: 0; padding: 0; background: var(--scrim); backdrop-filter: blur(7px); cursor: pointer; }
 .sheet { position: fixed; inset-inline: 0; inset-block-start: 50%; z-index: 41; display: grid; grid-template-columns: minmax(0, 64fr) minmax(0, 36fr); grid-template-rows: minmax(0, 1fr) auto; inline-size: min(860px, calc(100vw - 36px)); min-block-size: min(510px, 90dvh); max-block-size: 90dvh; margin-inline: auto; transform: translateY(-50%); border-radius: 22px; background: var(--bg); color: var(--tx); overflow: hidden; line-height: 1.6; box-shadow: 0 28px 100px color-mix(in srgb, var(--tx) 33%, transparent); }
@@ -31,9 +32,11 @@
 .desc:empty { display: none; }
 .group { display: flex; flex-direction: column; gap: 12px; margin: 0; padding-block: 0 22px; padding-inline: 28px; border: 0; min-inline-size: 0; }
 .groupHead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.noteHead { composes: groupHead; }
 .groupName { min-inline-size: 0; margin: 0; font-size: 15px; font-weight: 700; line-height: 1.6; }
 .badge { flex: none; padding: 2px 8px; border: 0; border-radius: 20px; background: var(--sf2); color: var(--tx3); font-size: 10px; font-weight: 400; line-height: 1.6; }
-.badgeReq, .badgeOpt { background: var(--sf2); color: var(--tx3); }
+.badgeReq { composes: badge; }
+.badgeOpt { composes: badge; }
 .badgeBad { background: var(--badbg); color: var(--badText); }
 .alert { display: flex; align-items: flex-start; gap: 8px; margin: 0; border-radius: 10px; padding: 8px 10px; background: var(--badbg); color: var(--badText); font-size: 12px; font-weight: 600; }
 .alert svg { flex: none; inline-size: 16px; block-size: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -44,13 +47,13 @@
 .optionOn { background: var(--accA); color: var(--accOnSelection); border-color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); }
 .optionFull { opacity: .55; }
 .control { display: none; }
-.controlRadio, .controlCheck { border-radius: 0; }
+.controlRadio { border-radius: 0; }
+.controlCheck { composes: controlRadio; }
 .optionName { min-inline-size: 0; font-size: 12px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
 .delta { flex: none; font-size: 9px; font-weight: 400; line-height: 1.6; color: var(--tx3); white-space: nowrap; }
 .optionOn .delta { color: var(--accOnSelection); }
-.deltaFree { color: var(--tx3); }
+.deltaFree { composes: delta; }
 .note { display: flex; flex-direction: column; gap: 10px; padding-block: 0 12px; padding-inline: 28px; border: 0; }
-.noteHead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .noteLabel { font-size: 14px; font-weight: 600; }
 .noteOptional { color: var(--tx3); font-size: 10px; font-weight: 400; line-height: 1.7; }
 .noteField { display: block; box-sizing: border-box; inline-size: 100%; min-block-size: 68px; max-block-size: 150px; padding: 12px 14px; border: 1px solid var(--hair2); border-radius: 10px; resize: vertical; background: var(--sf); color: var(--tx); font: inherit; font-size: 12px; }
@@ -75,10 +78,10 @@
 .ctaPrice { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .toast { position: fixed; inset-inline: 20px; inset-block-end: 98px; z-index: 42; display: flex; justify-content: center; pointer-events: none; }
 .toastPill { display: inline-flex; align-items: center; justify-content: center; max-inline-size: 100%; padding: 13px 24px; border-radius: 12px; background: var(--tx); color: var(--bg); box-shadow: 0 6px 30px color-mix(in srgb, var(--tx) 20%, transparent); font-size: 13px; font-weight: 500; line-height: 1.6; text-align: center; overflow-wrap: anywhere; }
-.motionFull .scrim, .motionLively .scrim { animation: sfScrimIn 200ms ease-out both; }
-.motionFull .sheet, .motionLively .sheet { animation: sfSheetEnter 220ms ease-out both; }
-.motionFull .toast, .motionLively .toast { animation: sfToastRise 200ms ease-out both; }
-.motionFull .alert, .motionLively .alert { animation: sfShake 400ms ease both; }
+.motionFull .scrim { animation: sfScrimIn 200ms ease-out both; }
+.motionFull .sheet { animation: sfSheetEnter 220ms ease-out both; }
+.motionFull .toast { animation: sfToastRise 200ms ease-out both; }
+.motionFull .alert { animation: sfShake 400ms ease both; }
 @keyframes sfScrimIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sfSheetEnter { from { opacity: 0; transform: translateY(calc(-50% + 14px)) scale(.98); } to { opacity: 1; transform: translateY(-50%) scale(1); } }
 @keyframes sfSheetRise { from { opacity: .5; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
@@ -100,7 +103,7 @@
  .foot { padding-block: 14px max(20px, env(safe-area-inset-bottom)); padding-inline: 22px; }
  .toast { inset-block-end: 95px; }
  .toastPill { min-inline-size: 200px; font-size: 12px; }
- .motionFull .sheet, .motionLively .sheet { animation-name: sfSheetRise; animation-duration: 250ms; }
+ .motionFull .sheet { animation-name: sfSheetRise; animation-duration: 250ms; }
 }
 @media (max-height: 650px) and (max-width: 640px) {
  .media { block-size: 110px; }
