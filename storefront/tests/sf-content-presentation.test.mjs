@@ -28,7 +28,7 @@ test('whole-image removes inherited crop/zoom/mask and corner clipping without m
   const saved = Object.freeze({ imageFit: 'whole-image', image: '/original.webp', name: 'צילום أصلي 🍔', priceMinor: 0 });
   assert.equal(productImageClass(saved, 'whole'), 'whole');
   assert.equal(productFrameClass(saved, 'frame'), 'frame');
-  const css = readFileSync(new URL('../src/ui/storefront/content.module.css', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/ui/storefront/storefront.module.css', import.meta.url), 'utf8');
   for (const rule of ['object-fit:contain', 'object-position:center', 'transform:none!important', 'clip-path:none', 'mask-image:none', 'overflow:visible']) assert.ok(css.includes(rule), rule);
   assert.equal(productImageClass({ imageFit: 'fill' }, 'whole'), '');
   assert.equal(productFrameClass({}, 'frame'), '');

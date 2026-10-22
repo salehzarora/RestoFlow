@@ -31,7 +31,7 @@ import { ChevronIcon, CloseIcon, SearchIcon } from '../icons';
 import { TenantText } from '../TenantText';
 import { GridCard } from '../home/MenuParts';
 import { productCardClass, productFrameClass, productImageClass, sectionGridClass, sectionLayout } from '../contentPresentation';
-import contentStyles from '../content.module.css';
+import contentStyles from '../storefront.module.css';
 import shell from '../storefront.module.css';
 import home from '../home/home.module.css';
 import styles from './search.module.css';

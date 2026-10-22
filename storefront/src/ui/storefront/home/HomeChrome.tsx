@@ -16,7 +16,7 @@ import { BrandLockup, CampaignHero } from './HomeParts';
 import { MenuSection, GridCard, ListRow } from './MenuParts';
 import { chooseSuggestion, suggestionPool } from './suggestions';
 import { sectionGridClass, sectionLayout } from '../contentPresentation';
-import contentStyles from '../content.module.css';
+import contentStyles from '../storefront.module.css';
 function NoResultsTitle({ template, query }: { template: string; query: string }) { const at = template.indexOf('{q}'); return at < 0 ? <>{template}</> : <>{template.slice(0, at)}<bdi>{query}</bdi>{template.slice(at + 3)}</>; }
 function CategoryIcon({ path, image }: { path: string; image: string | null }) {
   return image === null ? <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={path} /></svg> : (

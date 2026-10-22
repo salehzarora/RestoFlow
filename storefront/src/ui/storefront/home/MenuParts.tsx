@@ -5,7 +5,7 @@ import { PlusIcon, ChevronIcon } from '../icons';
 import { TenantText } from '../TenantText';
 import { Price } from './HomeParts';
 import { productCardClass, productFrameClass, productImageClass, sectionGridClass, sectionLayout } from '../contentPresentation';
-import contentStyles from '../content.module.css';
+import contentStyles from '../storefront.module.css';
 import styles from './home.module.css';
 
 function Media({ item, m, rankLabel }: { item: MenuItem; m: StorefrontMessages; rankLabel?: string }) {

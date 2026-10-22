@@ -23,7 +23,7 @@ import type { Quote } from '@/money/quote';
 import type { ModifierSelections, ServiceState } from '@/source/types';
 import { TenantText } from '../TenantText';
 import { productFrameClass, productImageClass } from '../contentPresentation';
-import contentStyles from '../content.module.css';
+import contentStyles from '../storefront.module.css';
 import { orderingBlocker, orderingReason } from '../checkout/eligibility';
 import styles from '../home/home.module.css';
 

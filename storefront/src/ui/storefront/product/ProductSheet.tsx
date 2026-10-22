@@ -1,7 +1,7 @@
 'use client';
 
 import { productFrameClass, productImageClass } from '../contentPresentation';
-import contentStyles from '../content.module.css';
+import contentStyles from '../storefront.module.css';
 
 /**
  * PRODUCT SHEET - screen 4 of the approved handoff.

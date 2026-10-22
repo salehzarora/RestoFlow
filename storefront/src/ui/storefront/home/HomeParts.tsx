@@ -13,7 +13,7 @@ import { TenantText } from '../TenantText';
 import { RestaurantContact } from '../RestaurantContact';
 import { closedNoticeBody, hoursLabel } from './hoursCopy';
 import { headlineParts, productFrameClass, productImageClass } from '../contentPresentation';
-import contentStyles from '../content.module.css';
+import contentStyles from '../storefront.module.css';
 import styles from './home.module.css';
 
 /** Price, always an LTR island with tabular figures even inside RTL copy. */

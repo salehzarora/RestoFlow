@@ -25,7 +25,7 @@
  */
 import Link from 'next/link';
 import { productImageClass } from '../contentPresentation';
-import contentStyles from '../content.module.css';
+import contentStyles from '../storefront.module.css';
 import { useEffect, useRef, useState } from 'react';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';

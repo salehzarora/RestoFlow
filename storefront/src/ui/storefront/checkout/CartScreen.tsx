@@ -23,7 +23,7 @@
  */
 import Link from 'next/link';
 import { productFrameClass, productImageClass } from '../contentPresentation';
-import contentStyles from '../content.module.css';
+import contentStyles from '../storefront.module.css';
 import { useCallback, useState } from 'react';
 import type { CartApi } from '@/cart/useCart';
 import { optionSummary, type ResolvedCartLine } from '@/cart/cartModel';
