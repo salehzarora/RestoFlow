@@ -281,7 +281,7 @@ test('cart presentation uses the existing live aside in a native modal with focu
 test('motion follows the approved hover treatment without legacy continuous effects', () => {
   const fullHover = /\.motionFull\s+\.card:hover\s+\.cardImg\s*\{\s*transform:\s*scale\(1\.045\);?\s*\}/;
   const livelyAlias = /\.motionLively\s*\{\s*composes:\s*motionFull;?\s*\}/;
-  const reducedHover = /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.card:hover\s+\.cardImg,\s*\.promoCta:hover\s*\{\s*transform:\s*none;?\s*\}/;
+  const reducedHover = /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.motionFull\s+\.card:hover\s+\.cardImg,\s*\.promoCta:hover\s*\{\s*transform:\s*none;?\s*\}/;
   const assertHoverBindings = (source) => {
     assert.match(source, fullHover);
     assert.match(source, livelyAlias, 'lively must compose the same full-motion treatment');
@@ -294,6 +294,7 @@ test('motion follows the approved hover treatment without legacy continuous effe
     css.replace(fullHover, ''),
     css.replace(fullHover, '.motionFull .card:hover .cardImg{transform:scale(1.25)}'),
     css.replace(reducedHover, ''),
+    css.replace(reducedHover, '@media(prefers-reduced-motion:reduce){.card:hover .cardImg,.promoCta:hover{transform:none}'),
   ]) {
     assert.notEqual(planted, css, 'the negative control must change the source');
     assert.throws(() => assertHoverBindings(planted), { code: 'ERR_ASSERTION' });

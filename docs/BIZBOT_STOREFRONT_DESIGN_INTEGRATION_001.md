@@ -301,3 +301,49 @@ External draft `followup-002/content-proposal/CONTENT_COMPLETION_PROPOSAL_R3.md`
 The draft retains tenant/branch/manager/ACL/RLS/CAS/audit, owned published-media lifecycle, canonical price/options/availability and strict versioned public projection alongside unchangedv3. Proposed ownership/overlaps and future acceptance are recorded; no SQL/RPC/API/Dashboard/shared-type or reserved shared-document implementation is included. #360 remains open for remaining controls, content, full journey/multi-restaurant and owner visual acceptance. Live private tracking stays coordinated with #366; no ETA/LiveRequestRuntime changes enter this follow-up.
 
 The portable review package contains full sources, complete patches (including reviewed7d→newHEAD), actual before/after36-route measurements, fresh images, R3, independent reviews, updated overlap/resume evidence and hashes. The external final receipt binds these to the final local commit and clean tree. Local tests do not establish remote CI/provider live/CDN/hosted behavior, current production holds readback or physical acceptance. No production order, call, print, notification/Cron, migration, deployment, APK or device action occurred; no push/PR/merge is authorized. Operational protections are preserved by no changes. The earlier incident's connectivity remains UNKNOWN_UNCHANGED, and the old incident-prone harness was not reused.
+
+## Owner followup003 — measured reduced-motion fix and capture diagnosis
+
+This continuation starts at the owner-reviewed `695de2ad916bd746e5995c43877770951113132e`. Its accepted followup002 package, every original capture, failed run and foundation commit remain preserved. The owner accepted the 13,998/14,000 gate evidence and R3 as the basis for drafting the concrete content contract; no additional CSS-headroom requirement or R4 proposal cycle is introduced. The final local source commit is recorded in the external source-binding receipt, avoiding a self-referential hash.
+
+The new pre-edit check read remote main at `fe78bbcd4de5befb91c09bd9161380f151fc7c6b`, all relevant worktrees and PR314/315/362/363/366. None of the82 reserved paths overlaps the two changed source/test files, this owned task document, or the separately owned new contract document. PR363 advanced to `89da0a02bc3131960f8e5f7a1bb24d97afc0c0d7`; its previously dirty shared documents are now committed and remain reserved. Primary local main `556136f1` is an old ancestor of remote main, not an unexpected advancement; it was not reset or edited. Missing/prunable aliases remain unverified and untouched. Fresh receipts are under `followup-003/preflight`.
+
+### A. Exact correction and actual real-card behavior
+
+The reduced-motion reset in `home.module.css` now uses `.motionFull .card:hover .cardImg`, matching the specificity of the normal Full hover declaration. Its later media-query order therefore cancels that transform when reduction is requested. The ordinary `scale(1.045)` declaration and Lively's existing Full composition remain unchanged. This fixes a defect already present at695de2ad; the previous cleanup did not introduce it. The source test requires the stronger reset and includes a sixth planted negative control restoring the old weaker selector. No other functional CSS was removed.
+
+The actual real Home product card was hovered and its settled computed DOMMatrix sampled, including the actual Full/Lively ancestor tokens and `matchMedia` state:
+
+| Mode | Preference | Before fix at695de2ad | New actual computed transform |
+| --- | --- | --- | --- |
+| Full | reduce | scale1.045 — defect reproduced | `none`, scaleX/Y1 |
+| Lively | reduce | scale1.045 — defect reproduced | `none`, scaleX/Y1 |
+| Full | no-preference | scale1.045 | `matrix(1.045,0,0,1.045,0,0)` |
+| Lively | no-preference | scale1.045 | `matrix(1.045,0,0,1.045,0,0)` |
+
+`capture-baseline-001` preserves browser exit1,8 passes and the two precise reduced-motion failures. Its orchestrator's successful defect-reproduction verdict is **not** a feature PASS. `capture-final-001` has browser exit0,10/10 cases passed, no skips/retries/flakes and empty cleanup errors. Four cases measure motion; six diagnose capture geometry. No CSS animation-disabling screenshot option substitutes for the motion measurements.
+
+| Fresh verification | Actual result | Source/evidence binding |
+| --- | --- | --- |
+| Existing Storefront unit/contract/source suite |392/392 PASS; no skip/cancel/todo | `followup-003/unit-001.log` |
+| Canonical017 default build/TypeScript/snapshot/pins | All seven stages PASS |203 application inputs,8 unchanged gate inputs,26 critical dependency pins |
+| Canonical017 output and CSS gate |28/28 PASS,36 routes; worst Brotli **13,994/14,000B**, max raw92,959B; no problems | `ci-harness-017/evidence`; original per-response Brotli TEXT/quality11 and `CSS-UI001-01` raw exception unchanged |
+| Focused actual browser evidence | Final10/10 PASS; baseline8pass/2 precise failures preserved | `followup-003/capture-{baseline,final}-001/evidence` |
+
+No new compressor, compiler, budget, exception or gate weakening was used. No extra CSS cleanup was needed. Independent code, actual gate, browser and contract reviews are recorded externally. These are local tests, not remote Linux CI, final visual approval or production acceptance.
+
+### B. Why fullPage PNG widths differ from the viewport
+
+The same local reference and implementation state was measured before and after every capture at320/390/430, DPR1. Playwright viewport, `innerWidth`, html/scrollingElement client/scroll/offset width and CDP layout/content width stay320/390/430. **body.scrollWidth is334/404/448** while body client/offset width remains the viewport width. The pinned Playwright1.61.1 `_fullPageSize` code uses the maximum of six html/body client/scroll/offset widths, so its full-page raster takes exactly334/404/448. The existing post-fullPage documentElement assertion still passes but cannot rule out body.scrollWidth and was not used as the explanation.
+
+For both reference and implementation, default-device scale, explicit CSS scale and animation-allow full-page variants produce the same expanded width; viewport-before/after PNGs retain exactly320/390/430. DPR, viewport changes, explicit clip, image resampling and a product/content width regression do not explain these results. All original PNGs and before/after geometry, CDP metrics, screenshot options and PNG-header dimensions are preserved. The visible extra right band is background; no application-wide overflow hiding, crop, resize or image alteration was applied. The bounded source/element investigation distinguishes the proven screenshot-sizing mechanism from any unproved exclusive contribution of an individual decorative element; see the external diagnosis for its exact evidence and limits.
+
+Review screenshots must label both the CSS viewport and actual PNG dimensions. Use the new exact-width viewport captures for viewport comparison and retain fullPage captures as uncropped long-page evidence. This corrects the interpretation of the evidence, not merchant content or covered layout. ProductSheet/cart/drinks were not changed in this followup; their accepted followup002 comparisons remain historical, not relabelled as new runs.
+
+### C. Concrete content contract, separate ownership and resume
+
+R3 now proceeds directly to `BIZBOT-STOREFRONT-CONTENT-CONTRACT-001`, in its own worktree/branch based on remote mainfe78. Its only owned file is `docs/BIZBOT_STOREFRONT_CONTENT_CONTRACT_001.md`. The concrete draft specifies fields/types/defaults/null/error rules; private branch-scoped sidecar DDL and ACL/RLS; manager RPCs with one global CAS/idempotency authority; atomic invalidation of Hero formatting for old writers; strict publicv4 alongside unchangedv3; exact Unicode15.1 token/grapheme/codepoint and UTF16 mapping; media lifecycle and same-tenant/branch projection; Dashboard→projection→UI rollout and acceptance. The ordinary category controls section columns, item overrides affect only that card, aggregate search/picks retain R3's all-resolved-cutout rule, and list mode wins. Server normalization of stale private relations to null is separate from strict malformed-wire rejection with no v3/fixture downgrade.
+
+The contract's local independent review approves it **for contract review**, not adoption, schema/API/shared-type/editor implementation or production use. Its final document hash and separate commit are in the shared external review package. No reserved API/decision/domain/security/checklist document was edited; future section owners and narrow edit scopes are specified in the contract instead. No migration, RPC, Dashboard, shared package/type or live API implementation is part of this continuation.
+
+Next step: owner/GPT review the exact concrete contract and local display evidence, then authorize any separately scoped implementation. #360 remains open for data-driven Hero/promo/story/category/media controls, actual owner visual/content approval and full journey/multi-restaurant acceptance. #366 owns coordinated live status/ETA and compatible receipt-phone work; no ETA/LiveRequestRuntime or Claude payment/printing314/315 change enters this branch. Existing merchant content and operational protections are preserved by no production action. No push, PR, merge, deployment, order, notification/Cron, APK, device or printing operation occurred. The old incident's connectivity remains **UNKNOWN_UNCHANGED**; its unsafe harness was not reused.

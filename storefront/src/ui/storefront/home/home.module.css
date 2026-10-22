@@ -268,4 +268,4 @@
 .asideCtaDisabled{background:var(--sf2);color:var(--tx2);cursor:default}
 .cartDialog .aside{display:block;position:static;width:auto;max-height:none;padding:0 24px;border:0;background:var(--bg);box-shadow:none;border-radius:0}
 
-@media(prefers-reduced-motion:reduce){.card:hover .cardImg,.promoCta:hover{transform:none}}
+@media(prefers-reduced-motion:reduce){.motionFull .card:hover .cardImg,.promoCta:hover{transform:none}}
