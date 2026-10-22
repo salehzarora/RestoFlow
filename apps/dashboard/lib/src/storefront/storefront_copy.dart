@@ -119,6 +119,16 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
     'add': ['Add', 'إضافة', 'הוספה'],
     'remove': ['Remove', 'إزالة', 'הסרה'],
     'promo': ['Promo', 'العرض الترويجي', 'קידום'],
+    'promoItemCandidates': [
+      'Candidates have a saved source image. Save verifies an eligible available product and its currently published image.',
+      'الخيارات لها صورة أصلية محفوظة. يتحقق الحفظ من أهلية المنتج وتوفره وصورته المنشورة الحالية.',
+      'למועמדים יש תמונת מקור שמורה. השמירה מאמתת מוצר זמין ומתאים ואת תמונתו המפורסמת הנוכחית.',
+    ],
+    'targetInvalid': [
+      'The selected relation is not eligible. A product promo needs an available product with its current image published; review the selection before saving.',
+      'الارتباط المحدد غير مؤهل. عرض المنتج يحتاج منتجًا متوفرًا وصورته الحالية منشورة؛ راجع الاختيار قبل الحفظ.',
+      'הקשר שנבחר אינו מתאים. קידום מוצר דורש מוצר זמין שתמונתו הנוכחית מפורסמת; יש לבדוק את הבחירה לפני שמירה.',
+    ],
     'story': ['Story', 'قصة المطعم', 'סיפור'],
     'enabled': ['Enabled', 'مفعّل', 'פעיל'],
     'kicker': ['Kicker', 'عنوان تمهيدي', 'כותרת מקדימה'],

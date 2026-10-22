@@ -490,16 +490,18 @@ class _ContentState extends State<StorefrontContentSection> {
                       .toList(),
                 ),
               )
-            else
+            else ...[
               _select(
                 'promo.target.item_id',
                 'item',
                 _options(
                   (_catalog?.items ?? [])
-                      .where((x) => x.available && x.hasImage)
+                      .where((x) => x.available && x.hasSourceImage)
                       .toList(),
                 ),
               ),
+              Text(c('promoItemCandidates')),
+            ],
           ],
           _text('$kind.kicker', 'kicker'),
           _text('$kind.title', 'moduleTitle'),
@@ -742,7 +744,9 @@ class _ContentState extends State<StorefrontContentSection> {
         setState(() => _message = 'missing');
       case StorefrontContentWriteStatus.invalid:
         setState(() {
-          _message = 'invalid';
+          _message = result.reason == 'target_invalid'
+              ? 'targetInvalid'
+              : 'invalid';
           _invalidField = _fieldLabel(result.field);
         });
       case StorefrontContentWriteStatus.unavailable:

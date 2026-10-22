@@ -117,7 +117,8 @@ class DashboardStorefrontFeaturedCatalog
               name: item.name,
               categoryId: item.menuCategoryId.toLowerCase(),
               available: item.availability != 'unavailable',
-              hasImage: item.imagePath != null && item.imagePath!.isNotEmpty,
+              hasSourceImage:
+                  item.imagePath != null && item.imagePath!.isNotEmpty,
             ),
           ),
         ),

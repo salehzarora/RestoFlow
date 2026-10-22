@@ -21,6 +21,7 @@ class ContentRepo implements StorefrontContentRepository {
   final calls = <StorefrontContentAttempt>[];
   var status = StorefrontContentWriteStatus.ok;
   var readStatus = StorefrontContentReadStatus.ok;
+  String? invalidReason, invalidField;
   final warnings = <StorefrontContentWarning>[];
   @override
   Future<StorefrontContentRead> readContent() async => StorefrontContentRead(
@@ -58,7 +59,13 @@ class ContentRepo implements StorefrontContentRepository {
       doc = attempt.document;
       version++;
     }
-    return StorefrontContentWrite(status, attempt: attempt, version: version);
+    return StorefrontContentWrite(
+      status,
+      attempt: attempt,
+      version: version,
+      reason: invalidReason,
+      field: invalidField,
+    );
   }
 }
 
@@ -76,7 +83,7 @@ class ContentCatalog implements StorefrontContentCatalog {
           id: item,
           name: 'Stored item',
           categoryId: category,
-          hasImage: true,
+          hasSourceImage: true,
         ),
       ],
     );
@@ -182,6 +189,56 @@ Future<void> edit(WidgetTester tester, String key, String text) async {
 }
 
 void main() {
+  for (final locale in ['en', 'ar', 'he']) {
+    testWidgets('promo source candidates are not claimed published in $locale', (
+      tester,
+    ) async {
+      final repo = ContentRepo();
+      final doc = repo.doc.editableCopy();
+      doc['promo'] = {
+        'kicker': 'Merchant kicker',
+        'title': 'Merchant promo',
+        'body': 'Merchant body',
+        'target': {'kind': 'item', 'item_id': item},
+      };
+      repo.doc = StorefrontContentDocument.fromJson(doc);
+      await mount(tester, repo, locale: locale);
+      final expected = switch (locale) {
+        'ar' =>
+          'الخيارات لها صورة أصلية محفوظة. يتحقق الحفظ من أهلية المنتج وتوفره وصورته المنشورة الحالية.',
+        'he' =>
+          'למועמדים יש תמונת מקור שמורה. השמירה מאמתת מוצר זמין ומתאים ואת תמונתו המפורסמת הנוכחית.',
+        _ =>
+          'Candidates have a saved source image. Save verifies an eligible available product and its currently published image.',
+      };
+      expect(find.text(expected), findsOneWidget);
+      expect(repo.calls, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('target refusal explains eligibility without inventing a cause', (
+    tester,
+  ) async {
+    final repo = ContentRepo()
+      ..status = StorefrontContentWriteStatus.invalid
+      ..invalidReason = 'target_invalid'
+      ..invalidField = 'promo.target';
+    await mount(tester, repo);
+    await edit(tester, 'content-hero-headline', 'Edited headline');
+    tester
+        .widget<FilledButton>(find.byKey(const Key('content-save')))
+        .onPressed!();
+    await tester.pumpAndSettle();
+    expect(repo.calls.length, 1);
+    expect(
+      find.text(
+        'The selected relation is not eligible. A product promo needs an available product with its current image published; review the selection before saving.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('content-retry-save')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('a retained save callback cannot act after scope disposal', (
     tester,
   ) async {

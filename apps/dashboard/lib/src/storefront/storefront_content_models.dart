@@ -391,11 +391,14 @@ class StorefrontContentChoice {
     required this.name,
     this.categoryId,
     this.available = true,
-    this.hasImage = false,
+    this.hasSourceImage = false,
   });
   final String id, name;
   final String? categoryId;
-  final bool available, hasImage;
+
+  /// Candidate-source hint only. The existing management reads do not prove
+  /// that the current w480 derivative is published; the save RPC validates it.
+  final bool available, hasSourceImage;
 }
 
 class StorefrontContentCatalogData {
