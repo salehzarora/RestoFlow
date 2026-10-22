@@ -75,7 +75,8 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
   useLayoutEffect(() => {
     if (categoryTarget === null) return;
     const heading = document.getElementById(`sf-cat-title-${categoryTarget}`);
-    if (heading) { heading.scrollIntoView({ block: 'start', behavior: 'auto' }); heading.focus({ preventScroll: true }); }
+    const section = document.getElementById(`sf-cat-${categoryTarget}`);
+    if (section && heading) { section.scrollIntoView({ block: 'start', behavior: 'auto' }); heading.focus({ preventScroll: true }); }
     setCategoryTarget(null);
   }, [categoryTarget, activeCategory]);
   useEffect(() => {

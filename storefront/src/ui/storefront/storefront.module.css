@@ -134,5 +134,4 @@
 .cutout.cutout{background:none;box-shadow:none}
 .cutoutGrid{--sf-columns:4}
 .heroProduct{position:absolute;inset-inline:0;inset-block-end:0;background:var(--bg);padding:12px;border-radius:7px}
-.categoryHeading{scroll-margin-block-start:calc(var(--header-height) + 18px)}
 .categoryImage{width:24px;height:24px;object-fit:cover;border-radius:50%}

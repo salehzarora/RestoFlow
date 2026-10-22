@@ -38,7 +38,7 @@ export function PopularSection({ items, m }: { items: readonly MenuItem[]; m: St
 export function MenuSection({ category, items, cardMode, m }: { category: Category; items: readonly MenuItem[]; cardMode: CardMode; m: StorefrontMessages }) {
   if (items.length === 0) return null;
   return <section className={styles.section} id={`sf-cat-${category.id}`} aria-labelledby={`sf-cat-title-${category.id}`} data-sf-module="sections">
-    <div className={styles.sectionHead}><h3 id={`sf-cat-title-${category.id}`} tabIndex={-1} className={contentStyles.categoryHeading}><TenantText>{category.heading ?? category.name}</TenantText></h3>{category.blurb ? <p className={styles.sectionBlurb}><TenantText>{category.blurb}</TenantText></p> : null}<span>{items.length === 1 ? m.item : fill(m.items, {n:String(items.length)})}</span></div>
+    <div className={styles.sectionHead}><h3 id={`sf-cat-title-${category.id}`} tabIndex={-1}><TenantText>{category.heading ?? category.name}</TenantText></h3>{category.blurb ? <p className={styles.sectionBlurb}><TenantText>{category.blurb}</TenantText></p> : null}<span>{items.length === 1 ? m.item : fill(m.items, {n:String(items.length)})}</span></div>
     <div className={`${cardMode === 'grid' ? styles.gridWrap : styles.listWrap} ${sectionGridClass(sectionLayout(cardMode, items, category), contentStyles.cutoutGrid)}`} data-sf-layout={sectionLayout(cardMode, items, category)}>{items.map(item => cardMode === 'grid' ? <GridCard key={item.id} item={item} m={m} /> : <ListRow key={item.id} item={item} m={m} />)}</div>
   </section>;
 }
