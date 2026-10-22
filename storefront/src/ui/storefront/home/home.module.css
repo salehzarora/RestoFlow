@@ -209,8 +209,8 @@
 .hero{grid-template-columns:1.12fr 1fr;gap:0 10px;padding:23px 0 25px;min-height:0}
 .heroCopy{display:contents}.hero .eyebrow{grid-column:1/-1;grid-row:1;margin-block-end:9px;font-size:9px}.littlePin{width:21px;height:21px}
 .heroTitle{grid-column:1;grid-row:2;font-size:48px;line-height:1.22;letter-spacing:-2px;margin:12px 0 18px;align-self:center}
-.heroSub{grid-column:1/-1;grid-row:3;margin-block-start:15px;max-width:100%;font-size:11px;line-height:1.9}
-.heroActions{grid-column:1/-1;grid-row:4;margin-block-start:18px;justify-content:space-between}
+.heroSub{grid-column:1/-1;margin-block-start:15px;max-width:100%;font-size:11px;line-height:1.9}
+.heroActions{grid-column:1/-1;margin-block-start:18px;justify-content:space-between}
 .heroActions .promoCta{min-width:158px;justify-content:space-between;min-height:44px;font-size:11px;padding:11px 17px;gap:14px}
 .heroVisual{grid-column:2;grid-row:2;width:100%;height:238px;margin:0;max-width:none}
 .heroMedia{width:157px;height:220px;inset-inline-end:0;inset-block-start:8px;border-radius:85px 85px 7px 7px;transform:rotate(-5deg)}
