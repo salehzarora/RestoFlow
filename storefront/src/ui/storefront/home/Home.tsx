@@ -7,7 +7,7 @@ import { cartPath, checkoutPath } from '@/routes/routes';
 import type { StorefrontResolution } from '@/source/types';
 import { ThemeScope } from '../ThemeScope';
 import { LanguageMenu } from '../LanguageMenu';
-import { CampaignHero, EmptyMenu, OrderingOffNotice, PromoBanner, ServiceStatusStrip, SiteFooter, StateNotice, StoryCard } from './HomeParts';
+import { EmptyMenu, OrderingOffNotice, PromoBanner, ServiceStatusStrip, SiteFooter, StateNotice, StoryCard } from './HomeParts';
 import { AsideSlot, DockSlot } from '../cart/CartRuntime';
 import { HomeChrome } from './HomeChrome';
 import { StorefrontRuntime } from '../StorefrontRuntime';
@@ -29,7 +29,7 @@ export function Home({ resolution, locale, slug, hrefFor }: {
         <main className={styles.page}>
           <HomeChrome key={slug} tenant={tenant} locale={locale} slug={slug} language={<LanguageMenu locale={locale} hrefFor={hrefFor} />} categories={categories} items={items} cardMode={cardMode}
             announcement={modules.announcement === null || tenant.service.state !== 'open' ? null : modules.announcement.text}
-            hero={<CampaignHero tenant={tenant} m={m} title={modules.campaign.title} subline={modules.campaign.subline} />}
+            heroTitle={modules.campaign.title} heroSubline={modules.campaign.subline}
             service={<ServiceStatusStrip tenant={tenant} m={m} />}
             notice={<>{tenant.service.orderingEnabled ? null : <OrderingOffNotice m={m} />}{tenant.service.state === 'open' ? null : <StateNotice state={tenant.service.state} tenant={tenant} m={m} />}</>}
             empty={items.length === 0 ? <EmptyMenu tenant={tenant} m={m} /> : null}

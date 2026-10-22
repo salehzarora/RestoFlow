@@ -2,6 +2,13 @@
 
 Local implementation and review record. No push, PR, merge, deployment or production operation is authorized by this task.
 
+## Follow-up status
+
+Owner status: **LOCAL_FOUNDATION_REVIEWED — VISUAL_AND_CONTENT_COMPLETION_PENDING**. Follow-up local review has an explicit **CSS_BUDGET_BLOCKER**; it is not ready for merge or deployment.
+Preserve foundation commit `039a318404f1ed3b4d0c6655db9a0b9bad33f9d6` unchanged. This local follow-up continues the same Work ID; local tests and independent source approval do not constitute final visual/content acceptance. No push, PR, merge or deployment is authorized.
+
+The section headed “Preserved foundation evidence” records the earlier006/003/003 lanes and their historical results. Its words “final” and “latest” refer to that foundation only. Fresh follow-up evidence is recorded separately below and in the new SHA-bound external receipt. Prior runs, images and reports remain untouched.
+
 ## Source and concurrency
 
 - Branch: `feat/BIZBOT-STOREFRONT-DESIGN-INTEGRATION-001-approved-design`.
@@ -22,7 +29,7 @@ The initial read-only preflight inspected 161 registered worktrees: 81 accessibl
 | Printing #314 | `54346b37b35679c21248a64e40dcb3b0ca894673` | No overlap or changes. |
 | Printing #315 | `4e8c81f6bd7249f3a44d1089c6253ad84df7f413` | No overlap or changes. |
 
-The dirty instant-wake worktree has an Edge-file overlap with ETA, outside this task. Payment and ETA worktrees were clean when inspected. No inaccessible tree is claimed conflict-free. Full metadata and exact reserved-path inventory are preserved under `preflight-001/`.
+The dirty instant-wake worktree has an Edge-file overlap with ETA, outside this task. Payment and ETA worktrees were clean when inspected. No inaccessible tree is claimed conflict-free. Full original metadata is preserved under `preflight-001/`. A bounded follow-up read-only refresh under `followup-001/preflight/` fetched remote main, checked the five named workstream heads and their accessible status, and retained82 reserved paths. Main remained `fe78bbcd4de5befb91c09bd9161380f151fc7c6b`; the five heads above were unchanged. No intended follow-up path overlaps those reservations. Absent/prunable printer aliases remain UNVERIFIED, rather than being declared conflict-free.
 
 ## Implementation scope
 
@@ -74,7 +81,7 @@ These are **not completed** and are not filled with static React/JSON production
 
 These gaps need a small separate Work ID/contract/review for the affected writer/projection fields, not an unrelated payment/POS change. Do not claim that a preview fixture proves Dashboard controls exist for these fields.
 
-## Visual evidence and verification
+## Preserved foundation evidence — commit039a3184
 
 Reference/candidate use the same explicit public reference content, local fonts, selections, viewport, scroll and reduced-motion state. Candidate components/cart/product authority are unchanged by the harness; only copied fixture data/assets are replaced outside Git. AR/HE/EN, another tenant, dark/list and checkout/status are **derived extensions**, not invented reference screenshots.
 
@@ -135,6 +142,86 @@ All earlier failures remain preserved. In visual002, 31 cases passed and one syn
 Security, money, privacy, decoder and authentication boundaries were not relaxed. The earlier incident-prone mock harness was not reused. Its production connectivity remains **UNKNOWN**, unchanged. The new fence is trusted-source loopback/process containment plus Chromium request/WebSocket denial, **not** an OS sandbox or proof of arbitrary browser background traffic.
 
 No hosted operational readback is claimed from this local task. No production order, call, payment, print, secret/configuration mutation, migration, deployment, APK operation, registration, notification/Cron operation or protected-print replay occurred.
+
+## Owner follow-up001 — display completion, local only
+
+This follow-up changes only Home presentation, its existing locale dictionaries, focused tests, one pure suggestion helper and this task record. The shared data/ordering/API/SQL/payment/ETA/private-status/POS/printing paths remain untouched. The final local commit and source-byte hashes are recorded externally after commit; this document does not invent a self-referential SHA.
+
+| Difference | Classification | Actual treatment / remaining limit |
+| --- | --- | --- |
+| “محتار؟ اختارلي!” | Fixed | Uses only the currently served, available items in the selected category; Kitchen Picks uses the existing manager-selected available subset. Search does not change category authority. No cross-category fallback, names/UUID inference or sales claim. Native pointer/Enter/Space opens the existing ProductSheet; no automatic add or submission. Empty pool disables the control with a localized explanation. Existing Runtime still owns validation, history, modifiers and focus. |
+| Hero underline | Fixed | Reference double-curve SVG applied only to the final explicit headline line; saved text/line order is retained. Long text may wrap normally. No guessed split of a one-line merchant headline. |
+| Header / identity / menu / search | Fixed, with intentional adaptation | Spacing, reference section/search wording and generic welcome are localized in AR/HE/EN. Full merchant logo, stored name/accessibility label, language access and service truth remain; no Maps-specific alias or crop. The generic translated welcome is UI copy, not a merchant claim. |
+| Announcement rhythm | Fixed, with intentional adaptation | Symmetric decorative separators, spacing and alignment around one escaped, complete `announcement_text`; existing service visibility and slug-session dismissal remain. Mobile text stays12px and grows/wraps instead of copying the reference’s10px fragments or splitting free merchant copy. Newline fixtures test defensive rendering only; existing Dashboard control-character restrictions are unchanged. |
+| Contrast / responsive behavior | Intentional functional adaptation | Keep derived readable CTA ink and tenant contrast floors, full logo and44px language access. Do not restore inaccessible white-on-orange merely for pixel similarity. Narrow layouts may wrap actions and merchant text. |
+| Hero product name / price / link | Needs data contract | No inferred relation to the Hero photo. Proposed same-tenant/branch, same-public-snapshot product relation; canonical item data and existing ProductSheet supply facts/actions. |
+| Drink / whole-image presentation | Needs data contract | No name/language/icon/UUID guessing. Current general photo crop remains; explicit per-item fit/category presentation is proposed. Existing missing-image behavior remains. This is a visible reference gap, not completed fidelity. |
+| Merchant stamps / photo footnotes / promo / story / category content | Needs data contract; retained under#360 | Optional bounded merchant copy/media and complete nullable modules are proposed; no fabricated claims, offers, prices or reference copy. |
+| Real private order tracking | Coordinated follow-up#366 | `LiveRequestRuntime.tsx` and its CSS/ETA contracts are unchanged in this round. Fixture status extensions do not establish private live-status compatibility. Coordinate semantic layout after#366. |
+
+### Minimum content contract proposal — not implemented
+
+The complete field-by-field review table is preserved outside Git at:
+`C:/Users/saleh/.codex/local-config/BIZBOT-STOREFRONT-DESIGN-INTEGRATION-001/followup-001/content-proposal/CONTENT_COMPLETION_PROPOSAL_R2.md`
+SHA-256: `9c7c9a6db8117860c49e940395de48909bd2a8f3af39804809112537769e8dc7`. V1 remains preserved unchanged at SHA-256 `4d448a93629b119e23540e0b655245ae06de6f4f7d4429fbbb3908d74cc0dd69`; R2 adds only an optional merchant section heading to the category proposal, retaining the canonical rail/catalogue name.
+Its evidence map pins18 foundation source files. It is included in the attachable review bundle.
+
+| Proposed minimum addition | Existing authority retained | Compatible null/default and safety |
+| --- | --- | --- |
+| Optional Hero product selector | Existing `hero_media_id`, Home copy and public catalogue | Null keeps current editorial Hero; same served snapshot supplies name/price/from/options/link. Deleted/unpublished/foreign/branch-ineligible product yields no relation or stale private ID. Missing product photo uses honest no-photo handling. |
+| Explicit item image fit + category photo/cutout presentation | Published item images, canonical category/name/order and current photo layout | Inherit/photo preserves current layout; whole-image means contain/center without cover zoom. No classifiers derived from names. Missing images preserve fallback. |
+| Optional merchant eyebrow≤60, stamp≤80, photo footnote≤120 | Existing merchant Home copy; generic UI labels remain translations | Blank→null, escaped plain text, manager+ covering scope, no generated claim. Null omits decorations or keeps generic welcome. |
+| Category image/optional section heading≤80/blurb≤120; complete optional promo/story modules | Current null adapter slots and current owned published-media pipeline | Disabled/null remains current behavior; bounded copy, explicit media ownership/lifecycle, no independent discount price or implicit publication. |
+
+All proposed writes require authenticated covering restaurant-manager authority, branch scope, validation/CAS/audit and public same-snapshot filtering. Public defaults must preserve existing profiles. A separately reviewed Work ID/contract is required for schema/RPC/API/shared-type changes, versioned projection alongside strict v3 readers, Dashboard controls and compatible rollout. No such implementation is included here. The full proposal details null/empty, missing/retracted image, deleted/unpublished/sold-out item, branch changes, price/options and tenant isolation.
+
+### Fresh verification and evidence binding
+
+The external follow-up receipt binds these completed local runs and images to the new local HEAD, preserved foundation039a3184 and basefe78bbcd. It does not grant owner visual approval. All50 current browser cases pass (32 preserved+18 new), zero skip/unexpected/flaky, build `bLeJYl7rAVl6mkECoSUCP`, clean owned-process cleanup. Native pointer/Enter/Space, repeat suppression, required modifiers, empty/sold-out pools, category/picks/search independence, Back/Forward, no automatic cart additions, one history entry, focus return and complete long/multiline announcement rendering/dismissal are covered.
+
+Fresh System.Drawing composition created65 unscaled side-by-side pairs (reference left, implementation right), with159 original PNGs and29 separately classified local interaction/headline/announcement images. These record real local renders, not pixel equality or live customer behavior.
+
+- [390px Home](C:/Users/saleh/.codex/local-config/BIZBOT-STOREFRONT-DESIGN-INTEGRATION-001/visual-review-final-004/compare-390-home-viewport.png) and [1440px Home](C:/Users/saleh/.codex/local-config/BIZBOT-STOREFRONT-DESIGN-INTEGRATION-001/visual-review-final-004/compare-1440-home-viewport.png).
+- [390px product](C:/Users/saleh/.codex/local-config/BIZBOT-STOREFRONT-DESIGN-INTEGRATION-001/visual-review-final-004/compare-390-product-base-choices.png) and [1440px product](C:/Users/saleh/.codex/local-config/BIZBOT-STOREFRONT-DESIGN-INTEGRATION-001/visual-review-final-004/compare-1440-product-base-choices.png).
+- [390px cart](C:/Users/saleh/.codex/local-config/BIZBOT-STOREFRONT-DESIGN-INTEGRATION-001/visual-review-final-004/compare-390-cart-filled.png) and [1440px cart](C:/Users/saleh/.codex/local-config/BIZBOT-STOREFRONT-DESIGN-INTEGRATION-001/visual-review-final-004/compare-1440-cart-filled.png).
+- [390px drinks](C:/Users/saleh/.codex/local-config/BIZBOT-STOREFRONT-DESIGN-INTEGRATION-001/visual-review-final-004/compare-390-drinks-menu.png) and [1440px drinks](C:/Users/saleh/.codex/local-config/BIZBOT-STOREFRONT-DESIGN-INTEGRATION-001/visual-review-final-004/compare-1440-drinks-menu.png): remaining explicit presentation/content-contract differences.
+- [All65 pairs and hashes](C:/Users/saleh/.codex/local-config/BIZBOT-STOREFRONT-DESIGN-INTEGRATION-001/visual-review-final-004/inventory.json).
+
+The fresh system-extension lane passes137/137 synthetic cases, zero skip/unexpected/flaky and clean owned-process cleanup, build `cRwlm-9Jo8gm9oJrr_1en`. It covers AR/HE/EN, widths320/390/1440, light/dark/grid/list/service/content states, isolated tenantB, Intro/session/deep links/language, fixture Checkout→Review without Send and fixture status/cancellation. These are intentional derived-system extensions with no matching reference for most states. They are not private live-order or Dashboard save→public-projection proof.
+
+Post-run independent checks retain all203 worktree source pins. The visual copy has exactly four reviewed fixture-generator replacements (199 other pins unchanged); the extension copy changes only `src/source/scenarios.ts` (202 other pins unchanged) and adds five reviewed synthetic SVGs. These copied fixture changes do not enter Git. The exact post-run inventory and generator hashes are preserved with the independent review.
+
+Root viewed the8 representative Home/product/cart/drinks pairs, long/empty suggestion states and independent-tenant/English narrow extensions. Visible residuals remain: drinks still use the generic three-column/cover mode rather than reference four-column/whole-image; category headings remain canonical, Hero product/price/stamp/caption relations are absent, whole merchant announcement wraps rather than becoming fabricated fragments, full logo/language access and readable CTA ink differ from the reference. Product/cart keep real production validation/controls instead of preview-only commerce/copy. Long header names retain the bounded two-line visual treatment and full accessible source label; full logo imagery is contained, not cropped. No final visual approval is claimed.
+
+| Fresh follow-up check | Actual result | Evidence |
+| --- | --- | --- |
+| Storefront unit/contract/source tests |392/392 PASS | `followup-001/unit-007.log` |
+| Default Next/Turbopack build, TypeScript, actual loopback snapshot,203 source/8 gate pins | PASS | `ci-harness-011/evidence/summary.json` |
+| Canonical output/budget tests | **25/28; FAIL,61B over compressed CSS limit** | `ci-harness-011/evidence/output-tests-summary.json` + `measure-firstload.json` |
+| Reference/behavior browser tests |50/50 PASS | `visual-final-004/evidence/results.json` + `summary.json` |
+| Unscaled reference comparisons |65 pairs;159 original PNGs | `visual-review-final-004/inventory.json` |
+| Derived-system browser extensions |137/137 PASS | `extension-harness-004/evidence/results.json` + `summary.json` |
+| Remote CI, provider live/missing-source build, hosted/CDN, merchant save/display and physical acceptance | NOT RUN / UNVERIFIED | No push/deployment/production authority |
+
+Earlier deployment-filter/money/guard results in the foundation section remain historical; this follow-up does not relabel them as new Linux CI. No deployment filter, dependency, ordering/money/phone/ETA/POS/print source changed. New exact scope/whitespace/secret evidence is recorded in the external receipt.
+
+CSS reuses same-file local `flexRow` across23 base classes and `gridCenter` across11, with10 exact same-file aliases (44 compositions total). Late header/language/Hero rules are grouped with their components; equivalent650px overrides are grouped without changing their precedence. Local LTR remains unchanged; no checkout-CSS dependency or shared utility was added. Later responsive and alignment overrides retain their order. [CSS Modules composition contract](https://github.com/css-modules/css-modules/blob/master/docs/composition.md) requires leading declarations and local single-class selectors and exports both class names. This avoids repeating long generated selector lists; it does not delete functional styling. Compiled output, budget and fresh rendered proof are required separately.
+
+Actual follow-up canonical measurements remain preserved:
+
+| Lane | Default build / TypeScript / snapshot / pins | Output tests | Worst route Brotli | Overall |
+| --- | --- | --- | --- | --- |
+|007 | PASS |25/28 |14,093B | FAIL, CSS budget |
+|008 | PASS |25/28 |14,133B | FAIL, CSS budget |
+|009 | PASS |25/28 |14,079B | FAIL, CSS budget |
+|010 | PASS |25/28 |14,065B | FAIL, CSS budget |
+|011, final current source | PASS |25/28 |**14,061B /14,000B** | **FAIL:61B over limit** |
+
+Canonical011 measured36 routes and37 actual local HTML/RSC documents on203 source pins and8 gate inputs. Maximum raw CSS is93,860B (HE93,858B), within the unchanged100,000B pre-existing raw exception. Three failed output tests report the same compressed-CSS gate through its budget/audit assertions; they are not three hidden functional failures. All failures remain failures. No new exception, increased budget, guard deletion, alternate compiler or automatic success waiver was used. The actual44 compiled compositions and helper/mobile order were independently checked.
+
+The392 current Storefront unit/contract/source tests pass (`followup-001/unit-007.log`). The browser visual and extension lanes are separate local evidence and cannot change the canonical FAIL. They may complete to make the requested display review possible; no “CI PASS”, merge readiness, final visual acceptance or live behavior is inferred. Further CSS work must preserve these functional styles and pass the actual canonical gate before a later push/release proposal.
+
+A read-only scan found no unused Home CSS class to delete. Proposed cross-file helpers, extra row compositions and unused fallback cleanup were not implemented merely to force a number; candidate estimates remain non-authoritative and preserved outside Git. No unrelated CSS, data contract or functional style was removed.
 
 ## Resume ledger
 

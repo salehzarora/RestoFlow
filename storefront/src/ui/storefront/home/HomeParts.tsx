@@ -2,6 +2,7 @@
  * Home modules that render from data alone — no interactivity of their own.
  * All are SERVER components; only the chrome that needs scroll is a client one.
  */
+import type { ReactNode } from 'react';
 import { type Locale } from '@/i18n/locales';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
@@ -25,19 +26,19 @@ export function Price({ minor, from }: { minor: number; from?: string }) {
 }
 
 /** Hero media always comes from the published tenant hero; no inferred product relation. */
-export function CampaignHero({ tenant, m, title, subline, eyebrow, ctaHref, ctaLabel }: {
+export function CampaignHero({ tenant, m, title, subline, eyebrow, ctaHref, ctaLabel, suggestion }: {
   tenant: Tenant; m: StorefrontMessages; title: string; subline: string;
   /** Intro is a derived composition; Home keeps its existing in-page action. */
-  eyebrow?: string; ctaHref?: string; ctaLabel?: string;
+  eyebrow?: string; ctaHref?: string; ctaLabel?: string; suggestion?: ReactNode;
 }) {
   const headlineLines = title.split('\n');
   const eyebrowText = eyebrow ?? tenant.city;
   return <section className={`${styles.inner} ${styles.hero}`} data-sf-module="hero" aria-labelledby="sf-hero-title">
     <div className={styles.heroCopy}>
       {eyebrowText ? <p className={styles.eyebrow}><span className={styles.littlePin} aria-hidden="true">⌖</span><TenantText>{eyebrowText}</TenantText></p> : null}
-      <h1 className={styles.heroTitle} id="sf-hero-title"><span dir="auto">{headlineLines.map((line, index) => <span className={headlineLines.length > 1 && index === headlineLines.length - 1 ? styles.heroWord : undefined} key={index}>{line}{index < headlineLines.length - 1 ? <br /> : null}</span>)}</span></h1>
+      <h1 className={styles.heroTitle} id="sf-hero-title"><span dir="auto">{headlineLines.map((line, index) => <span className={headlineLines.length > 1 && index === headlineLines.length - 1 ? styles.heroWord : undefined} key={index}>{line}{headlineLines.length > 1 && index === headlineLines.length - 1 ? <svg viewBox="0 0 320 22" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M3 12C95-3 188 0 312 7M70 20c95-10 155-9 218-7" /></svg> : null}{index < headlineLines.length - 1 ? <br /> : null}</span>)}</span></h1>
       {subline === '' ? null : <p className={styles.heroSub}><span dir="auto">{subline}</span></p>}
-      <div className={styles.heroActions}><a className={styles.promoCta} href={ctaHref ?? '#sf-menu'}>{ctaLabel ?? m.discoverMenu}<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6" /></svg></a></div>
+      <div className={styles.heroActions}><a className={styles.promoCta} href={ctaHref ?? '#sf-menu'}>{ctaLabel ?? m.discoverMenu}<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6" /></svg></a>{suggestion}</div>
     </div>
     <div className={styles.heroVisual}>
       <div className={styles.heroGhost} aria-hidden="true"><TenantText>{tenant.displayName}</TenantText></div>

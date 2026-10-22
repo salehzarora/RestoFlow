@@ -24,6 +24,63 @@ const { anchorOrder, CHROME_ANCHORS, PAGE_ANCHORS, LOCKED_MODULE_ORDER } = await
   '../scripts/module-order.mjs'
 );
 const { CATEGORIES, MENU_ITEMS, TAX_RATE_BP } = await import('../src/source/menu-fixture.ts');
+const { suggestionPool, chooseSuggestion } = await import('../src/ui/storefront/home/suggestions.ts');
+
+test('suggestions use only available canonical items in the selected category, without cross-category fallback', () => {
+  const a = { ...MENU_ITEMS[0], id: 'synthetic-a', categoryId: 'scope-a', soldOut: false, featured: false };
+  const sold = { ...a, id: 'synthetic-sold', soldOut: true, featured: true };
+  const b = { ...a, id: 'synthetic-b', categoryId: 'scope-b', featured: true };
+  assert.deepEqual(suggestionPool([a, sold, b], 'scope-a', false), [a]);
+  assert.deepEqual(suggestionPool([a, sold, b], 'absent', false), []);
+  assert.deepEqual(suggestionPool([], 'scope-a', false), []);
+  assert.deepEqual(suggestionPool([sold], 'scope-a', false), []);
+});
+
+test('manager-pick suggestions use the explicit featured flag, not name, tag, category or sales inference', () => {
+  const base = { ...MENU_ITEMS[0], soldOut: false, categoryId: 'unrelated' };
+  const featured = { ...base, id: 'selected', featured: true, name: 'arbitrary name' };
+  const tagOnly = { ...base, id: 'unselected', featured: false, signature: true, badge: 'new', name: 'Best Burger' };
+  const sold = { ...featured, id: 'sold', soldOut: true };
+  assert.deepEqual(suggestionPool([tagOnly, sold, featured], 'other', true), [featured]);
+});
+
+test('suggestion sampling selects current pool entries only and fails closed on empty or invalid samples', () => {
+  const pool = MENU_ITEMS.slice(0, 3);
+  for (const [sample, index] of [[0, 0], [1 / 3, 1], [2 / 3, 2], [0.999999, 2]]) {
+    assert.equal(chooseSuggestion(pool, sample), pool[index]);
+  }
+  for (const sample of [NaN, Infinity, -0.1, 1, 2]) assert.equal(chooseSuggestion(pool, sample), null);
+  assert.equal(chooseSuggestion([], 0), null);
+  assert.equal(pool.length, 3);
+});
+
+test('suggestion is a native capture trigger for the existing product opener, never cart or order authority', () => {
+  const chrome = code('src/ui/storefront/home/HomeChrome.tsx');
+  const preparation = chrome.slice(chrome.indexOf('const prepareSuggestion'), chrome.indexOf('const hero ='));
+  assert.ok(preparation.indexOf('delete button.dataset.sfItem') < preparation.indexOf('chooseSuggestion'));
+  assert.ok(preparation.indexOf('delete button.dataset.sfLine') < preparation.indexOf('chooseSuggestion'));
+  assert.match(preparation, /if \(button\.disabled\) return/);
+  assert.match(preparation, /button\.dataset\.sfItem = item\.id/);
+  assert.match(preparation, /button\.focus\(\{ preventScroll: true \}\)/);
+  assert.doesNotMatch(preparation, /\.add\(|\.submit\(|fetch\(|pushState|setTimeout|await|stopPropagation/);
+  assert.match(chrome, /onClickCapture=\{e => prepareSuggestion\(e\.currentTarget\)\}/);
+  assert.match(chrome, /if \(e\.key !== 'Enter' && e\.key !== ' '\) return/);
+  assert.match(chrome, /if \(e\.repeat\)/);
+  assert.match(chrome, /disabled=\{candidates\.length === 0\}/);
+  for (const locale of ['ar', 'he', 'en']) {
+    assert.ok(storefrontMessages(locale).suggestItem);
+    assert.ok(storefrontMessages(locale).suggestionEmpty);
+  }
+});
+
+test('announcement keeps one complete tenant run and decorative separators without parsing or ellipsis', () => {
+  const chrome = read('src/ui/storefront/home/HomeChrome.tsx');
+  assert.equal((chrome.match(/<TenantText>\{announcement\}<\/TenantText>/g) ?? []).length, 1);
+  assert.doesNotMatch(chrome, /announcement\.(split|replace|slice|substring)/);
+  const css = read('src/ui/storefront/home/home.module.css');
+  assert.match(css, /\.announce>span\[dir\]\{[^}]*white-space:pre-wrap[^}]*overflow-wrap:anywhere/);
+  assert.doesNotMatch(css, /\.announce[^}]*text-overflow:ellipsis/);
+});
 
 const tenant = fixtureSource.getTenant('maps-burger');
 const homeSource = read('src/ui/storefront/home/Home.tsx');

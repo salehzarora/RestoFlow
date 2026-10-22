@@ -12,17 +12,18 @@ import { TenantText } from '../TenantText';
 
 import { RestaurantContact } from '../RestaurantContact';
 import { useCartApi } from '../cart/CartContext';
-import { BrandLockup } from './HomeParts';
+import { BrandLockup, CampaignHero } from './HomeParts';
 import { MenuSection, GridCard, ListRow } from './MenuParts';
+import { chooseSuggestion, suggestionPool } from './suggestions';
 function NoResultsTitle({ template, query }: { template: string; query: string }) { const at = template.indexOf('{q}'); return at < 0 ? <>{template}</> : <>{template.slice(0, at)}<bdi>{query}</bdi>{template.slice(at + 3)}</>; }
 function CategoryIcon({ path }: { path: string }) { return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={path} /></svg>; }
 import styles from './home.module.css';
 
 /** Presentation state only. Product/cart/order authority stays in StorefrontRuntime. */
-export function HomeChrome({ tenant, locale, slug, language, categories, items, cardMode, announcement, hero, service, notice, empty, cart }: {
+export function HomeChrome({ tenant, locale, slug, language, categories, items, cardMode, announcement, heroTitle, heroSubline, service, notice, empty, cart }: {
   tenant: Tenant; locale: Locale; slug: string; language: ReactNode;
   categories: readonly Category[]; items: readonly MenuItem[]; cardMode: CardMode;
-  announcement: string | null; hero: ReactNode; service: ReactNode; notice: ReactNode; empty: ReactNode; cart: ReactNode;
+  announcement: string | null; heroTitle: string; heroSubline: string; service: ReactNode; notice: ReactNode; empty: ReactNode; cart: ReactNode;
 }) {
   const m = storefrontMessages(locale);
   const [active, setActive] = useState(categories[0]?.id ?? '');
@@ -62,6 +63,27 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
   const activeCategory = categories.some(c => c.id === active) ? active : categories[0]?.id ?? '';
   const shown = query.trim() ? searchItems(items, query) : picks ? items.filter(i => i.featured && !i.soldOut) : items.filter(i => i.categoryId === activeCategory);
   const selected = categories.find(c => c.id === activeCategory);
+  const candidates = suggestionPool(items, activeCategory, picks);
+  // Capture runs synchronously before the unchanged document-level opener.
+  // It owns URL/history, item validation, modifiers and focus restoration.
+  const prepareSuggestion = (button: HTMLButtonElement) => {
+    delete button.dataset.sfItem;
+    delete button.dataset.sfLine;
+    if (button.disabled) return;
+    const item = chooseSuggestion(candidates, Math.random());
+    if (item === null) return;
+    button.dataset.sfItem = item.id;
+    button.focus({ preventScroll: true });
+  };
+  const hero = <CampaignHero tenant={tenant} m={m} eyebrow={m.heroEyebrow} title={heroTitle} subline={heroSubline} suggestion={<>
+    <button className={styles.suggest} data-sf-suggest="" type="button" disabled={candidates.length === 0} aria-disabled={candidates.length === 0 ? 'true' : undefined} aria-describedby={candidates.length === 0 ? 'sf-suggest-empty' : undefined} title={candidates.length === 0 ? m.suggestionEmpty : picks ? m.chefPicks : selected?.name}
+      onClickCapture={e => prepareSuggestion(e.currentTarget)} onKeyDownCapture={e => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        if (e.repeat) { delete e.currentTarget.dataset.sfItem; delete e.currentTarget.dataset.sfLine; e.preventDefault(); return; }
+        prepareSuggestion(e.currentTarget);
+      }}><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="5" /><path d="M8 8h.01M16 8h.01M12 12h.01M8 16h.01M16 16h.01" strokeWidth="3" /></svg>{m.suggestItem}</button>
+    {candidates.length === 0 ? <span className={styles.srOnly} id="sf-suggest-empty" role="status">{m.suggestionEmpty}</span> : null}
+  </>} />;
   const switchCategory = (id: string) => { setActive(id); setPicks(false); setQuery(''); };
   // Close the native top layer before the existing delegated product opener runs.
   // Enter/Space is intercepted by that opener, so waiting for click is insufficient.
@@ -81,10 +103,10 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
       </div>
     </header>
     {hero}
-    {announcement === null || dismissed ? null : <div className={styles.announce} data-sf-module="announce" role="status"><TenantText>{announcement}</TenantText><button className={styles.announceClose} type="button" aria-label={m.close} onClick={() => { setDismissed(true); markAnnouncementDismissed(slug); }}><CloseIcon /></button></div>}
+    {announcement === null || dismissed ? null : <div className={styles.announce} data-sf-module="announce" role="status"><span aria-hidden="true">✦</span><TenantText>{announcement}</TenantText><span aria-hidden="true">✦</span><button className={styles.announceClose} type="button" aria-label={m.close} onClick={() => { setDismissed(true); markAnnouncementDismissed(slug); }}><CloseIcon /></button></div>}
     {notice}
     {empty ?? <section className={`${styles.inner} ${styles.menu}`} id="sf-menu" aria-label={m.menuLabel}>
-      <div className={styles.menuHeading}><div><p className={styles.eyebrow}>{m.menuLabel}</p><h2>{m.menuHeading}</h2></div><form className={styles.searchBox} role="search" onSubmit={e => e.preventDefault()}><SearchIcon /><input ref={search} type="search" autoComplete="off" maxLength={80} value={query} onChange={e => { setQuery(e.target.value); setPicks(false); }} placeholder={m.searchPh} aria-label={m.search} />{query ? <button type="button" aria-label={m.clearSearch} onClick={() => { setQuery(''); search.current?.focus(); }}><CloseIcon /></button> : <kbd aria-hidden="true">/</kbd>}</form></div>
+      <div className={styles.menuHeading}><div><p className={styles.eyebrow}>{m.menuEyebrow}<span>{m.menuCaption}</span></p><h2>{m.menuHeading}</h2></div><form className={styles.searchBox} role="search" onSubmit={e => e.preventDefault()}><SearchIcon /><input ref={search} type="search" autoComplete="off" maxLength={80} value={query} onChange={e => { setQuery(e.target.value); setPicks(false); }} placeholder={m.searchPh} aria-label={m.search} />{query ? <button type="button" aria-label={m.clearSearch} onClick={() => { setQuery(''); search.current?.focus(); }}><CloseIcon /></button> : <kbd aria-hidden="true">/</kbd>}</form></div>
       <div className={styles.categoryWrap}><nav className={styles.rail} aria-label={m.menuLabel} data-sf-module="categories">{categories.map(category => <button className={`${styles.chip} ${category.id === activeCategory && !query && !picks ? styles.chipActive : ''}`} type="button" key={category.id} aria-current={category.id === activeCategory && !query && !picks ? 'true' : undefined} onClick={() => switchCategory(category.id)}><CategoryIcon path={category.iconPath} /><span dir="auto">{category.name}</span><small dir="ltr">{String(items.filter(i => i.categoryId === category.id).length).padStart(2, '0')}</small></button>)}{items.some(item => item.featured && !item.soldOut) ? <button type="button" className={`${styles.chip} ${styles.picksChip} ${picks && !query ? styles.chipActive : ''}`} aria-current={picks && !query ? 'true' : undefined} onClick={() => { setPicks(true); setQuery(''); }}>{m.chefPicks}</button> : null}</nav></div>
       {query.trim() || picks ? <section className={styles.section} data-sf-module="sections" aria-label={query.trim() ? m.search : m.chefPicks}><div className={styles.sectionHead}><h3>{picks ? m.chefPicks : m.search}</h3><span role="status">{shown.length === 1 ? m.item : fill(m.items, {n:String(shown.length)})}</span></div>{shown.length ? <div className={cardMode === 'grid' ? styles.gridWrap : styles.listWrap}>{shown.map(item => cardMode === 'grid' ? <GridCard item={item} m={m} key={item.id} /> : <ListRow item={item} m={m} key={item.id} />)}</div> : <div className={styles.empty} role="status"><SearchIcon /><h3>{query.trim() ? <NoResultsTitle template={m.noResults} query={query.trim()} /> : m.emptyMenu}</h3><p>{m.tryOther}</p><button className={styles.promoCta} type="button" onClick={() => { setQuery(''); setPicks(false); }}>{m.browseMenu}</button></div>}</section> : selected ? <MenuSection category={selected} items={shown} cardMode={cardMode} m={m} /> : null}
     </section>}

@@ -14,6 +14,11 @@ import type { Locale } from './locales';
 export interface StorefrontMessages {
   readonly menuHeading: string;
   readonly discoverMenu: string;
+  readonly suggestItem: string;
+  readonly suggestionEmpty: string;
+  readonly menuEyebrow: string;
+  readonly menuCaption: string;
+  readonly heroEyebrow: string;
   readonly findUs: string;
   readonly yourChoices: string;
   readonly welcome: string;
