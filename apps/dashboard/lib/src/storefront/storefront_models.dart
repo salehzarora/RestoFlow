@@ -1302,6 +1302,8 @@ class StorefrontProfile {
     this.heroSubline,
     this.announcementText,
     this.supportsHomeContent = false,
+    this.featuredItemIds = const [],
+    this.supportsFeaturedItems = false,
     required this.primaryColor,
     required this.accentColor,
     required this.visualPreset,
@@ -1360,6 +1362,25 @@ class StorefrontProfile {
   final String? heroSubline;
   final String? announcementText;
 
+  /// Additive capability; absence on an old backend never enables a save.
+  final bool supportsFeaturedItems;
+  final List<String> featuredItemIds;
+  static const int maxFeaturedItems = 12;
+
+  static bool isValidFeaturedItemIds(Object? value) {
+    if (value is! List || value.length > maxFeaturedItems) return false;
+    final seen = <String>{};
+    for (final id in value) {
+      if (id is! String ||
+          id.length != 36 ||
+          !isCanonicalUuid(id.toLowerCase()) ||
+          !seen.add(id.toLowerCase())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   static const Map<String, int> homeContentLimits = {
     'hero_headline': 120,
     'hero_subline': 180,
@@ -1409,6 +1430,20 @@ class StorefrontProfile {
 
   factory StorefrontProfile.fromJson(Object? json, {String path = 'profile'}) {
     final j = _Json.of(json, path);
+    final supportsFeatured = j.map.containsKey('featured_item_ids');
+    final featuredRaw = supportsFeatured ? j['featured_item_ids'] : const [];
+    if (!isValidFeaturedItemIds(featuredRaw)) {
+      throw StorefrontDecodeException(
+        j.at('featured_item_ids'),
+        'invalid featured selection',
+      );
+    }
+    final featured =
+        (featuredRaw as List)
+            .cast<String>()
+            .map((id) => id.toLowerCase())
+            .toList()
+          ..sort();
     final present = homeContentLimits.keys.where(j.map.containsKey).length;
     if (present != 0 && present != homeContentLimits.length) {
       throw StorefrontDecodeException(
@@ -1434,6 +1469,8 @@ class StorefrontProfile {
       heroSubline: j.optString('hero_subline'),
       announcementText: j.optString('announcement_text'),
       supportsHomeContent: present == homeContentLimits.length,
+      supportsFeaturedItems: supportsFeatured,
+      featuredItemIds: List.unmodifiable(featured),
       primaryColor: j.string('primary_color'),
       accentColor: j.string('accent_color'),
       visualPreset: j.enumValue('visual_preset', StorefrontVisualPreset.values),

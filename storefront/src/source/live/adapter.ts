@@ -37,7 +37,8 @@ import type {
 import { isValidSlug } from '@/theme/sanitize';
 import { fetchStorefrontMenu, liveConfig, type LiveConfig } from './client';
 import type { StorefrontMenuOk } from './decode';
-import { decodeStorefrontMenuV2, type StorefrontMenuV2Ok } from './decodeHomeContent';
+import type { StorefrontMenuV2Ok } from './decodeHomeContent';
+import { decodeStorefrontMenuV3, type StorefrontMenuV3Ok } from './decodeFeaturedItems';
 import { iconPathFor } from './icons';
 import { liveOrderingEnabled, orderEndpointOrigin } from './ordering';
 
@@ -79,9 +80,10 @@ export function nextOpenParts(iso: string | null, timeZone: string): NextOpenAt 
   }
 }
 
-export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok, origin: string): StorefrontResolution {
+export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok, origin: string): StorefrontResolution {
   const r = envelope.restaurant;
   const home = 'home_content' in envelope ? envelope.home_content : null;
+  const featured = new Set('featured_item_ids' in envelope ? envelope.featured_item_ids : []);
   const tenant: Tenant = {
     slug: r.slug,
     displayName: r.display_name,
@@ -154,7 +156,7 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok,
       description: i.description,
       priceMinor: i.base_price_minor,
       image: mediaUrl(i.image_url, origin),
-      featured: false,
+      featured: featured.has(i.id),
       signature: i.tags.includes('popular'),
       badge: i.tags.includes('new') ? 'new' : null,
       soldOut: i.availability === 'unavailable',
@@ -200,7 +202,7 @@ export function liveStorefrontSource(config?: LiveConfig): StorefrontSource {
     async getStorefront(slug: string): Promise<StorefrontResolution | null> {
       if (!isValidSlug(slug)) return null;
       const cfg = config ?? liveConfig();
-      const envelope = decodeStorefrontMenuV2(await fetchStorefrontMenu(slug, cfg));
+      const envelope = decodeStorefrontMenuV3(await fetchStorefrontMenu(slug, cfg));
       if (!envelope.ok) {
         if (envelope.error === 'not_found') return null;
         throw new Error(`storefront_menu answered ${envelope.error}`);

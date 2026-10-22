@@ -10,6 +10,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'opening_hours_editor.dart';
 import 'storefront_contrast.dart';
 import 'storefront_copy.dart';
+import 'storefront_featured_items.dart';
 import 'storefront_item_images.dart';
 import 'storefront_media_publisher.dart';
 import 'storefront_media_repository.dart';
@@ -28,6 +29,7 @@ class StorefrontEditorSeams {
     required this.mediaRepository,
     required this.branchSource,
     required this.sourceCatalog,
+    this.featuredCatalog,
     this.publisher,
     this.publicUrlFor,
   });
@@ -44,6 +46,7 @@ class StorefrontEditorSeams {
   final StorefrontMediaRepository mediaRepository;
   final StorefrontBranchSource branchSource;
   final StorefrontSourceCatalog sourceCatalog;
+  final StorefrontFeaturedCatalog? featuredCatalog;
 
   /// The Edge Function client (null = image publishing is not available
   /// here; the media slots then show an honest note).
@@ -321,6 +324,11 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   /// out with a stale version and read as someone else's conflict.
   bool _stale = false;
   _PendingSave? _homePending;
+  _PendingSave? _featuredPending;
+  Set<String> _featuredIds = {};
+  List<StorefrontFeaturedOption>? _featuredOptions;
+  bool _featuredLoading = false;
+  int _featuredGeneration = 0;
 
   /// C12 (CRIT-2): the receipt logo the publish function REFUSED for the
   /// logo slot (a deterministic source refusal). The logo slot's only source
@@ -332,7 +340,38 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
 
   bool get _wired => widget.seams != null;
   StorefrontProfile? get _profile => _read?.profile;
-  bool get _busy => _saving || _mediaBusy || _stale || _homePending != null;
+  bool get _busy =>
+      _saving ||
+      _mediaBusy ||
+      _stale ||
+      _homePending != null ||
+      _featuredPending != null;
+
+  bool get _featuredSupported =>
+      (_profile?.supportsFeaturedItems ?? false) &&
+      widget.seams?.profileRepository is StorefrontFeaturedItemsRepository &&
+      widget.seams?.featuredCatalog != null;
+
+  Map<String, Object?> _featuredContent() => {
+    'featured_item_ids': List<String>.unmodifiable(
+      _featuredIds.toList()..sort(),
+    ),
+  };
+
+  bool get _featuredDirty {
+    final profile = _profile;
+    if (profile == null || !_featuredSupported) return false;
+    return _featuredIds.length != profile.featuredItemIds.length ||
+        !profile.featuredItemIds.every(_featuredIds.contains);
+  }
+
+  bool get _featuredValid =>
+      !_featuredLoading &&
+      _featuredOptions != null &&
+      StorefrontProfile.isValidFeaturedItemIds(_featuredIds.toList()) &&
+      _featuredIds.every(
+        (id) => _featuredOptions!.any((option) => option.id == id),
+      );
 
   bool get _homeSupported =>
       (_profile?.supportsHomeContent ?? false) &&
@@ -368,6 +407,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
 
   @override
   void dispose() {
+    _featuredGeneration++;
     for (final c in _controllers) {
       c.removeListener(_onTextChanged);
       c.dispose();
@@ -401,6 +441,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     if (read.exists) {
       unawaited(_loadMedia());
       unawaited(_loadSources());
+      unawaited(_loadFeatured());
     }
   }
 
@@ -433,6 +474,32 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     setState(() => _sources = sources);
   }
 
+  Future<void> _loadFeatured() async {
+    final generation = ++_featuredGeneration;
+    final profile = _profile;
+    final catalog = widget.seams?.featuredCatalog;
+    if (!_featuredSupported || profile == null || catalog == null) return;
+    setState(() {
+      _featuredLoading = true;
+      _featuredOptions = null;
+    });
+    List<StorefrontFeaturedOption>? options;
+    try {
+      options = await catalog.load(profile.storefrontBranchId);
+    } catch (_) {
+      options = null;
+    }
+    if (!mounted ||
+        generation != _featuredGeneration ||
+        _profile?.version != profile.version ||
+        _profile?.storefrontBranchId != profile.storefrontBranchId)
+      return;
+    setState(() {
+      _featuredLoading = false;
+      _featuredOptions = options;
+    });
+  }
+
   /// Re-reads the authoritative profile AND media list (and the sources when
   /// asked). A failed profile read keeps the last good state on screen and
   /// answers false (a successful one clears [_stale]).
@@ -463,6 +530,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     if (read.isOk && read.exists && !hadProfile && _sources == null) {
       unawaited(_loadSources());
     }
+    if (read.isOk && read.exists) unawaited(_loadFeatured());
     return read.isOk;
   }
 
@@ -524,6 +592,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     _heroHeadline.text = p?.heroHeadline ?? '';
     _heroSubline.text = p?.heroSubline ?? '';
     _announcement.text = p?.announcementText ?? '';
+    if (_featuredPending == null) _featuredIds = {...?p?.featuredItemIds};
     _branchId = p?.storefrontBranchId;
     _preset = p?.visualPreset ?? StorefrontVisualPreset.dark;
     _locale = p?.localeDefault ?? StorefrontLocale.ar;
@@ -656,7 +725,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       !_hasErrors(l10n);
 
   bool _canSave(AppLocalizations l10n) =>
-      !_busy && _dirty && !_homeDirty && !_hasErrors(l10n);
+      !_busy && _dirty && !_homeDirty && !_featuredDirty && !_hasErrors(l10n);
 
   // ---------------------------------------------------------------------------
   // Writes
@@ -710,7 +779,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   Future<void> _onSave() async {
     final l10n = AppLocalizations.of(context);
     final read = _read;
-    if (read == null || !read.isOk || _busy || _homeDirty) return;
+    if (read == null || !read.isOk || _busy || _homeDirty || _featuredDirty)
+      return;
     // The button may predate a check that changes with time (a pause end
     // that has passed since it was picked): re-check at the press.
     if (_hasErrors(l10n)) {
@@ -745,6 +815,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     if (p == null ||
         repository is! StorefrontHomeContentRepository ||
         !_homeSupported ||
+        _featuredDirty ||
+        _featuredPending != null ||
         _saving ||
         _mediaBusy ||
         _stale)
@@ -846,6 +918,132 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         banner = _Banner(l10n.storefrontErrorUnavailable, RestoflowTone.danger);
       case StorefrontWriteStatus.notCommitted:
         _homePending = null;
+        banner = _Banner(
+          l10n.storefrontErrorNotCommitted,
+          RestoflowTone.danger,
+        );
+    }
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _banner = banner;
+      if (stale) _stale = true;
+    });
+  }
+
+  Future<void> _onSaveFeatured({_PendingSave? replay}) async {
+    if (!mounted) return;
+    final p = _profile;
+    final repository = widget.seams?.profileRepository;
+    if (p == null ||
+        repository is! StorefrontFeaturedItemsRepository ||
+        !_featuredSupported ||
+        _homeDirty ||
+        _homePending != null ||
+        _saving ||
+        _mediaBusy ||
+        _stale)
+      return;
+    if (replay == null &&
+        (_featuredPending != null ||
+            _dirty ||
+            !_featuredDirty ||
+            !_featuredValid))
+      return;
+    if (replay != null && !identical(replay, _featuredPending)) return;
+    final featuredRepository = repository as StorefrontFeaturedItemsRepository;
+    final l10n = AppLocalizations.of(context);
+    final patch =
+        replay?.patch ?? Map<String, Object?>.unmodifiable(_featuredContent());
+    final version = replay?.expectedVersion ?? p.version;
+    final requestId =
+        replay?.requestId ??
+        storefrontRequestId(
+          'pbl:storefront:featured:',
+          [widget.seams!.scopeIdentity, version.toString(), jsonEncode(patch)],
+          widget.nonce?.call() ?? DateTime.now().microsecondsSinceEpoch,
+        );
+    setState(() {
+      _saving = true;
+      _banner = null;
+    });
+    StorefrontWriteResult result;
+    try {
+      result = await featuredRepository.saveFeaturedItems(
+        expectedVersion: version,
+        itemIds: (patch['featured_item_ids']! as List).cast<String>(),
+        requestId: requestId,
+      );
+    } catch (_) {
+      // A seam that throws after sending cannot prove a rollback. Keep the
+      // existing retry identity if one exists; never mint an automatic POST.
+      result = StorefrontWriteResult(
+        StorefrontWriteStatus.uncertain,
+        requestId: requestId,
+        expectedVersion: version,
+      );
+    }
+    if (!mounted) return;
+    if (replay != null &&
+        result.status != StorefrontWriteStatus.ok &&
+        result.status != StorefrontWriteStatus.conflict) {
+      // Losing authorization during an explicit retry says nothing about
+      // the original unknown write. Keep its exact identity and draft.
+      result = StorefrontWriteResult(
+        StorefrontWriteStatus.uncertain,
+        requestId: requestId,
+        expectedVersion: version,
+        readback: result.readback,
+      );
+    }
+    var stale = false;
+    late final _Banner banner;
+    switch (result.status) {
+      case StorefrontWriteStatus.ok:
+        _featuredPending = null;
+        stale = !await _refreshAll();
+        banner = _Banner(
+          l10n.storefrontFeaturedItemsSaved,
+          RestoflowTone.success,
+        );
+      case StorefrontWriteStatus.conflict:
+        _featuredPending = null;
+        stale = !await _refreshAll();
+        banner = _Banner(
+          stale
+              ? l10n.storefrontErrorConflictNotReloaded
+              : l10n.storefrontErrorConflict,
+          RestoflowTone.warning,
+        );
+      case StorefrontWriteStatus.uncertain:
+        _featuredPending = _PendingSave(
+          patch: patch,
+          expectedVersion: version,
+          requestId: requestId,
+          draftPatch: patch,
+          okMessage: l10n.storefrontFeaturedItemsSaved,
+        );
+        banner = _Banner(
+          l10n.storefrontFeaturedItemsUncertain,
+          RestoflowTone.warning,
+        );
+      case StorefrontWriteStatus.denied:
+        _featuredPending = null;
+        banner = _Banner(l10n.storefrontErrorDenied, RestoflowTone.danger);
+      case StorefrontWriteStatus.invalid:
+        _featuredPending = null;
+        if (result.reason == 'not_found') stale = !await _refreshAll();
+        banner = _Banner(
+          result.reason == 'not_found'
+              ? l10n.storefrontFeaturedItemsProfileMissing
+              : l10n.storefrontFeaturedItemsInvalid,
+          RestoflowTone.danger,
+        );
+      case StorefrontWriteStatus.unavailable:
+        _featuredPending = null;
+        banner = _Banner(l10n.storefrontErrorUnavailable, RestoflowTone.danger);
+      case StorefrontWriteStatus.notCommitted:
+        _featuredPending = null;
         banner = _Banner(
           l10n.storefrontErrorNotCommitted,
           RestoflowTone.danger,
@@ -1430,6 +1628,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         ),
       ]),
       ..._homeContentEditor(l10n, theme, profile),
+      ..._featuredEditor(l10n, theme, profile),
       const Divider(height: RestoflowSpacing.xl),
       Text(l10n.storefrontLookTitle, style: theme.textTheme.titleSmall),
       const SizedBox(height: RestoflowSpacing.sm),
@@ -1713,9 +1912,148 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       if (_banner != null) ..._bannerView(l10n, theme),
       if (_stale) ..._staleView(l10n, theme),
       const Divider(height: RestoflowSpacing.xl),
-      ..._publishArea(l10n, theme, profile, derived, dirty || _homeDirty),
+      ..._publishArea(
+        l10n,
+        theme,
+        profile,
+        derived,
+        dirty || _homeDirty || _featuredDirty,
+      ),
       const Divider(height: RestoflowSpacing.xl),
-      ..._mediaArea(l10n, theme, profile, dirty || _homeDirty),
+      ..._mediaArea(
+        l10n,
+        theme,
+        profile,
+        dirty || _homeDirty || _featuredDirty,
+      ),
+    ];
+  }
+
+  List<Widget> _featuredEditor(
+    AppLocalizations l10n,
+    ThemeData theme,
+    StorefrontProfile profile,
+  ) {
+    final pending = _featuredPending;
+    final options = _featuredOptions;
+    final unavailableIds = options == null
+        ? <String>{}
+        : _featuredIds.difference(options.map((option) => option.id).toSet());
+    final editable = !_busy && !_dirty && !_homeDirty && !_featuredLoading;
+    return [
+      const Divider(height: RestoflowSpacing.xl),
+      Text(
+        l10n.storefrontFeaturedItemsTitle,
+        style: theme.textTheme.titleSmall,
+      ),
+      const SizedBox(height: RestoflowSpacing.xs),
+      if (!_featuredSupported)
+        Text(
+          l10n.storefrontFeaturedItemsUnavailable,
+          key: const Key('storefront-featured-unsupported'),
+        )
+      else ...[
+        Text(
+          l10n.storefrontFeaturedItemsHelp,
+          style: theme.textTheme.bodySmall,
+        ),
+        Text(
+          l10n.storefrontFeaturedItemsCount(
+            _featuredIds.length,
+            StorefrontProfile.maxFeaturedItems,
+          ),
+          key: const Key('storefront-featured-count'),
+        ),
+        if (_featuredLoading)
+          const LinearProgressIndicator(key: Key('storefront-featured-loading'))
+        else if (options == null) ...[
+          Text(
+            l10n.storefrontFeaturedItemsCatalogUnavailable,
+            key: const Key('storefront-featured-catalog-unavailable'),
+          ),
+          TextButton(
+            onPressed: _busy ? null : _loadFeatured,
+            child: Text(l10n.storefrontReloadAction),
+          ),
+        ] else ...[
+          if (options.isEmpty) Text(l10n.storefrontFeaturedItemsEmpty),
+          for (final option in options)
+            CheckboxListTile(
+              key: Key('storefront-featured-item-${option.id}'),
+              title: Text(option.name),
+              subtitle: Text(option.categoryName),
+              value: _featuredIds.contains(option.id),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              onChanged:
+                  editable &&
+                      (_featuredIds.contains(option.id) ||
+                          _featuredIds.length <
+                              StorefrontProfile.maxFeaturedItems)
+                  ? (selected) => setState(() {
+                      if (selected == true) {
+                        _featuredIds.add(option.id);
+                      } else {
+                        _featuredIds.remove(option.id);
+                      }
+                    })
+                  : null,
+            ),
+          if (unavailableIds.isNotEmpty) ...[
+            Text(
+              l10n.storefrontFeaturedItemsStaleSelection,
+              key: const Key('storefront-featured-stale-selection'),
+            ),
+            TextButton(
+              key: const Key('storefront-featured-remove-unavailable'),
+              onPressed: editable
+                  ? () => setState(() => _featuredIds.removeAll(unavailableIds))
+                  : null,
+              child: Text(l10n.storefrontFeaturedItemsRemoveUnavailable),
+            ),
+          ],
+        ],
+        const SizedBox(height: RestoflowSpacing.sm),
+        Wrap(
+          spacing: RestoflowSpacing.sm,
+          children: [
+            FilledButton.icon(
+              key: const Key('storefront-featured-save'),
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+              onPressed: editable && _featuredDirty && _featuredValid
+                  ? () => _onSaveFeatured()
+                  : null,
+              icon: const Icon(Icons.save_outlined),
+              label: Text(l10n.storefrontFeaturedItemsSaveAction),
+            ),
+            if (_featuredDirty)
+              TextButton(
+                key: const Key('storefront-featured-discard'),
+                onPressed: _busy
+                    ? null
+                    : () => setState(
+                        () => _featuredIds = {...profile.featuredItemIds},
+                      ),
+                child: Text(l10n.storefrontDiscardAction),
+              ),
+            if (pending?.requestId != null)
+              TextButton.icon(
+                key: const Key('storefront-featured-retry'),
+                onPressed:
+                    _saving || _mediaBusy || _stale || _homePending != null
+                    ? null
+                    : () => _onSaveFeatured(replay: pending),
+                icon: const Icon(Icons.refresh),
+                label: Text(l10n.storefrontRetry),
+              ),
+          ],
+        ),
+        if (_dirty || _homeDirty)
+          Text(
+            l10n.storefrontFeaturedItemsSeparateEdits,
+            key: const Key('storefront-featured-separate-edits'),
+          ),
+      ],
     ];
   }
 
@@ -1787,7 +2125,12 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           children: [
             FilledButton.icon(
               key: const Key('storefront-home-save'),
-              onPressed: !_busy && !_dirty && _homeDirty && _homeValid
+              onPressed:
+                  !_busy &&
+                      !_dirty &&
+                      !_featuredDirty &&
+                      _homeDirty &&
+                      _homeValid
                   ? () => _onSaveHome()
                   : null,
               icon: const Icon(Icons.save_outlined),

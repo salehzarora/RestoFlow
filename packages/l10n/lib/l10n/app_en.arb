@@ -5991,5 +5991,70 @@
   "storefrontHomeContentPreviewTitle": "Text preview",
   "@storefrontHomeContentPreviewTitle": {"description":"BIZBOT-STOREFRONT-HOME-CONTENT-001: optional merchant Home copy editor."},
   "storefrontHomeContentProfileMissing": "The profile is no longer available. Reload and create it through normal profile setup first.",
-  "@storefrontHomeContentProfileMissing": {"description":"BIZBOT-STOREFRONT-HOME-CONTENT-001: existing profile required; no implicit creation."}
+  "@storefrontHomeContentProfileMissing": {"description":"BIZBOT-STOREFRONT-HOME-CONTENT-001: existing profile required; no implicit creation."},
+
+  "storefrontFeaturedItemsTitle": "Featured products",
+  "storefrontFeaturedItemsHelp": "Select products to show as larger cards. Their price, availability and catalog order stay unchanged.",
+  "storefrontFeaturedItemsUnavailable": "Featured product selection is not available here yet.",
+  "storefrontFeaturedItemsCount": "{count} of {maximum} selected",
+  "storefrontFeaturedItemsCatalogUnavailable": "Could not load products for the saved storefront branch. Reload to try again.",
+  "storefrontFeaturedItemsEmpty": "There are no eligible products in the saved storefront branch.",
+  "storefrontFeaturedItemsStaleSelection": "Some saved choices are no longer eligible in this storefront branch. Remove unavailable choices before saving.",
+  "storefrontFeaturedItemsRemoveUnavailable": "Remove unavailable choices",
+  "storefrontFeaturedItemsSaveAction": "Save featured products",
+  "storefrontFeaturedItemsSaved": "Featured products saved.",
+  "storefrontFeaturedItemsSeparateEdits": "Save or discard other Home/profile edits first. If both sections have unsaved edits, discard one.",
+  "storefrontFeaturedItemsUncertain": "The save result is unknown. Your exact choices and request are kept. Try again reconciles the same request; do not start another save.",
+  "storefrontFeaturedItemsProfileMissing": "The profile is no longer available. Reload and create it through normal profile setup first.",
+  "storefrontFeaturedItemsInvalid": "These choices could not be saved. Reload the available products and check the selection.",
+  "@storefrontFeaturedItemsTitle": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsHelp": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsUnavailable": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsCount": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "maximum": {
+        "type": "int"
+      }
+    }
+  },
+  "@storefrontFeaturedItemsCatalogUnavailable": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsEmpty": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsStaleSelection": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsRemoveUnavailable": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsSaveAction": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsSaved": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsSeparateEdits": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsUncertain": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsProfileMissing": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  },
+  "@storefrontFeaturedItemsInvalid": {
+    "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
+  }
 }

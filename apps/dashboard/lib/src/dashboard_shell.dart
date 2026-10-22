@@ -35,6 +35,7 @@ import 'storefront/storefront_media_repository.dart';
 import 'storefront/storefront_profile_repository.dart';
 import 'storefront/storefront_section.dart';
 import 'storefront/storefront_sources.dart';
+import 'storefront/storefront_featured_items.dart';
 import 'analytics/dashboard_destination.dart';
 import 'support/support_mode_scope.dart';
 import 'widgets/language_selector.dart';
@@ -492,6 +493,12 @@ class _DashboardShellState extends State<DashboardShell> {
         logoRepository: _brandingRepo,
         menuReadSource: widget.menuReadSource,
         menuScope: _menuScope,
+      ),
+      featuredCatalog: DashboardStorefrontFeaturedCatalog(
+        menuReadSource: widget.menuReadSource,
+        organizationId: organizationId,
+        restaurantId: restaurantId,
+        currencyCode: _menuScope?.currencyCode ?? demoCurrencyCode,
       ),
       publisher: invoker == null
           ? null
