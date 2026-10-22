@@ -1,5 +1,218 @@
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+/// Owned content-editor copy only; generated/shared translation files remain
+/// untouched. Keys are internal constants, never server-provided text.
+String storefrontContentCopy(AppLocalizations l10n, String key) {
+  const copy = <String, List<String>>{
+    'title': ['Storefront content', 'محتوى واجهة المتجر', 'תוכן חלון הראווה'],
+    'help': [
+      'Edit the saved branch content. Save is one complete versioned change.',
+      'عدّل محتوى الفرع المحفوظ. الحفظ تغيير كامل برقم نسخة واحد.',
+      'עריכת תוכן הסניף השמור. השמירה היא שינוי מלא עם גרסה אחת.',
+    ],
+    'loadFailed': [
+      'Content could not be verified. Reload before editing.',
+      'تعذر التحقق من المحتوى. أعد التحميل قبل التعديل.',
+      'לא ניתן לאמת תוכן. יש לטעון מחדש לפני עריכה.',
+    ],
+    'denied': [
+      'Content management is unavailable for this account.',
+      'إدارة المحتوى غير متاحة لهذا الحساب.',
+      'ניהול תוכן אינו זמין לחשבון זה.',
+    ],
+    'missing': [
+      'Save a Storefront profile and branch first.',
+      'احفظ ملف واجهة المتجر والفرع أولًا.',
+      'יש לשמור תחילה פרופיל וסניף.',
+    ],
+    'save': ['Save content', 'حفظ المحتوى', 'שמירת תוכן'],
+    'reload': [
+      'Reload saved content',
+      'إعادة تحميل المحتوى المحفوظ',
+      'טעינת תוכן שמור מחדש',
+    ],
+    'discard': [
+      'Discard local edits',
+      'تجاهل التعديلات المحلية',
+      'ביטול שינויים מקומיים',
+    ],
+    'saved': [
+      'Content saved and reread.',
+      'حُفظ المحتوى وأُعيدت قراءته.',
+      'התוכן נשמר ונקרא מחדש.',
+    ],
+    'conflict': [
+      'The profile or branch changed. Reload; no edits were merged.',
+      'تغيّر الملف أو الفرع. أعد التحميل؛ لم تُدمج التعديلات.',
+      'הפרופיל או הסניף השתנו. יש לטעון מחדש; השינויים לא מוזגו.',
+    ],
+    'uncertain': [
+      'Save outcome is unknown. Keep this draft; retry only the same request.',
+      'نتيجة الحفظ غير مؤكدة. احتفظ بالمسودة وأعد الطلب نفسه فقط.',
+      'תוצאת השמירה אינה ידועה. יש לשמור טיוטה ולנסות שוב רק את אותה הבקשה.',
+    ],
+    'retry': [
+      'Retry the same save',
+      'إعادة طلب الحفظ نفسه',
+      'ניסיון חוזר של אותה שמירה',
+    ],
+    'invalid': [
+      'Content is incomplete or invalid. Correct it before saving.',
+      'المحتوى ناقص أو غير صالح. صححه قبل الحفظ.',
+      'התוכן חסר או לא תקין. יש לתקן לפני שמירה.',
+    ],
+    'unavailable': [
+      'The service is unavailable; no success is claimed.',
+      'الخدمة غير متاحة؛ لم يُؤكد النجاح.',
+      'השירות אינו זמין; ההצלחה לא אושרה.',
+    ],
+    'otherEdits': [
+      'Save or discard edits in the other Storefront controls first.',
+      'احفظ أو تجاهل تعديلات بقية إعدادات المتجر أولًا.',
+      'יש לשמור או לבטל תחילה שינויים בשאר הגדרות החנות.',
+    ],
+    'headline': ['Hero headline', 'عنوان الواجهة الرئيسي', 'כותרת ראשית'],
+    'subline': ['Hero subline', 'النص الفرعي للواجهة', 'כותרת משנה'],
+    'announcement': ['Announcement text', 'نص الإعلان', 'טקסט הודעה'],
+    'hero': ['Hero', 'الواجهة الرئيسية', 'אזור ראשי'],
+    'editorial': ['Editorial image', 'صورة تحريرية', 'תמונה מערכתית'],
+    'item': ['Product', 'منتج', 'מוצר'],
+    'category': ['Category', 'قسم', 'קטגוריה'],
+    'inherit': ['Inherit', 'حسب الإعداد العام', 'ירושה'],
+    'none': ['None', 'بدون', 'ללא'],
+    'eyebrow': ['Eyebrow', 'عنوان تمهيدي', 'כותרת מקדימה'],
+    'stamp': ['Stamp', 'وسم الواجهة', 'חותמת'],
+    'footnote': ['Footnote', 'ملاحظة الواجهة', 'הערה'],
+    'format': [
+      'Headline selection',
+      'تحديد تنسيق العنوان',
+      'בחירת עיצוב כותרת',
+    ],
+    'formatHelp': [
+      'Select complete words in the exact preview. Text edits clear selection.',
+      'حدّد كلمات كاملة في المعاينة الدقيقة. تعديل النص يلغي التحديد.',
+      'יש לבחור מילים שלמות בתצוגה המדויקת. עריכת טקסט מבטלת בחירה.',
+    ],
+    'normalize': [
+      'Confirm exact headline preview',
+      'تأكيد معاينة العنوان الدقيقة',
+      'אישור תצוגת הכותרת המדויקת',
+    ],
+    'confirm': ['Confirm', 'تأكيد', 'אישור'],
+    'cancel': ['Cancel', 'إلغاء', 'ביטול'],
+    'highlight': [
+      'Highlight selected words',
+      'تمييز الكلمات المحددة',
+      'הדגשת המילים שנבחרו',
+    ],
+    'break': [
+      'Break before selected word',
+      'فاصل قبل الكلمة المحددة',
+      'מעבר לפני המילה שנבחרה',
+    ],
+    'clearFormat': [
+      'Clear headline formatting',
+      'إلغاء تنسيق العنوان',
+      'ניקוי עיצוב כותרת',
+    ],
+    'segments': ['Announcement segments', 'مقاطع الإعلان', 'מקטעי הודעה'],
+    'add': ['Add', 'إضافة', 'הוספה'],
+    'remove': ['Remove', 'إزالة', 'הסרה'],
+    'promo': ['Promo', 'العرض الترويجي', 'קידום'],
+    'story': ['Story', 'قصة المطعم', 'סיפור'],
+    'enabled': ['Enabled', 'مفعّل', 'פעיל'],
+    'kicker': ['Kicker', 'عنوان تمهيدي', 'כותרת מקדימה'],
+    'moduleTitle': ['Title', 'العنوان', 'כותרת'],
+    'body': ['Body', 'النص', 'תוכן'],
+    'facts': [
+      'Facts (merchant supplied)',
+      'حقائق يكتبها المطعم',
+      'עובדות מטעם העסק',
+    ],
+    'media': [
+      'Published editorial image',
+      'صورة تحريرية منشورة',
+      'תמונה מערכתית שפורסמה',
+    ],
+    'mediaUsage': [
+      'Current image usage',
+      'الاستخدام الحالي للصورة',
+      'שימוש נוכחי בתמונה',
+    ],
+    'mediaUnavailable': [
+      'Image choices could not be verified.',
+      'تعذر التحقق من خيارات الصور.',
+      'לא ניתן לאמת אפשרויות תמונה.',
+    ],
+    'publish': [
+      'Publish editorial derivative only',
+      'نشر نسخة تحريرية فقط',
+      'פרסום נגזרת מערכתית בלבד',
+    ],
+    'publishHelp': [
+      'Publishing here does not assign or change the Hero image. Save the selected reference separately.',
+      'النشر هنا لا يعيّن أو يغيّر صورة الواجهة. احفظ مرجع الصورة المختار بشكل منفصل.',
+      'פרסום כאן אינו משנה את תמונת האזור הראשי. יש לשמור את ההפניה שנבחרה בנפרד.',
+    ],
+    'publishConfirm': [
+      'Publish a public derivative of this restaurant image?',
+      'هل تريد نشر نسخة عامة من صورة هذا المطعم؟',
+      'לפרסם נגזרת ציבורית של תמונת המסעדה?',
+    ],
+    'published': [
+      'Image published; select it and save content.',
+      'نُشرت الصورة؛ اخترها واحفظ المحتوى.',
+      'התמונה פורסמה; יש לבחור בה ולשמור תוכן.',
+    ],
+    'publishUncertain': [
+      'Publication is uncertain. Reload images; do not start a new publish.',
+      'نتيجة النشر غير مؤكدة. أعد تحميل الصور ولا تبدأ نشرًا جديدًا.',
+      'תוצאת הפרסום אינה ידועה. יש לטעון תמונות מחדש ולא להתחיל פרסום חדש.',
+    ],
+    'categoryPresentation': [
+      'Category presentation',
+      'عرض الأقسام',
+      'תצוגת קטגוריות',
+    ],
+    'itemPresentation': [
+      'Product presentation',
+      'عرض المنتجات',
+      'תצוגת מוצרים',
+    ],
+    'heading': ['Heading', 'عنوان القسم', 'כותרת'],
+    'blurb': ['Description', 'وصف مختصر', 'תיאור'],
+    'fit': ['Image fit', 'ملاءمة الصورة', 'התאמת תמונה'],
+    'fill': ['Fill card', 'ملء البطاقة', 'מילוי כרטיס'],
+    'whole-image': ['Whole image', 'الصورة كاملة', 'תמונה מלאה'],
+    'layout': ['Card layout', 'تنسيق البطاقة', 'פריסת כרטיס'],
+    'standard': ['Standard grid', 'شبكة عادية', 'רשת רגילה'],
+    'cutout': ['Cutout grid', 'شبكة صور مفرغة', 'רשת תמונות גזורות'],
+    'relation_unavailable': [
+      'A saved relation is unavailable; review the affected field.',
+      'ارتباط محفوظ غير متاح؛ راجع الحقل المعني.',
+      'קשר שמור אינו זמין; יש לבדוק את השדה.',
+    ],
+    'media_unavailable': [
+      'A saved image is unavailable; review the affected field.',
+      'صورة محفوظة غير متاحة؛ راجع الحقل المعني.',
+      'תמונה שמורה אינה זמינה; יש לבדוק את השדה.',
+    ],
+    'legacy_value_invalid': [
+      'An older value could not be used; review the affected field.',
+      'تعذر استخدام قيمة قديمة؛ راجع الحقل المعني.',
+      'לא ניתן להשתמש בערך ישן; יש לבדוק את השדה.',
+    ],
+  };
+  final values = copy[key];
+  if (values == null) throw ArgumentError('unknown content copy key');
+  final language = l10n.localeName.split(RegExp('[-_]')).first;
+  return values[language == 'ar'
+      ? 1
+      : language == 'he'
+      ? 2
+      : 0];
+}
+
 /// STOREFRONT-PUBLISH-001 — the localized copy of the profile writer's server
 /// codes, shared by the Settings "Storefront" card and its media slots: a
 /// refused slot assignment shows the SAME per-reason copy and blocker labels

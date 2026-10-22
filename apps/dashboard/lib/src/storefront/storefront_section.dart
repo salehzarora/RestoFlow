@@ -9,6 +9,9 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'opening_hours_editor.dart';
 import 'storefront_contrast.dart';
+import 'storefront_content_models.dart';
+import 'storefront_content_repository.dart';
+import 'storefront_content_section.dart';
 import 'storefront_copy.dart';
 import 'storefront_featured_items.dart';
 import 'storefront_item_images.dart';
@@ -30,9 +33,12 @@ class StorefrontEditorSeams {
     required this.branchSource,
     required this.sourceCatalog,
     this.featuredCatalog,
+    StorefrontContentRepository? contentRepository,
+    StorefrontContentCatalog? contentCatalog,
     this.publisher,
     this.publicUrlFor,
-  });
+  }) : _contentRepository = contentRepository,
+       _contentCatalog = contentCatalog;
 
   /// WHO this editor works for — the membership, organization, restaurant
   /// (and role) the repositories below were built for. The card's draft,
@@ -47,6 +53,19 @@ class StorefrontEditorSeams {
   final StorefrontBranchSource branchSource;
   final StorefrontSourceCatalog sourceCatalog;
   final StorefrontFeaturedCatalog? featuredCatalog;
+  final StorefrontContentRepository? _contentRepository;
+  final StorefrontContentCatalog? _contentCatalog;
+  StorefrontContentRepository? get contentRepository =>
+      _contentRepository ??
+      (profileRepository is StorefrontContentRepositoryBinding
+          ? (profileRepository as StorefrontContentRepositoryBinding)
+                .contentRepository
+          : null);
+  StorefrontContentCatalog? get contentCatalog =>
+      _contentCatalog ??
+      (featuredCatalog is StorefrontContentCatalog
+          ? featuredCatalog as StorefrontContentCatalog
+          : null);
 
   /// The Edge Function client (null = image publishing is not available
   /// here; the media slots then show an honest note).
@@ -342,10 +361,15 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   StorefrontProfile? get _profile => _read?.profile;
   bool get _busy =>
       _saving ||
+      _contentDirty ||
+      _contentBusy ||
       _mediaBusy ||
       _stale ||
       _homePending != null ||
       _featuredPending != null;
+
+  bool _contentDirty = false;
+  bool _contentBusy = false;
 
   bool get _featuredSupported =>
       (_profile?.supportsFeaturedItems ?? false) &&
@@ -1628,6 +1652,37 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         ),
       ]),
       ..._homeContentEditor(l10n, theme, profile),
+      if (widget.seams?.contentRepository
+          case final StorefrontContentRepository repository)
+        StorefrontContentSection(
+          key: ValueKey('storefront-content|${widget.seams!.scopeIdentity}'),
+          repository: repository,
+          catalog: widget.seams!.contentCatalog,
+          profileVersion: profile.version,
+          savedBranchId: profile.storefrontBranchId,
+          enabled:
+              !_saving &&
+              !_mediaBusy &&
+              !_stale &&
+              !_dirty &&
+              !_homeDirty &&
+              !_featuredDirty &&
+              _homePending == null &&
+              _featuredPending == null,
+          publisher: widget.seams!.publisher,
+          sources: _sources,
+          reloadSources: _reloadSources,
+          publicUrlFor: widget.seams!.publicUrlFor,
+          onRefresh: () async {
+            await _refreshAll();
+          },
+          onDraftChanged: (dirty) {
+            if (mounted) setState(() => _contentDirty = dirty);
+          },
+          onBusyChanged: (busy) {
+            if (mounted) setState(() => _contentBusy = busy);
+          },
+        ),
       ..._featuredEditor(l10n, theme, profile),
       const Divider(height: RestoflowSpacing.xl),
       Text(l10n.storefrontLookTitle, style: theme.textTheme.titleSmall),
