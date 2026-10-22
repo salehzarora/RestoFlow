@@ -17,24 +17,32 @@
 .media { grid-column: 2; grid-row: 1 / span 2; position: static; min-block-size: 0; overflow: hidden; background: var(--sf2); }
 .mediaImg { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; object-position: center; }
 .mediaFade, .handle { display: none; }
-.mediaNone { display: grid; place-items: center; block-size: 100%; min-block-size: 170px; background: var(--sf2); color: var(--acct); font-size: 56px; font-weight: 900; }
-.close { position: absolute; inset-block-start: 28px; inset-inline-end: calc(36% + 28px); z-index: 2; display: grid; place-items: center; inline-size: 38px; block-size: 38px; border: 1px solid var(--hair2); border-radius: 50%; padding: 0; background: var(--bg); color: var(--tx); cursor: pointer; transition: background 200ms, transform 200ms; }
+.mediaNone,.close,.step{display:grid;place-items:center}
+.mediaNone { block-size: 100%; min-block-size: 170px; background: var(--sf2); color: var(--acct); font-size: 56px; font-weight: 900; }
+.close,.option,.step{color:var(--tx);cursor:pointer}
+.close { position: absolute; inset-block-start: 28px; inset-inline-end: calc(36% + 28px); z-index: 2; inline-size: 38px; block-size: 38px; border: 1px solid var(--hair2); border-radius: 50%; padding: 0; background: var(--bg); transition: background 200ms, transform 200ms; }
 .close:hover { background: var(--sf2); transform: rotate(90deg); }
 .close svg { inline-size: 21px; block-size: 21px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .body { grid-column: 1; grid-row: 1; min-inline-size: 0; min-block-size: 0; overflow: auto; overscroll-behavior: contain; scroll-behavior: auto; }
 /* Current head is inside the scroll body. Sticky retains its controls. Exact
  * source scrolling requires the small head/body boundary change in notes. */
 .head { position: sticky; inset-block-start: 0; z-index: 1; padding-block: 28px 18px; padding-inline: 28px 82px; background: var(--bg); }
-.nameRow { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 5px 12px; }
-.name { min-inline-size: 0; margin: 0; font-size: 27px; font-weight: 800; line-height: 1.5; overflow-wrap: anywhere; }
-.basePrice { flex: none; color: var(--tx); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.nameRow,.groupHead{display:flex;flex-wrap:wrap}
+.nameRow { align-items: baseline; justify-content: space-between; gap: 5px 12px; }
+.name,.groupName{min-inline-size:0;margin:0}
+.name { font-size: 27px; font-weight: 800; line-height: 1.5; overflow-wrap: anywhere; }
+.basePrice,.stepValue,.ctaPrice{font-variant-numeric:tabular-nums}
+.basePrice,.badge,.delta,.stepper,.ctaPrice{flex:none}
+.basePrice { color: var(--tx); font-size: 14px; font-weight: 600; }
 .desc { margin-block-start: 5px; font-size: 14px; line-height: 1.6; color: var(--tx3); }
 .desc:empty { display: none; }
-.group { display: flex; flex-direction: column; gap: 12px; margin: 0; padding-block: 0 22px; padding-inline: 28px; border: 0; min-inline-size: 0; }
-.groupHead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.group,.quantityOption,.note{display:flex;flex-direction:column}
+.group { gap: 12px; margin: 0; padding-block: 0 22px; padding-inline: 28px; border: 0; min-inline-size: 0; }
+.groupHead { align-items: center; gap: 6px 10px; }
 .noteHead { composes: groupHead; }
-.groupName { min-inline-size: 0; margin: 0; font-size: 15px; font-weight: 700; line-height: 1.6; }
-.badge { flex: none; padding: 2px 8px; border: 0; border-radius: 20px; background: var(--sf2); color: var(--tx3); font-size: 10px; font-weight: 400; line-height: 1.6; }
+.groupName { font-size: 15px; font-weight: 700; line-height: 1.6; }
+.badge,.delta,.noteOptional{color:var(--tx3);font-weight:400}
+.badge { padding: 2px 8px; border: 0; border-radius: 20px; background: var(--sf2); font-size: 10px; line-height: 1.6; }
 .badgeReq { composes: badge; }
 .badgeOpt { composes: badge; }
 .badgeBad { background: var(--badbg); color: var(--badText); }
@@ -42,40 +50,42 @@
 .alert svg { flex: none; inline-size: 16px; block-size: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .options[role='radiogroup'] { grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); }
-.quantityOption { display: flex; flex-direction: column; min-inline-size: 0; gap: 6px; }
-.option { position: relative; display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 3px; inline-size: 100%; min-inline-size: 0; min-block-size: 65px; padding: 10px 5px; border: 1px solid var(--hair2); border-radius: 10px; background: transparent; color: var(--tx); font: inherit; text-align: center; cursor: pointer; transition: background var(--d-option), border-color var(--d-option); }
+.quantityOption { min-inline-size: 0; gap: 6px; }
+.option,.noteField,.cta{font:inherit}
+.option { position: relative; display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 3px; inline-size: 100%; min-inline-size: 0; min-block-size: 65px; padding: 10px 5px; border: 1px solid var(--hair2); border-radius: 10px; background: transparent; text-align: center; transition: background var(--d-option), border-color var(--d-option); }
 .optionOn { background: var(--accA); color: var(--accOnSelection); border-color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); }
 .optionFull { opacity: .55; }
 .control { display: none; }
 .controlRadio { border-radius: 0; }
 .controlCheck { composes: controlRadio; }
-.optionName { min-inline-size: 0; font-size: 12px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
-.delta { flex: none; font-size: 9px; font-weight: 400; line-height: 1.6; color: var(--tx3); white-space: nowrap; }
+.optionName,.ctaLabel{min-inline-size:0;overflow-wrap:anywhere}
+.optionName { font-size: 12px; font-weight: 600; line-height: 1.6; }
+.delta { font-size: 9px; line-height: 1.6; white-space: nowrap; }
 .optionOn .delta { color: var(--accOnSelection); }
 .deltaFree { composes: delta; }
-.note { display: flex; flex-direction: column; gap: 10px; padding-block: 0 12px; padding-inline: 28px; border: 0; }
+.note { gap: 10px; padding-block: 0 12px; padding-inline: 28px; border: 0; }
 .noteLabel { font-size: 14px; font-weight: 600; }
-.noteOptional { color: var(--tx3); font-size: 10px; font-weight: 400; line-height: 1.7; }
-.noteField { display: block; box-sizing: border-box; inline-size: 100%; min-block-size: 68px; max-block-size: 150px; padding: 12px 14px; border: 1px solid var(--hair2); border-radius: 10px; resize: vertical; background: var(--sf); color: var(--tx); font: inherit; font-size: 12px; }
+.noteOptional { font-size: 10px; line-height: 1.7; }
+.noteField { display: block; box-sizing: border-box; inline-size: 100%; min-block-size: 68px; max-block-size: 150px; padding: 12px 14px; border: 1px solid var(--hair2); border-radius: 10px; resize: vertical; background: var(--sf); color: var(--tx); font-size: 12px; }
 .noteField::placeholder { color: var(--tx3); }
 .noteField:focus { border-color: var(--acc); }
-.foot { grid-column: 1; grid-row: 2; display: flex; flex: none; align-items: center; gap: 12px; min-inline-size: 0; padding-block: 18px 24px; padding-inline: 28px; margin-block-start: auto; border-block-start: 1px solid var(--hair2); background: var(--bg); }
-.stepper { display: flex; flex: none; align-items: center; direction: ltr; border: 1px solid var(--hair2); border-radius: 10px; background: transparent; }
-.step { position: relative; display: grid; place-items: center; inline-size: 32px; block-size: 46px; padding: 0; border: 0; background: transparent; color: var(--tx); cursor: pointer; }
+.foot,.stepper,.cta{display:flex;align-items:center}
+.foot { grid-column: 1; grid-row: 2; flex: none; gap: 12px; min-inline-size: 0; padding-block: 18px 24px; padding-inline: 28px; margin-block-start: auto; border-block-start: 1px solid var(--hair2); background: var(--bg); }
+.stepper { direction: ltr; border: 1px solid var(--hair2); border-radius: 10px; background: transparent; }
+.step { position: relative; inline-size: 32px; block-size: 46px; padding: 0; border: 0; background: transparent; }
 .step::after { content: ''; position: absolute; inset-block: 0; inset-inline: -6px; }
 .step:hover:not(:disabled) { background: var(--sf2); }
 .step svg { inline-size: 16px; block-size: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .stepPlus { background: transparent; color: var(--tx); }
 .step:disabled { opacity: .35; cursor: not-allowed; }
-.stepValue { inline-size: 26px; text-align: center; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stepValue { inline-size: 26px; text-align: center; font-size: 13px; font-weight: 600; }
 .quantityOption > .stepper { align-self: center; }
 .quantityOption > .stepper .step { inline-size: 25px; block-size: 30px; }
 .quantityOption > .stepper .stepValue { inline-size: 22px; font-size: 11px; }
-.cta { display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 14px; min-inline-size: 0; min-block-size: 49px; border: 0; border-radius: 10px; padding: 14px 18px; background: var(--acc); color: var(--onacc); font: inherit; font-size: 13px; font-weight: 700; line-height: 1.6; box-shadow: none; cursor: pointer; transition: background 200ms, transform 200ms; }
+.cta { flex: 1; justify-content: space-between; gap: 14px; min-inline-size: 0; min-block-size: 49px; border: 0; border-radius: 10px; padding: 14px 18px; background: var(--acc); color: var(--onacc); font-size: 13px; font-weight: 700; line-height: 1.6; box-shadow: none; cursor: pointer; transition: background 200ms, transform 200ms; }
 .cta:hover:not(.ctaBlocked) { background: color-mix(in srgb, var(--acc) 90%, var(--tx)); transform: translateY(-1px); }
 .ctaBlocked { background: var(--sf2); color: var(--tx2); box-shadow: none; }
-.ctaLabel { min-inline-size: 0; overflow-wrap: anywhere; }
-.ctaPrice { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ctaPrice { white-space: nowrap; }
 .toast { position: fixed; inset-inline: 20px; inset-block-end: 98px; z-index: 42; display: flex; justify-content: center; pointer-events: none; }
 .toastPill { display: inline-flex; align-items: center; justify-content: center; max-inline-size: 100%; padding: 13px 24px; border-radius: 12px; background: var(--tx); color: var(--bg); box-shadow: 0 6px 30px color-mix(in srgb, var(--tx) 20%, transparent); font-size: 13px; font-weight: 500; line-height: 1.6; text-align: center; overflow-wrap: anywhere; }
 .motionFull .scrim { animation: sfScrimIn 200ms ease-out both; }
