@@ -17,11 +17,12 @@ test('transport uses the exact Edge endpoint, no ambient credentials and only tw
   assert.deepEqual(JSON.parse(init.body), { action: 'submit', ...identity(), order: order() });
   assert.equal(calls.length, 1);
 });
-test('status sends only identity and capability in POST body, never in URL', async () => {
+test('status sends only identity and capability in body and negotiates v2 without URL changes', async () => {
   let captured;
   const transport = createOrderTransport({ origin: WEB_ORDER_ORIGIN, fetchImpl: async (url, init) => { captured = { url, init }; return response(result('accepted')); } });
   assert.equal((await transport.status(identity())).result.status, 'accepted');
   assert.deepEqual(JSON.parse(captured.init.body), { action: 'status', ...identity() });
+  assert.deepEqual(captured.init.headers, { 'Content-Type': 'application/json', Accept: 'application/json', 'X-BIZBOT-Order-Response-Version': '2' });
   assert.equal(captured.url.includes(identity().status_token), false); assert.equal(captured.url.includes(REQUEST_ID), false);
 });
 test('origin accepts only the configured exact HTTPS project origin', () => {
@@ -93,7 +94,7 @@ test('timeout bounds both fetch and response-body reads even if upstream ignores
   let aborted = false;
   const timeoutFetch = createOrderTransport({ origin: WEB_ORDER_ORIGIN, timeoutMs: 10, fetchImpl: async (_url, init) => { init.signal.addEventListener('abort', () => { aborted = true; }); return new Promise(() => {}); } });
   assert.equal((await timeoutFetch.submit(identity(), order())).kind, 'unknown'); assert.equal(aborted, true);
-  const slowBody = createOrderTransport({ origin: WEB_ORDER_ORIGIN, timeoutMs: 10, fetchImpl: async () => new Response(new ReadableStream({ start() {} }), { headers: { 'Content-Type': 'application/json' } }) });
+  const slowBody = createOrderTransport({ origin: WEB_ORDER_ORIGIN, timeoutMs: 10, fetchImpl: async () => new Response(new ReadableStream({ start() {} }), { headers: { 'Content-Type': 'application/json', 'X-BIZBOT-Order-Response-Version': '2' } }) });
   assert.equal((await slowBody.status(identity())).kind, 'unavailable');
 });
 test('bounded strict UTF-8 JSON rejects duplicate decoded keys, BOM, malformed JSON and unknown fields', async () => {

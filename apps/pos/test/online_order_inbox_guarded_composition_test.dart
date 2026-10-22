@@ -199,11 +199,13 @@ _boot(SyncRpcTransport transport, _Store store, {bool offline = false}) async {
 
 Future<OnlineInboxDecisionResult> _decide(
   OnlineOrderInboxRepository repository,
-  OnlineOrderDecision action,
-) => repository.decide(
+  OnlineOrderDecision action, {
+  int? preparationMinutes,
+}) => repository.decide(
   requestId: requestId,
   decisionId: decisionId,
   decision: action,
+  preparationMinutes: preparationMinutes,
   reason: action == OnlineOrderDecision.reject ? '  نفد المخزون  ' : null,
 );
 
@@ -213,7 +215,11 @@ Matcher get _transportFailure => isA<OnlineInboxException>().having(
   OnlineInboxFailure.transport,
 );
 
-void _expectSingleEdgeCall(_Wire wire, OnlineOrderDecision action) {
+void _expectSingleEdgeCall(
+  _Wire wire,
+  OnlineOrderDecision action, {
+  int? preparationMinutes,
+}) {
   expect(wire.requests, hasLength(1));
   final request = wire.requests.single;
   expect(request.method, 'POST');
@@ -229,6 +235,7 @@ void _expectSingleEdgeCall(_Wire wire, OnlineOrderDecision action) {
     'device_id': deviceId,
     'pin_session_id': pinId,
     'device_session_token': _credential.sessionToken,
+    if (preparationMinutes != null) 'preparation_minutes': preparationMinutes,
     if (action == OnlineOrderDecision.reject) 'reason': 'نفد المخزون',
   });
   expect(wire.requests.where((r) => r.url.path.contains('/rpc/')), isEmpty);
@@ -236,6 +243,103 @@ void _expectSingleEdgeCall(_Wire wire, OnlineOrderDecision action) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('ETA reaches real boot guard and SDK Edge body exactly once', () async {
+    final wire = _Wire();
+    addTearDown(wire.client.dispose);
+    final boot = await _boot(wire.transport, _Store());
+    await _decide(
+      boot.repository,
+      OnlineOrderDecision.accept,
+      preparationMinutes: 30,
+    );
+    _expectSingleEdgeCall(
+      wire,
+      OnlineOrderDecision.accept,
+      preparationMinutes: 30,
+    );
+  });
+
+  test('ETA cannot escape block during private credential loading', () async {
+    final wire = _Wire();
+    addTearDown(wire.client.dispose);
+    final store = _Store();
+    final boot = await _boot(wire.transport, store);
+    final gate = store.readGate = Completer<DeviceSessionCredential?>();
+    final result = _decide(
+      boot.repository,
+      OnlineOrderDecision.accept,
+      preparationMinutes: 15,
+    );
+    final assertion = expectLater(result, throwsA(_transportFailure));
+    boot.guard.block();
+    gate.complete(_credential);
+    await assertion;
+    expect(wire.requests, isEmpty);
+  });
+
+  test('ETA HOLD never queues; same guard upgrades without replay', () async {
+    final wire = _Wire();
+    addTearDown(wire.client.dispose);
+    final boot = await _boot(wire.transport, _Store(), offline: true);
+    await expectLater(
+      _decide(
+        boot.repository,
+        OnlineOrderDecision.accept,
+        preparationMinutes: 60,
+      ),
+      throwsA(_transportFailure),
+    );
+    expect(wire.requests, isEmpty);
+    await boot.goOnline();
+    expect(wire.requests, isEmpty);
+    await _decide(
+      boot.repository,
+      OnlineOrderDecision.accept,
+      preparationMinutes: 60,
+    );
+    _expectSingleEdgeCall(
+      wire,
+      OnlineOrderDecision.accept,
+      preparationMinutes: 60,
+    );
+  });
+
+  test('ETA real boot SDK and actual Edge use only the new RPC once', () async {
+    final wire = _Wire(realEdge: true);
+    addTearDown(wire.client.dispose);
+    final boot = await _boot(wire.transport, _Store());
+    final result = await _decide(
+      boot.repository,
+      OnlineOrderDecision.accept,
+      preparationMinutes: 30,
+    );
+    expect(result.replayed, false);
+    _expectSingleEdgeCall(
+      wire,
+      OnlineOrderDecision.accept,
+      preparationMinutes: 30,
+    );
+    expect(wire.rpcCalls, hasLength(1));
+    final rpc = wire.rpcCalls.single;
+    expect(
+      rpc['url'],
+      'https://synthetic.invalid/rest/v1/rpc/pos_accept_web_order_with_eta',
+    );
+    expect(
+      (rpc['headers'] as Map)['Authorization'],
+      'Bearer synthetic.device.jwt',
+    );
+    expect((rpc['headers'] as Map)['apikey'], 'synthetic-public-key');
+    expect(rpc['body'], {
+      'p_device_id': deviceId,
+      'p_pin_session_id': pinId,
+      'p_device_session_token': _credential.sessionToken,
+      'p_request_id': requestId,
+      'p_decision_id': decisionId,
+      'p_preparation_minutes': 30,
+    });
+  });
 
   for (final action in OnlineOrderDecision.values) {
     test(

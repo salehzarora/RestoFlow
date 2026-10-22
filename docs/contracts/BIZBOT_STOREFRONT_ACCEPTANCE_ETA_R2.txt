@@ -1,0 +1,267 @@
+BIZBOT — WEBSITE ORDER ACCEPTANCE ETA CONTRACT — R2 PROPOSAL
+Work ID: BIZBOT-STOREFRONT-ACCEPTANCE-ETA-CONTRACT-001
+Status: R2 PROPOSED CONTRACT FOR GPT / OWNER REVIEW ONLY — NO IMPLEMENTATION
+Issue: https://github.com/salehzarora/RestoFlow/issues/360
+Observed source: ec134dedb73fc2e013148131233d08d9f94c4011
+Observed tree: bc44ee904ff2578e766cb46397c3fc49174b75b3
+Read-only source worktree:
+C:/Users/saleh/Desktop/ClaudeAi/RestoFlow/worktrees/BIZBOT-STOREFRONT-CONTACT-CHECKOUT-001-ROLLOUT
+
+R1 is preserved byte-for-byte at ETA-CONTRACT-FOR-REVIEW.txt (SHA-256 d3172376a4f71eaff26284052586a634913858dbe20bb9a55dfa3dddb88654e6). This new document addresses ETA-COMPAT-001 from INDEPENDENT-CONTRACT-REVIEW-001.json; it is not a source patch. Every header/RPC/schema/field name, version value, custom range and rollout choice below remains PROPOSED for GPT/owner review. No API contract has been allocated or enabled.
+
+1. PURPOSE AND STATUS
+
+The cashier deliberately chooses a preparation duration while accepting a website Pickup request. A customer subsequently sees an approximate server-derived ready estimate. This is an informational acceptance estimate, not authority to mark an order ready, change preparation algorithms, create another order, send a print, or modify an existing decision.
+
+This file proposes concrete wire/storage names and bounds for review. It is not an approved application contract, source implementation, migration, deployment, release approval or execution permit. No ETA source change has begun. Parent-owned PR364 main-CI/menu-deployment closure is a prerequisite for another implementation workstream and is not established by this document.
+
+The owner requirement already specifies quick choices 10 / 15 / 20 / 30 / 45 / 60 minutes. The custom range 1..240 whole minutes below is PROPOSED, not silently approved. Fields, range and DB strategy require review before cross-stack implementation.
+
+2. VERIFIED CURRENT ACCEPTANCE AND TRANSPORT PATH
+
+POS UI:
+- apps/pos/lib/src/widgets/online_order_inbox_sheet.dart: Accept currently calls controller.decide immediately. Rejection already has a keyboard-safe dialog pattern. No preparation chooser exists.
+- apps/pos/lib/src/state/online_order_inbox_controller.dart: OnlineInboxIntent retains requestId, decisionId, decision and reason. Opposite/new decisions are blocked while uncertain. _reconcile performs a targeted request lookup which obtains the server request lock; only confirmed pending state permits one existing bounded recovery send of the ORIGINAL intent. A terminal result finishes without another canonical submit.
+- apps/pos/lib/src/data/online_order_inbox.dart: RealOnlineOrderInboxRepository asynchronously reads the matching private device credential, checks isCurrent, requires AuthenticatedWebOrderDecisionTransport and passes action/request/decision plus PIN/device/session credentials to the authenticated Edge capability. It does not fall back to legacy decision RPCs.
+
+Actual production wrappers, preserved by Issue358:
+- packages/auth_identity/lib/src/device_session_guarded_transport.dart: Outer DeviceSessionGuardedTransport checks blocked state immediately before forwarding; there is no await before handoff. A block while repository credential loading wins. An already handed-off ambiguous outcome must reconcile rather than resend blindly.
+- packages/data_remote/lib/src/upgradable_sync_transport.dart: Offline HOLD refuses calls without IO. A single in-place upgrade installs the real delegate; retain the same runtime and capability.
+- packages/data_remote/lib/src/supabase_sync_rpc_transport.dart: Real SDK invokes pos-web-order-decision with a bounded timeout. The kitchen-ACK HTTP boundary is independent and must remain intact.
+- packages/data_remote/lib/src/sync_rpc_transport.dart: AuthenticatedWebOrderDecisionTransport accepts a Map body; no new direct HTTP transport is required merely to carry an optional integer.
+
+Edge:
+- supabase/functions/pos-web-order-decision/handler.mjs accepts an exact action-dependent key set, forwards the real caller JWT and public project key, and calls five-argument public.pos_accept_web_order for accept or pos_reject_web_order_customer for reject.
+- SQL remains device/PIN/tenant authority. No service-role impersonation, caller API-key authority, redirect or decision write retry exists.
+- The header AND body read are bounded; an unknown result remains decision_outcome_unknown. A valid non-replayed committed decision schedules the existing best-effort terminal wake after response construction. Preserve that ordering and notification independence.
+
+Database:
+- supabase/migrations/20261013235300_web_orders_checkout_001_item_notes.sql defines the latest app.decide_pos_web_order. It locks the same-scope request FOR UPDATE, rechecks session deadlines, hashes request_id/decision/reason, and writes canonical effects, the final decided_at and append-only web_order_decisions in the existing transaction path.
+- supabase/migrations/20261020143657_bizbot_platform_online_orders_353.sql defines the platform app.pos_accept_web_order wrapper. It retains containment/device/request serialization, exact winning device/PIN/decision checks on accepted replay, and at most one existing printer lease. Old enrollments use their preserved legacy resolver.
+- supabase/migrations/20261013174657_web_orders_001_pending_requests.sql guards immutable request identity/quote. Only its explicitly permitted terminal fields may change. Do not casually add mutable ETA fields to this trigger allowlist.
+- public.web_order_decisions is append-only, one row per request, with scoped decision identity and private payload_hash. No historical decision rewrite is permitted.
+
+Customer:
+- app.web_order_public_result is most recently extended by 20261020212503_bizbot_pos_order_decision_ux_sync_001.sql. It projects narrow capability-scoped status and only authorized new public rejection reasons.
+- supabase/functions/web-order-submit/handler.mjs separately whitelists public result fields.
+- storefront/src/orders/transport.ts is strict today and rejects unknown fields. Optional ETA decoding alone is insufficient for already-open old tabs. R2 requires explicit response-version negotiation: legacy callers ALWAYS retain the old response projection, even when a new POS later accepts with ETA. Backend support precedes a negotiating consumer; new POS producer comes last.
+- storefront/src/orders/contract.ts recovery identity contains only slug/request/status capability/creation/retention deadline. Do not add customer PII or ETA authority to persisted recovery identity.
+
+3. PROPOSED WIRE CONTRACT — REVIEW REQUIRED
+
+Incoming authenticated acceptance:
+  action: "accept"
+  existing PIN/device/session/request/decision keys: unchanged
+  preparation_minutes: integer JSON number, 1..240 inclusive [PROPOSED RANGE]
+
+Quick choices: exactly 10,15,20,30,45,60. Custom entry is whole minutes within the reviewed bound. Reject strings, fractions, booleans, null, missing new-client selection, overflow and non-finite values. Reject action must not accept this extra key.
+
+Legacy compatibility: absence of preparation_minutes keeps the existing old-client acceptance path and creates no ETA. New POS requires a deliberate valid choice; it never silently omits the field, defaults to a duration, or falls back to legacy acceptance if the new path is unavailable.
+
+Proposed new named RPC:
+  public/app.pos_accept_web_order_with_eta(
+    p_pin_session_id uuid,
+    p_device_id uuid,
+    p_device_session_token text,
+    p_request_id uuid,
+    p_decision_id uuid,
+    p_preparation_minutes integer)
+
+Use a distinct explicit name, not an ambiguous PostgREST overload or default-argument change to the existing five-argument RPC. Edge routing selects this path only when the reviewed optional field exists and is valid. The old path remains supported. No per-restaurant/device UUID allowlist.
+
+Proposed optional response field ONLY for a successfully NEGOTIATED v2 capability status read whose result is accepted. Legacy/no-header responses, existing SQL result/status functions, and submit responses never acquire this field:
+  "acceptance_eta": {
+    "preparation_minutes": 15,
+    "accepted_at": "<UTC RFC3339 instant from winning decision decided_at>",
+    "ready_at": "<UTC RFC3339 instant: accepted_at + 15 minutes>",
+    "timezone": "<validated effective restaurant/branch IANA timezone>"
+  }
+
+The exact tuple is one atomic optional object. Its four fields are all required when present, with no unknown keys. The object must be absent for legacy/historical accepted requests and for pending, rejected and expired states. Do not emit null placeholders or partially populated estimates.
+
+Validate integer bounds, parseable UTC instants, approved timezone, arithmetic consistency and accepted-only presence at producer and strict consumer boundaries. Canonicalize instants consistently without changing their meaning or manufacturing a new accepted timestamp. The customer whitelist must not expose internal order/employee/device IDs, decision fingerprints, PIN/session details or extra capabilities.
+
+Existing safe error vocabulary can represent invalid_request, decision_conflict, request_expired and ordering_unavailable. Final error choice is part of reviewed implementation. Never expose raw SQL/HTTP/server exceptions; an error or timeout is not proof that acceptance did not commit.
+
+3A. R2 PROPOSED RESPONSE-VERSION NEGOTIATION — NONAUTH, BACKEND FIRST
+
+PROPOSED header name: X-BIZBOT-Order-Response-Version.
+PROPOSED supported values: absent or the single string "1" means legacy; the single string "2" requests the new status representation. Names/values are NOT approved or implemented. HTTP-standard header-name case insensitivity is expected; comma-joined duplicates, unsupported/empty values and malformed values fail with a fixed invalid_request before any database RPC. Never log the raw header or use it as authorization.
+
+This is an informational representation capability, not an employee, device, tenant, order, capability-token, notification or print credential. A caller who asks for version2 still needs the exact existing slug + UUIDv4 client_request_id + private canonical status_token. Missing/wrong/expired capability remains not_found; no estimate existence, private request ID, decision identity or table metadata may leak. Customer Authorization/apikey headers remain ignored for database authority; only the Edge's existing server-held service credential reaches service-only status RPCs. POS acceptance continues to use its independent real caller JWT/device/PIN guards.
+
+For the first minimal slice, the new client attaches the proposed header ONLY to action=status. Submit bodies, requests and responses remain legacy and byte-compatible: no extra body key, order field, immutable request fingerprint, request ID, status token, idempotency identity, recovery record, URL or persisted setting. Header2 on action=submit is proposed to fail invalid_request before any write; absence/1 follows the unchanged submission path. This action restriction is also a review decision, not a deployed rule. Do not change or retry an uncertain submit to obtain ETA.
+
+Explicit action/representation matrix:
+- No header (including an already-open old customer tab), or supported legacy1, status: call existing get_web_order_request_status; apply the existing strict legacy projection; omit acceptance_eta ALWAYS, including orders accepted by new ETA-capable POS.
+- Header2, status: call a NEW explicitly versioned, service-only capability status reader; apply a NEW strict v2 projection accepting only the complete optional accepted-only tuple. Error vocabulary/capability retention and private-data exclusions remain the existing contract.
+- No header/legacy1, submit: call the existing selected live/test/pilot submit RPC exactly as today; use unchanged legacy projection; no ETA even for an accepted replay.
+- Header2, submit in this first proposal: fixed pre-write invalid_request. New consumer never sends it for submit. No second submit, backend write retry or post-write status/enrichment query is hidden inside that path.
+
+An accepted SUBMIT replay legitimately carries no ETA. A new consumer may perform one explicitly designed, bounded STATUS read with version2 after such an accepted result, retaining the same capability, to obtain the authoritative optional tuple. This is a read, not an acceptance/submission retry. Failure preserves the already-known accepted status, explains estimate unavailability if needed and never fabricates/restarts a timer. Absence in a legacy submit response must not be presented as proof that no sidecar exists. Review this read behavior with the controller recovery contract before implementation.
+
+PROPOSED new SQL names, to be reviewed for collisions and authority before code:
+- app.web_order_public_result_v2(p_request public.web_order_requests,p_replayed boolean).
+- app.get_web_order_request_status_v2(p_slug text,p_client_request_id uuid,p_status_token_hash text).
+- public.get_web_order_request_status_v2 with the same three input types, invoker wrapper/EXECUTE grant parity with the existing service-only status RPC.
+
+Keep existing app.web_order_public_result, app/public.get_web_order_request_status and all submit RPC definitions/shapes unchanged for this scope. In particular, do NOT globally append ETA to the shared old result helper: old submit-replay and status callers use it, including already-open strict tabs. Preserve their existing explicitly authorized rejection-reason projection without disclosing historical private reasons. No unconditional acceptance_eta field, null placeholder, body version key or generic allow-unknown-fields decoder anywhere.
+
+The proposed v2 result helper derives the same base legacy result and joins an estimate only for an accepted request whose SAME full scoped winning request/decision matches the immutable sidecar, accepted_at and decided_at. A genuinely absent sidecar means the OPTIONAL key is absent. A present but inconsistent/corrupt tuple is an error/failed verification, not permission to guess, overwrite it, or quietly manufacture a legacy success. The full nested tuple remains strict and excludes all private identifiers.
+
+The proposed v2 status reader must perform the full established capability lookup, retention checks, channel locking, fresh post-lock row read and existing status-attempt quota exactly once. It passes its authorized scoped request row to the v2 result projection; neither a caller UUID alone nor a separately selected unbound row may reveal an estimate. It must preserve same-scope historical status availability under the current reader's rules, not add a new publication requirement or bypass rate limits. Existing reader code may be mirrored narrowly into the new named reader with parity tests and review; do NOT call the old quota-counting reader twice or perform a second unchecked metadata lookup keyed only by client_request_id/slug after its JSON returns. If a safe shared-authority approach cannot be proven while preserving legacy shapes, stop for contract revision rather than weaken capability checks.
+
+Current verified implementation details driving this proposal:
+- web-order-submit/handler.mjs uses a fixed explicit public projection, Cache-Control no-store,max-age=0, Pragma no-cache and Vary:Origin.
+- Its current preflight allows content-type,authorization,apikey,x-client-info only; the new public version header is NOT currently supported.
+- Its existing JSON validation allows only action,slug,request_id,status_token (+order for submit), hashes the token before PostgREST, and forwards no customer Authorization/apikey.
+- Existing status RPC is service-role-only, validates the capability and its24h retention and increments its established bounded status quota under a channel lock. A request labeled status is therefore not a pure no-side-effect SQL SELECT; no new invocation occurs in this preparation.
+- Current browser transport sends the same strict JSON body, Content-Type/Accept, credentials:omit, redirect:error, cache:no-store; strict response exactObject would reject the future key. Historical CONTRACT.md sections mention older Maps Burger admission; current handler/platform source is the routing authority for this proposal.
+
+CORS and representation response rules, PROPOSED:
+1. Deploy server support for the header, v2 status routing/projection and same-origin policy BEFORE any browser sends it. Add only the exact new header to the established preflight allowlist; preserve other allowed headers and origin rules. Retain bounded existing preflight Max-Age; no credentials/cookie authority added.
+2. For accepted v2 status requests, echo the fixed response-version value2 in a response header (not a JSON body key). Expose that single response header through Access-Control-Expose-Headers so the new browser can verify the selected representation. The new client checks the expected acknowledgment; no automatic legacy fallback masks an unsupported/missing backend. Legacy responses may acknowledge1 in a header that old decoders safely ignore; their JSON shape never changes.
+3. Retain Cache-Control:no-store,max-age=0, Pragma:no-cache, request cache:no-store and no ambient credentials. Add the response-version request header to Vary together with Origin on all negotiated responses, including errors/preflight where relevant. Intermediaries must never serve a v2 response body to an absent-header caller. No CDN/recovery/local-storage cache of capabilities or ETA is introduced.
+4. Malformed/unsupported version must return a fixed safe error with no raw upstream/header diagnostics. Header version alone cannot make a failed or uncertain order successful, cause a second RPC/write, select another tenant, or enable FCM/Cron/printing.
+
+The new Storefront release must not send an unsupported header and rely on fallback. Keep that client change out of the active live bundle until the exact backend/CORS/versioned reader deployment is independently verified. An unsupported backend is a compatibility/deployment blocker, not a reason to send without the header after a failed negotiated request. Old tabs simply omit it forever and continue receiving the legacy projection. New navigation/reload may load the new consumer normally, without deleting recovery state or forcing a customer session reset.
+
+4. PROPOSED IMMUTABLE DATA AND ATOMICITY STRATEGY
+
+Preferred candidate for review: new private append-only app.web_order_acceptance_estimates sidecar, keyed by the exact scoped winning request/decision. This avoids changing immutable request identity, existing legacy fingerprint semantics and historical decisions. Final schema names/constraints need security/database review.
+
+Proposed columns:
+- request_id: primary key and scoped foreign key to the accepted request/decision.
+- organization_id, restaurant_id, branch_id, decision_id: exact tenant/winner binding.
+- preparation_minutes: approved integer bound.
+- accepted_at: copied exactly from winning web_order_decisions.decided_at.
+- ready_at: server-derived accepted_at + duration, with an arithmetic CHECK.
+- timezone: validated effective IANA timezone captured with the estimate.
+- intent_fingerprint: canonical versioned SHA256 binding request/action/duration and exact scoped decision identity.
+
+Table protection: FORCE RLS; no direct client/anon/authenticated/service_role CRUD; fixed-search-path trusted function access only; append-only update/delete/truncate guards; scoped foreign keys; no customer read except through the existing capability-validated projection. No historical backfill.
+
+Mandatory transaction behavior:
+1. Validate new duration/timezone before canonical side effects.
+2. Reuse current device/PIN/tenant/session validation, containment/device/request lock order and winner checks. Recheck authority/deadlines after waiting. Do not invert locks by introducing a metadata-first lock.
+3. Reuse the existing acceptance/canonical/print-lease authority exactly once; do not fork a parallel acceptance implementation.
+4. Insert metadata in the SAME SQL transaction as the winning acceptance. Read accepted_at from that winning decision, not from the caller or a later clock sample.
+5. If metadata cannot be bound/inserted/verified after a new acceptance, roll back ALL canonical/decision/lease effects. Returning an error JSON after the old accept succeeds would be unsafe if its writes could remain committed.
+6. A wrapper can reuse existing acceptance only after its enclosing exception/subtransaction structure proves full rollback. If that proof cannot be made, revise the design before code; do not weaken atomicity.
+7. Preserve legacy web_order_decisions.payload_hash and protected request trigger. Sidecar binding does not permit retroactive attachment to an already accepted legacy request.
+
+Required outcomes:
+- Old client accepts: existing result, no estimate.
+- New decision commits with duration: one order, one original print authority and one immutable estimate.
+- Same exact winning intent and duration: replay original accepted_at/ready_at/timezone; no timestamp reset, insert or new lease.
+- Same decision identity but changed duration: decision_conflict.
+- Accepted legacy request with no estimate: new ETA attempt conflicts; no invented/backfilled estimate.
+- Another device/PIN/decision after acceptance: existing winner conflict; cannot edit ETA or create print permission.
+- Concurrent accepts or accept/reject: one existing canonical winner only; loser writes no estimate.
+- Rejected/expired: no estimate.
+
+5. TIME AND DISPLAY AUTHORITY
+
+accepted_at is the winning final decision timestamp sampled by PostgreSQL clock_timestamp after canonical work and before COMMIT; it is NOT a precise commit timestamp. ready_at is an absolute instant computed once from that unchanged decision value. expires_at remains the PENDING deadline and is never reused as ETA.
+
+Proposed timezone authority: effective branch timezone, otherwise restaurant timezone, following existing public storefront rules. Capture that validated IANA value with the estimate. A missing/invalid zone denies only the new ETA path before acceptance; do not silently substitute browser/Android/POS zone. Old no-estimate acceptance remains compatible. This behavior needs explicit contract review.
+
+Customer UI presents localized approximate duration and/or approximate ready time in AR/HE/EN, with a date when crossing the restaurant's local day. Recommended first slice omits a live countdown: absolute estimate plus duration avoids new device-clock authority. If a countdown is required later, define its clock contract first.
+
+For an ETA-aware negotiated status consumer, refreshing, resuming, reopening or changing language fetches the original tuple through the existing status capability; it cannot restart the duration. Same-intent replay returns the stored timezone even if current restaurant settings later change; only a genuinely NEW pending acceptance resolves/validates the current effective timezone. An elapsed estimate changes informational copy only: never state='ready', autoaccept, cancellation authority, dispatch, reprint or any other business transition.
+
+6. POS CHOOSER AND UNCERTAIN RECOVERY
+
+Use a small accessible inset-aware dialog/sheet with the six quick choices, bounded custom numeric entry, explicit Confirm Accept and Cancel. No implicit selected duration. Dismiss/back/escape/cancel creates no decision intent or POST.
+
+Keep actions reachable with the keyboard, 44+dp touch targets, scrollable content, large text, tablet portrait/landscape and Arabic/Hebrew direction. Reuse rejection-dialog layout safety without sharing reason/selection state.
+
+At confirmation, revalidate current pending request, foreground/session, online phase and deadline. Store the chosen integer in OnlineInboxIntent with the original action/request/decision identity before handoff. An expired/stale/blocked request sends nothing.
+
+All uncertain recovery retains that exact duration and original identity. Preserve the existing locked-request targeted reconciliation: confirmed pending may use the existing bounded ORIGINAL-intent recovery send; terminal truth finishes. Never generate a fresh decision, choose a new default, repeat ordinary discovery as proof of no write, downgrade to the old RPC, reset providers, restart, re-pair or clear data as a workaround.
+
+The actual guard/HOLD/upgrade/SDK/Edge composition must forward the optional duration once. Blocking during async credential loading must prevent handoff; a post-handoff timeout remains uncertain. Kitchen ACK protections remain unchanged. If another device resolves while the chooser is open, reconcile authoritative truth without acceptance or print duplication, and preserve other pending alerts.
+
+7. ROLLOUT AND COMPATIBILITY ORDER — R2, NO OLD-TAB BREAKAGE
+
+This artifact authorizes no implementation, merge, migration, deployment, enablement or build. Fresh source/worktree/PR overlap and separate scoped contract approval come first. The proposed order is SERVER READER/NEGOTIATION FIRST, CONSUMER SECOND, NEW POS PRODUCER LAST:
+
+1. Review the proposed header/value/action restriction, versioned SQL readers/projection, complete tuple, sidecar/acceptance atomicity and bounds. Independently verify original v1 SQL and old strict browser contracts as compatibility fixtures. New source must not emit ETA unconditionally into an existing response helper.
+2. Under separately reviewed backend-first rollout authority, apply the additive ETA sidecar/new acceptance RPC and new versioned status/result reader migration once. Leave all old SQL result/status/submit functions and shapes unchanged; install no historical backfill or setting that can create estimates by itself. Verify schema/history/ACL/RLS, quota/capability parity and old shapes before dependent Edge changes.
+3. Deploy the backward-compatible customer Edge CORS/version negotiation and explicit LEGACY/v2 projections after the new reader exists. Absent-header legacy calls ALWAYS use old projection, whether an ETA sidecar exists or not. Preserve submit response/body/write RPC semantics and no retry. Deploy the new authenticated decision Edge routing only after the additive acceptance RPC exists; old POS input remains accepted. No new POS producer yet.
+4. Independently verify the actual backend/CORS/version acknowledgment and old-client response parity with focused controlled fixtures. A missing/unknown header/reader is a STOP, not a silent fallback. Prove an already-open OLD strict browser tab can continue status polling across the backend rollout and an ETA-capable acceptance without receiving the new key. Source-local/isolated evidence must precede any separately approved live acceptance; do not generate orders merely to prove preparation.
+5. Only after the exact backend deployment is verified, deploy the new strict optional v2 decoder/UI and status-header opt-in on the actual live menu domain. New submit stays legacy; new status explicitly negotiates2 and validates the acknowledgment. Genuine legacy accepted absence remains an honest no-estimate state. Never change immutable request/recovery identity to store the version or ETA.
+6. Release the new POS chooser/repository/controller LAST in a separately reviewed compatible official version, preserving real guarded composition, original intent duration and existing decision recovery. Every producer writes metadata atomically; public ETA appears ONLY for a negotiated v2 status consumer. Older POS accepts remain valid and produce no sidecar; older customer tabs remain valid and receive legacy projection even for new POS accepts.
+7. Owner-operated physical acceptance only after separate readiness: original duration/absolute estimate survives customer refresh; old-open-tab/new-POS mix and new-tab/old-POS legacy absence work; two-device winner/cancellation and existing print behavior are observed. No agent-generated production order or speculative paper/dialer/notification PASS.
+
+Live ordering, notifications and Cron remain ON throughout any separately approved rollout. Preserve BLOCKED1264,625 historical holds, pairings/local data, capabilities and existing HOME/platform authority. No per-tenant manual activation or hardcoded restaurant/device identity. A representation-header rollback disables new consumer opt-in first while preserving old projection and accepted metadata; never delete sidecars, reset capabilities or roll back successful canonical DDL/order effects as a recovery shortcut.
+
+8. FOCUSED VERIFICATION MATRIX
+
+SQL/RLS:
+- Whole integer bounds/types/absence; scoped foreign keys; append-only/forced RLS/ACL.
+- Revoked employee/device/PIN and expiry before/after lock; cross-tenant/request identity reuse.
+- Same duration replay, changed duration conflict, existing legacy no-ETA accepted rows.
+- Real concurrent accept/accept and accept/reject; no duplicate canonical order/lease.
+- Metadata SQL failure rolls back acceptance/decision/order/lease; failed postcheck is not permission to retry.
+- Server decided_at equality, ready arithmetic, timezone, DST/day boundaries and immutable history.
+- Existing625holds and print permissions unchanged.
+
+Edge:
+- Exact keys, legacy/new named-RPC routing, duration types/bounds, reject disallows ETA.
+- Missing/legacy1/status2/unsupported/empty/duplicate header, submit2 pre-write refusal, and case-insensitive header-name behavior.
+- Absent header ALWAYS returns the exact old JSON projection even when an immutable ETA exists; version negotiation changes no body/idempotency/auth authority.
+- New status reader once-per-call quota/capability behavior, no double-count or unchecked second row lookup.
+- CORS allow/expose rules, exact acknowledgment, Vary:Origin plus version-header, no-store on successes/errors, and no new unsupported header before verified server rollout.
+- Real caller JWT/device/PIN authority; no service-role bypass or raw errors/logs.
+- Strict complete accepted-only tuple projection and customer whitelist.
+- Header/body timeout and uncertain outcomes; no decision write retry.
+- Existing terminal postcommit wake once on nonreplay, notification failure independent of successful decision.
+
+Flutter:
+- Six quick/custom choices, cancel/dismiss, no default, keyboard/RTL/textscale/layout.
+- Frozen intent duration across locked pending recovery; malformed/timeout/conflict/terminal states.
+- REAL boot/provider/DeviceSessionGuardedTransport/UpgradableSyncTransport/Supabase SDK HTTP/actual Edge adapter composition.
+- Block during secret read, offline HOLD/upgrade, invalid scope/session and existing kitchen ACK boundaries.
+
+Storefront:
+- REQUIRED ALREADY-OPEN OLD-TAB TEST: load the original strict ec134 browser/transport before backend update, retain its existing capability and pending request, deploy negotiated backend in an isolated fixture, accept with the new POS ETA path, then poll WITHOUT a reload or new order; old tab still decodes accepted legacy body and never receives ETA.
+- Mixed matrix: old consumer/new ETA accept, new consumer/old no-ETA accept, both new, both old; genuine optional absence versus malformed/present inconsistency.
+- New header sent only for status AFTER supported deployment, no automatic representation fallback, no submit body/fingerprint/recovery changes; accepted submit replay follows at most one separately designed bounded status read.
+- Old accepted absence, strict complete tuple, malformed/partial/unknown/status-mismatched fields.
+- AR/HE/EN approximate display; restaurant zone/day/DST; refresh/resume does not restart.
+- Late unknown outcomes and expired pending do not fabricate ETA.
+- Capability, recovery snapshot, customer phone/privacy and existing Call action unchanged.
+
+Physical acceptance remains PENDING until owner observation; include A resolves while B remains background with NO later new order, and another pending request continues alerting. Do not repeat physical printing to validate contract preparation.
+
+9. REVIEW DECISIONS REQUIRED BEFORE ETA CODE
+
+A. Approve/change proposed1..240-minute custom range.
+B. Approve optional acceptance_eta exact tuple, UTC/timezone rules and new named RPC.
+C. Approve sidecar strategy after full lock/rollback proof; resolve implementation if old wrapper cannot provide atomic metadata rollback.
+D. Approve missing-timezone behavior and approximate time/date copy; decide whether countdown is intentionally omitted.
+E. Approve/change the proposed NONAUTH response-version header/value/action restriction, acknowledgment/CORS/Vary/no-store rules, service-only versioned status reader/projection and explicit old-open-tab compatibility tests. Absence ALWAYS retains old projection; no shared legacy SQL helper adds ETA.
+F. Review migration/RLS/compatibility rollout separately: supported server negotiation/readers first, ETA-aware customer consumer second, new POS producer last. No client sends an unsupported new header; no producer unconditionally extends old responses.
+G. Coordinate release scope with receipt display change and printer workstreams; this document consumes no version.
+
+10. RECEIPT PHONE AND RELEASE COORDINATION — PLANNED ONLY
+
+Later compatible POS work may share the ETA release after both scopes are reviewed:
+- packages/printing/lib/src/receipt/customer_receipt_print_builder.dart currently interpolates raw customerPhone in text and Arabic/Hebrew raster paths.
+- apps/pos/lib/src/widgets/receipt_print_preview.dart does the same in preview/manual-slip paths.
+- Use one display-only formatter for valid Israeli international/local forms; preserve canonical storage, API, search identity, request body, merchant phone and actual dialing.
+- It is a different contract from public restaurant tel sanitization and checkout input normalization.
+- Fresh overlap coordination with PR314/315 before receipt paths. No changes to spool, ACK, routing, transport, historical snapshots or protected jobs.
+- v68 is consumed and immutable. v69 is bookkeeping-reserved only; no build/signing/install/release authorization is granted.
+
+11. EXCLUSIONS AND EVIDENCE HONESTY
+
+No ETA editing after acceptance, readiness automation, SMS, delivery ETA, new queue/sender, payment changes, preparation algorithm changes, static device allowlists or historical reason disclosure.
+No shared payment contract/docs edits. Preserve the September20 approved design handoff,16 comparison evidence, prior scripts/receipts and old mock incident. The previous unexpected synthetic-password native start still has UNKNOWN connection outcome; these new local artifacts do not rewrite it as zero attempts.
+
+This preparation reads source and writes only the dedicated external review directory. It runs no database/client/SQL/test, accesses no password, and contacts no production system. Separate local helper review work, if any, is recorded in its own receipt.
+
+R2 FINDING DISPOSITION AND REVIEW LIMITS
+
+ETA-COMPAT-001 is addressed by an explicit PROPOSED negotiated representation contract and old-open-tab acceptance matrix. This document does not prove an implementation, deployed backend, browser header/CORS support, SQL atomicity, old-tab test result or owner approval. The existing 20 source pins and R1 independent review remain preserved; current customer validation/CORS source was additionally inspected offline to avoid proposing a body-field change or unsupported-header-first rollout. All names/bounds/version choices remain unapproved. No ETA application code, SQL/client/test, production connection, secret, order, device or deployment was executed or edited.

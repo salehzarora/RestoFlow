@@ -71,6 +71,11 @@ export function createOrderController(options: OrderControllerOptions): OrderCon
       if (snapshot.result && snapshot.result.status !== 'pending' && outcome.result.status !== snapshot.result.status) {
         return update({ phase: 'unavailable', error: 'status_unavailable', canRetry: false });
       }
+      // A confirmed immutable estimate cannot disappear or change on a later
+      // read. Keep accepted truth instead of replacing it with inconsistent data.
+      if (snapshot.result?.acceptance_eta && JSON.stringify(snapshot.result.acceptance_eta) !== JSON.stringify(outcome.result.acceptance_eta)) {
+        return update({ phase: 'unavailable', error: 'status_unavailable', canRetry: false });
+      }
       // Server expires_at is the pending request deadline, not the capability's
       // retention deadline. Terminal results remain recoverable for this tab's 24h TTL.
       return update({ phase: 'status', result: outcome.result, error: null, canRetry: false });
@@ -107,7 +112,9 @@ export function createOrderController(options: OrderControllerOptions): OrderCon
     catch { outcome = { kind: 'unknown', error: 'submission_outcome_unknown' }; }
     receive(outcome, false);
     // Reads are safe to repeat. An uncertain write is never automatically repeated.
-    return outcome.kind === 'unknown' ? check() : snapshot;
+    // Submit replay deliberately retains the old representation. One bounded
+    // status read may enrich accepted truth without another submission.
+    return outcome.kind === 'unknown' || (outcome.kind === 'known' && outcome.result.status === 'accepted' && outcome.result.replayed) ? check() : snapshot;
   };
   const run = (operation: () => Promise<OrderSnapshot>): Promise<OrderSnapshot> => {
     if (inFlight) return inFlight;

@@ -78,6 +78,7 @@ export 'src/receipt/customer_receipt_print_builder.dart';
 // The Flutter/dart:ui decoder that feeds it lives in packages/l10n.
 export 'src/receipt/logo_rasterizer.dart';
 export 'src/receipt/receipt_input.dart';
+export 'src/receipt/receipt_customer_phone.dart';
 export 'src/receipt/receipt_money_format.dart';
 export 'src/receipt/receipt_print_dispatcher.dart';
 export 'src/receipt/receipt_rasterizer.dart';

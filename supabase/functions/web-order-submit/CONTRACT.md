@@ -1,5 +1,67 @@
 # WEB-ORDERS-001 Edge API
 
+## BIZBOT-STOREFRONT-ACCEPTANCE-ETA-001 — negotiated status representation
+
+`X-BIZBOT-Order-Response-Version` is a non-authentication request header. Missing
+or exact `1` retains the existing RPC routing and legacy JSON projection,
+including for an accepted submission replay. The legacy projection always
+omits `acceptance_eta`, even if an upstream response unexpectedly includes it.
+No submit body, capability, normalized fingerprint or admission RPC changes.
+
+Exact `2` is supported only for `action: "status"` and calls the distinct
+service-only `get_web_order_request_status_v2(p_slug, p_client_request_id,
+p_status_token_hash)` exactly once. Submit with `2`, empty/unsupported versions
+and comma-joined duplicate values return fixed `invalid_request` before any RPC
+and without a version acknowledgment. There is no fallback or second status
+read. Header names follow HTTP case-insensitive semantics; values are exact
+after the platform's HTTP header normalization.
+
+Once a decoded body identifies `status` and version `2` is valid, every response
+acknowledges `X-BIZBOT-Order-Response-Version: 2`: pending, accepted, rejected,
+expired, safe fixed errors, validation denials and unavailable/timeout results.
+Invalid origin/method, unreadable body, unknown action, malformed version and
+submit-v2 do not acknowledge. The acknowledgment confirms the representation,
+never successful ordering, notification delivery or existence of an order.
+
+Only accepted v2 success may optionally include an exact four-field object:
+
+```json
+{
+  "acceptance_eta": {
+    "preparation_minutes": 15,
+    "accepted_at": "2026-10-22T23:55:00.123456Z",
+    "ready_at": "2026-10-23T00:10:00.123456Z",
+    "timezone": "Asia/Jerusalem"
+  }
+}
+```
+
+Absence means no estimate. Present null/partial/unknown fields, another status,
+invalid calendar instants, non-UTC offsets, invalid timezone, or inconsistent
+arithmetic fail as sanitized `status_unavailable`, never legacy success.
+Minutes are integer 1..240. UTC inputs allow `Z` or `+00:00` and up to six
+fractional digits; output canonicalizes to six digits and `Z`, retaining exact
+PostgreSQL microseconds. `ready_at` must equal `accepted_at` plus the original
+duration. Timezone is `UTC` or a slash-separated IANA identifier, at most 100
+characters, recognized by Intl; `posix/` and `right/` forms are denied. The SQL
+producer validates its captured restaurant/branch zone independently; supported
+runtime timezone catalogs must agree before rollout. No browser timezone
+fallback, timer reset, state transition or historical ETA backfill is inferred.
+
+CORS adds only the version request header to its existing allowlist and exposes
+only this new acknowledgment header. All responses retain no-store/no-cache,
+`Vary: Origin, X-BIZBOT-Order-Response-Version`, bounded POST/OPTIONS policy and
+no cookie credentials. The capability hash and server-held service credential
+remain the only database boundary; customer Authorization/apikey are not
+forwarded. Customer projection still strips private IDs, reasons and details.
+
+Backend rollout order is additive SQL/readers first, compatible Edge second,
+ETA-aware customer consumer third and optional-duration POS producer last.
+Older open customer tabs omit the header and keep the strict legacy body.
+Consumers must validate the acknowledgment on every negotiated status response
+and must not hide unsupported deployment by retrying without the header. This
+local source change does not deploy, activate notifications or authorize an APK.
+
 ## BIZBOT-STOREFRONT-MANUAL-ORDER-PILOT-001 — expiring manual website pilot
 
 Default OFF. `WEB_ORDERS_PILOT_ENABLED=true` routes only `mapsburger` submissions

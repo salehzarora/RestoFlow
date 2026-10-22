@@ -1,5 +1,6 @@
 import '../print_document.dart';
 import 'receipt_input.dart';
+import 'receipt_customer_phone.dart';
 import 'receipt_money_format.dart';
 import 'receipt_rasterizer.dart';
 
@@ -83,7 +84,7 @@ class CustomerReceiptPrintBuilder {
     final customerPhone = input.customerPhone;
     if (customerPhone != null && customerPhone.isNotEmpty) {
       for (final text in _wrapWords(
-        '${labels.customerPhone}: $customerPhone',
+        '${labels.customerPhone}: ${formatReceiptCustomerPhone(customerPhone)}',
         width,
       )) {
         lines.add(PrintTextLine(text));
@@ -207,7 +208,9 @@ class CustomerReceiptPrintBuilder {
     // because the whole line is drawn as a bitmap in the receipt's own direction.
     final customerPhone = input.customerPhone;
     if (customerPhone != null && customerPhone.isNotEmpty) {
-      out.add('${labels.customerPhone}: $customerPhone');
+      out.add(
+        '${labels.customerPhone}: ${formatReceiptCustomerPhone(customerPhone)}',
+      );
     }
     out
       ..add(labels.serviceType(input.serviceType))

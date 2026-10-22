@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -33,6 +34,8 @@ class _Controller extends OnlineOrderInboxController {
   final OnlineOrderInboxState fixed;
   final decisions = <OnlineOrderDecision>[];
   String? reason;
+  int? preparationMinutes;
+  bool get hasIntent => state.intent != null;
   int refreshes = 0;
   void replace(OnlineOrderInboxState next) => state = next;
   @override
@@ -53,10 +56,12 @@ class _Controller extends OnlineOrderInboxController {
     String requestId,
     OnlineOrderDecision decision, {
     String? reason,
+    int? preparationMinutes,
   }) async {
     if (state.intent != null) return;
     decisions.add(decision);
     this.reason = reason;
+    this.preparationMinutes = preparationMinutes;
     state = state.copyWith(
       deciding: true,
       intent: OnlineInboxIntent(
@@ -64,6 +69,7 @@ class _Controller extends OnlineOrderInboxController {
         decisionId: decisionId,
         decision: decision,
         reason: reason,
+        preparationMinutes: preparationMinutes,
       ),
     );
   }
@@ -274,6 +280,158 @@ Future<_Controller> pumpInbox(
 }
 
 void main() {
+  Future<void> openAcceptance(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('online-request-$requestId')));
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('online-inbox-accept')));
+    await tester.tap(find.byKey(const Key('online-inbox-accept')));
+    await tester.pumpAndSettle();
+  }
+
+  for (final minutes in [10, 15, 20, 30, 45, 60]) {
+    testWidgets('explicit quick choice $minutes accepts once, never defaults', (
+      tester,
+    ) async {
+      final controller = await pumpInbox(tester);
+      await openAcceptance(tester);
+      final confirm = find.byKey(const Key('online-inbox-accept-confirm'));
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+      expect(controller.decisions, isEmpty);
+      for (final chip in tester.widgetList<ChoiceChip>(
+        find.byType(ChoiceChip),
+      )) {
+        expect(chip.selected, false);
+      }
+      final quick = find.byKey(Key('online-inbox-preparation-$minutes'));
+      await tester.ensureVisible(quick);
+      expect(tester.getSize(quick).height, greaterThanOrEqualTo(44));
+      await tester.tap(quick);
+      await tester.pump();
+      await tester.ensureVisible(confirm);
+      final callback = tester.widget<FilledButton>(confirm).onPressed!;
+      await tester.tap(confirm);
+      callback(); // a retained callback must still be single-flight
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(controller.decisions, [OnlineOrderDecision.accept]);
+      expect(controller.preparationMinutes, minutes);
+    });
+  }
+
+  for (final cancel in ['cancel', 'dismiss', 'escape']) {
+    testWidgets(
+      'accept chooser $cancel creates no intent even after selection',
+      (tester) async {
+        final controller = await pumpInbox(tester);
+        await openAcceptance(tester);
+        await tester.tap(find.byKey(const Key('online-inbox-preparation-20')));
+        await tester.pump();
+        if (cancel == 'cancel') {
+          await tester.ensureVisible(
+            find.byKey(const Key('online-inbox-accept-cancel')),
+          );
+          await tester.tap(find.byKey(const Key('online-inbox-accept-cancel')));
+        } else if (cancel == 'escape') {
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        } else {
+          await tester.binding.handlePopRoute();
+        }
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('online-inbox-accept-dialog')),
+          findsNothing,
+        );
+        expect(controller.decisions, isEmpty);
+        expect(controller.hasIntent, false);
+      },
+    );
+  }
+
+  testWidgets('custom preparation time requires a strict integer in 1..240', (
+    tester,
+  ) async {
+    final controller = await pumpInbox(tester);
+    await openAcceptance(tester);
+    final field = find.byKey(const Key('online-inbox-preparation-custom'));
+    final confirm = find.byKey(const Key('online-inbox-accept-confirm'));
+    for (final invalid in ['0', '241', '-1', '1.5', ' 1', 'abc']) {
+      await tester.enterText(field, invalid);
+      await tester.pump();
+      expect(
+        tester.widget<FilledButton>(confirm).onPressed,
+        isNull,
+        reason: invalid,
+      );
+    }
+    await tester.enterText(field, '1');
+    await tester.pump();
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+    expect(controller.decisions, isEmpty);
+  });
+
+  testWidgets('another device resolves while chooser is open: no acceptance', (
+    tester,
+  ) async {
+    final controller = await pumpInbox(tester);
+    await openAcceptance(tester);
+    await tester.tap(find.byKey(const Key('online-inbox-preparation-15')));
+    controller.replace(
+      OnlineOrderInboxState(
+        requests: [inboxRequest(status: 'accepted')],
+        serverTime: inboxNow,
+      ),
+    );
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('online-inbox-accept-confirm')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(controller.decisions, isEmpty);
+  });
+
+  for (final locale in ['ar', 'he', 'en']) {
+    for (final size in [const Size(390, 844), const Size(1024, 768)]) {
+      testWidgets(
+        '$locale ${size.width}px preparation chooser stays keyboard-safe at 2x',
+        (tester) async {
+          final controller = await pumpInbox(
+            tester,
+            locale: locale,
+            size: size,
+            scale: 2,
+          );
+          await openAcceptance(tester);
+          tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+          addTearDown(tester.view.resetViewInsets);
+          await tester.pump();
+          final field = find.byKey(
+            const Key('online-inbox-preparation-custom'),
+          );
+          await tester.ensureVisible(field);
+          await tester.enterText(field, '240');
+          await tester.pump();
+          final dialog = find.byKey(const Key('online-inbox-accept-dialog'));
+          expect(
+            Directionality.of(tester.element(dialog)),
+            locale == 'en' ? TextDirection.ltr : TextDirection.rtl,
+          );
+          final confirm = find.byKey(const Key('online-inbox-accept-confirm'));
+          await tester.ensureVisible(confirm);
+          expect(confirm.hitTestable(), findsOneWidget);
+          expect(tester.getSize(confirm).height, greaterThanOrEqualTo(44));
+          await tester.tap(confirm);
+          await tester.pump(const Duration(milliseconds: 300));
+          expect(controller.preparationMinutes, 240);
+          expect(controller.decisions, [OnlineOrderDecision.accept]);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
   for (final language in ['ar', 'he', 'en']) {
     for (final size in [const Size(800, 1100), const Size(1100, 700)]) {
       testWidgets(

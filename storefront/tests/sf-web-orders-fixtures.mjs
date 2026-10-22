@@ -8,7 +8,9 @@ export const identity = () => ({ slug: SLUG, request_id: REQUEST_ID, status_toke
 export const record = (over = {}) => ({ ...identity(), created_at: NOW, expires_at: NOW + 86_400_000, ...over });
 export const order = (over = {}) => ({ order_type: 'takeaway', customer: { name: 'Test Customer', phone: '+972501234567' }, items: [{ menu_item_id: ITEM_ID, quantity: 2, modifiers: [{ modifier_option_id: OPTION_ID, quantity: 3 }], notes: 'No onion' }], notes: 'Pickup after 12', ...over });
 export const result = (status = 'pending', over = {}) => ({ ok: true, request_id: REQUEST_ID, status, expires_at: new Date(NOW + 3_600_000).toISOString(), totals: { currency_code: 'ILS', subtotal_minor: 1000, tax_total_minor: 180, grand_total_minor: 1180 }, replayed: false, ...over });
-export const response = (body, status = 200, headers = {}) => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers } });
+// Negotiation-capable synthetic backend. Submit ignores this harmless response
+// header; explicit missing/incorrect acknowledgments are tested separately.
+export const response = (body, status = 200, headers = {}) => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-BIZBOT-Order-Response-Version': '2', ...headers } });
 export function memoryStorage(initial = []) {
   const map = new Map(initial);
   return { map, getItem: (key) => map.get(key) ?? null, setItem: (key, value) => { map.set(key, value); }, removeItem: (key) => { map.delete(key); } };

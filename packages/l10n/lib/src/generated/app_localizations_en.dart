@@ -66,6 +66,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posOnlineInboxAccept => 'Accept order';
 
   @override
+  String get posOnlineInboxPreparationTitle => 'Estimated preparation time';
+
+  @override
+  String get posOnlineInboxPreparationHint =>
+      'Choose an approximate preparation time before accepting. This estimate is shown to the customer.';
+
+  @override
+  String posOnlineInboxPreparationMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get posOnlineInboxPreparationCustom => 'Custom time in minutes';
+
+  @override
+  String get posOnlineInboxPreparationRange =>
+      'Enter a whole number from 1 to 240.';
+
+  @override
+  String get posOnlineInboxPreparationConfirm => 'Confirm and accept';
+
+  @override
   String get posOnlineInboxReject => 'Reject order';
 
   @override
