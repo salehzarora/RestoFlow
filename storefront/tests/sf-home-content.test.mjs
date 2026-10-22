@@ -97,7 +97,7 @@ test('independent tenant resolutions never share or persist content', () => {
 test('one new public read, same scoped body and credentials, no fallback or hidden retry', async () => {
   const config = { url: ORIGIN, anonKey: 'sb_publishable_SYNTHETIC_not_real_00000' };
   const request = storefrontMenuRequest(config, 'sf-synth-a');
-  assert.equal(request.url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v3`);
+  assert.equal(request.url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v4`);
   assert.equal(request.init.body, JSON.stringify({ p_slug: 'sf-synth-a' }));
   assert.equal(request.init.headers.apikey, config.anonKey);
   let calls = 0;

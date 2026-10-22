@@ -149,6 +149,21 @@ export interface FixtureTenantSource {
 /** Presentation settings a restaurant controls; never customer controls. */
 export type CardMode = 'list' | 'grid';
 export type MotionMode = 'calm' | 'full' | 'lively';
+export type ImageFit = 'fill' | 'whole-image';
+export type CardLayout = 'standard' | 'cutout';
+export interface HeroFormat {
+  readonly text: string;
+  readonly highlight: { readonly start: number; readonly end: number } | null;
+  readonly break_before: number | null;
+}
+export interface HeroPresentation {
+  readonly mode: 'editorial' | 'item';
+  readonly itemId: string | null;
+  readonly format: HeroFormat | null;
+  readonly eyebrow: string | null;
+  readonly stamp: string | null;
+  readonly footnote: string | null;
+}
 
 /** The optional home modules. Their ORDER is fixed in UI-001 and is not data. */
 export type OptionalModule = 'announce' | 'promo' | 'popular' | 'story';
@@ -164,6 +179,11 @@ export interface Category {
    */
   readonly iconPath: string;
   readonly blurb: string | null;
+  /** Editorial section heading; canonical name/rail identity stays unchanged. */
+  readonly heading?: string | null;
+  readonly imageFit?: ImageFit | null;
+  /** Ordinary section columns depend on this setting, never an item override. */
+  readonly cardLayout?: CardLayout | null;
 }
 
 export type ItemBadge = 'new' | 'deal';
@@ -188,6 +208,9 @@ export interface MenuItem {
    * is ordered as-is; `hasOptions` is exactly `groupIds.length > 0`.
    */
   readonly groupIds: readonly string[];
+  /** v4 resolves item→category→default before any media consumer reads it. */
+  readonly imageFit?: ImageFit;
+  readonly cardLayout?: CardLayout;
 }
 
 /**
@@ -258,22 +281,38 @@ export interface CartState {
 
 export interface AnnouncementModule {
   readonly text: string;
+  readonly segments?: readonly string[];
 }
 
 export interface CampaignModule {
   readonly title: string;
   /** Empty when the tenant has no second line; the hero then omits the row. */
   readonly subline: string;
+  readonly hero?: HeroPresentation;
 }
 
-export interface PromoModule {
+export interface ItemPromoModule {
+  /** Optional only for existing fixtures; live v4 always supplies the kind. */
+  readonly kind?: 'item';
   readonly kicker: string;
   readonly title: string;
   readonly body: string;
   readonly image: string;
   readonly priceMinor: Minor;
   readonly itemId: string;
+  readonly imageFit?: ImageFit;
+  readonly hasOptions?: boolean;
 }
+
+export interface CategoryPromoModule {
+  readonly kind: 'category';
+  readonly kicker: string;
+  readonly title: string;
+  readonly body: string;
+  readonly image: string;
+  readonly categoryId: string;
+}
+export type PromoModule = ItemPromoModule | CategoryPromoModule;
 
 export interface StoryModule {
   readonly kicker: string;

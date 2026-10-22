@@ -54,6 +54,8 @@ const outputs = {
   'tools/storefront_content_unicode/vectors.json': JSON.stringify({unicode:'15.1.0',uax29:43,vectors},null,2)+'\n',
   'tools/storefront_content_unicode/provenance.json': JSON.stringify({unicode:'15.1.0',uax29:43,rule:'default extended grapheme clusters; no tailoring or normalization',files:Object.entries(pins).map(([name,[url,sha256]])=>({name,url:url?`https://www.unicode.org/Public/15.1.0/ucd/${url}`:'https://www.unicode.org/license.txt',sha256,bytes:Buffer.byteLength(sources[name])}))},null,2)+'\n',
 };
+if(vectors.some(v=>v.codepoints.includes(0))) throw Error('Official NUL test requires explicit PostgreSQL representation review');
+outputs['tools/storefront_content_unicode/generated/grapheme-conformance.sql']='-- Generated official Unicode15.1 grapheme conformance:1187 pgTAP assertions.\n'+vectors.map((v,i)=>`SELECT is(app.storefront_content_grapheme_boundaries_v1(${v.codepoints.length?'array_to_string(ARRAY['+v.codepoints.map(cp=>'chr('+cp+')').join(',')+"], '')":"''"}),ARRAY[${v.boundaries.join(',')}]::integer[],'Unicode15.1 grapheme vector ${i}');`).join('\n')+'\n';
 // Cross-language implementations are separate source templates, with the exact
 // same generated ranges and official test vectors; no platform ICU dependency.
 const dartTemplate=readFileSync(path.join(root,'templates/unicode.dart.txt'),'utf8');
