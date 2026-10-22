@@ -43,39 +43,18 @@
   --accs: #3b3322;
   --accOnSelection: #e89a58;
   --cta: linear-gradient(135deg, #e5904e 0%, #e07b2c 52%, #b86524 100%);
-  --ctaSh: 0 12px 28px -8px rgba(224, 123, 44, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
-  --glow: 0 0 14px rgba(224, 123, 44, 0.55);
-  --heroGlow: radial-gradient(90% 70% at 50% 108%, rgba(224, 123, 44, 0.4), transparent 72%);
-  --glass: rgba(19, 50, 42, 0.74); /* NEUTRAL_PRIMARY #13322a at 74% */
-  --glassLine: rgba(255, 255, 255, 0.14);
 
   /* --- radii --- */
   --r-xs: 6px;
-  --r-sm: 8px;
   --r-md: 10px;
   --r-control: 12px;
   --r-card: 14px;
-  --r-surface: 18px;
-  --r-module: 20px;
-  --r-story: 24px;
   --r-pill: 999px;
 
   /* --- spacing --- */
-  --gutter: 16px;
 
   /* --- motion (TOKENS.json -> motion) --- */
-  --d-micro: 120ms;
-  --d-standard: 200ms;
-  --d-emphasis: 300ms;
-  --d-reveal: 460ms;
-  --d-pop: 560ms;
-  --d-sheen: 4200ms;
-  --d-halo: 2600ms;
-  --d-ken: 24000ms;
   --e-standard: cubic-bezier(0.22, 0.9, 0.26, 1);
-  --e-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --e-sheen: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* --- type --- */
   /* Three script families, one per subset file (src/fonts/README.md), walked
@@ -150,10 +129,6 @@
 }
 
 /* Closed merchant presentation choices. No arbitrary styles or inline props. */
-.flexRow{display:flex;align-items:center}
-.gridCenter{display:grid;place-items:center}
-.flexColumn{display:flex;flex-direction:column}
-.imageCover{width:100%;height:100%;object-fit:cover}
 .wholeImage.wholeImage{object-fit:contain;object-position:center;transform:none!important;clip-path:none;mask-image:none;border-radius:0;inline-size:100%;block-size:100%}
 .wholeFrame.wholeFrame{overflow:visible;border-radius:0;transform:none}
 .cutout.cutout{background:none;box-shadow:none}
