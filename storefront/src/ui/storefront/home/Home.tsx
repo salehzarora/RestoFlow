@@ -29,7 +29,8 @@ export function Home({ resolution, locale, slug, hrefFor }: {
         <main className={styles.page}>
           <HomeChrome key={slug} tenant={tenant} locale={locale} slug={slug} language={<LanguageMenu locale={locale} hrefFor={hrefFor} />} categories={categories} items={items} cardMode={cardMode}
             announcement={modules.announcement === null || tenant.service.state !== 'open' ? null : modules.announcement.text}
-            heroTitle={modules.campaign.title} heroSubline={modules.campaign.subline}
+            announcementSegments={modules.announcement?.segments}
+            heroTitle={modules.campaign.title} heroSubline={modules.campaign.subline} heroContent={modules.campaign.hero}
             service={<ServiceStatusStrip tenant={tenant} m={m} />}
             notice={<>{tenant.service.orderingEnabled ? null : <OrderingOffNotice m={m} />}{tenant.service.state === 'open' ? null : <StateNotice state={tenant.service.state} tenant={tenant} m={m} />}</>}
             empty={items.length === 0 ? <EmptyMenu tenant={tenant} m={m} /> : null}

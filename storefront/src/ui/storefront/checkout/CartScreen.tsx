@@ -22,6 +22,8 @@
  * thing the prototype does not do and a keyboard visitor needs.
  */
 import Link from 'next/link';
+import { productFrameClass, productImageClass } from '../contentPresentation';
+import contentStyles from '../content.module.css';
 import { useCallback, useState } from 'react';
 import type { CartApi } from '@/cart/useCart';
 import { optionSummary, type ResolvedCartLine } from '@/cart/cartModel';
@@ -64,7 +66,7 @@ function CartLineCard({
 
   return (
     <li className={s.line} data-sf-cart-line={line.line.lineId}>
-      <span className={s.lineMedia}>
+      <span className={`${s.lineMedia} ${productFrameClass(line.item, contentStyles.wholeFrame)}`}>
         {line.item.image === null ? (
           <span className={s.lineNoImg} aria-hidden="true">
             {initial}
@@ -72,7 +74,7 @@ function CartLineCard({
         ) : (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            className={s.lineImg}
+            className={`${s.lineImg} ${productImageClass(line.item, contentStyles.wholeImage)}`}
             src={line.item.image}
             alt=""
             width={128}

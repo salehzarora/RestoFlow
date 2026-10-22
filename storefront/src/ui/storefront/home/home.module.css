@@ -55,7 +55,7 @@
 .promoCta:disabled{cursor:default;opacity:.6}
 .heroVisual{position:relative;height:480px;isolation:isolate;min-width:0}
 .heroMedia{position:absolute;inset-inline-end:45px;inset-block-start:12px;width:345px;height:440px;border-radius:150px 150px 13px 13px;overflow:hidden;background:var(--hero);box-shadow:0 16px 28px #19292213;transform:rotate(-4deg)}
-.heroMedia::after{content:'';position:absolute;inset:60% 0 0;background:linear-gradient(transparent,#080a05c7);pointer-events:none}
+.heroMedia:not([data-sf-product])::after{content:'';position:absolute;inset:60% 0 0;background:linear-gradient(transparent,#080a05c7);pointer-events:none}
 
 .heroImg{height:100%;width:100%;object-fit:cover;object-position:50% 44%;transform:scale(1.52);transform-origin:50% 123%}
 .heroGhost{position:absolute;inset-inline-end:82px;inset-block-start:100px;font-size:120px;font-weight:900;letter-spacing:-8px;transform:rotate(90deg);color:transparent;-webkit-text-stroke:1px var(--hair);z-index:-1;width:420px;line-height:1;white-space:nowrap;overflow:hidden}
@@ -114,7 +114,7 @@
 .sectionHead h3{font-size:17px;font-weight:600;margin:0}
 .sectionHead>span{font-size:10px;color:var(--tx2)}
 .sectionBlurb{font-size:11px;color:var(--tx2);margin:0;margin-inline-end:auto}
-.gridWrap{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:29px 24px;min-height:220px}
+.gridWrap{display:grid;grid-template-columns:repeat(var(--sf-columns,3),minmax(0,1fr));gap:29px 24px;min-height:220px}
 .popularGrid{composes:gridWrap}
 .listWrap{display:grid;gap:18px}
 .card,.row{min-width:0;cursor:pointer;outline-offset:4px}
@@ -200,7 +200,7 @@
 .dockDisabled{font-size:10px}
 .page:has(.dock){padding-block-end:85px}
 @media(min-width:651px){.dock{display:none}.page:has(.dock){padding-block-end:0}}
-@media(max-width:900px){.page{--header-height:79px}.inner{width:calc(100% - 44px)}.headerInner{gap:16px}.headerNav{gap:18px;font-size:11px}.headerActions{gap:10px}.announce{min-height:43px;gap:27px}.headerPhone{display:none}.brandName{font-size:20px}.hero{gap:5px;min-height:490px;padding-block:30px 39px}.heroTitle{font-size:73px}.heroVisual{height:413px}.heroMedia{width:270px;height:370px;inset-inline-end:8px}.heroSub{font-size:12px}.menu{padding-block:49px 50px}.gridWrap{gap:25px 17px}.cardName{font-size:16px}.cardMain{gap:6px}.price{font-size:18px}.findUs{gap:35px}.findCopy h2{font-size:32px}}
+@media(max-width:900px){.page{--header-height:79px}.inner{width:calc(100% - 44px)}.headerInner{gap:16px}.headerNav{gap:18px;font-size:11px}.headerActions{gap:10px}.announce{min-height:43px;gap:27px}.headerPhone{display:none}.brandName{font-size:20px}.hero{gap:5px;min-height:490px;padding-block:30px 39px}.heroTitle{font-size:73px}.heroVisual{height:413px}.heroMedia{width:270px;height:370px;inset-inline-end:8px}.heroSub{font-size:12px}.menu{padding-block:49px 50px}.gridWrap{gap:25px 17px;grid-template-columns:repeat(3,minmax(0,1fr))}.cardName{font-size:16px}.cardMain{gap:6px}.price{font-size:18px}.findUs{gap:35px}.findCopy h2{font-size:32px}}
 @media(max-width:650px){
 .page{--header-height:72px}.inner{width:calc(100% - 36px)}.topline>.inner{min-height:29px;font-size:9px}.topline>.inner>span:nth-child(2){display:none}
 .headerInner{gap:10px}.headerNav{display:none}.headerActions{gap:7px}.brandLogo{width:39px;height:41px}.lockup{gap:8px}.brandName{max-width:128px}.brandCity{font-size:9px;margin-block-start:4px}

@@ -22,6 +22,8 @@ import { formatMoney, formatRateBp } from '@/money/format';
 import type { Quote } from '@/money/quote';
 import type { ModifierSelections, ServiceState } from '@/source/types';
 import { TenantText } from '../TenantText';
+import { productFrameClass, productImageClass } from '../contentPresentation';
+import contentStyles from '../content.module.css';
 import { orderingBlocker, orderingReason } from '../checkout/eligibility';
 import styles from '../home/home.module.css';
 
@@ -125,10 +127,10 @@ export function LiveCartAside({
                   key={line.line.lineId}
                   data-sf-aside-line={line.line.lineId}
                 >
-                  <span className={styles.asideThumb}>
+                  <span className={`${styles.asideThumb} ${productFrameClass(line.item, contentStyles.wholeFrame)}`}>
                     {line.item.image === null ? line.item.name.slice(0, 1) : (
                       /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={line.item.image} alt="" width={70} height={87} loading="lazy" decoding="async" />
+                      <img className={productImageClass(line.item, contentStyles.wholeImage)} src={line.item.image} alt="" width={70} height={87} loading="lazy" decoding="async" />
                     )}
                   </span>
                   <div className={styles.asideLineMain}>

@@ -26,9 +26,12 @@ import { fill, storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
 import { formatMoney } from '@/money/format';
 import { searchItems } from '@/source/search';
-import type { Category, MenuItem } from '@/source/types';
+import type { CardMode, Category, MenuItem } from '@/source/types';
 import { ChevronIcon, CloseIcon, SearchIcon } from '../icons';
 import { TenantText } from '../TenantText';
+import { GridCard } from '../home/MenuParts';
+import { productCardClass, productFrameClass, productImageClass, sectionGridClass, sectionLayout } from '../contentPresentation';
+import contentStyles from '../content.module.css';
 import shell from '../storefront.module.css';
 import home from '../home/home.module.css';
 import styles from './search.module.css';
@@ -67,12 +70,14 @@ export function SearchScreen({
   categories,
   locale,
   menuHref,
+  cardMode = 'list',
 }: {
   items: readonly MenuItem[];
   categories: readonly Category[];
   /** The locale; the dictionary is resolved client-side (E-OPT-1). */
   locale: Locale;
   menuHref: string;
+  cardMode?: CardMode;
 }) {
   const m = storefrontMessages(locale);
   const [query, setQuery] = useState('');
@@ -81,6 +86,7 @@ export function SearchScreen({
   const results = useMemo(() => searchItems(items, query), [items, query]);
   const trimmed = query.trim();
   const noResults = trimmed.length > 0 && results.length === 0;
+  const layout = sectionLayout(cardMode, results);
 
   const categoryName = useMemo(() => {
     const byId = new Map(categories.map((c) => [c.id, c.name]));
@@ -142,7 +148,7 @@ export function SearchScreen({
         {announcement}
       </span>
 
-      <div className={styles.list}>
+      <div className={`${!noResults && cardMode === 'grid' ? home.gridWrap : styles.list} ${sectionGridClass(layout, contentStyles.cutoutGrid)}`} data-sf-layout={layout}>
         {noResults ? (
           <div className={styles.empty}>
             <p className={styles.emptyTitle}>
@@ -150,17 +156,17 @@ export function SearchScreen({
             </p>
             <p className={styles.emptyBody}>{m.tryOther}</p>
           </div>
-        ) : (
+        ) : cardMode === 'grid' ? results.map(item => <GridCard item={item} m={m} key={item.id} />) : (
           results.map((item) => (
             <div
-              className={`${styles.row} ${item.soldOut ? styles.rowSoldOut : ''}`}
+              className={`${styles.row} ${item.soldOut ? styles.rowSoldOut : ''} ${productCardClass(item, contentStyles.cutout)}`}
               key={item.id}
               role="button"
               tabIndex={item.soldOut ? -1 : 0}
               data-sf-item={item.id}
               aria-disabled={item.soldOut ? 'true' : undefined}
             >
-              <span className={styles.thumb}>
+              <span className={`${styles.thumb} ${productFrameClass(item, contentStyles.wholeFrame)}`}>
                 {item.image === null ? (
                   <span className={styles.thumbNone} aria-hidden="true">
                     {item.name.trim().slice(0, 1)}
@@ -168,7 +174,7 @@ export function SearchScreen({
                 ) : (
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img
-                    className={styles.thumbImg}
+                    className={`${styles.thumbImg} ${productImageClass(item, contentStyles.wholeImage)}`}
                     src={item.image}
                     alt=""
                     width={112}

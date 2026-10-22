@@ -89,6 +89,7 @@ export function Search({
             categories={categories}
             locale={locale}
             menuHref={menuPath(locale, slug)}
+            cardMode={view.cardMode}
           />
           <AsideSlot
             locale={locale}
