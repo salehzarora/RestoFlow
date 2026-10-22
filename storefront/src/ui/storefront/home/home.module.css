@@ -1039,13 +1039,15 @@
 
 .cardMediaFeatured {
   position: relative;
-  height: 172px;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 360px;
   background: var(--sf2);
 }
 
 .cardMediaPopular {
   position: relative;
-  height: 124px;
+  aspect-ratio: 4 / 3;
   background: var(--sf2);
 }
 
@@ -1058,7 +1060,8 @@
 .cardImg {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   display: block;
 }
 
