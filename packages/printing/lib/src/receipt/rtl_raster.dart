@@ -9,7 +9,7 @@ import '../print_typography.dart';
 import 'receipt_rasterizer.dart';
 
 /// PRINT-RTL-001: turn an already-laid-out ESC/POS TEXT [PrintDocument] into a
-/// single monochrome RASTER-image document so Arabic/Hebrew (and non-ASCII
+/// monochrome RASTER-image document so Arabic/Hebrew (and non-ASCII
 /// symbols like the shekel sign or the "×N" multiplier) print correctly on
 /// thermal printers that have no reliable Unicode/RTL codepage.
 ///
@@ -22,6 +22,9 @@ import 'receipt_rasterizer.dart';
 
 /// The default 80mm printable raster width in dots (multiple of 8). 58mm = 384.
 const int kNativeRasterWidthDots = 576;
+
+/// Bound each continuous-roll text command without changing its rendered rows.
+const int _continuousRasterBandHeightDots = 256;
 
 /// A money row on a receipt — a plain key/value line ([PrintLineStyle.normal])
 /// or the emphasised [PrintLineStyle.total]. Used only to keep an unbroken run
@@ -105,8 +108,8 @@ ReceiptTextDirection baseDirectionForLines(Iterable<String> lines) {
   return rtl > ltr ? ReceiptTextDirection.rtl : ReceiptTextDirection.ltr;
 }
 
-/// Renders [textDoc]'s pre-formatted text lines into ONE [PrintRasterImageLine]
-/// via [rasterizer], returning a raster [PrintDocument] (image + feed + cut).
+/// Renders [textDoc]'s pre-formatted text once, then frames the bitmap in
+/// consecutive raster bands of at most 256 rows, followed by one feed + cut.
 /// [widthDots] must be a multiple of 8 (576 for 80mm, 384 for 58mm). When
 /// [direction] is omitted it is derived from the content.
 Future<PrintDocument> rasterizeTextDocument(
@@ -146,10 +149,45 @@ Future<PrintDocument> rasterizeTextDocument(
     // PRINT-BRANDING-LOGO-001: keep the leading logo raster (+ its feed) above
     // the rasterized text so it still prints on ar/he receipts.
     ...leadingPreambleLines(textDoc),
-    image.toPrintLine(),
+    ..._continuousTextRasterBands(image),
     PrintFeedLine(feedLines),
     const PrintCutLine(),
   ], localeTag: textDoc.localeTag);
+}
+
+/// Slice whole rows only. Views preserve the full-canvas allocation and avoid
+/// copying pixels; the adapter adds one header per band, with no separators.
+Iterable<PrintRasterImageLine> _continuousTextRasterBands(
+  ReceiptRasterImage image,
+) sync* {
+  if (image.data.length != image.widthBytes * image.heightDots) {
+    throw ArgumentError(
+      'raster data length must equal widthBytes * heightDots',
+    );
+  }
+  if (image.heightDots <= _continuousRasterBandHeightDots) {
+    yield image.toPrintLine();
+    return;
+  }
+  for (
+    var firstRow = 0;
+    firstRow < image.heightDots;
+    firstRow += _continuousRasterBandHeightDots
+  ) {
+    final height = math.min(
+      _continuousRasterBandHeightDots,
+      image.heightDots - firstRow,
+    );
+    yield PrintRasterImageLine(
+      data: Uint8List.sublistView(
+        image.data,
+        firstRow * image.widthBytes,
+        (firstRow + height) * image.widthBytes,
+      ),
+      widthBytes: image.widthBytes,
+      heightDots: height,
+    );
+  }
 }
 
 /// If [rasterizer] is provided AND [textDoc] contains content ESC/POS text mode
@@ -182,8 +220,8 @@ typedef PageLineLabel = String Function(int page, int total);
 /// for a FIXED medium — fixed-height PAGINATION so nothing runs off the label.
 ///
 ///  * `continuous80` (the default roll): behaves exactly like [maybeRasterizeForRtl]
-///    — ASCII-only English stays the crisp text path; non-ASCII rasterizes to ONE
-///    image at 576 dots, feed 3. Byte-identical to the pre-profile output.
+///    — ASCII-only English stays the crisp text path; non-ASCII rasterizes at
+///    576 dots into consecutive bands, followed by feed 3 and one cut.
 ///  * `label50x50` / `label80x80` (fixed labels): ALWAYS rasterize (so the label
 ///    width + pagination apply uniformly, never a narrow bitmap on a wide canvas
 ///    or an unpaginated overflow), split into pages that each fit

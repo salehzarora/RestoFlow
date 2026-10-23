@@ -295,15 +295,71 @@ void main() {
         expectEveryBandInked(render);
       });
 
-      test('$code: the real rasterizer turns the slip into ONE raster image '
-          'on the roll', () async {
+      test('$code: roll bands reconstruct the real slip bitmap with no '
+          'command separators', () async {
+        final source = _escPos(code);
+        final textLines = source.lines.whereType<pp.PrintTextLine>().toList();
+        final texts = [for (final line in textLines) line.text, ''];
+        final image = await rasterizer.rasterize(
+          pp.ReceiptRasterRequest(
+            lines: texts,
+            styles: [
+              for (final line in textLines) line.style,
+              pp.PrintLineStyle.normal,
+            ],
+            widthDots: 576,
+            direction: pp.baseDirectionForLines(texts),
+            localeTag: source.localeTag ?? '',
+          ),
+        );
         final out = await pp.rasterizeForMediaProfile(
-          _escPos(code),
+          source,
           rasterizer: rasterizer,
           profile: pp.MediaProfile.continuous80,
         );
-        expect(out.lines.whereType<pp.PrintRasterImageLine>(), hasLength(1));
+        final bands = out.lines.whereType<pp.PrintRasterImageLine>().toList();
+        expect(bands.length, greaterThan(1));
+        expect(bands.length, (image.heightDots + 255) ~/ 256);
+        expect(bands.every((band) => band.widthBytes == 72), isTrue);
+        expect(
+          bands.take(bands.length - 1).map((band) => band.heightDots),
+          everyElement(256),
+        );
+        expect(bands.last.heightDots, inInclusiveRange(1, 256));
+        expect(
+          bands.fold<int>(0, (sum, band) => sum + band.heightDots),
+          image.heightDots,
+        );
+        expect(bands.expand((band) => band.data), orderedEquals(image.data));
+        expect(out.lines.length, bands.length + 2);
+        expect(out.lines[bands.length], isA<pp.PrintFeedLine>());
+        expect(out.lines.last, isA<pp.PrintCutLine>());
         expect(out.lines.whereType<pp.PrintTextLine>(), isEmpty);
+
+        final bytes = const pp.EscPosPrintAdapter().encode(
+          out,
+          pp.PrinterProfile.escPos80mm,
+        );
+        expect(bytes.take(5), [0x1b, 0x40, 0x1b, 0x74, 0]);
+        final pixels = <int>[];
+        var offset = 5;
+        for (final band in bands) {
+          expect(bytes.sublist(offset, offset + 8), [
+            0x1d,
+            0x76,
+            0x30,
+            0,
+            72,
+            0,
+            band.heightDots & 0xff,
+            band.heightDots >> 8,
+          ]);
+          final end = offset + 8 + band.widthBytes * band.heightDots;
+          pixels.addAll(bytes.sublist(offset + 8, end));
+          offset = end;
+        }
+        expect(pixels, orderedEquals(image.data));
+        expect(bytes.sublist(offset), [0x1b, 0x64, 3, 0x1d, 0x56, 1]);
       });
     }
   });
