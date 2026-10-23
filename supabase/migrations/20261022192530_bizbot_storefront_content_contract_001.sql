@@ -194,15 +194,18 @@ begin
      x:=f->'highlight';
      if not app.storefront_content_keys_v1(x,array['start','end']) or jsonb_typeof(x->'start') is distinct from 'number' or jsonb_typeof(x->'end') is distinct from 'number' then return jsonb_build_object('error','headline_format_invalid','field','hero.format'); end if;
      if (x->>'start')::numeric<>trunc((x->>'start')::numeric) or (x->>'end')::numeric<>trunc((x->>'end')::numeric) or (x->>'start')::numeric not between 0 and 120 or (x->>'end')::numeric not between 0 and 120 then return jsonb_build_object('error','headline_format_invalid','field','hero.format'); end if;
-     s:=(x->>'start')::integer;e:=(x->>'end')::integer;
+     s:=(x->>'start')::numeric::integer;e:=(x->>'end')::numeric::integer;
    end if;
    if f->'break_before'<>'null'::jsonb then
      if jsonb_typeof(f->'break_before') is distinct from 'number' then return jsonb_build_object('error','headline_format_invalid','field','hero.format'); end if;
      if (f->>'break_before')::numeric<>trunc((f->>'break_before')::numeric) or (f->>'break_before')::numeric not between 0 and 120 then return jsonb_build_object('error','headline_format_invalid','field','hero.format'); end if;
-     b:=(f->>'break_before')::integer;
+     b:=(f->>'break_before')::numeric::integer;
    end if;
    if not app.storefront_content_hero_format_valid_v1(headline,s,e,b) then return jsonb_build_object('error','headline_format_invalid','field','hero.format'); end if;
-   if s is null and b is null then h:=jsonb_set(h,'{format}','null'); end if;
+   -- JSON numbers may be integral decimal/exponent spellings. Only after the
+   -- strict type, integral, bounds and Unicode checks above, emit integer JSON.
+   f:=jsonb_build_object('text',f->>'text','highlight',case when s is null then 'null'::jsonb else jsonb_build_object('start',s,'end',e) end,'break_before',b);
+   h:=jsonb_set(h,'{format}',case when s is null and b is null then 'null'::jsonb else f end);
  end if;
  d:=jsonb_set(d,'{hero}',h);
  if d->'announcement_segments'<>'null'::jsonb then
@@ -530,7 +533,7 @@ begin
   where organization_id=p_organization_id and restaurant_id=p_restaurant_id;
  insert into app.storefront_content_profiles(organization_id,restaurant_id,storefront_branch_id,hero_mode,hero_item_id,headline_format_text,headline_highlight_start,headline_highlight_end,headline_break_before,hero_eyebrow,hero_stamp,hero_footnote,announcement_segments,
   promo_kind,promo_category_id,promo_item_id,promo_media_id,promo_kicker,promo_title,promo_body,story_media_id,story_kicker,story_title,story_body,story_facts)
- values(p_organization_id,p_restaurant_id,p.storefront_branch_id,h->>'mode',(h->>'item_id')::uuid,f->>'text',(f#>>'{highlight,start}')::integer,(f#>>'{highlight,end}')::integer,(f->>'break_before')::integer,h->>'eyebrow',h->>'stamp',h->>'footnote',
+ values(p_organization_id,p_restaurant_id,p.storefront_branch_id,h->>'mode',(h->>'item_id')::uuid,f->>'text',(f#>>'{highlight,start}')::numeric::integer,(f#>>'{highlight,end}')::numeric::integer,(f->>'break_before')::numeric::integer,h->>'eyebrow',h->>'stamp',h->>'footnote',
   case when d->'announcement_segments'='null'::jsonb then null else array(select jsonb_array_elements_text(d->'announcement_segments')) end,
   d#>>'{promo,target,kind}',(d#>>'{promo,target,category_id}')::uuid,(d#>>'{promo,target,item_id}')::uuid,(d#>>'{promo,editorial_media_id}')::uuid,d#>>'{promo,kicker}',d#>>'{promo,title}',d#>>'{promo,body}',
   (d#>>'{story,editorial_media_id}')::uuid,d#>>'{story,kicker}',d#>>'{story,title}',d#>>'{story,body}',case when d->'story'='null'::jsonb then '{}'::text[] else array(select jsonb_array_elements_text(d#>'{story,facts}')) end)
