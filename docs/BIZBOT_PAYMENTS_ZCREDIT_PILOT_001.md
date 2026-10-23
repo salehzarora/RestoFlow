@@ -12,6 +12,8 @@ terminal number, PIN-pad identifier, serial, card number or provider payload, an
 
 1. The pilot proceeds from the official vendor materials already received plus test-driven discovery;
    further vendor correspondence is **not** a prerequisite for software implementation.
+   *(Amended 2026-10-23, round 6: discovery happens only inside the owner-sealed non-settling TEST
+   facility of item 9; it never establishes whether a charge settles.)*
 2. The override weakens **no** financial or security control.
 3. H0 sensitive-material housekeeping is mandatory before any branch (done locally on 2026-10-21:
    the vendor material was moved out of the repository tree with a hash manifest and a local-only
@@ -23,9 +25,12 @@ terminal number, PIN-pad identifier, serial, card number or provider payload, an
 7. Code may be completed and tested with fakes before any provider call.
 8. No Z-Credit call, card use, terminal operation, hosted secret write, migration, deployment or live
    enablement without a separate owner approval after code review.
-9. First physical test = TEST mode only (§5).
+9. First physical test = TEST mode only (§5), and only after the owner seals the evidence that identifies
+   the exact non-settling TEST facility (D-051 point 7, **Q-047**); before it, no real provider action of
+   any kind (no provider call, test-card use, terminal payment action or hosted provider-secret setup).
 10. Fail closed on any mismatch between device, provider and the received contract; report the exact
-    sanitized mismatch; support contact becomes a targeted escalation, not a blocker.
+    sanitized mismatch; vendor support contact is a targeted escalation and the route to the item-9
+    evidence package — whose absence is a hard owner gate, never resolved by a first charge.
 11. Never expose PAN, CVV, test-card numbers, PINs, serials, MAC/IMEI values, provider passwords or
     keys, terminal credentials or unrestricted provider payloads.
 12. Storefront/Codex work stays fully reserved and untouched.
@@ -48,8 +53,11 @@ physical-test blockers.
 - The POS transport timeout is a 15 s constructor default shared by every RPC and Edge call and is
   not per-call configurable. Supabase Edge limits: 150 s request idle timeout (504), wall clock 150 s
   (Free) / 400 s (paid), 2 s CPU. A background continuation runs only within the wall clock.
-- The Dashboard represents `method='card'` correctly on every money surface; every total reads
-  `status='completed'` only. No Dashboard change is needed for the agreed row shape.
+- The Dashboard classifies `method='card'` correctly on the intended tender surfaces and every total
+  reads `status='completed'` only. The all-tender "Cash collected" label and the sales-summary fallback
+  are separate defects of `DASHBOARD-COLLECTED-LABEL-001`, whose deployment — or the owner's recorded
+  acceptance of the mislabel — gates LIVE enablement; the pilot's only Dashboard change is the exact
+  [MVP_SCOPE](MVP_SCOPE.md) §5 exception (amended 2026-10-23, round 6).
 - No payment-provider secret, table or code exists on `main` or on the hosted project.
 
 ## 3. Provider contract map (Z-Credit WebService, public documentation; sanitized)
@@ -71,20 +79,31 @@ physical-test blockers.
 
 | Component | Ticket | Shape |
 |---|---|---|
-| Private provider-attempt ledger (`app` schema) | 001D | tenant columns (`organization_id`, `restaurant_id`, `branch_id`, `device_id`), optional `order_id` (NULL in TEST mode), `local_operation_id`, mode `test` / `live`, state (`sent` / `approved` / `declined` / `unknown` / `released`; `recorded` and `approved_unrecorded` are derived; `released` is provisional until a status lookup), both provider keys as sent, `amount_minor` + `currency_code`, allowlisted provider fields only, timestamps; UNIQUE (`organization_id`, `device_id`, `local_operation_id`); partial UNIQUE on `order_id` while in progress; forced RLS, deny policies, no app-role grants; append-only evidence rows; plus the tenant-scoped PIN-pad mapping table (opaque `terminal_ref` per branch / device; no credential or identifier; populated only at TEST secret setup). |
+| Private provider-attempt ledger (`app` schema) | 001D | tenant columns (`organization_id`, `restaurant_id`, `branch_id`, `device_id`), optional `order_id` (NULL in TEST mode), `local_operation_id`, mode `test` / `live`, state (`sent` / `approved` / `declined` / `unknown` / `released`; `recorded` and `approved_unrecorded` are derived; `released` is provisional until a status lookup), both full internal key digests and both provider keys as sent (D-052 point 2), `amount_minor` + `currency_code`, allowlisted, field-validated provider codes only (no provider free text), timestamps; UNIQUE (`organization_id`, `device_id`, `local_operation_id`); partial UNIQUE on `order_id` while in progress; forced RLS, deny policies, no app-role grants; append-only evidence rows; plus the tenant-scoped PIN-pad mapping table (opaque `terminal_ref` per branch / device; no credential or identifier; populated only at TEST secret setup). |
 | Ledger RPCs | 001D | SECURITY DEFINER writer / claim / finish / status on the real PIN + device + employee proof (pattern `app.pos_web_order_context`); operator revision setter pinned to the pilot organization / branch, default OFF, bounded window; typed RETURN envelopes. |
 | Edge provider adapter (proposed `pos-card-charge`) | 001E | caller JWT forwarded; exact key set; `start` (claim → provider commit under a bounded deadline → ledger outcome; expiry = UNKNOWN), `status` (ledger first, then the provider lookup by the merchant key), `release` (advisory); reads only documented NAMES through an injected, shape-validated accessor pinned by a static guard; never logs bodies; float-free money module. |
 | Runtime configuration | 001H (values) / 001D (table) | master flag (exact `true`) and one provider configuration secret (JSON: environment, base URL, terminal credentials and PIN-pad identifiers keyed by opaque terminal references), installed only at TEST secret setup; the tenant-scoped mapping table that holds only opaque references per branch / device ships with the 001D migration. |
 | Shared transport capability | 001C | new capability interface in `packages/data_remote` with its own timeout, implemented by the Supabase, upgradable and guarded transports (`packages/auth_identity`). |
 | POS Payment Lab | 001F | decorator on `PaymentAttemptSender`; provider-leg sibling journal key; polling; outcomes `providerDeclined`, charged-unrecorded, provider status unavailable; per-device default-OFF lab screen; `method='card'` unchanged; `order_action_row.dart` untouched. |
-| Dashboard | 001G | verification tests only. |
+| Dashboard | 001G / 001D | 001G: verification tests only; 001D: the `card_attempt.*` audit registry entries, safe-detail labels and ar / he / en titles only — the one [MVP_SCOPE](MVP_SCOPE.md) §5 exception, in the files of §7. |
 
 ## 5. TEST-mode protocol (first physical test; D-051 point 4)
 
+- Gate (hard; D-051 point 7, **Q-047**, amended 2026-10-23): nothing below runs — no provider commit,
+  status or release call, no test-card use, no terminal payment action, no hosted provider-secret
+  setup — until the owner has sealed, outside Git, the evidence that identifies the exact non-settling
+  TEST facility: the test base URL / environment; the test credential record with its mode and scope;
+  the test terminal / PIN-pad binding; the test-card status; written or provider-portal evidence that
+  they cannot settle or move real money; the exact key / purpose / environment mapping. A missing or
+  failed package stops here; it is never replaced by discovering settlement with a first charge.
+- Session: one paired-device / PIN session established before the sealed PRE snapshot and kept for the
+  whole run — no sign-out or sign-in, PIN change, shift or drawer transition; a session that expires
+  or changes aborts the run.
 - Scope: Maps Burger organization / branch; a real paired POS device with a real PIN session and
   membership; the lab screen enabled on that one device only.
 - Attempt: order-less (amount-only, small amount, `order_id` NULL); mode `test`; one frozen identity
-  minted and persisted before the first provider request; both provider keys derived from it.
+  minted and persisted before the first provider request; both provider keys derived from its full
+  tuple (organization, device, local operation id; D-052 point 2).
 - Never: `record_payment`, a `payments` row, a receipt number, a shift or drawer effect, an order-history
   or kitchen change, a Dashboard revenue change, a tenant Activity-log entry (**Q-055**).
 - Transport: UNKNOWN on timeout or dropped connection; no automatic retry; recovery by the status
@@ -99,16 +118,23 @@ physical-test blockers.
 - Integer minor units everywhere; the adapter's two-decimal text formatting is the only decimal
   boundary; strict minor-unit equality on lookups; currency must match the order currency (ILS for the
   pilot tenant); the tip object is omitted and a non-zero tip amount fails closed.
-- Persist only: provider reference, approval number, voucher number, last four digits, brand code,
-  approval type, return code and message, entry mode, payment method, status code, deposit id,
-  provider timestamp, minor amounts with currency.
+- Persist only closed classes and validated codes: provider reference, approval number, voucher
+  number, last four digits, brand code, approval type, the integer return code and a normalized
+  return class, entry mode, payment method, status code, deposit id, provider timestamp, minor amounts
+  with currency — each after its field-specific character-set / length rule and the no-card-data rule
+  (a failing field is dropped). The vendor's free-text message is inspected transiently and dropped;
+  no provider free text is ever stored, logged, audited or returned (amended 2026-10-23, round 6).
 - Never persist, log, print or display: full or masked card number, BIN, expiry, token, raw or
   encrypted processor records, receipt texts, request bodies, any field outside the allowlist.
 
 ## 7. Scope allowlist and forbidden paths
 
 - Allowed by ticket: 001A/001B docs; 001C `packages/data_remote`, `packages/auth_identity`,
-  `packages/l10n` ARBs; 001D one forward-only migration + pgTAP; 001E one new function directory, an
+  `packages/l10n` ARBs; 001D one forward-only migration + pgTAP, plus the one Dashboard exception of
+  [MVP_SCOPE](MVP_SCOPE.md) §5 — exactly `apps/dashboard/lib/src/data/audit_action_registry.dart`,
+  `apps/dashboard/lib/src/data/audit_log_presentation.dart`, `packages/l10n/lib/l10n/app_en.arb`,
+  `app_ar.arb`, `app_he.arb`, the `packages/l10n/lib/src/generated/app_localizations*.dart` files
+  regenerated from those ARBs and the rendering test `apps/dashboard/test/card_attempt_activity_log_test.dart`; 001E one new function directory, an
   additive `config.toml` block and one explicit CI test step; 001F `apps/pos` payment files listed in
   the preflight; 001G tests only.
 - Forbidden: `storefront/**`, `supabase/functions/web-order-submit/**`,
@@ -117,7 +143,8 @@ physical-test blockers.
   Vercel project, any unregistered Codex location; `apps/pos/lib/src/widgets/order_action_row.dart`
   (PR #314), `packages/printing/**` and the receipt preview (PR #315) in phase 1;
   `tools/android_release/**`, `docs/ANDROID_RELEASE_SIGNING.md`, `tools/vercel/ignore-build.mjs`,
-  lockfiles and generated files; the body of `app.record_payment`; the D-018 enumerations; the
+  lockfiles and generated files (except the l10n localizations regenerated for the Dashboard exception
+  above); the body of `app.record_payment`; the D-018 enumerations; the
   dirty `BIZBOT-INSTANT-NOTIFICATION-WAKE-001` worktree.
 - Base and order: every ticket branches from a fresh `origin/main`; #314 and #315 do not block
   001A–001E; merge or close them before 001F.
@@ -126,24 +153,30 @@ physical-test blockers.
 
 | Gate | Proof |
 |---|---|
-| Unit / integration (fakes) | float-free money; derived keys deterministic; journal sibling-key round trip and older-build quarantine; gate fail-closed; approved / declined / UNKNOWN / released paths; Resume never re-charges; two tabs or tills refused before any provider call; restart mid-attempt recovers; ar / he / en. |
+| Unit / integration (fakes) | float-free money; the full-identity key digests deterministic and domain-separated (status vs duplicate), never from `local_operation_id` alone (D-052 point 2); journal sibling-key round trip and older-build quarantine; gate fail-closed; approved / declined / UNKNOWN / released paths; Resume never re-charges; a second till or a duplicate request refused before any provider call; restart mid-attempt recovers; ar / he / en. |
 | Shared transport | both boot compositions forward the capability; blocked session refuses; late response after timeout causes no second transmission; dedicated timeout independent of the 15 s default. |
-| Edge adapter | exact environment-read allow-list and `config.toml` pin; JWT forwarding; closed-set projection; timeout → UNKNOWN; no body logging; static guard against float parsing on money. |
-| T-023 (pgTAP + the Edge test lane + static guard) | role denies, forced RLS, immutability, proof-derived tenant context, TEST mode never writes `payments` / receipt / shift / order history / Activity log (**Q-055** default), one in-progress attempt per order, kitchen exclusion, accountant read-only, support mode denied. |
-| Deploy (001H) | migration PRE/POST per OPERATIONS §4.2 and the DEPLOYMENT §17.2 PRE / POST recipe; function deployed with every flag OFF; secret NAMES verified, values never read back. |
-| Physical test (001H) | TEST mode per §5 only, owner present; hosted PRE/POST queries prove no Maps Burger production row changed. |
+| Edge adapter | exact environment-read allow-list and `config.toml` pin; JWT forwarding; closed-set projection; timeout → UNKNOWN; no body logging; static guard against float parsing on money; outbound keys only from the sealed formatter configuration — without it `provider_unavailable` and zero provider calls (**Q-049**); the vendor's free-text message never stored, logged or returned. |
+| T-023 (pgTAP + the Edge test lane + static guard) | role denies, forced RLS, immutability, no provider free-text column, field-validated provider codes, proof-derived tenant context, TEST mode never writes `payments` / receipt / shift / order history / Activity log (**Q-055** default), one in-progress attempt per order, kitchen exclusion, accountant read-only, support mode denied. |
+| Deploy (001H) | migration PRE/POST per OPERATIONS §4.2 and the DEPLOYMENT §17.2 PRE / POST recipe; function deployed with every flag OFF; secret NAMES verified, values never read back; no provider secret installed before the sealed **Q-047** and **Q-049** evidence. |
+| Physical test (001H) | only after the sealed non-settling TEST facility evidence (§5 gate, **Q-047**); TEST mode per §5 only, owner present, one session kept for the whole run; hosted PRE/POST queries prove no Maps Burger production row changed. |
 | Rollback | master flag OFF → operator revision OFF → poller off; keep every ledger row; no replay; forward-only migrations. |
 
 ## 9. Owner decisions still open and targeted escalation list
 
 Open owner decisions: **Q-051** (orphan approval / same-day void), **Q-052** (receipt law),
 **Q-053** (plan tier), **Q-054** (per-tenant credentials, merchant of record), **Q-055** (TEST-mode
-traces), **Q-056** (till platform / journal policy). None blocks 001B–001F beyond the ASSUMPTION defaults recorded in **D-052** (Q-055 → the 001D audit rule, Q-056 → the 001F journal policy); each is revisited before production enablement.
+traces). None blocks 001B–001F beyond the ASSUMPTION defaults recorded in **D-052** (Q-055 → the 001D
+audit rule); each is revisited before production enablement. **Q-056** is resolved by D-051 point 9
+(Android POS only, 2026-10-23). Hard owner gates on every real provider action: **Q-047** (the sealed
+non-settling TEST facility evidence) and **Q-049** (the sealed key-format evidence); neither blocks
+code or fake-provider work.
 
-Targeted escalation to vendor support, only if discovery fails or a mismatch appears (never a
-blocker): test environment host and credentials mapping and the purpose of the extra key (**Q-047**);
-status-lookup semantics for never-received / declined / pending attempts (**Q-048**); key length and
-character rules and the duplicate-check window (**Q-049**); device model, identifier, binding and the
-masking setting (**Q-050**); maximum pad blocking time, return codes for pad timeout / offline / busy /
+Vendor support is the route to the two gating evidence packages — the exact non-settling TEST
+facility (test environment host, credential record and mode, terminal / PIN-pad binding, test-card
+status, no-settlement evidence and the purpose of the extra key — **Q-047**) and the key length and
+character rules (**Q-049**); without them nothing real runs. Targeted escalation, only if discovery
+inside the sealed facility fails or a mismatch appears: status-lookup semantics for never-received /
+declined / pending attempts (**Q-048**); the duplicate-check window (**Q-049**); device model,
+identifier and the masking setting (**Q-050**); maximum pad blocking time, return codes for pad timeout / offline / busy /
 after release, behaviour when the HTTP connection drops mid-call; release-versus-tap race; deposit
 timing; tip amount unit; customer-present expectation.
