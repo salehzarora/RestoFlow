@@ -18,7 +18,8 @@ import '../print/pos_kitchen_ticket_printer.dart'
     show
         PosKitchenPrintOutcome,
         kitchenTicketPrintLabelsFromL10n,
-        posKitchenReprintProvider;
+        posKitchenReprintProvider,
+        settleOwedKitchenDispatchClaims;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/discount_controller.dart' show staffCapabilitiesProvider;
@@ -805,8 +806,9 @@ class OrderActionRow extends ConsumerWidget {
   /// ORDER-EDIT-001F (decision D6, "R2"): an EDITED order (`editCount > 0`)
   /// never reprints its order-time snapshot — removed food would come back on
   /// paper. It prints the ORDER-NOW change slip from the authoritative detail
-  /// instead ([posKitchenChangeSlipReprintProvider]). An unedited order is
-  /// byte-identical to before.
+  /// instead ([posKitchenChangeSlipReprintProvider]). An unedited order uses
+  /// the combined server detail when available, with its local snapshot as
+  /// the offline/demo fallback.
   Future<void> _reprintKitchenTicket(
     BuildContext context,
     WidgetRef ref,
@@ -836,43 +838,49 @@ class OrderActionRow extends ConsumerWidget {
       );
       return;
     }
-    // KIOSK-PRINT-114B.5A: a DEVICE-OWNED order prints its local order-time
-    // snapshot exactly as before. A BRANCH-DISCOVERED order (a kiosk order, or
-    // one taken on another till) has no local snapshot — it used to refuse here
-    // and nothing printed — so it is now resolved from the AUTHORITATIVE
-    // detail, the same source the receipt reprint already trusts.
+    // The local snapshot stops at submission; later service rounds live in
+    // the authoritative detail. Resolve ONE combined ticket for a deliberate
+    // manual print, retaining local lines only when that detail is unavailable.
     final local = order.order;
-    final view =
-        local ??
-        await authoritativeKitchenSource(
-          isDemoMode: isDemo,
-          orderId: order.orderId,
-          localView: null,
-          repository: ref.read(orderDetailRepositoryProvider),
-        );
-    if (view == null) {
-      // Honest KITCHEN-only refusal — never a silent receipt instead. Demo /
-      // no server identity: there is nothing to fetch; otherwise the fetch
-      // itself failed (offline, malformed) — say so, print nothing.
-      final message = (isDemo || order.orderId == null)
+    final canFetch = !isDemo && orderId != null && orderId.trim().isNotEmpty;
+    final authoritative = canFetch
+        ? await authoritativeKitchenSource(
+            isDemoMode: isDemo,
+            orderId: orderId,
+            localView: null,
+            repository: ref.read(orderDetailRepositoryProvider),
+          )
+        : null;
+    final view = authoritative ?? local;
+    if (view == null || view.lines.isEmpty) {
+      // An empty authoritative result must not resurrect excluded local lines
+      // or produce an empty document. A failed fetch with no fallback remains
+      // an honest KITCHEN-only failure, never a receipt instead.
+      final message = (!canFetch || view != null)
           ? l10n.posReprintKitchenUnavailable
           : l10n.posReprintKitchenFetchFailed;
       messenger.showSnackBar(SnackBar(content: Text(message)));
       return;
     }
-    final outcome = await ref.read(posKitchenReprintProvider)(
+    final outcome = await container.read(posKitchenReprintProvider)(
       container: container,
       order: view,
       labels: kitchenTicketPrintLabelsFromL10n(l10n),
     );
+    if (outcome == PosKitchenPrintOutcome.printed &&
+        authoritative != null &&
+        local != null) {
+      // The mapped detail has no local outbox identity. Preserve the existing
+      // successful manual print's INITIAL claim bookkeeping using that identity;
+      // the helper does not settle addition-round claims.
+      await settleOwedKitchenDispatchClaims(container: container, order: local);
+    }
     messenger.showSnackBar(
       SnackBar(content: Text(_kitchenReprintSnack(outcome))),
     );
-    // 114B.5A DETAIL-SOURCED LIMITATION (until 114B.5B): the authoritative
-    // detail carries no prep/meat snapshots, so a branch-discovered reprint
-    // prints WITHOUT the whole-order counts block. Say so — informational,
-    // after the honest print outcome; never a silent omission.
-    if (local == null &&
+    // Retain the existing notice when the selected server detail lacks kitchen
+    // snapshots, including when this till also has a local order-time view.
+    if (authoritative != null &&
         outcome == PosKitchenPrintOutcome.printed &&
         view.lines.every(
           (l) => l.kitchenMeats.isEmpty && l.prepComponents.isEmpty,
