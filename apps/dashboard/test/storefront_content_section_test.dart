@@ -153,6 +153,12 @@ Future<void> mount(
                   enabled: enabled,
                   onRefresh: () async {
                     update(() {});
+                    return StorefrontContentRefresh(
+                      profileRead: true,
+                      mediaRead: true,
+                      version: repo.version,
+                      branchId: branch,
+                    );
                   },
                   onDraftChanged: (_) {},
                   onBusyChanged: (_) {},
@@ -189,6 +195,22 @@ Future<void> edit(WidgetTester tester, String key, String text) async {
 }
 
 void main() {
+  for (final status in [
+    StorefrontContentReadStatus.unavailable,
+    StorefrontContentReadStatus.denied,
+  ]) {
+    testWidgets(
+      'failed content read does not fetch an unrelated catalog: $status',
+      (tester) async {
+        final repo = ContentRepo()..readStatus = status;
+        final catalog = ContentCatalog();
+        await mount(tester, repo, catalog: catalog);
+        expect(catalog.branches, isEmpty);
+        expect(repo.calls, isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   for (final locale in ['en', 'ar', 'he']) {
     testWidgets('promo source candidates are not claimed published in $locale', (
       tester,

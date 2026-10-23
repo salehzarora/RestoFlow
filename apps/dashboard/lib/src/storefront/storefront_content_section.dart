@@ -11,6 +11,27 @@ import 'storefront_media_publisher.dart';
 import 'storefront_models.dart';
 import 'storefront_sources.dart';
 
+/// A read acknowledgment from the actual parent editor. A completed Future is
+/// not evidence that the profile and its media were both refreshed.
+class StorefrontContentRefresh {
+  const StorefrontContentRefresh({
+    required this.profileRead,
+    required this.mediaRead,
+    this.version,
+    this.branchId,
+  });
+  const StorefrontContentRefresh.unavailable()
+    : profileRead = false,
+      mediaRead = false,
+      version = null,
+      branchId = null;
+  final bool profileRead, mediaRead;
+  final int? version;
+  final String? branchId;
+  bool get isReady =>
+      profileRead && mediaRead && version != null && branchId != null;
+}
+
 /// One complete content draft, owned by the existing membership/restaurant
 /// editor identity. The server read controls access; no role test authorizes it.
 class StorefrontContentSection extends StatefulWidget {
@@ -33,7 +54,7 @@ class StorefrontContentSection extends StatefulWidget {
   final StorefrontContentCatalog? catalog;
   final int profileVersion;
   final String savedBranchId;
-  final Future<void> Function() onRefresh;
+  final Future<StorefrontContentRefresh> Function() onRefresh;
   final ValueChanged<bool> onDraftChanged, onBusyChanged;
   final bool enabled;
   final StorefrontMediaPublisher? publisher;
@@ -50,18 +71,27 @@ class _ContentState extends State<StorefrontContentSection> {
   StorefrontContentMediaList? _media;
   Map<String, dynamic>? _draft;
   StorefrontContentAttempt? _pending;
+  StorefrontContentAttempt? _confirmedSave;
   final _headline = TextEditingController(),
       _selection = TextEditingController();
   bool _busy = false, _dirty = false, _stale = false;
   int _generation = 0;
+  int _bindingGeneration = 0;
+  bool _ownsRefresh = false, _bindingHold = false, _branchHold = false;
   String? _message, _sourceId, _invalidField;
-  ({StorefrontMediaSource source, String requestId})? _pendingPublish;
+  ({StorefrontMediaSource source, String requestId, String branchId})?
+  _pendingPublish;
+  ({StorefrontMediaSource source, String requestId, String branchId})?
+  _confirmedPublish;
   String c(String key) =>
       storefrontContentCopy(AppLocalizations.of(context), key);
   bool get _editable =>
       widget.enabled &&
       !_busy &&
       !_stale &&
+      !_bindingHold &&
+      _confirmedSave == null &&
+      _confirmedPublish == null &&
       _pending == null &&
       _pendingPublish == null;
 
@@ -73,6 +103,8 @@ class _ContentState extends State<StorefrontContentSection> {
 
   @override
   void dispose() {
+    _bindingGeneration++;
+    _generation++;
     _headline.dispose();
     _selection.dispose();
     super.dispose();
@@ -81,8 +113,50 @@ class _ContentState extends State<StorefrontContentSection> {
   @override
   void didUpdateWidget(covariant StorefrontContentSection old) {
     super.didUpdateWidget(old);
+    if (!identical(old.repository, widget.repository) ||
+        !identical(old.catalog, widget.catalog) ||
+        !identical(old.publisher, widget.publisher) ||
+        old.savedBranchId != widget.savedBranchId) {
+      _bindingGeneration++;
+      _generation++;
+      _ownsRefresh = false;
+      _busy = false;
+      // An in-flight or uncertain request remains owned by its original
+      // transport. Never replay it on a replacement authenticated binding.
+      _bindingHold =
+          _bindingHold ||
+          _pending != null ||
+          _pendingPublish != null ||
+          (old.savedBranchId != widget.savedBranchId &&
+              (_confirmedSave != null || _confirmedPublish != null));
+      _branchHold =
+          _branchHold ||
+          (old.savedBranchId != widget.savedBranchId && _bindingHold);
+      if (_bindingHold || _confirmedSave != null || _confirmedPublish != null) {
+        _stale = true;
+        _message = _bindingHold ? 'bindingChanged' : 'savedReadFailed';
+        final binding = _bindingGeneration;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && binding == _bindingGeneration)
+            widget.onBusyChanged(true);
+        });
+      } else {
+        _load();
+      }
+      return;
+    }
     if (old.savedBranchId != widget.savedBranchId ||
         old.profileVersion != widget.profileVersion) {
+      // This is our parent's acknowledgment, not a competing write. The
+      // explicit refresh owns one child read using its returned version/branch.
+      if (_ownsRefresh || _confirmedSave != null || _confirmedPublish != null)
+        return;
+      final snapshot = _read?.snapshot;
+      if (!_stale &&
+          snapshot?.branchId == widget.savedBranchId &&
+          snapshot?.version == widget.profileVersion &&
+          _media?.version == snapshot?.version)
+        return;
       if (_dirty || _pending != null || _pendingPublish != null) {
         _stale = true;
         _message = 'conflict';
@@ -104,41 +178,84 @@ class _ContentState extends State<StorefrontContentSection> {
     widget.onBusyChanged(value);
   }
 
-  Future<void> _load() async {
-    if (!mounted) return;
+  Future<bool> _load({
+    int? version,
+    String? branchId,
+    bool owned = false,
+  }) async {
+    if (!mounted) return false;
+    final binding = _bindingGeneration;
+    final repository = widget.repository;
+    final catalog = widget.catalog;
+    final expectedVersion = version ?? widget.profileVersion;
+    final expectedBranch = branchId ?? widget.savedBranchId;
+    bool propsMatch() =>
+        owned ||
+        (widget.profileVersion == expectedVersion &&
+            widget.savedBranchId == expectedBranch);
     final generation = ++_generation;
     setState(() => _busy = true);
     final results = await Future.wait<Object?>(
       <Future<Object?> Function()>[
-        () => widget.repository.readContent(),
-        () => widget.repository.listContentMedia(),
-        () =>
-            widget.catalog?.loadContent(widget.savedBranchId) ??
-            Future<StorefrontContentCatalogData?>.value(),
+        () => repository.readContent(),
+        () => repository.listContentMedia(),
       ].map(_safeRead),
     );
-    if (!mounted || generation != _generation) return;
+    if (!_current(binding) || generation != _generation) return false;
     final read = results[0] as StorefrontContentRead?;
+    final media = results[1] as StorefrontContentMediaList?;
+    final snapshot = read?.snapshot;
+    // A failed/denied content read cannot enable this editor. Do not send an
+    // unrelated menu/catalog read on that path; positive reads still require
+    // all three acknowledgments while the same operation owns the lock.
+    StorefrontContentCatalogData? choices;
+    if (propsMatch() &&
+        read?.isOk == true &&
+        snapshot != null &&
+        media != null &&
+        snapshot.branchId == expectedBranch &&
+        snapshot.version == expectedVersion &&
+        media.version == snapshot.version) {
+      choices =
+          await _safeRead(
+                () =>
+                    catalog?.loadContent(expectedBranch) ??
+                    Future<StorefrontContentCatalogData?>.value(),
+              )
+              as StorefrontContentCatalogData?;
+    }
+    if (!_current(binding) || generation != _generation) return false;
+    final verified =
+        propsMatch() &&
+        read?.isOk == true &&
+        snapshot != null &&
+        media != null &&
+        choices != null &&
+        snapshot.branchId == expectedBranch &&
+        snapshot.version == expectedVersion &&
+        media.version == snapshot.version;
     setState(() {
-      _busy = false;
-      _read =
-          read ??
-          const StorefrontContentRead(StorefrontContentReadStatus.unavailable);
-      _media = results[1] as StorefrontContentMediaList?;
-      _catalog = results[2] as StorefrontContentCatalogData?;
-      final snapshot = _read?.snapshot;
-      if (snapshot != null) {
-        _stale =
-            snapshot.branchId != widget.savedBranchId ||
-            snapshot.version != widget.profileVersion ||
-            (_media != null && _media!.version != snapshot.version);
-        if (_stale) _message = 'conflict';
+      if (!owned) _busy = false;
+      if (!owned || verified) {
+        _read =
+            (!owned && read?.isOk == true && !verified ? null : read) ??
+            const StorefrontContentRead(
+              StorefrontContentReadStatus.unavailable,
+            );
+        _media = media;
+        _catalog = choices;
+      }
+      _stale = !verified;
+      if (!owned)
+        _message = null; // The typed failure view owns its reload message.
+      if (verified) {
         _draft = snapshot.document.editableCopy();
         _headline.text = _draft!['hero_headline'] as String? ?? '';
         _selection.text = _headline.text;
         _notifyDraft(false);
       }
     });
+    return verified;
   }
 
   Future<Object?> _safeRead(Future<Object?> Function() action) async {
@@ -149,14 +266,97 @@ class _ContentState extends State<StorefrontContentSection> {
     }
   }
 
-  Future<bool> _refreshProfile() async {
+  bool _current(int binding) => mounted && binding == _bindingGeneration;
+
+  Future<void> _refreshConfirmed(int binding) async {
+    final refresh = widget.onRefresh;
+    final published = _confirmedPublish != null;
+    _ownsRefresh = true;
+    StorefrontContentRefresh parent;
     try {
-      await widget.onRefresh();
-      return true;
+      parent = await refresh();
     } catch (_) {
-      if (mounted) setState(() => _stale = true);
-      return false;
+      parent = const StorefrontContentRefresh.unavailable();
     }
+    if (!_current(binding)) return;
+    final minimumVersion = _confirmedSave == null
+        ? null
+        : _confirmedSave!.expectedVersion + 1;
+    final expectedBranch =
+        _confirmedSave?.expectedBranchId ?? _confirmedPublish?.branchId;
+    var verified =
+        parent.isReady &&
+        (expectedBranch == null || parent.branchId == expectedBranch) &&
+        (minimumVersion == null || parent.version! >= minimumVersion);
+    if (verified)
+      verified = await _load(
+        version: parent.version,
+        branchId: parent.branchId,
+        owned: true,
+      );
+    if (!_current(binding)) return;
+    _ownsRefresh = false;
+    setState(() {
+      _busy = false;
+      _stale = !verified;
+      if (verified) {
+        _confirmedSave = null;
+        _confirmedPublish = null;
+        _message = published ? 'published' : 'saved';
+      } else {
+        _message = published ? 'publishedReadFailed' : 'savedReadFailed';
+      }
+    });
+    widget.onBusyChanged(!verified);
+  }
+
+  Future<void> _resumeConfirmedRead() async {
+    if (!mounted ||
+        _busy ||
+        _bindingHold ||
+        (_confirmedSave == null && _confirmedPublish == null))
+      return;
+    final binding = _bindingGeneration;
+    _setBusy(true);
+    await _refreshConfirmed(binding);
+  }
+
+  Future<void> _reload() async {
+    if (!mounted ||
+        _busy ||
+        _pending != null ||
+        _pendingPublish != null ||
+        _confirmedSave != null ||
+        _confirmedPublish != null)
+      return;
+    final binding = _bindingGeneration;
+    if (_dirty && !await _confirm('discard')) return;
+    if (!_current(binding) || _busy) return;
+    _notifyDraft(false);
+    _setBusy(true);
+    _ownsRefresh = true;
+    StorefrontContentRefresh parent;
+    try {
+      parent = await widget.onRefresh();
+    } catch (_) {
+      parent = const StorefrontContentRefresh.unavailable();
+    }
+    if (!_current(binding)) return;
+    var verified = parent.isReady;
+    if (verified)
+      verified = await _load(
+        version: parent.version,
+        branchId: parent.branchId,
+        owned: true,
+      );
+    if (!_current(binding)) return;
+    _ownsRefresh = false;
+    setState(() {
+      _busy = false;
+      _stale = !verified;
+      _message = verified ? null : 'loadFailed';
+    });
+    widget.onBusyChanged(!verified);
   }
 
   Object? _get(String path) {
@@ -267,9 +467,11 @@ class _ContentState extends State<StorefrontContentSection> {
       false;
   Future<void> _normalizeHeadline() async {
     if (!mounted || !_editable) return;
+    final binding = _bindingGeneration;
+    final original = _headline.text;
     try {
       final normalized = unicode.normalizeContentText(
-        _headline.text,
+        original,
         120,
         legacy: true,
       );
@@ -277,10 +479,11 @@ class _ContentState extends State<StorefrontContentSection> {
         setState(() => _message = 'invalid');
         return;
       }
-      if (normalized != _headline.text &&
+      if (normalized != original &&
           !await _confirm('normalize', text: normalized))
         return;
-      if (!mounted) return;
+      if (!_current(binding) || !_editable || _headline.text != original)
+        return;
       setState(() {
         _headline.text = normalized;
         _selection.text = normalized;
@@ -289,7 +492,7 @@ class _ContentState extends State<StorefrontContentSection> {
         _notifyDraft(true);
       });
     } on FormatException {
-      setState(() => _message = 'invalid');
+      if (_current(binding)) setState(() => _message = 'invalid');
     }
   }
 
@@ -677,15 +880,18 @@ class _ContentState extends State<StorefrontContentSection> {
     if (!mounted ||
         _busy ||
         (!replay && !_editable) ||
+        _bindingHold ||
         (replay && _pending == null))
       return;
+    final binding = _bindingGeneration;
+    final repository = widget.repository;
     final snapshot = _read?.snapshot;
     if (snapshot == null) return;
     StorefrontContentAttempt attempt;
     try {
       attempt = replay
           ? _pending!
-          : widget.repository.prepareContent(
+          : repository.prepareContent(
               expectedVersion: snapshot.version,
               expectedBranchId: snapshot.branchId,
               document: StorefrontContentDocument.fromJson(_normalizedDraft()),
@@ -700,37 +906,34 @@ class _ContentState extends State<StorefrontContentSection> {
       setState(() => _message = 'invalid');
       return;
     }
+    // Until a definitive response arrives, retain the exact original attempt.
+    _pending = attempt;
     _setBusy(true);
     StorefrontContentWrite result;
     try {
-      result = await widget.repository.saveContent(attempt);
+      result = await repository.saveContent(attempt);
     } catch (_) {
       result = StorefrontContentWrite(
         StorefrontContentWriteStatus.uncertain,
         attempt: attempt,
       );
     }
-    if (!mounted) return;
-    setState(() => _busy = false);
-    widget.onBusyChanged(false);
+    if (!_current(binding)) return;
     switch (result.status) {
       case StorefrontContentWriteStatus.ok:
         _pending = null;
+        _confirmedSave = attempt;
         _notifyDraft(false);
-        if (!await _refreshProfile()) {
-          if (mounted) setState(() => _message = 'loadFailed');
-          return;
-        }
-        if (!mounted) return;
-        await _load();
-        if (!mounted) return;
-        setState(() => _message = _read?.isOk == true ? 'saved' : 'loadFailed');
+        await _refreshConfirmed(binding);
+        return;
       case StorefrontContentWriteStatus.uncertain:
         setState(() {
           _pending = attempt;
+          _busy = false;
           _message = 'uncertain';
         });
         widget.onBusyChanged(true);
+        return;
       case StorefrontContentWriteStatus.conflict:
       case StorefrontContentWriteStatus.branchConflict:
         setState(() {
@@ -752,6 +955,8 @@ class _ContentState extends State<StorefrontContentSection> {
       case StorefrontContentWriteStatus.unavailable:
         setState(() => _message = 'unavailable');
     }
+    _pending = null;
+    _setBusy(false);
   }
 
   String? _fieldLabel(String? field) => switch (field?.split('.').first) {
@@ -787,26 +992,30 @@ class _ContentState extends State<StorefrontContentSection> {
     if (!mounted ||
         _busy ||
         (!replay && (!_editable || _dirty)) ||
+        _bindingHold ||
         (replay && _pendingPublish == null))
       return;
+    final binding = _bindingGeneration;
     final publisher = widget.publisher;
+    final reloadSources = widget.reloadSources;
+    final branch = widget.savedBranchId;
     if (publisher == null) return;
     final initial = _sources(
       widget.sources,
     ).where((source) => source.id == _sourceId).firstOrNull;
     if (!replay && initial == null) return;
     if (!replay && !await _confirm('publishConfirm')) return;
-    if (!mounted) return;
+    if (!_current(binding)) return;
     if (!replay && (!_editable || _dirty)) return;
     _setBusy(true);
     final source = _pendingPublish?.source ?? initial!.source;
     StorefrontSourceOptions? fresh;
     try {
-      fresh = await widget.reloadSources?.call();
+      fresh = await reloadSources?.call();
     } catch (_) {
       fresh = null;
     }
-    if (!mounted) return;
+    if (!_current(binding)) return;
     if (!replay &&
         (fresh == null ||
             !_sources(fresh).any(
@@ -821,11 +1030,12 @@ class _ContentState extends State<StorefrontContentSection> {
     final requestId =
         _pendingPublish?.requestId ??
         storefrontRequestId('pbl:storefront:editorial:', [
-          widget.savedBranchId,
+          branch,
           source.bucket.wire,
           source.key,
         ], DateTime.now().microsecondsSinceEpoch);
     StorefrontPublishResult result;
+    _pendingPublish = (source: source, requestId: requestId, branchId: branch);
     try {
       result = await publisher.publish(
         slot: StorefrontEditorialTarget.editorial,
@@ -839,33 +1049,34 @@ class _ContentState extends State<StorefrontContentSection> {
         slot: StorefrontEditorialTarget.editorial,
       );
     }
-    if (!mounted) return;
-    _setBusy(false);
+    if (!_current(binding)) return;
     if (result.isPublished) {
       // No slot/profile write here. The owner selects a content media reference
       // and saves the whole document through the same global profile CAS.
       _pendingPublish = null;
-      if (!await _refreshProfile()) {
-        if (mounted) setState(() => _message = 'loadFailed');
-        return;
-      }
-      if (!mounted) return;
-      await _load();
-      if (!mounted) return;
-      setState(() => _message = 'published');
+      _confirmedPublish = (
+        source: source,
+        requestId: requestId,
+        branchId: branch,
+      );
+      await _refreshConfirmed(binding);
     } else if (result.status == StorefrontPublishStatus.uncertain) {
       setState(() {
-        _pendingPublish = (source: source, requestId: requestId);
+        _pendingPublish = (
+          source: source,
+          requestId: requestId,
+          branchId: branch,
+        );
+        _busy = false;
         _message = 'publishUncertain';
       });
       widget.onBusyChanged(true);
-      final media = await widget.repository.listContentMedia();
-      if (mounted) setState(() => _media = media);
     } else {
       setState(() {
         _pendingPublish = null;
         _message = 'unavailable';
       });
+      _setBusy(false);
     }
   }
 
@@ -914,7 +1125,9 @@ class _ContentState extends State<StorefrontContentSection> {
         ),
         if (_pendingPublish != null)
           TextButton(
-            onPressed: _busy ? null : () => _publish(replay: true),
+            onPressed: _busy || _bindingHold
+                ? null
+                : () => _publish(replay: true),
             child: Text(c('retry')),
           ),
       ],
@@ -922,6 +1135,14 @@ class _ContentState extends State<StorefrontContentSection> {
   );
   @override
   Widget build(BuildContext context) {
+    if (_branchHold)
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _title('title'),
+          Text(c('bindingChanged'), key: const Key('content-message')),
+        ],
+      );
     if (_read == null) return const LinearProgressIndicator();
     final status = _read!.status;
     return Column(
@@ -957,6 +1178,7 @@ class _ContentState extends State<StorefrontContentSection> {
             enabled: _editable,
             decoration: InputDecoration(labelText: c('headline')),
             onChanged: (value) {
+              if (!mounted || !_editable) return;
               _change('hero_headline', value);
               _put('hero.format', null);
               _selection.clear();
@@ -993,22 +1215,28 @@ class _ContentState extends State<StorefrontContentSection> {
               if (_pending != null)
                 OutlinedButton(
                   key: const Key('content-retry-save'),
-                  onPressed: _busy ? null : () => _save(replay: true),
+                  onPressed: _busy || _bindingHold
+                      ? null
+                      : () => _save(replay: true),
                   child: Text(c('retry')),
                 ),
+              if (_confirmedSave != null || _confirmedPublish != null)
+                TextButton(
+                  key: const Key('content-resume-read'),
+                  onPressed: _busy || _bindingHold
+                      ? null
+                      : _resumeConfirmedRead,
+                  child: Text(c('resumeRead')),
+                ),
               TextButton(
-                onPressed: _busy || _pending != null || _pendingPublish != null
+                onPressed:
+                    _busy ||
+                        _pending != null ||
+                        _pendingPublish != null ||
+                        _confirmedSave != null ||
+                        _confirmedPublish != null
                     ? null
-                    : () async {
-                        if (_dirty && !await _confirm('discard')) return;
-                        if (!mounted) return;
-                        _notifyDraft(false);
-                        await widget.onRefresh();
-                        if (mounted) {
-                          _stale = false;
-                          await _load();
-                        }
-                      },
+                    : _reload,
                 child: Text(c('reload')),
               ),
             ],

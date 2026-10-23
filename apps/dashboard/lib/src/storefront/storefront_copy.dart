@@ -15,6 +15,26 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
       'تعذر التحقق من المحتوى. أعد التحميل قبل التعديل.',
       'לא ניתן לאמת תוכן. יש לטעון מחדש לפני עריכה.',
     ],
+    'savedReadFailed': [
+      'Save confirmed. Required reads failed; editing stays locked. Resume verification only; do not save again.',
+      'تأكد الحفظ. تعذرت القراءات المطلوبة؛ يبقى التعديل مقفلاً. استأنف التحقق فقط دون إعادة الحفظ.',
+      'השמירה אושרה. הקריאות הנדרשות נכשלו והעריכה נשארת נעולה. יש לחדש אימות בלבד, ללא שמירה נוספת.',
+    ],
+    'publishedReadFailed': [
+      'Image publication confirmed. Required reads failed; editing stays locked. Resume verification without publishing again.',
+      'تأكد نشر الصورة. تعذرت القراءات المطلوبة؛ يبقى التعديل مقفلاً. استأنف التحقق دون إعادة النشر.',
+      'פרסום התמונה אושר. הקריאות הנדרשות נכשלו והעריכה נשארת נעולה. יש לחדש אימות ללא פרסום נוסף.',
+    ],
+    'resumeRead': [
+      'Resume read-only verification',
+      'استئناف التحقق للقراءة فقط',
+      'חידוש אימות לקריאה בלבד',
+    ],
+    'bindingChanged': [
+      'The authenticated connection changed while a request was unresolved. Its original identity is retained; no replay or new write is allowed here. Reconcile the original request first.',
+      'تغيّر الاتصال الموثّق ونتيجة الطلب لم تُحسم. حُفظت هوية الطلب الأصلي؛ لا إعادة إرسال أو كتابة جديدة هنا قبل تسويته.',
+      'החיבור המאומת השתנה כאשר הבקשה טרם הוכרעה. זהות הבקשה המקורית נשמרה; אין לשלוח שוב או לכתוב לפני בירור הבקשה המקורית.',
+    ],
     'denied': [
       'Content management is unavailable for this account.',
       'إدارة المحتوى غير متاحة لهذا الحساب.',
