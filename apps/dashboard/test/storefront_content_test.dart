@@ -10,6 +10,25 @@ import 'package:restoflow_dashboard/src/storefront/storefront_models.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_profile_repository.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
+File _unicodeVectorsFile() {
+  final override = Platform.environment['BIZBOT_CONTENT_UNICODE_VECTORS'];
+  final paths = override == null
+      ? const [
+          'tools/storefront_content_unicode/vectors.json',
+          '../../tools/storefront_content_unicode/vectors.json',
+        ]
+      : [override];
+  for (final path in paths) {
+    final file = File(path);
+    if (file.existsSync()) return file;
+  }
+  fail(
+    'cannot find Unicode vectors (BIZBOT_CONTENT_UNICODE_VECTORS: '
+    '${override == null ? 'unset' : 'set'}; cwd: ${Directory.current.path}; '
+    'tried: ${paths.join(', ')})',
+  );
+}
+
 const org = '11111111-1111-4111-8111-111111111111';
 const restaurant = '22222222-2222-4222-8222-222222222222';
 const branch = '33333333-3333-4333-8333-333333333333';
@@ -516,10 +535,7 @@ void main() {
     expect(t.calls, isEmpty);
   });
   test('Unicode15.1 corpus matches all1187 official grapheme vectors', () {
-    final path =
-        Platform.environment['BIZBOT_CONTENT_UNICODE_VECTORS'] ??
-        '../../tools/storefront_content_unicode/vectors.json';
-    final corpus = jsonDecode(File(path).readAsStringSync()) as Map;
+    final corpus = jsonDecode(_unicodeVectorsFile().readAsStringSync()) as Map;
     expect(corpus['unicode'], '15.1.0');
     expect(corpus['uax29'], 43);
     expect((corpus['vectors'] as List).length, 1187);
