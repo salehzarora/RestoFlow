@@ -2887,5 +2887,20 @@
   "storefrontHomeContentSeparateEdits": "יש לשמור או לבטל את שינויי הפרופיל האחרים לפני שמירת טקסט הבית. אם שני החלקים השתנו, בטלו תחילה אחד מהם.",
   "storefrontHomeContentUncertain": "תוצאת השמירה אינה ידועה. הטיוטה ומזהה הבקשה נשמרו. נסו שוב כדי לבדוק את אותה בקשה, ואל תתחילו שמירה אחרת.",
   "storefrontHomeContentPreviewTitle": "תצוגת טקסט מקדימה",
-  "storefrontHomeContentProfileMissing": "הפרופיל אינו זמין עוד. יש לרענן וליצור אותו תחילה דרך הגדרת הפרופיל הרגילה."
+  "storefrontHomeContentProfileMissing": "הפרופיל אינו זמין עוד. יש לרענן וליצור אותו תחילה דרך הגדרת הפרופיל הרגילה.",
+
+  "storefrontFeaturedItemsTitle": "מוצרים נבחרים",
+  "storefrontFeaturedItemsHelp": "בחרו מוצרים להצגה בכרטיסים גדולים יותר. המחיר, הזמינות וסדר התפריט נשארים ללא שינוי.",
+  "storefrontFeaturedItemsUnavailable": "בחירת מוצרים נבחרים עדיין אינה זמינה כאן.",
+  "storefrontFeaturedItemsCount": "נבחרו {count} מתוך {maximum}",
+  "storefrontFeaturedItemsCatalogUnavailable": "לא ניתן לטעון מוצרים עבור הסניף השמור של החנות. טענו מחדש כדי לנסות שוב.",
+  "storefrontFeaturedItemsEmpty": "אין מוצרים מתאימים בסניף השמור של החנות.",
+  "storefrontFeaturedItemsStaleSelection": "חלק מהבחירות השמורות כבר אינן מתאימות לסניף זה. הסירו בחירות שאינן זמינות לפני השמירה.",
+  "storefrontFeaturedItemsRemoveUnavailable": "הסרת בחירות שאינן זמינות",
+  "storefrontFeaturedItemsSaveAction": "שמירת מוצרים נבחרים",
+  "storefrontFeaturedItemsSaved": "המוצרים הנבחרים נשמרו.",
+  "storefrontFeaturedItemsSeparateEdits": "שמרו או בטלו תחילה את שאר השינויים בדף הבית או בפרופיל. אם בשני החלקים יש שינויים, בטלו אחד מהם.",
+  "storefrontFeaturedItemsUncertain": "תוצאת השמירה אינה ידועה. הבחירות וזהות הבקשה נשמרו. ניסיון חוזר מברר את אותה בקשה; אל תתחילו שמירה אחרת.",
+  "storefrontFeaturedItemsProfileMissing": "הפרופיל אינו זמין עוד. טענו מחדש וצרו אותו תחילה בהגדרות הפרופיל הרגילות.",
+  "storefrontFeaturedItemsInvalid": "לא ניתן לשמור את הבחירות. טענו מחדש את המוצרים הזמינים ובדקו את הבחירה."
 }

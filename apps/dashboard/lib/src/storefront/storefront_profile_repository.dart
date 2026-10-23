@@ -205,11 +205,22 @@ abstract interface class StorefrontHomeContentRepository {
   });
 }
 
+abstract interface class StorefrontFeaturedItemsRepository {
+  Future<StorefrontWriteResult> saveFeaturedItems({
+    required int expectedVersion,
+    required List<String> itemIds,
+    String? requestId,
+  });
+}
+
 /// The real, Supabase-backed [StorefrontProfileRepository] over
 /// `public.get_restaurant_storefront_profile` /
 /// `public.set_restaurant_storefront_profile`.
 class SupabaseStorefrontProfileRepository
-    implements StorefrontProfileRepository, StorefrontHomeContentRepository {
+    implements
+        StorefrontProfileRepository,
+        StorefrontHomeContentRepository,
+        StorefrontFeaturedItemsRepository {
   SupabaseStorefrontProfileRepository({
     required SyncRpcTransport transport,
     required this.organizationId,
@@ -222,6 +233,8 @@ class SupabaseStorefrontProfileRepository
   static const String writeFunction = 'set_restaurant_storefront_profile';
   static const String homeContentFunction =
       'set_restaurant_storefront_home_content';
+  static const String featuredItemsFunction =
+      'set_restaurant_storefront_featured_items';
 
   /// The idempotency-key namespace of a profile save.
   static const String requestIdPrefix = 'pbl:storefront:';
@@ -346,6 +359,100 @@ class SupabaseStorefrontProfileRepository
           jsonEncode(patch),
         ], _nonce());
     final attempt = await invokeStorefrontRpc(_t, homeContentFunction, {
+      'p_client_request_id': id,
+      'p_organization_id': organizationId,
+      'p_restaurant_id': restaurantId,
+      'p_expected_version': expectedVersion,
+      'p_patch': patch,
+    });
+    if (attempt.isRefused) {
+      return StorefrontWriteResult(
+        StorefrontWriteStatus.unavailable,
+        requestId: id,
+        expectedVersion: expectedVersion,
+        code: attempt.code,
+      );
+    }
+    if (attempt.isResponded) {
+      final raw = attempt.response!;
+      if (raw['ok'] == true &&
+          raw['entity'] == 'restaurant_storefront_profile' &&
+          raw['restaurant_id'] is String &&
+          (raw['restaurant_id'] as String).toLowerCase() ==
+              restaurantId.toLowerCase() &&
+          raw['version'] is int &&
+          raw['version'] == expectedVersion + 1 &&
+          raw['is_published'] is bool &&
+          raw['idempotent_replay'] is bool &&
+          raw['slug'] is String &&
+          (raw['slug'] as String).isNotEmpty) {
+        return _classify(raw, id, expectedVersion);
+      }
+      if (raw['ok'] == false &&
+          const {
+            'version_conflict',
+            'permission_denied',
+            'invalid',
+          }.contains(raw['error'])) {
+        return _classify(raw, id, expectedVersion);
+      }
+      if (raw['ok'] == false && raw['error'] == 'not_found') {
+        return StorefrontWriteResult(
+          StorefrontWriteStatus.invalid,
+          requestId: id,
+          expectedVersion: expectedVersion,
+          reason: 'not_found',
+        );
+      }
+    }
+    // A matching profile alone cannot prove which manager committed it.
+    // Preserve uncertainty and identity even after a readable readback.
+    return StorefrontWriteResult(
+      StorefrontWriteStatus.uncertain,
+      requestId: id,
+      expectedVersion: expectedVersion,
+      readback: await read(),
+    );
+  }
+
+  @override
+  Future<StorefrontWriteResult> saveFeaturedItems({
+    required int expectedVersion,
+    required List<String> itemIds,
+    String? requestId,
+  }) async {
+    if (requestId != null && !isCanonicalUuid(requestId)) {
+      throw ArgumentError.value(requestId, 'requestId', 'not a canonical uuid');
+    }
+    if (expectedVersion < 1) {
+      return const StorefrontWriteResult(
+        StorefrontWriteStatus.invalid,
+        reason: 'not_found',
+        refusedLocally: true,
+      );
+    }
+    if (!StorefrontProfile.isValidFeaturedItemIds(itemIds)) {
+      return const StorefrontWriteResult(
+        StorefrontWriteStatus.invalid,
+        reason: 'featured_item_ids_invalid',
+        field: 'featured_item_ids',
+        refusedLocally: true,
+      );
+    }
+    // Freeze raw order/case and the nested list before the first await.
+    // Explicit retries preserve the same identity/version/body; never auto-POST.
+    final patch = Map<String, Object?>.unmodifiable({
+      'featured_item_ids': List<String>.unmodifiable(itemIds),
+    });
+    final id =
+        requestId ??
+        storefrontRequestId('pbl:storefront:featured:', [
+          organizationId,
+          restaurantId,
+          expectedVersion.toString(),
+          jsonEncode(patch),
+        ], _nonce());
+    final attempt = await invokeStorefrontRpc(_t, featuredItemsFunction, {
       'p_client_request_id': id,
       'p_organization_id': organizationId,
       'p_restaurant_id': restaurantId,

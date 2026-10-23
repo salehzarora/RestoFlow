@@ -9684,4 +9684,58 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get storefrontHomeContentProfileMissing =>
       'The profile is no longer available. Reload and create it through normal profile setup first.';
+
+  @override
+  String get storefrontFeaturedItemsTitle => 'Featured products';
+
+  @override
+  String get storefrontFeaturedItemsHelp =>
+      'Select products to show as larger cards. Their price, availability and catalog order stay unchanged.';
+
+  @override
+  String get storefrontFeaturedItemsUnavailable =>
+      'Featured product selection is not available here yet.';
+
+  @override
+  String storefrontFeaturedItemsCount(int count, int maximum) {
+    return '$count of $maximum selected';
+  }
+
+  @override
+  String get storefrontFeaturedItemsCatalogUnavailable =>
+      'Could not load products for the saved storefront branch. Reload to try again.';
+
+  @override
+  String get storefrontFeaturedItemsEmpty =>
+      'There are no eligible products in the saved storefront branch.';
+
+  @override
+  String get storefrontFeaturedItemsStaleSelection =>
+      'Some saved choices are no longer eligible in this storefront branch. Remove unavailable choices before saving.';
+
+  @override
+  String get storefrontFeaturedItemsRemoveUnavailable =>
+      'Remove unavailable choices';
+
+  @override
+  String get storefrontFeaturedItemsSaveAction => 'Save featured products';
+
+  @override
+  String get storefrontFeaturedItemsSaved => 'Featured products saved.';
+
+  @override
+  String get storefrontFeaturedItemsSeparateEdits =>
+      'Save or discard other Home/profile edits first. If both sections have unsaved edits, discard one.';
+
+  @override
+  String get storefrontFeaturedItemsUncertain =>
+      'The save result is unknown. Your exact choices and request are kept. Try again reconciles the same request; do not start another save.';
+
+  @override
+  String get storefrontFeaturedItemsProfileMissing =>
+      'The profile is no longer available. Reload and create it through normal profile setup first.';
+
+  @override
+  String get storefrontFeaturedItemsInvalid =>
+      'These choices could not be saved. Reload the available products and check the selection.';
 }

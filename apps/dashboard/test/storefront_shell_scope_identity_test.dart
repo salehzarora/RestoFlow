@@ -24,6 +24,7 @@ import 'package:restoflow_dashboard/src/storefront/storefront_section.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
+import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 /// Every read answers "transient": the surfaces show their honest failure
@@ -40,6 +41,71 @@ class _OfflineTransport implements SyncRpcTransport {
       code: '503',
       message: 'not under test',
     );
+  }
+}
+
+class _MenuSource implements MenuReadSource {
+  final List<MenuScope> calls = [];
+  @override
+  Future<MenuSnapshot> load(MenuScope scope) async {
+    calls.add(scope);
+    return const MenuSnapshot();
+  }
+}
+
+class _ProfileTransport extends _OfflineTransport {
+  _ProfileTransport(this.restaurant, this.savedBranch);
+  final String restaurant;
+  final String savedBranch;
+
+  @override
+  Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    if (function != SupabaseStorefrontProfileRepository.readFunction) {
+      return super.invoke(function, params);
+    }
+    calls.add((function, Map.of(params)));
+    return {
+      'ok': true,
+      'entity': 'restaurant_storefront_profile',
+      'restaurant_id': restaurant,
+      'exists': true,
+      'version': 1,
+      'profile': {
+        'restaurant_id': restaurant,
+        'storefront_branch_id': savedBranch,
+        'slug': 'synthetic-featured',
+        'display_name': 'Synthetic Storefront',
+        'tagline': null,
+        'public_city': null,
+        'public_address': null,
+        'public_phone': null,
+        'primary_color': '#13322a',
+        'accent_color': '#e07b2c',
+        'visual_preset': 'dark',
+        'locale_default': 'en',
+        'card_mode': 'list',
+        'motion': 'full',
+        'pickup_enabled': true,
+        'delivery_enabled': false,
+        'ordering_enabled': false,
+        'paused_until': null,
+        'pause_reason': null,
+        'opening_hours': {'weekly': <Object>[], 'exceptions': <Object>[]},
+        'logo_media_id': null,
+        'hero_media_id': null,
+        'is_published': false,
+        'version': 1,
+        'featured_item_ids': <String>[],
+      },
+      'derived': {
+        'timezone': 'UTC',
+        'currency_code': 'ILS',
+        'tax': null,
+        'publish_ready': true,
+        'publish_blockers': <String>[],
+        'media_prefix': 'prefix0',
+      },
+    };
   }
 }
 
@@ -66,8 +132,9 @@ MembershipContext _membership({
 Widget _app(
   MembershipContext membership,
   String currencyCode,
-  SyncRpcTransport transport,
-) => ProviderScope(
+  SyncRpcTransport transport, {
+  MenuReadSource? menuReadSource,
+}) => ProviderScope(
   overrides: [
     runtimeConfigProvider.overrideWithValue(
       RuntimeConfig.test(isDemoMode: false),
@@ -85,6 +152,7 @@ Widget _app(
       membership: membership,
       currencyCode: currencyCode,
       reportsTransport: transport,
+      menuReadSource: menuReadSource,
       // STOREFRONT-INTEGRATE-001: the editor is DARK by default; this test
       // proves the WIRED editor's identity, so it opens the gate.
       storefrontEditorEnabled: true,
@@ -119,6 +187,43 @@ Future<void> _revealStorefront(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'real shell supplies complete catalog loaded for saved storefront branch, not membership branch',
+    (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      tester.view.physicalSize = const Size(1400, 2200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final source = _MenuSource();
+      final membership = _membership(
+        id: 'member',
+        organizationId: 'org',
+        restaurantId: 'restaurant',
+        branchId: '11111111-1111-1111-1111-111111111111',
+        role: MembershipRole.manager,
+      );
+      const saved = '22222222-2222-2222-2222-222222222222';
+      final transport = _ProfileTransport(membership.restaurantId!, saved);
+      await tester.pumpWidget(
+        _app(membership, 'ILS', transport, menuReadSource: source),
+      );
+      await tester.pumpAndSettle();
+      await _openSettings(tester, l10n);
+      await _revealStorefront(tester);
+      expect(find.byType(StorefrontSection), findsOneWidget);
+      expect(
+        transport.calls.where(
+          (call) => call.$1 == SupabaseStorefrontProfileRepository.readFunction,
+        ),
+        hasLength(1),
+      );
+      expect(source.calls, hasLength(1));
+      expect(source.calls.single.branchId, saved);
+      expect(source.calls.single.branchId, isNot(membership.branchId));
+      expect(source.calls.single.organizationId, membership.organizationId);
+      expect(source.calls.single.restaurantId, membership.restaurantId);
+    },
+  );
   testWidgets('DASH-V-1: the shell builds the Storefront seams for exactly its '
       'own membership identity, and the editor is keyed by it', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));

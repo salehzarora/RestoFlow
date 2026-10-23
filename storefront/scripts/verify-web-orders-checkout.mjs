@@ -15,11 +15,14 @@ import { createServer, request as httpRequest } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { syntheticEnvelope, SYNTH_IDS, NOT_FOUND_ENVELOPE } from '../tests/support/envelope.mjs';
+import { CHROME, installLoopbackBoundary } from './offline-loopback-boundary.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WORKTREE = path.dirname(ROOT);
+assert.ok(process.argv.slice(2).every(arg => arg === '--featured-only'), 'Unknown offline evidence mode');
+const featuredOnly = process.argv.includes('--featured-only');
 const PROJECT = 'https://oqmevrndtivqxgyvcmwy.supabase.co';
-const RPC = `${PROJECT}/rest/v1/rpc/storefront_menu_v2`;
+const RPC = `${PROJECT}/rest/v1/rpc/storefront_menu_v3`;
 const SYNTHETIC_KEY = 'sb_publishable_SYNTHETIC_browser_local_only_000000';
 const GATE = path.join(ROOT, 'src/source/live/ordering.ts');
 const gateSource = readFileSync(GATE, 'utf8');
@@ -30,6 +33,10 @@ assert.ok(existsSync(path.join(ROOT, 'node_modules/next/dist/bin/next')), 'Run n
 const evidenceRoot = path.join(WORKTREE, 'build/web-orders-checkout-001');
 const run = path.join(evidenceRoot, `browser-${Date.now()}-${randomUUID().slice(0, 8)}`);
 const app = path.join(run, 'browser-app');
+const preload = path.join(run, 'local-only-fetch.mjs');
+const config = path.join(run, 'playwright.config.mjs');
+const boundarySettings = { root: ROOT, app, config, preload: pathToFileURL(preload).href };
+if (featuredOnly) installLoopbackBoundary(boundarySettings);
 assert.ok(path.resolve(run).startsWith(path.resolve(evidenceRoot) + path.sep));
 mkdirSync(app, { recursive: true });
 for (const input of ['package.json', 'package-lock.json', 'next.config.mjs', 'tsconfig.json', '.nvmrc', 'app', 'src', 'messages', 'public']) {
@@ -45,6 +52,11 @@ const children = new Set();
 const servers = [];
 const rpcCalls = [];
 const summary = { workId: 'BIZBOT-PLATFORM-ONLINE-ORDERS-353', generatedAt: new Date().toISOString(), node: process.version, run, app, productionAdmissionSourceUnchanged: true, trackedGateSha256: createHash('sha256').update(gateSource).digest('hex'), hostedRequests: 0, status: 'running' };
+if (featuredOnly) {
+  summary.workId = 'BIZBOT-STOREFRONT-FEATURED-ITEMS-001';
+  summary.hostedRequests = null;
+  summary.networkEvidence = 'Node TCP/DNS/UDP/TLS/native-child denial plus Chromium request interception; blocked attempts reported separately, no historical connectivity inference';
+}
 const safeEnv = {};
 for (const key of ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'TEMP', 'TMP', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'COMSPEC', 'PATHEXT']) if (process.env[key]) safeEnv[key] = process.env[key];
 
@@ -81,7 +93,10 @@ async function waitFor(url, child) {
 }
 async function stop(child) {
   if (child.exitCode !== null) return;
-  if (process.platform === 'win32') {
+  if (featuredOnly) {
+    child.kill();
+    await Promise.race([new Promise(resolve => child.once('close', resolve)), new Promise((_, reject) => setTimeout(() => reject(new Error('Owned child cleanup timeout')), 5000))]);
+  } else if (process.platform === 'win32') {
     await new Promise((resolve) => spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' }).once('close', resolve));
   } else child.kill('SIGTERM');
 }
@@ -93,7 +108,7 @@ try {
     req.on('end', () => {
       let input;
       try { input = JSON.parse(body); } catch { res.writeHead(400).end(); return; }
-      if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu_v2' || Object.keys(input).join(',') !== 'p_slug' || req.headers.apikey !== SYNTHETIC_KEY || req.headers.authorization !== `Bearer ${SYNTHETIC_KEY}`) { res.writeHead(400).end(); return; }
+      if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu_v3' || Object.keys(input).join(',') !== 'p_slug' || req.headers.apikey !== SYNTHETIC_KEY || req.headers.authorization !== `Bearer ${SYNTHETIC_KEY}`) { res.writeHead(400).end(); return; }
       const slug = input.p_slug;
       rpcCalls.push(slug);
       if (typeof slug !== 'string' || !/^sf-browser-[a-z0-9-]+$/.test(slug)) { res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(NOT_FOUND_ENVELOPE)); return; }
@@ -102,6 +117,11 @@ try {
       if (slug.endsWith('-contact-empty')) envelope.restaurant.phone = null;
       if (slug.endsWith('-contact-invalid')) envelope.restaurant.phone = 'javascript:alert(1)';
       envelope.home_content = { hero_headline: null, hero_subline: null, announcement_text: null };
+      envelope.featured_item_ids = [];
+      if (slug.endsWith('-featured')) {
+        envelope.featured_item_ids = [SYNTH_IDS.burger, SYNTH_IDS.cola, SYNTH_IDS.soldOut];
+        envelope.items = envelope.items.map(item => ({ ...item, image_url: null }));
+      }
       if (slug.endsWith('-home')) {
         envelope.restaurant.display_name = 'Synthetic Long Restaurant Name مطعم تجريبي ארוך';
         envelope.home_content = {
@@ -118,8 +138,8 @@ try {
   });
   const stubPort = await listen(stub);
   const nextPort = await sparePort();
-  const preload = path.join(run, 'local-only-fetch.mjs');
-  writeFileSync(preload, `// Generated offline-only process boundary. No real service is contacted.\nconst originalFetch = globalThis.fetch;\nglobalThis.fetch = (input, init) => {\n const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;\n if (url === ${JSON.stringify(RPC)}) return originalFetch(${JSON.stringify(`http://127.0.0.1:${stubPort}/rest/v1/rpc/storefront_menu_v2`)}, init);\n const parsed = new URL(url);\n if (parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1') return originalFetch(input, init);\n throw new Error('offline_verification_remote_fetch_blocked');\n};\n`);
+  writeFileSync(preload, `// Generated offline-only process boundary. No real service is contacted.\nconst originalFetch = globalThis.fetch;\nglobalThis.fetch = (input, init) => {\n const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;\n if (url === ${JSON.stringify(RPC)}) return originalFetch(${JSON.stringify(`http://127.0.0.1:${stubPort}/rest/v1/rpc/storefront_menu_v3`)}, init);\n const parsed = new URL(url);\n if (parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1') return originalFetch(input, init);\n throw new Error('offline_verification_remote_fetch_blocked');\n};\n`);
+  if (featuredOnly) writeFileSync(preload, `import { installLoopbackBoundary } from ${JSON.stringify(pathToFileURL(path.join(ROOT, 'scripts/offline-loopback-boundary.mjs')).href)};\ninstallLoopbackBoundary(${JSON.stringify(boundarySettings)});\n` + readFileSync(preload, 'utf8'));
   const env = { NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', STOREFRONT_SOURCE: 'live', STOREFRONT_SUPABASE_URL: PROJECT, STOREFRONT_SUPABASE_ANON_KEY: SYNTHETIC_KEY, NODE_OPTIONS: `--import=${pathToFileURL(preload).href}` };
   console.log(`Offline browser evidence: ${run}`);
   console.log('Building an isolated LIVE-mode copy with identical tenant-scoped admission source.');
@@ -142,10 +162,9 @@ try {
   });
   const proxyPort = await listen(proxy);
   const baseURL = `http://127.0.0.1:${proxyPort}`;
-  const config = path.join(run, 'playwright.config.mjs');
   // Traces capture POST bodies and storage evaluations, including capabilities.
   // Screenshots/results prove the flow without recording those private bodies.
-  writeFileSync(config, `import { defineConfig } from ${JSON.stringify(pathToFileURL(path.join(ROOT, 'node_modules/@playwright/test/index.mjs')).href)};\nexport default defineConfig({ testDir: ${JSON.stringify(path.join(ROOT, 'tests/browser'))}, testMatch: 'web-orders-checkout-001.spec.ts', workers: 1, fullyParallel: false, retries: 0, timeout: 60000, expect: { timeout: 12000 }, outputDir: ${JSON.stringify(path.join(run, 'test-results'))}, reporter: [['list'], ['json', { outputFile: ${JSON.stringify(path.join(run, 'results.json'))} }], ['html', { outputFolder: ${JSON.stringify(path.join(run, 'report'))}, open: 'never' }]], use: { baseURL: ${JSON.stringify(baseURL)}, headless: true, serviceWorkers: 'block', trace: 'off', screenshot: 'only-on-failure', video: 'off', launchOptions: ${JSON.stringify(process.env.SF_BROWSER_EXECUTABLE ? { executablePath: process.env.SF_BROWSER_EXECUTABLE } : {})} }, projects: [{name:'chromium',use:{browserName:'chromium'}}] });\n`);
+  writeFileSync(config, `import { defineConfig } from ${JSON.stringify(pathToFileURL(path.join(ROOT, 'node_modules/@playwright/test/index.mjs')).href)};\nexport default defineConfig({ testDir: ${JSON.stringify(path.join(ROOT, 'tests/browser'))}, testMatch: ${JSON.stringify(featuredOnly ? 'storefront-featured-items-001.spec.ts' : 'web-orders-checkout-001.spec.ts')}, workers: 1, fullyParallel: false, retries: 0, timeout: 60000, expect: { timeout: 12000 }, outputDir: ${JSON.stringify(path.join(run, 'test-results'))}, reporter: [['list'], ['json', { outputFile: ${JSON.stringify(path.join(run, 'results.json'))} }], ['html', { outputFolder: ${JSON.stringify(path.join(run, 'report'))}, open: 'never' }]], use: { baseURL: ${JSON.stringify(baseURL)}, headless: true, serviceWorkers: 'block', trace: 'off', screenshot: 'only-on-failure', video: 'off', launchOptions: ${JSON.stringify(featuredOnly ? { executablePath: CHROME, args: ['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'] } : process.env.SF_BROWSER_EXECUTABLE ? { executablePath: process.env.SF_BROWSER_EXECUTABLE } : {})} }, projects: [{name:'chromium',use:{browserName:'chromium'}}] });\n`);
   console.log('Running Chromium against loopback with the committed CSP.');
   await completion(launch([path.join(ROOT, 'node_modules/@playwright/test/cli.js'), 'test', '--config', config], ROOT, { ...safeEnv, SF_WEB_ORDER_BASE: baseURL, SF_WEB_ORDER_RUN_DIR: run, SF_WEB_ORDER_ORIGINAL: ROOT, SF_WEB_ORDER_APP_DIR: app, NEXT_TELEMETRY_DISABLED: '1', NODE_OPTIONS: env.NODE_OPTIONS }, path.join(run, 'browser.log')));
   const results = JSON.parse(readFileSync(path.join(run, 'results.json'), 'utf8'));

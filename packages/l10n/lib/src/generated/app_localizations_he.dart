@@ -9533,4 +9533,58 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get storefrontHomeContentProfileMissing =>
       'הפרופיל אינו זמין עוד. יש לרענן וליצור אותו תחילה דרך הגדרת הפרופיל הרגילה.';
+
+  @override
+  String get storefrontFeaturedItemsTitle => 'מוצרים נבחרים';
+
+  @override
+  String get storefrontFeaturedItemsHelp =>
+      'בחרו מוצרים להצגה בכרטיסים גדולים יותר. המחיר, הזמינות וסדר התפריט נשארים ללא שינוי.';
+
+  @override
+  String get storefrontFeaturedItemsUnavailable =>
+      'בחירת מוצרים נבחרים עדיין אינה זמינה כאן.';
+
+  @override
+  String storefrontFeaturedItemsCount(int count, int maximum) {
+    return 'נבחרו $count מתוך $maximum';
+  }
+
+  @override
+  String get storefrontFeaturedItemsCatalogUnavailable =>
+      'לא ניתן לטעון מוצרים עבור הסניף השמור של החנות. טענו מחדש כדי לנסות שוב.';
+
+  @override
+  String get storefrontFeaturedItemsEmpty =>
+      'אין מוצרים מתאימים בסניף השמור של החנות.';
+
+  @override
+  String get storefrontFeaturedItemsStaleSelection =>
+      'חלק מהבחירות השמורות כבר אינן מתאימות לסניף זה. הסירו בחירות שאינן זמינות לפני השמירה.';
+
+  @override
+  String get storefrontFeaturedItemsRemoveUnavailable =>
+      'הסרת בחירות שאינן זמינות';
+
+  @override
+  String get storefrontFeaturedItemsSaveAction => 'שמירת מוצרים נבחרים';
+
+  @override
+  String get storefrontFeaturedItemsSaved => 'המוצרים הנבחרים נשמרו.';
+
+  @override
+  String get storefrontFeaturedItemsSeparateEdits =>
+      'שמרו או בטלו תחילה את שאר השינויים בדף הבית או בפרופיל. אם בשני החלקים יש שינויים, בטלו אחד מהם.';
+
+  @override
+  String get storefrontFeaturedItemsUncertain =>
+      'תוצאת השמירה אינה ידועה. הבחירות וזהות הבקשה נשמרו. ניסיון חוזר מברר את אותה בקשה; אל תתחילו שמירה אחרת.';
+
+  @override
+  String get storefrontFeaturedItemsProfileMissing =>
+      'הפרופיל אינו זמין עוד. טענו מחדש וצרו אותו תחילה בהגדרות הפרופיל הרגילות.';
+
+  @override
+  String get storefrontFeaturedItemsInvalid =>
+      'לא ניתן לשמור את הבחירות. טענו מחדש את המוצרים הזמינים ובדקו את הבחירה.';
 }
