@@ -320,7 +320,7 @@ queries + expected results instead. Prints **PASS/FAIL**.
 
 ## 8. Incident runbook 5 — card provider outage, unknown outcome, provider anomaly, approved-unrecorded, orphaned approval (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001)
 
-- **Scope:** the card-present provider leg of **DECISION D-051 / D-052 / D-053 / D-054 / D-055 / D-056 / D-057**
+- **Scope:** the card-present provider leg of **DECISION D-051 / D-052 / D-053 / D-054 / D-055 / D-056 / D-057 / D-058**
   ([API_CONTRACT](API_CONTRACT.md) §4.55). Agents never operate the terminal or call the provider; every
   step below is an operator / manager action. TEST attempts are never financial incidents: they are
   projected `test_<state>`, never `approved_unrecorded` / `orphan_approved`, and appear only under the
@@ -330,7 +330,8 @@ queries + expected results instead. Prints **PASS/FAIL**.
   environment; a customer charged while the order still reads unpaid (`approved_unrecorded` /
   `orphan_approved`); an order refusing every tender with `payment_in_progress`; a shift refusing to
   close (`card_payment_in_progress`); a recording leg answered `provider_recording_refused`,
-  `test_attempt_not_recordable`, `resume_authority_required` or a `resume_denied` token; the pad never
+  `test_attempt_not_recordable`, `resume_authority_required` or a `resume_denied` token; a
+  `security.card_provider_field_dropped` event (**D-058** point 10); the pad never
   prompting; a credential suspected exposed; a planned terminal binding change (**D-057** point 4).
 - **Severity:** **SEV-2** on the shared ladder above ("payments failing for a branch",
   [OPERATIONS_AND_RECOVERY](OPERATIONS_AND_RECOVERY.md) §7.4); **SEV-1** the moment a provider
@@ -381,7 +382,9 @@ queries + expected results instead. Prints **PASS/FAIL**.
   the orphan procedure below. A till whose pairing alone is missing, suspended or replaced shows the
   non-orphan reason `device_session_unavailable`: re-pair the same device record, then record. A
   `resume_denied` of `actor_not_active` or `not_manager` means the signed-in actor fails the
-  active-manager proof — sign in as an active manager; it never consumes a Resume. A leg refused
+  active-manager proof — sign in as an active manager; it never consumes a Resume; `operation_mismatch`
+  means the resend differs from the stored operation's target or client timestamp (a payload difference is answered `conflict`) — the POS
+  resends the stored operation unchanged (**D-058** point 11). A leg refused
   `provider_recording_refused` or `test_attempt_not_recordable` is never resumed: the identity is not
   admissible (freed, resolved, anomalous, TEST, another order or tender, already paid) — follow the
   classification shown and never record it by another path (**D-057** point 1); another order or tender
@@ -422,10 +425,11 @@ queries + expected results instead. Prints **PASS/FAIL**.
 - **Recovery — unknown / released (no anomaly):** repeat the operator lookup; if it stays
   inconclusive, obtain documented provider evidence that no approved charge exists — the provider's
   transaction report (`provider_report`) or its back office (`provider_back_office`) — then `free_order`
-  (§4.55.6) with that source, its sanitized evidence reference and a reason (a provider reference the
-  safe-text rule refuses — a 12–19-digit Luhn-valid run or any run of 20 or more digits, digits counted
-  across spaces, hyphens, underscores, dots and slashes — goes only into the sealed evidence, and the field gets a non-numeric pointer to it, **D-057**
-  point 8); the attempt stays
+  (§4.55.6) — the manager's POS action, which reaches the service-only RPC only through the Edge
+  proof (**D-058** point 9) — with that source, its sanitized evidence reference and a reason (a
+  reference or reason the field rule refuses — 12 or more digits of any script across any punctuation,
+  symbol or space, a masked card pattern, or a character outside its set — goes only into the sealed
+  evidence, and the field gets a short non-numeric pointer to it, **D-058** point 10); the attempt stays
   `unknown` / `released`. Poll-cap exhaustion, a provider outage, "still inconclusive" or any
   self-attestation never frees the order, and no command-room override exists in phase 1 (**D-053**
   point 1). A later approval of a freed attempt is an `orphan_approved` incident (reason `order_freed`),
@@ -454,18 +458,30 @@ queries + expected results instead. Prints **PASS/FAIL**.
   `orphan_approved` row and every `provider_anomaly` has an open incident; the pilot branch's `payments`
   count equals the recorded attempts plus the other tenders. TEST rows are excluded from this
   reconciliation.
+- **TEST run gate, session and abort (D-058 points 1 and 8):** no TEST secret, provider call, test-card
+  use or terminal payment action before the owner's sealed evidence of the exact non-settling TEST
+  facility and of the key format ([DEPLOYMENT](DEPLOYMENT.md) §18.1 step 6) — a missing or failed
+  package is a hard stop, never a first charge to find out. The facility is armed before the session;
+  inside an owner-arranged quiet window the run keeps one paired-device / PIN session from before the
+  sealed PRE to POST; if it expires, ends or changes, stop at once, run the kill steps (master flag OFF,
+  revision OFF, mapping `enabled → draining`), take POST and close any unresolved TEST attempt only
+  through `test_closed` or a later, separately approved run with its own PRE / POST
+  ([DEPLOYMENT](DEPLOYMENT.md) §18.4).
+  A `test.card_recording_refused` or any other `test.*` / `security.*` event is a stop condition.
 - **TEST evidence retention (D-053 point 4, D-056 point 6):** TEST attempt rows and TEST private events
   expire 90 days after creation; set an incident hold on the TEST attempt or on a single TEST private
   event (`app.card_attempt_set_incident_hold`, operator only, a private operator event, **D-057** point 8)
   before expiry when a TEST run belongs to an open incident; the operator purge
-  (`app.purge_expired_test_card_attempts`) deletes only expired, unheld TEST rows and every
+  (`app.purge_expired_test_card_attempts`, under each device's terminal lock and the exclusive purge barrier, never inside a TEST run's PRE / POST window, keeping each purged identity and its keys in
+  the tombstone set, **D-058** point 7) deletes only expired, unheld TEST rows and every
   `mode='test'` private event past its own `retention_until` that is itself unheld and whose attempt,
   if any, is unheld
   (never an `operator.*` event) and records counts only, as a private operator event; no phase-1
   application role, RPC or the TEST purge deletes LIVE evidence (final legal retention per **D-013** /
   **Q-005**).
-- **Terminal binding lifecycle (D-057 point 4):** the till's `app.payment_terminals` row changes only
-  through `app.set_payment_terminal`, run by the operator naming the attested owner approver, a sealed
+- **Terminal binding lifecycle (D-057 point 4; D-058 point 6):** the till's `app.payment_terminals` row
+  changes only through `app.set_payment_terminal` — which serializes with every start and payment
+  admission of the device on the terminal admission lock and re-checks its gates under it — run by the operator naming the attested owner approver, a sealed
   `operator_reference` and a reason — never by a direct table edit. To stop new integrated starts (an
   incident, a hardware swap, the end of the pilot) move `enabled → draining`: unresolved attempts
   finish and the hand-recorded Card tender stays refused. Move `draining → retired` only when no
