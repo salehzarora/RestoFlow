@@ -85,6 +85,8 @@ class _ContentState extends State<StorefrontContentSection> {
   _confirmedPublish;
   String c(String key) =>
       storefrontContentCopy(AppLocalizations.of(context), key);
+  String _warningText(StorefrontContentWarning warning) =>
+      '${c(warning.reason)} (${warning.field})';
   bool get _editable =>
       widget.enabled &&
       !_busy &&
@@ -1170,7 +1172,7 @@ class _ContentState extends State<StorefrontContentSection> {
           TextButton(onPressed: _busy ? null : _load, child: Text(c('reload'))),
         ] else ...[
           for (final warning in _read!.snapshot!.warnings)
-            Text('${c(warning.reason)} (${warning.field})'),
+            Text(_warningText(warning)),
           if (!widget.enabled) Text(c('otherEdits')),
           TextField(
             key: const Key('content-hero-headline'),

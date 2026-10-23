@@ -212,6 +212,42 @@ void main() {
     );
   }
   for (final locale in ['en', 'ar', 'he']) {
+    testWidgets('complete translated warnings retain field paths in $locale', (
+      tester,
+    ) async {
+      final repo = ContentRepo()
+        ..warnings.addAll(const [
+          StorefrontContentWarning('hero.item_id', 'relation_unavailable'),
+          StorefrontContentWarning(
+            'story.editorial_media_id',
+            'media_unavailable',
+          ),
+          StorefrontContentWarning('hero.format', 'legacy_value_invalid'),
+        ]);
+      await mount(tester, repo, locale: locale);
+      final expected = switch (locale) {
+        'ar' => const [
+          'ارتباط محفوظ غير متاح؛ راجع الحقل المعني. (hero.item_id)',
+          'صورة محفوظة غير متاحة؛ راجع الحقل المعني. (story.editorial_media_id)',
+          'تعذر استخدام قيمة قديمة؛ راجع الحقل المعني. (hero.format)',
+        ],
+        'he' => const [
+          'קשר שמור אינו זמין; יש לבדוק את השדה. (hero.item_id)',
+          'תמונה שמורה אינה זמינה; יש לבדוק את השדה. (story.editorial_media_id)',
+          'לא ניתן להשתמש בערך ישן; יש לבדוק את השדה. (hero.format)',
+        ],
+        _ => const [
+          'A saved relation is unavailable; review the affected field. (hero.item_id)',
+          'A saved image is unavailable; review the affected field. (story.editorial_media_id)',
+          'An older value could not be used; review the affected field. (hero.format)',
+        ],
+      };
+      for (final message in expected) {
+        expect(find.text(message), findsOneWidget);
+      }
+      expect(repo.calls, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
     testWidgets('promo source candidates are not claimed published in $locale', (
       tester,
     ) async {
