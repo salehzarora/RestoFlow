@@ -51,6 +51,7 @@ Each item below is a checkable deliverable. Mechanics live in the owning specifi
 ### 2.5 Payments, shifts, and cash
 - [ ] **Customer receipt printing** — localized receipts with Arabic/Hebrew/English encoding/raster fallback (**DECISION D-014**; [PRINTERS_AND_HARDWARE_SPEC.md](PRINTERS_AND_HARDWARE_SPEC.md); **OPEN QUESTION Q-015**).
 - [ ] **Cash payment** — payment lifecycle `pending → tendered → completed` (+ `voided`, `failed`); `completed` is **TERMINAL** — payment void is allowed **only pre-completion** (`pending → voided`, `tendered → voided`); `completed → voided` is **FORBIDDEN** (**DECISION D-023**). Refunds and any post-completion reversal are **DEFERRED** (no MVP refund; `refunded` state **DEFERRED**) (**DECISION D-018**, **DECISION D-023**). Online/card payments are **DEFERRED** (see §3).
+- [ ] **Card-present POS payment — flag-gated single-tenant pilot** (Z-Credit PIN pad; **DECISION D-051**, **D-052**; pulled in on 2026-10-21 under BIZBOT-PAYMENTS-ZCREDIT-PILOT-001). The POS never calls the provider; one caller-JWT Edge boundary and a private provider-attempt ledger initiate and poll; a `payments` row is written only on a verified provider approval through the unchanged `record_payment` (`method='card'`, `status='completed'`); TEST mode runs only inside the owner-sealed non-settling TEST facility (**D-051** point 7) and never writes payments, receipts, shift, order-history or Dashboard revenue. Online, wallet, gateway-hosted, kiosk, Storefront and web-order payments stay DEFERRED (§3).
 - [ ] **Shift open/close** — shift lifecycle `opening → open → closing → closed → reconciled` (**DECISION D-018**).
 - [ ] **Opening cash** — cash drawer session `opened(opening float) → active → counting → closed(counted+variance) → reconciled`, bound to a shift (**DECISION D-018**).
 - [ ] **Cash reconciliation** — counted vs expected variance at close (**DECISION D-018**).
@@ -73,7 +74,7 @@ Each item below is a checkable deliverable. Mechanics live in the owning specifi
 
 Each item is **DEFERRED**. Target milestone is **M4 or later / none** (**DECISION D-019**). These must not appear in M1–M3 tickets (§5).
 
-- **DEFERRED — Online payments** (card/wallet/gateway). MVP supports cash payment only. Maps to: M4.
+- **DEFERRED — Online payments** (card/wallet/gateway). MVP supports cash payment only. Maps to: M4. *(BIZBOT-PAYMENTS-ZCREDIT-PILOT-001, **DECISION D-051**, 2026-10-21: card-present PIN-pad payments at the POS are carved out as a flag-gated single-tenant pilot (§2.5); online, wallet, gateway-hosted, kiosk, Storefront and web-order payments remain DEFERRED. Since RF-117 the MVP also records `card`/`bit`/`external` tenders externally without processing a charge.)*
 - **DEFERRED — Delivery provider integrations** (aggregator/3rd-party delivery). Maps to: M4 or later.
 - **DEFERRED — Advanced inventory** (stock counts, depletion, purchasing, recipes/BOM). Maps to: M4 or later.
 - **DEFERRED — Loyalty** (points, rewards, customer profiles). Maps to: M4 or later.
@@ -109,6 +110,7 @@ The ticket backlog itself is owned by [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATI
 | Kitchen ticket printing | printing-kds | M3 |
 | Customer receipt printing | printing-receipt | M3 |
 | Cash payment | payments-cash | M1→M2 |
+| Card-present POS payment (Z-Credit PIN pad pilot, **DECISION D-051**) | payments-card-pilot (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A–001F; 001G-DASHBOARD-VERIFICATION and 001H-PILOT-OPS approved by the owner on 2026-10-21) | pilot (post-M7, flag-gated) |
 | Shift open/close; opening cash; cash reconciliation | shifts-cash | M2→M3 |
 | Discounts | money-discounts | M1→M2 |
 | Voids with reason + authorization | void-authz, audit | M2 |
@@ -120,7 +122,7 @@ The ticket backlog itself is owned by [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATI
 
 | DEFERRED item | Milestone |
 |---|---|
-| Online payments | M4 |
+| Online payments (the card-present POS pilot is carved out by **DECISION D-051**) | M4 |
 | Delivery provider integrations | M4 or later |
 | Advanced inventory | M4 or later |
 | Loyalty | M4 or later |
@@ -144,6 +146,7 @@ The ticket backlog itself is owned by [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATI
 
 - No M1–M3 ticket may implement, partially scaffold, or add schema/columns/UI dedicated to a §3 DEFERRED capability. Forward-compatible neutral design (e.g. integer minor-unit money, multi-tenant keys) is allowed; deferred-feature-specific work is not.
 - Any proposal to pull a DEFERRED item into the MVP requires a new **DECISION D-xxx** in [DECISIONS.md](DECISIONS.md) and human approval (**DECISION D-016**); it is a **silent scope expansion** violation otherwise.
+- *(2026-10-21)* **DECISION D-051** is such a decision: it pulls card-present PIN-pad payments at the POS into a flag-gated single-tenant pilot under BIZBOT-PAYMENTS-ZCREDIT-PILOT-001 (§2.5). Reviewers should reject payment-provider work outside that Work-ID family, any work that touches Storefront/Codex files, any change to `record_payment` or the D-018 enumerations, and any Dashboard change for this pilot except one exact exception *(amended 2026-10-23, BIZBOT-PAYMENTS-ZCREDIT-PILOT-001A correction round 6)*: the Dashboard verification tests of 001G, and 001D's `card_attempt.*` audit registry entries, safe-detail labels and ar / he / en action titles with their rendering test — limited to the files listed in the [execution packet](BIZBOT_PAYMENTS_ZCREDIT_PILOT_001.md) §7; no analytics, report or other Dashboard change.
 - Reviewers (Codex) should reject MVP tickets/PRs whose scope touches §3 items without such a decision.
 - **ASSUMPTION**: the §2 list is complete for MVP; any capability not listed in §2 is treated as out of MVP by default and must be added via a decision before implementation.
 
