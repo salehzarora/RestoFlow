@@ -9599,4 +9599,58 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get storefrontHomeContentProfileMissing =>
       'لم يعد الملف متاحًا. أعد التحميل وأنشئه أولًا من إعداد الملف المعتاد.';
+
+  @override
+  String get storefrontFeaturedItemsTitle => 'المنتجات المميزة';
+
+  @override
+  String get storefrontFeaturedItemsHelp =>
+      'اختر المنتجات لعرضها ببطاقات أكبر. تبقى الأسعار والتوفر وترتيب القائمة كما هي.';
+
+  @override
+  String get storefrontFeaturedItemsUnavailable =>
+      'اختيار المنتجات المميزة غير متاح هنا بعد.';
+
+  @override
+  String storefrontFeaturedItemsCount(int count, int maximum) {
+    return 'تم اختيار $count من $maximum';
+  }
+
+  @override
+  String get storefrontFeaturedItemsCatalogUnavailable =>
+      'تعذّر تحميل منتجات الفرع المحفوظ للمتجر. أعد التحميل للمحاولة مجددًا.';
+
+  @override
+  String get storefrontFeaturedItemsEmpty =>
+      'لا توجد منتجات مؤهلة في الفرع المحفوظ للمتجر.';
+
+  @override
+  String get storefrontFeaturedItemsStaleSelection =>
+      'بعض الاختيارات المحفوظة لم تعد مؤهلة في هذا الفرع. أزل الاختيارات غير المتاحة قبل الحفظ.';
+
+  @override
+  String get storefrontFeaturedItemsRemoveUnavailable =>
+      'إزالة الاختيارات غير المتاحة';
+
+  @override
+  String get storefrontFeaturedItemsSaveAction => 'حفظ المنتجات المميزة';
+
+  @override
+  String get storefrontFeaturedItemsSaved => 'تم حفظ المنتجات المميزة.';
+
+  @override
+  String get storefrontFeaturedItemsSeparateEdits =>
+      'احفظ تعديلات الرئيسية أو الملف الأخرى أو تجاهلها أولًا. إذا عُدّل القسمان، تجاهل تعديلات أحدهما.';
+
+  @override
+  String get storefrontFeaturedItemsUncertain =>
+      'نتيجة الحفظ غير معروفة. احتفظنا باختياراتك ومعرّف الطلب نفسه. إعادة المحاولة تراجع الطلب نفسه؛ لا تبدأ حفظًا آخر.';
+
+  @override
+  String get storefrontFeaturedItemsProfileMissing =>
+      'لم يعد الملف متاحًا. أعد التحميل وأنشئه أولًا من إعداد الملف المعتاد.';
+
+  @override
+  String get storefrontFeaturedItemsInvalid =>
+      'تعذّر حفظ هذه الاختيارات. أعد تحميل المنتجات المتاحة وتحقق من الاختيار.';
 }

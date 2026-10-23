@@ -207,11 +207,11 @@ select is((select prosecdef from pg_proc where oid='app.heartbeat_device_session
 select is((select array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text)
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and p.prokind='f' and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  (select array_agg(v order by v) from unnest(array['storefront_menu(text)','storefront_menu_v2(text)']) v), 'anonymous executable surface remains exactly the two versioned storefront readers');
+  (select array_agg(v order by v) from unnest(array['storefront_menu(text)','storefront_menu_v2(text)', 'storefront_menu_v3(text)']) v), 'anonymous executable surface remains exactly the three versioned storefront readers');
 select is((select array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text)
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and p.prokind='f' and p.prosecdef),
-  (select array_agg(v order by v) from unnest(array['storefront_menu(text)','storefront_menu_v2(text)']) v), 'public definer surface remains exactly the two versioned storefront readers');
+  (select array_agg(v order by v) from unnest(array['storefront_menu(text)','storefront_menu_v2(text)', 'storefront_menu_v3(text)']) v), 'public definer surface remains exactly the three versioned storefront readers');
 select ok(not has_schema_privilege('anon', 'app', 'USAGE'), 'anon still has no app schema usage');
 set local role anon;
 select throws_ok($$select public.heartbeat_device_session('be510001-0000-0000-0000-00000000d001', 'bizbot-fixture-pos')$$,

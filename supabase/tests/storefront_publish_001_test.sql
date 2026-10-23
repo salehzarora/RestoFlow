@@ -141,13 +141,13 @@ select is(
   (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by 1)
      from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
       and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  'storefront_menu(text), storefront_menu_v2(text)',
-  'A7. the anon-executable public set is EXACTLY the two versioned storefront readers');
+  'storefront_menu(text), storefront_menu_v2(text), storefront_menu_v3(text)',
+  'A7. the anon-executable public set is EXACTLY the three versioned storefront readers');
 select is(
   (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by 1)
      from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and p.prosecdef),
-  'storefront_menu(text), storefront_menu_v2(text)',
-  'A8. the public SECURITY DEFINER set is EXACTLY the two versioned storefront readers');
+  'storefront_menu(text), storefront_menu_v2(text), storefront_menu_v3(text)',
+  'A8. the public SECURITY DEFINER set is EXACTLY the three versioned storefront readers');
 select ok(not has_schema_privilege('anon', 'app', 'USAGE'), 'A9. anon still has no USAGE on schema app');
 select is((select provolatile::text from pg_proc where oid = 'app.list_storefront_media(uuid,uuid)'::regprocedure), 's',
   'A10. list is STABLE (read-only)');

@@ -2887,5 +2887,20 @@
   "storefrontHomeContentSeparateEdits": "احفظ تعديلات الملف الأخرى أو تجاهلها قبل حفظ نص الرئيسية. إذا عُدّل القسمان، تجاهل تعديلات أحدهما أولًا.",
   "storefrontHomeContentUncertain": "نتيجة الحفظ غير معروفة. احتفظنا بالنص ومعرّف الطلب نفسه. استخدم إعادة المحاولة لمراجعة الطلب نفسه، ولا تبدأ حفظًا مختلفًا.",
   "storefrontHomeContentPreviewTitle": "معاينة النص",
-  "storefrontHomeContentProfileMissing": "لم يعد الملف متاحًا. أعد التحميل وأنشئه أولًا من إعداد الملف المعتاد."
+  "storefrontHomeContentProfileMissing": "لم يعد الملف متاحًا. أعد التحميل وأنشئه أولًا من إعداد الملف المعتاد.",
+
+  "storefrontFeaturedItemsTitle": "المنتجات المميزة",
+  "storefrontFeaturedItemsHelp": "اختر المنتجات لعرضها ببطاقات أكبر. تبقى الأسعار والتوفر وترتيب القائمة كما هي.",
+  "storefrontFeaturedItemsUnavailable": "اختيار المنتجات المميزة غير متاح هنا بعد.",
+  "storefrontFeaturedItemsCount": "تم اختيار {count} من {maximum}",
+  "storefrontFeaturedItemsCatalogUnavailable": "تعذّر تحميل منتجات الفرع المحفوظ للمتجر. أعد التحميل للمحاولة مجددًا.",
+  "storefrontFeaturedItemsEmpty": "لا توجد منتجات مؤهلة في الفرع المحفوظ للمتجر.",
+  "storefrontFeaturedItemsStaleSelection": "بعض الاختيارات المحفوظة لم تعد مؤهلة في هذا الفرع. أزل الاختيارات غير المتاحة قبل الحفظ.",
+  "storefrontFeaturedItemsRemoveUnavailable": "إزالة الاختيارات غير المتاحة",
+  "storefrontFeaturedItemsSaveAction": "حفظ المنتجات المميزة",
+  "storefrontFeaturedItemsSaved": "تم حفظ المنتجات المميزة.",
+  "storefrontFeaturedItemsSeparateEdits": "احفظ تعديلات الرئيسية أو الملف الأخرى أو تجاهلها أولًا. إذا عُدّل القسمان، تجاهل تعديلات أحدهما.",
+  "storefrontFeaturedItemsUncertain": "نتيجة الحفظ غير معروفة. احتفظنا باختياراتك ومعرّف الطلب نفسه. إعادة المحاولة تراجع الطلب نفسه؛ لا تبدأ حفظًا آخر.",
+  "storefrontFeaturedItemsProfileMissing": "لم يعد الملف متاحًا. أعد التحميل وأنشئه أولًا من إعداد الملف المعتاد.",
+  "storefrontFeaturedItemsInvalid": "تعذّر حفظ هذه الاختيارات. أعد تحميل المنتجات المتاحة وتحقق من الاختيار."
 }

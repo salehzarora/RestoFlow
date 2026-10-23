@@ -8,6 +8,7 @@ import 'package:restoflow_dashboard/src/admin/supabase_settings_repository.dart'
 import 'package:restoflow_dashboard/src/admin/timezone_catalog.dart';
 import 'package:restoflow_dashboard/src/storefront/opening_hours_editor.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_copy.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_featured_items.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_repository.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_models.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_profile_repository.dart';
@@ -23,6 +24,79 @@ const _rest = '22222222-2222-4222-8222-222222222222';
 const _branchA = '33333333-3333-4333-8333-333333333333';
 const _branchB = '44444444-4444-4444-8444-444444444444';
 const _retryId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const _featuredOne = '00000000-0000-0000-0000-00000000f001';
+const _featuredTwo = '00000000-0000-0000-0000-00000000f002';
+
+class _FeaturedCatalog implements StorefrontFeaturedCatalog {
+  _FeaturedCatalog({
+    this.options = const [
+      StorefrontFeaturedOption(
+        id: _featuredOne,
+        name: 'Stored product one',
+        categoryName: 'Food',
+      ),
+      StorefrontFeaturedOption(
+        id: _featuredTwo,
+        name: 'Stored product two',
+        categoryName: 'Food',
+      ),
+    ],
+  });
+  List<StorefrontFeaturedOption>? options;
+  Completer<List<StorefrontFeaturedOption>?>? next;
+  final List<String> branches = [];
+  @override
+  Future<List<StorefrontFeaturedOption>?> load(
+    String storefrontBranchId,
+  ) async {
+    branches.add(storefrontBranchId);
+    final pending = next;
+    next = null;
+    if (pending != null) return pending.future;
+    return options;
+  }
+}
+
+class _FeaturedRepo extends _FakeProfileRepo
+    implements StorefrontFeaturedItemsRepository {
+  _FeaturedRepo({List<String> ids = const [], String branch = _branchA})
+    : super(
+        profile: {
+          ..._profileJson(),
+          'featured_item_ids': ids,
+          'storefront_branch_id': branch,
+        },
+      );
+  final List<_Save> featuredSaves = [];
+  final List<StorefrontWriteResult> results = [];
+  Completer<StorefrontWriteResult>? pending;
+  int blockedMutations = 0;
+  @override
+  Future<StorefrontWriteResult> saveFeaturedItems({
+    required int expectedVersion,
+    required List<String> itemIds,
+    String? requestId,
+  }) async {
+    featuredSaves.add(
+      _Save(expectedVersion, {'featured_item_ids': itemIds}, requestId),
+    );
+    // A misbehaving seam cannot mutate the retained UI pending body.
+    try {
+      itemIds.add(_featuredTwo);
+    } on UnsupportedError {
+      blockedMutations++;
+    }
+    if (pending != null) return pending!.future;
+    if (results.isNotEmpty) return results.removeAt(0);
+    profile!['featured_item_ids'] = List.of(itemIds)..sort();
+    profile!['version'] = expectedVersion + 1;
+    return StorefrontWriteResult(
+      StorefrontWriteStatus.ok,
+      requestId: requestId,
+      version: expectedVersion + 1,
+    );
+  }
+}
 
 Map<String, Object?> _profileJson({
   String displayName = 'Cafe Roma',
@@ -261,12 +335,14 @@ StorefrontEditorSeams _seams(
   StorefrontProfileRepository repo, {
   String identity = 'm-1|org-1|$_rest|manager',
   StorefrontBranchSource? branches,
+  StorefrontFeaturedCatalog? featuredCatalog,
 }) => StorefrontEditorSeams(
   scopeIdentity: identity,
   profileRepository: repo,
   mediaRepository: _FakeMediaRepo(),
   branchSource: branches ?? _FakeBranches(),
   sourceCatalog: _FakeSources(),
+  featuredCatalog: featuredCatalog,
 );
 
 /// Branch B is SUSPENDED (as `list_org_structure` serves it).
@@ -400,6 +476,405 @@ void _expectPublishedWithNote(
 }
 
 void main() {
+  group('featured product editor', () {
+    testWidgets(
+      'twelve disables only additional choices; dirty branch prevents selection save',
+      (tester) async {
+        final ids = List.generate(
+          13,
+          (n) =>
+              '00000000-0000-0000-0000-${(n + 1).toRadixString(16).padLeft(12, '0')}',
+        );
+        final repo = _FeaturedRepo(ids: ids.take(12).toList());
+        final catalog = _FeaturedCatalog(
+          options: [
+            for (var n = 0; n < ids.length; n++)
+              StorefrontFeaturedOption(
+                id: ids[n],
+                name: 'Product $n',
+                categoryName: 'Food',
+              ),
+          ],
+        );
+        await _pump(
+          tester,
+          StorefrontSection(seams: _seams(repo, featuredCatalog: catalog)),
+        );
+        Finder option(int n) =>
+            find.byKey(Key('storefront-featured-item-${ids[n]}'));
+        expect(tester.widget<CheckboxListTile>(option(12)).onChanged, isNull);
+        expect(tester.widget<CheckboxListTile>(option(0)).onChanged, isNotNull);
+        await _tap(tester, option(0));
+        expect(
+          tester.widget<CheckboxListTile>(option(12)).onChanged,
+          isNotNull,
+        );
+        await _tap(tester, option(12));
+        expect(tester.widget<CheckboxListTile>(option(0)).onChanged, isNull);
+        expect(
+          find.text((await _l10n()).storefrontFeaturedItemsCount(12, 12)),
+          findsOneWidget,
+        );
+        await _tap(
+          tester,
+          find.byKey(const Key('storefront-featured-discard')),
+        );
+        await _choose(tester, const Key('storefront-branch'), 'Harbor');
+        expect(tester.widget<CheckboxListTile>(option(0)).onChanged, isNull);
+        expect(
+          _enabled(tester, const Key('storefront-featured-save')),
+          isFalse,
+        );
+        expect(repo.featuredSaves, isEmpty);
+        expect(catalog.branches, [
+          _branchA,
+        ], reason: 'unsaved branch is never a catalog authority');
+      },
+    );
+
+    testWidgets(
+      'late catalog cannot replace a newer saved profile branch/version',
+      (tester) async {
+        final repo = _FeaturedRepo();
+        final catalog = _FeaturedCatalog(options: null);
+        final l10n = await _l10n();
+        await _pump(
+          tester,
+          StorefrontSection(seams: _seams(repo, featuredCatalog: catalog)),
+        );
+        await _choose(tester, const Key('storefront-branch'), 'Harbor');
+        final save = tester
+            .widget<FilledButton>(find.byKey(const Key('storefront-save')))
+            .onPressed!;
+        final old = Completer<List<StorefrontFeaturedOption>?>();
+        catalog.next = old;
+        final reload = tester
+            .widget<TextButton>(
+              find.widgetWithText(TextButton, l10n.storefrontReloadAction).last,
+            )
+            .onPressed!;
+        reload();
+        await tester.pump();
+        catalog.options = const [
+          StorefrontFeaturedOption(
+            id: _featuredTwo,
+            name: 'New branch product',
+            categoryName: 'Food',
+          ),
+        ];
+        save();
+        await tester.pumpAndSettle();
+        expect(catalog.branches, [_branchA, _branchA, _branchB]);
+        expect(repo.profile!['version'], 2);
+        expect(find.text('New branch product'), findsOneWidget);
+        old.complete(const [
+          StorefrontFeaturedOption(
+            id: _featuredOne,
+            name: 'Stale old branch product',
+            categoryName: 'Food',
+          ),
+        ]);
+        await tester.pumpAndSettle();
+        expect(find.text('Stale old branch product'), findsNothing);
+        expect(find.text('New branch product'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'late catalog and save completions cannot land in another editor identity',
+      (tester) async {
+        final oldRepo = _FeaturedRepo();
+        final oldCatalog = _FeaturedCatalog(options: null);
+        final gate = Completer<List<StorefrontFeaturedOption>?>();
+        final l10n = await _l10n();
+        await _pump(
+          tester,
+          StorefrontSection(
+            seams: _seams(
+              oldRepo,
+              identity: 'old-read',
+              featuredCatalog: oldCatalog,
+            ),
+          ),
+        );
+        oldCatalog.next = gate;
+        tester
+            .widget<TextButton>(
+              find.widgetWithText(TextButton, l10n.storefrontReloadAction).last,
+            )
+            .onPressed!();
+        await tester.pump();
+        final writing = _FeaturedRepo()
+          ..pending = Completer<StorefrontWriteResult>();
+        await _pump(
+          tester,
+          StorefrontSection(
+            seams: _seams(
+              writing,
+              identity: 'old-write',
+              featuredCatalog: _FeaturedCatalog(),
+            ),
+          ),
+        );
+        gate.complete(const [
+          StorefrontFeaturedOption(
+            id: _featuredOne,
+            name: 'Stale scope product',
+            categoryName: 'Food',
+          ),
+        ]);
+        await tester.pumpAndSettle();
+        expect(find.text('Stale scope product'), findsNothing);
+        await _tap(
+          tester,
+          find.byKey(const Key('storefront-featured-item-$_featuredOne')),
+        );
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('storefront-featured-save')),
+            )
+            .onPressed!();
+        await tester.pump();
+        final current = _FeaturedRepo(ids: [_featuredTwo]);
+        await _pump(
+          tester,
+          StorefrontSection(
+            seams: _seams(
+              current,
+              identity: 'current',
+              featuredCatalog: _FeaturedCatalog(),
+            ),
+          ),
+        );
+        final reads = current.reads;
+        writing.pending!.complete(
+          const StorefrontWriteResult(StorefrontWriteStatus.ok, version: 2),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          current.reads,
+          reads,
+          reason: 'old completion cannot refresh current scope',
+        );
+        expect(current.featuredSaves, isEmpty);
+        expect(
+          tester
+              .widget<CheckboxListTile>(
+                find.byKey(const Key('storefront-featured-item-$_featuredTwo')),
+              )
+              .value,
+          isTrue,
+        );
+        expect(find.text(l10n.storefrontFeaturedItemsSaved), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    for (final locale in ['ar', 'he', 'en']) {
+      testWidgets(
+        '$locale real control saves scoped choices at390px and large text',
+        (tester) async {
+          final repo = _FeaturedRepo(branch: _branchB);
+          final catalog = _FeaturedCatalog();
+          await _pump(
+            tester,
+            StorefrontSection(seams: _seams(repo, featuredCatalog: catalog)),
+            locale: locale,
+          );
+          tester.view.physicalSize = const Size(390, 900);
+          tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          await tester.pumpAndSettle();
+          expect(
+            catalog.branches,
+            [_branchB],
+            reason: 'saved storefront branch, not membership scope',
+          );
+          final l10n = await _l10n(locale);
+          expect(find.text(l10n.storefrontFeaturedItemsTitle), findsOneWidget);
+          await _tap(
+            tester,
+            find.byKey(const Key('storefront-featured-item-$_featuredOne')),
+          );
+          await _tap(tester, find.byKey(const Key('storefront-featured-save')));
+          expect(repo.featuredSaves.single.patch, {
+            'featured_item_ids': [_featuredOne],
+          });
+          expect(repo.profile!['featured_item_ids'], [_featuredOne]);
+          expect(repo.blockedMutations, 1);
+          expect(repo.saves, isEmpty);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+    testWidgets(
+      'old backend capability cannot load or pretend to save selections',
+      (tester) async {
+        final repo = _FakeProfileRepo(profile: _profileJson());
+        final catalog = _FeaturedCatalog();
+        await _pump(
+          tester,
+          StorefrontSection(seams: _seams(repo, featuredCatalog: catalog)),
+        );
+        expect(
+          find.byKey(const Key('storefront-featured-unsupported')),
+          findsOneWidget,
+        );
+        expect(catalog.branches, isEmpty);
+        expect(find.byKey(const Key('storefront-featured-save')), findsNothing);
+      },
+    );
+    testWidgets(
+      'duplicate callback sends once; unknown retry retains deep-frozen body/id/version',
+      (tester) async {
+        final repo = _FeaturedRepo()
+          ..pending = Completer<StorefrontWriteResult>();
+        await _pump(
+          tester,
+          StorefrontSection(
+            seams: _seams(repo, featuredCatalog: _FeaturedCatalog()),
+          ),
+        );
+        await _tap(
+          tester,
+          find.byKey(const Key('storefront-featured-item-$_featuredOne')),
+        );
+        final callback = tester
+            .widget<FilledButton>(
+              find.byKey(const Key('storefront-featured-save')),
+            )
+            .onPressed!;
+        callback();
+        await tester.pump();
+        callback();
+        await tester.pump();
+        expect(repo.featuredSaves, hasLength(1));
+        expect(repo.blockedMutations, 1);
+        final first = repo.featuredSaves.single;
+        expect(first.patch, {
+          'featured_item_ids': [_featuredOne],
+        });
+        repo.pending!.complete(
+          const StorefrontWriteResult(StorefrontWriteStatus.uncertain),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          repo.featuredSaves,
+          hasLength(1),
+          reason: 'no automatic POST retry',
+        );
+        repo.pending = null;
+        repo.results.add(
+          const StorefrontWriteResult(StorefrontWriteStatus.denied),
+        );
+        await _tap(tester, find.byKey(const Key('storefront-featured-retry')));
+        expect(repo.featuredSaves, hasLength(2));
+        expect(repo.featuredSaves.last.patch, first.patch);
+        expect(repo.featuredSaves.last.requestId, first.requestId);
+        expect(repo.featuredSaves.last.expectedVersion, first.expectedVersion);
+        expect(
+          find.byKey(const Key('storefront-featured-retry')),
+          findsOneWidget,
+        );
+        expect(
+          _enabled(tester, const Key('storefront-featured-save')),
+          isFalse,
+        );
+      },
+    );
+    testWidgets(
+      'stale saved IDs require deliberate removal and never invent product labels',
+      (tester) async {
+        const stale = '00000000-0000-0000-0000-00000000f099';
+        final repo = _FeaturedRepo(ids: [stale]);
+        await _pump(
+          tester,
+          StorefrontSection(
+            seams: _seams(repo, featuredCatalog: _FeaturedCatalog()),
+          ),
+        );
+        expect(
+          find.byKey(const Key('storefront-featured-stale-selection')),
+          findsOneWidget,
+        );
+        expect(find.text(stale), findsNothing);
+        expect(
+          _enabled(tester, const Key('storefront-featured-save')),
+          isFalse,
+        );
+        await _tap(
+          tester,
+          find.byKey(const Key('storefront-featured-remove-unavailable')),
+        );
+        await _tap(tester, find.byKey(const Key('storefront-featured-save')));
+        expect(repo.profile!['featured_item_ids'], isEmpty);
+      },
+    );
+    testWidgets('retained callback cannot save after editor scope disposal', (
+      tester,
+    ) async {
+      final old = _FeaturedRepo();
+      await _pump(
+        tester,
+        StorefrontSection(
+          seams: _seams(
+            old,
+            identity: 'old',
+            featuredCatalog: _FeaturedCatalog(),
+          ),
+        ),
+      );
+      await _tap(
+        tester,
+        find.byKey(const Key('storefront-featured-item-$_featuredOne')),
+      );
+      final callback = tester
+          .widget<FilledButton>(
+            find.byKey(const Key('storefront-featured-save')),
+          )
+          .onPressed!;
+      final current = _FeaturedRepo();
+      await _pump(
+        tester,
+        StorefrontSection(
+          seams: _seams(
+            current,
+            identity: 'current',
+            featuredCatalog: _FeaturedCatalog(),
+          ),
+        ),
+      );
+      callback();
+      await tester.pumpAndSettle();
+      expect(old.featuredSaves, isEmpty);
+      expect(current.featuredSaves, isEmpty);
+    });
+    testWidgets(
+      'unavailable catalog is not an empty successful menu or selectable data',
+      (tester) async {
+        final repo = _FeaturedRepo();
+        await _pump(
+          tester,
+          StorefrontSection(
+            seams: _seams(
+              repo,
+              featuredCatalog: _FeaturedCatalog(options: null),
+            ),
+          ),
+        );
+        expect(
+          find.byKey(const Key('storefront-featured-catalog-unavailable')),
+          findsOneWidget,
+        );
+        expect(
+          _enabled(tester, const Key('storefront-featured-save')),
+          isFalse,
+        );
+        expect(repo.featuredSaves, isEmpty);
+      },
+    );
+  });
   group('Home content editor', () {
     testWidgets('disposed scope cannot start a save from a retained callback', (
       tester,

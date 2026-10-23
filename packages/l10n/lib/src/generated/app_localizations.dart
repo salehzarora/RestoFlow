@@ -17199,6 +17199,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The profile is no longer available. Reload and create it through normal profile setup first.'**
   String get storefrontHomeContentProfileMissing;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Featured products'**
+  String get storefrontFeaturedItemsTitle;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Select products to show as larger cards. Their price, availability and catalog order stay unchanged.'**
+  String get storefrontFeaturedItemsHelp;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Featured product selection is not available here yet.'**
+  String get storefrontFeaturedItemsUnavailable;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {maximum} selected'**
+  String storefrontFeaturedItemsCount(int count, int maximum);
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load products for the saved storefront branch. Reload to try again.'**
+  String get storefrontFeaturedItemsCatalogUnavailable;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no eligible products in the saved storefront branch.'**
+  String get storefrontFeaturedItemsEmpty;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Some saved choices are no longer eligible in this storefront branch. Remove unavailable choices before saving.'**
+  String get storefrontFeaturedItemsStaleSelection;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove unavailable choices'**
+  String get storefrontFeaturedItemsRemoveUnavailable;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Save featured products'**
+  String get storefrontFeaturedItemsSaveAction;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Featured products saved.'**
+  String get storefrontFeaturedItemsSaved;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Save or discard other Home/profile edits first. If both sections have unsaved edits, discard one.'**
+  String get storefrontFeaturedItemsSeparateEdits;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'The save result is unknown. Your exact choices and request are kept. Try again reconciles the same request; do not start another save.'**
+  String get storefrontFeaturedItemsUncertain;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'The profile is no longer available. Reload and create it through normal profile setup first.'**
+  String get storefrontFeaturedItemsProfileMissing;
+
+  /// BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection.
+  ///
+  /// In en, this message translates to:
+  /// **'These choices could not be saved. Reload the available products and check the selection.'**
+  String get storefrontFeaturedItemsInvalid;
 }
 
 class _AppLocalizationsDelegate
