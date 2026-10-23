@@ -566,6 +566,10 @@ returns jsonb language sql volatile security invoker set search_path='' as $$sel
 create function app.invalidate_storefront_content_v1() returns trigger language plpgsql volatile security definer set search_path='' as $$
 declare changed boolean:=false;
 begin
+ -- Legacy profiles without content have nothing to invalidate or audit.
+ -- Include every branch (and tombstone), not only the current storefront.
+ if not exists(select 1 from app.storefront_content_profiles
+  where organization_id=new.organization_id and restaurant_id=new.restaurant_id) then return new;end if;
  if convert_to(old.hero_headline,'UTF8') is distinct from convert_to(new.hero_headline,'UTF8') then
   update app.storefront_content_profiles set headline_format_text=null,headline_highlight_start=null,headline_highlight_end=null,headline_break_before=null
    where organization_id=new.organization_id and restaurant_id=new.restaurant_id and headline_format_text is not null;

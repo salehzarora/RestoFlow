@@ -3,61 +3,191 @@ const Map<String, List<int>> _ranges = {
 };
 List<int>? scalarValues(String text) {
   final c = text.codeUnits, out = <int>[];
-  for (var i=0;i<c.length;i++) {
-    final p=c[i];
-    if(p>=0xd800 && p<=0xdbff) { if(++i>=c.length || c[i]<0xdc00 || c[i]>0xdfff)return null; out.add(0x10000+(p-0xd800)*1024+c[i]-0xdc00); }
-    else { if(p>=0xdc00 && p<=0xdfff)return null; out.add(p); }
+  for (var i = 0; i < c.length; i++) {
+    final p = c[i];
+    if (p >= 0xd800 && p <= 0xdbff) {
+      if (++i >= c.length || c[i] < 0xdc00 || c[i] > 0xdfff) return null;
+      out.add(0x10000 + (p - 0xd800) * 1024 + c[i] - 0xdc00);
+    } else {
+      if (p >= 0xdc00 && p <= 0xdfff) return null;
+      out.add(p);
+    }
   }
   return out;
 }
-bool _has(int cp,String key) {
-  final r=_ranges[key]??const <int>[];var lo=0,hi=r.length~/2-1;
-  while(lo<=hi){final mid=(lo+hi)~/2;if(cp<r[mid*2]){hi=mid-1;}else if(cp>r[mid*2+1]){lo=mid+1;}else{return true;}}
+
+bool _has(int cp, String key) {
+  final r = _ranges[key] ?? const <int>[];
+  var lo = 0, hi = r.length ~/ 2 - 1;
+  while (lo <= hi) {
+    final mid = (lo + hi) ~/ 2;
+    if (cp < r[mid * 2]) {
+      hi = mid - 1;
+    } else if (cp > r[mid * 2 + 1]) {
+      lo = mid + 1;
+    } else {
+      return true;
+    }
+  }
   return false;
 }
+
 String _gcb(int cp) {
-  if(cp>=0xac00 && cp<=0xd7a3)return (cp-0xac00)%28==0?'LV':'LVT';
-  for(final key in const ['CR','LF','Control','L','V','T','Extend','ZWJ','Regional_Indicator','Prepend','SpacingMark']){if(_has(cp,key))return key;}
+  if (cp >= 0xac00 && cp <= 0xd7a3)
+    return (cp - 0xac00) % 28 == 0 ? 'LV' : 'LVT';
+  for (final key in const [
+    'CR',
+    'LF',
+    'Control',
+    'L',
+    'V',
+    'T',
+    'Extend',
+    'ZWJ',
+    'Regional_Indicator',
+    'Prepend',
+    'SpacingMark',
+  ]) {
+    if (_has(cp, key)) return key;
+  }
   return 'Other';
 }
+
 List<int>? graphemeBoundaries(String text) {
-  final c=scalarValues(text);if(c==null)return null;
-  final g=c.map(_gcb).toList(),out=<int>[0];
-  for(var i=1;i<c.length;i++){
-    final a=g[i-1],b=g[i];var join=false;
-    if(a=='CR'&&b=='LF'){join=true;}
-    else if(const ['Control','CR','LF'].contains(a)||const ['Control','CR','LF'].contains(b)){join=false;}
-    else if(a=='L'&&const ['L','V','LV','LVT'].contains(b)){join=true;}
-    else if(const ['LV','V'].contains(a)&&const ['V','T'].contains(b)){join=true;}
-    else if(const ['LVT','T'].contains(a)&&b=='T'){join=true;}
-    else if(const ['Extend','ZWJ','SpacingMark'].contains(b)||a=='Prepend'){join=true;}
-    else {
-      if(_has(c[i],'InCB_Consonant')){var j=i-1,link=false;while(j>=0&&(_has(c[j],'InCB_Extend')||_has(c[j],'InCB_Linker'))){link=link||_has(c[j],'InCB_Linker');j--;}join=link&&j>=0&&_has(c[j],'InCB_Consonant');}
-      if(!join&&a=='ZWJ'&&_has(c[i],'Extended_Pictographic')){var j=i-2;while(j>=0&&g[j]=='Extend'){j--;}join=j>=0&&_has(c[j],'Extended_Pictographic');}
-      if(!join&&a=='Regional_Indicator'&&b==a){var j=i-1,n=0;while(j>=0&&g[j]=='Regional_Indicator'){j--;n++;}join=n%2==1;}
+  final c = scalarValues(text);
+  if (c == null) return null;
+  final g = c.map(_gcb).toList(), out = <int>[0];
+  for (var i = 1; i < c.length; i++) {
+    final a = g[i - 1], b = g[i];
+    var join = false;
+    if (a == 'CR' && b == 'LF') {
+      join = true;
+    } else if (const ['Control', 'CR', 'LF'].contains(a) ||
+        const ['Control', 'CR', 'LF'].contains(b)) {
+      join = false;
+    } else if (a == 'L' && const ['L', 'V', 'LV', 'LVT'].contains(b)) {
+      join = true;
+    } else if (const ['LV', 'V'].contains(a) && const ['V', 'T'].contains(b)) {
+      join = true;
+    } else if (const ['LVT', 'T'].contains(a) && b == 'T') {
+      join = true;
+    } else if (const ['Extend', 'ZWJ', 'SpacingMark'].contains(b) ||
+        a == 'Prepend') {
+      join = true;
+    } else {
+      if (_has(c[i], 'InCB_Consonant')) {
+        var j = i - 1, link = false;
+        while (j >= 0 &&
+            (_has(c[j], 'InCB_Extend') || _has(c[j], 'InCB_Linker'))) {
+          link = link || _has(c[j], 'InCB_Linker');
+          j--;
+        }
+        join = link && j >= 0 && _has(c[j], 'InCB_Consonant');
+      }
+      if (!join && a == 'ZWJ' && _has(c[i], 'Extended_Pictographic')) {
+        var j = i - 2;
+        while (j >= 0 && g[j] == 'Extend') {
+          j--;
+        }
+        join = j >= 0 && _has(c[j], 'Extended_Pictographic');
+      }
+      if (!join && a == 'Regional_Indicator' && b == a) {
+        var j = i - 1, n = 0;
+        while (j >= 0 && g[j] == 'Regional_Indicator') {
+          j--;
+          n++;
+        }
+        join = n % 2 == 1;
+      }
     }
-    if(!join)out.add(i);
+    if (!join) out.add(i);
   }
-  if(c.isNotEmpty)out.add(c.length);return out;
+  if (c.isNotEmpty) out.add(c.length);
+  return out;
 }
-bool isContentSpace(int cp)=>cp==0x20||cp==0x85||cp==0xa0||cp==0x1680||(cp>=0x2000&&cp<=0x200a)||const [0x2028,0x2029,0x202f,0x205f,0x3000,0xfeff].contains(cp);
-String? normalizeContentText(String? text,int max,{bool legacy=false}) {
-  if(max<1)throw const FormatException('content_text_invalid');
-  if(text==null)return null;final c=scalarValues(text);
-  if(c==null||c.any((p)=>p<=0x1f||p==0x7f||(!legacy&&((p>=0x80&&p<=0x9f)||p==0x2028||p==0x2029))))throw const FormatException('content_text_invalid');
-  var a=0,b=c.length;while(a<b&&isContentSpace(c[a])){a++;}while(b>a&&isContentSpace(c[b-1])){b--;}
-  if(b-a>max)throw const FormatException('content_text_invalid');return a==b?null:String.fromCharCodes(c.sublist(a,b));
+
+bool isContentSpace(int cp) =>
+    cp == 0x20 ||
+    cp == 0x85 ||
+    cp == 0xa0 ||
+    cp == 0x1680 ||
+    (cp >= 0x2000 && cp <= 0x200a) ||
+    const [0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff].contains(cp);
+String? normalizeContentText(String? text, int max, {bool legacy = false}) {
+  if (max < 1) throw const FormatException('content_text_invalid');
+  if (text == null) return null;
+  final c = scalarValues(text);
+  if (c == null ||
+      c.any(
+        (p) =>
+            p <= 0x1f ||
+            p == 0x7f ||
+            (!legacy &&
+                ((p >= 0x80 && p <= 0x9f) || p == 0x2028 || p == 0x2029)),
+      ))
+    throw const FormatException('content_text_invalid');
+  var a = 0, b = c.length;
+  while (a < b && isContentSpace(c[a])) {
+    a++;
+  }
+  while (b > a && isContentSpace(c[b - 1])) {
+    b--;
+  }
+  if (b - a > max) throw const FormatException('content_text_invalid');
+  return a == b ? null : String.fromCharCodes(c.sublist(a, b));
 }
-bool contentTextValid(String? text,int max,{bool legacy=false}) {try{return normalizeContentText(text,max,legacy:legacy)==text;}on FormatException{return false;}}
-bool heroFormatValid(String? text,int? start,int? end,int? breakBefore) {
-  if(start==null&&end==null&&breakBefore==null)return true;
-  if(text==null||!contentTextValid(text,120,legacy:true))return false;
-  final c=scalarValues(text)!;if(c.any((p)=>const [0x85,0x2028,0x2029].contains(p)))return false;final bounds=graphemeBoundaries(text)!.toSet();
-  if((start==null)!=(end==null))return false;
-  if(start!=null&&end!=null){if(start<0||end<=start||end>c.length||end-start>60||isContentSpace(c[start])||isContentSpace(c[end-1])||(start>0&&!isContentSpace(c[start-1]))||(end<c.length&&!isContentSpace(c[end]))||!bounds.contains(start)||!bounds.contains(end))return false;}
-  if(breakBefore!=null){if(breakBefore<1||breakBefore>=c.length||isContentSpace(c[breakBefore])||!isContentSpace(c[breakBefore-1])||!bounds.contains(breakBefore)||(start!=null&&end!=null&&start<breakBefore&&breakBefore<end))return false;}
+
+bool contentTextValid(String? text, int max, {bool legacy = false}) {
+  try {
+    return normalizeContentText(text, max, legacy: legacy) == text;
+  } on FormatException {
+    return false;
+  }
+}
+
+bool heroFormatValid(String? text, int? start, int? end, int? breakBefore) {
+  if (start == null && end == null && breakBefore == null) return true;
+  if (text == null || !contentTextValid(text, 120, legacy: true)) return false;
+  final c = scalarValues(text)!;
+  if (c.any((p) => const [0x85, 0x2028, 0x2029].contains(p))) return false;
+  final bounds = graphemeBoundaries(text)!.toSet();
+  if ((start == null) != (end == null)) return false;
+  if (start != null && end != null) {
+    if (start < 0 ||
+        end <= start ||
+        end > c.length ||
+        end - start > 60 ||
+        isContentSpace(c[start]) ||
+        isContentSpace(c[end - 1]) ||
+        (start > 0 && !isContentSpace(c[start - 1])) ||
+        (end < c.length && !isContentSpace(c[end])) ||
+        !bounds.contains(start) ||
+        !bounds.contains(end))
+      return false;
+  }
+  if (breakBefore != null) {
+    if (breakBefore < 1 ||
+        breakBefore >= c.length ||
+        isContentSpace(c[breakBefore]) ||
+        !isContentSpace(c[breakBefore - 1]) ||
+        !bounds.contains(breakBefore) ||
+        (start != null &&
+            end != null &&
+            start < breakBefore &&
+            breakBefore < end))
+      return false;
+  }
   return true;
 }
-List<int>? utf16SelectionToCodepoints(String text,int start,int end) {
-  final c=scalarValues(text);if(c==null)return null;final u=<int>[0];for(final cp in c){u.add(u.last+(cp>0xffff?2:1));}final a=u.indexOf(start<end?start:end),b=u.indexOf(start>end?start:end);return a<0||b<0?null:<int>[a,b];
+
+List<int>? utf16SelectionToCodepoints(String text, int start, int end) {
+  final c = scalarValues(text);
+  if (c == null) return null;
+  final u = <int>[0];
+  for (final cp in c) {
+    u.add(u.last + (cp > 0xffff ? 2 : 1));
+  }
+  final a = u.indexOf(start < end ? start : end),
+      b = u.indexOf(start > end ? start : end);
+  return a < 0 || b < 0 ? null : <int>[a, b];
 }

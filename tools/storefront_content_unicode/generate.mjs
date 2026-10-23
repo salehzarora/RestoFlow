@@ -59,12 +59,26 @@ outputs['tools/storefront_content_unicode/generated/grapheme-conformance.sql']='
 // Cross-language implementations are separate source templates, with the exact
 // same generated ranges and official test vectors; no platform ICU dependency.
 const dartTemplate=readFileSync(path.join(root,'templates/unicode.dart.txt'),'utf8');
-outputs['tools/storefront_content_unicode/generated/storefront_content_unicode.dart']=banner+dartTemplate.replace('/*RANGES*/',Object.entries(ranges).map(([k,v])=>`  '${k}': <int>[${v.join(',')}],`).join('\n'));
+// Emit the Dart 3.12 formatter's stable 80-column layout directly, offline.
+// Short ranges stay inline; longer ranges retain the vertical trailing comma.
+const dartRanges=Object.entries(ranges).map(([key,values])=>{
+  const inline=`  '${key}': <int>[${values.join(', ')}],`;
+  return inline.length<=80?inline:`  '${key}': <int>[\n${values.map(value=>`    ${value},`).join('\n')}\n  ],`;
+}).join('\n');
+const dartOutput=banner+dartTemplate.replace('/*RANGES*/',dartRanges);
+outputs['tools/storefront_content_unicode/generated/storefront_content_unicode.dart']=dartOutput;
+outputs['apps/dashboard/lib/src/storefront/storefront_content_unicode.dart']=dartOutput;
 const sqlTemplate=readFileSync(path.join(root,'templates/unicode.sql.txt'),'utf8');
 outputs['tools/storefront_content_unicode/generated/unicode-v15_1.sql']='-- GENERATED from pinned Unicode15.1/UAX29r43; see vendor/LICENSE.txt and provenance.json.\n'+sqlTemplate.replace('/*RANGES*/',Object.entries(ranges).map(([k,v])=>`WHEN '${k}' THEN v_ranges := ARRAY[${v.join(',')}]::integer[];`).join('\n'));
 for(const [relative,text] of Object.entries(outputs)) {
   const filename=path.join(repo,relative);
-  if(process.argv.includes('--check')) { if(readFileSync(filename,'utf8')!==text) throw Error(`Generated output drift: ${relative}`); }
+  if(process.argv.includes('--check')) {
+    const actual=readFileSync(filename,'utf8');
+    // The Dashboard app copy follows Git core.autocrlf on Windows; only its
+    // checkout CRLF pairs are equivalent. Pinned data and other outputs stay exact.
+    const checked=relative==='apps/dashboard/lib/src/storefront/storefront_content_unicode.dart'?actual.replace(/\r\n/g,'\n'):actual;
+    if(checked!==text) throw Error(`Generated output drift: ${relative}`);
+  }
   else { mkdirSync(path.dirname(filename),{recursive:true}); writeFileSync(filename,text); }
 }
 console.log(JSON.stringify({status:process.argv.includes('--check')?'GENERATED_PARITY_OK':'GENERATED',unicode:'15.1.0',vectors:vectors.length,outputs:Object.keys(outputs)}));
