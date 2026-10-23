@@ -54,6 +54,63 @@ class _GatedStore extends InMemoryDeviceSessionSecretStore {
 
 void main() {
   test(
+    'optional ETA is accept-only, bounded, and absent for legacy calls',
+    () async {
+      final transport = _Transport()..result = decisionJson();
+      final store = InMemoryDeviceSessionSecretStore();
+      await store.write(
+        const DeviceSessionCredential(
+          deviceId: deviceId,
+          sessionToken: 'synthetic-token',
+        ),
+      );
+      final repo = RealOnlineOrderInboxRepository(
+        transport: transport,
+        session: const SyncSession(pinSessionId: pinId, deviceId: deviceId),
+        secretStore: store,
+      );
+      for (final minutes in [1, 240, null]) {
+        await repo.decide(
+          requestId: requestId,
+          decisionId: decisionId,
+          decision: OnlineOrderDecision.accept,
+          preparationMinutes: minutes,
+        );
+        expect(
+          transport.params!.containsKey('preparation_minutes'),
+          minutes != null,
+        );
+        if (minutes != null)
+          expect(transport.params!['preparation_minutes'], minutes);
+      }
+      for (final minutes in [-1, 0, 241]) {
+        transport.function = null;
+        await expectLater(
+          repo.decide(
+            requestId: requestId,
+            decisionId: decisionId,
+            decision: OnlineOrderDecision.accept,
+            preparationMinutes: minutes,
+          ),
+          throwsA(isA<OnlineInboxException>()),
+        );
+        expect(transport.function, isNull);
+      }
+      transport.function = null;
+      await expectLater(
+        repo.decide(
+          requestId: requestId,
+          decisionId: decisionId,
+          decision: OnlineOrderDecision.reject,
+          reason: 'No stock',
+          preparationMinutes: 15,
+        ),
+        throwsA(isA<OnlineInboxException>()),
+      );
+      expect(transport.function, isNull);
+    },
+  );
+  test(
     'trusted menu item ID is retained without changing priced snapshots',
     () {
       final json = requestJson();

@@ -2,6 +2,9 @@ import { MAX_BODY_BYTES, WEB_ORDER_ENDPOINT, WEB_ORDER_ORIGIN } from './contract
 import type { OrderIdentity, OrderOutcome, OrderTransport, WebOrder, WebOrderErrorCode, WebOrderResult, WebOrderStatus } from './contract';
 import { parseOrderJson } from './json';
 import { exactObject, invalid, normalizeWebOrder, validateIdentity } from './validation';
+import { decodeAcceptanceEta } from './acceptanceEta';
+
+export const ORDER_RESPONSE_VERSION_HEADER = 'X-BIZBOT-Order-Response-Version';
 
 const FAILURE_STATUS: Readonly<Record<string, number>> = {
   invalid_request: 400, not_found: 404, ordering_unavailable: 503, idempotency_conflict: 409,
@@ -18,10 +21,11 @@ export function validateOrderOrigin(origin: string): typeof WEB_ORDER_ORIGIN {
   return WEB_ORDER_ORIGIN;
 }
 /** Exact response projection, including rejection of extra customer/credential fields. */
-export function decodeOrderResponse(value: unknown, status: number, identity: OrderIdentity, action: 'submit' | 'status'): OrderOutcome {
-  const object = exactObject(value, ['ok'], ['request_id', 'status', 'expires_at', 'totals', 'replayed', 'customer_rejection_reason', 'error', 'uncertain']);
+export function decodeOrderResponse(value: unknown, status: number, identity: OrderIdentity, action: 'submit' | 'status', representation: 'legacy' | '2' = 'legacy'): OrderOutcome {
+  const etaKeys = action === 'status' && representation === '2' ? ['acceptance_eta'] : [];
+  const object = exactObject(value, ['ok'], ['request_id', 'status', 'expires_at', 'totals', 'replayed', 'customer_rejection_reason', 'error', 'uncertain', ...etaKeys]);
   if (object.ok === true) {
-    exactObject(object, ['ok', 'request_id', 'status', 'expires_at', 'totals', 'replayed'], ['customer_rejection_reason']);
+    exactObject(object, ['ok', 'request_id', 'status', 'expires_at', 'totals', 'replayed'], ['customer_rejection_reason', ...etaKeys]);
     if (status !== 200 || object.request_id !== identity.request_id || typeof object.status !== 'string' || !STATUSES.includes(object.status) || typeof object.replayed !== 'boolean') invalid();
     if (typeof object.expires_at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(object.expires_at) || !Number.isFinite(Date.parse(object.expires_at))) invalid();
     const totals = exactObject(object.totals, ['currency_code', 'subtotal_minor', 'tax_total_minor', 'grand_total_minor']);
@@ -34,7 +38,10 @@ export function decodeOrderResponse(value: unknown, status: number, identity: Or
     const hasReason = Object.hasOwn(object, 'customer_rejection_reason');
     const reason = object.customer_rejection_reason;
     if (hasReason && (object.status !== 'rejected' || typeof reason !== 'string' || reason !== reason.trim() || [...reason].length < 1 || [...reason].length > 240 || /[\x00-\x1f\x7f\p{Cs}]/u.test(reason))) invalid();
-    const result: WebOrderResult = Object.freeze({ ok: true, request_id: identity.request_id, status: object.status as WebOrderStatus, expires_at: object.expires_at, totals: Object.freeze({ currency_code: 'ILS', subtotal_minor, tax_total_minor, grand_total_minor }), replayed: object.replayed, ...(hasReason ? { customer_rejection_reason: reason as string } : {}) });
+    const hasEta = Object.hasOwn(object, 'acceptance_eta');
+    if (hasEta && object.status !== 'accepted') invalid();
+    const acceptance_eta = hasEta ? decodeAcceptanceEta(object.acceptance_eta) : undefined;
+    const result: WebOrderResult = Object.freeze({ ok: true, request_id: identity.request_id, status: object.status as WebOrderStatus, expires_at: object.expires_at, totals: Object.freeze({ currency_code: 'ILS', subtotal_minor, tax_total_minor, grand_total_minor }), replayed: object.replayed, ...(hasReason ? { customer_rejection_reason: reason as string } : {}), ...(acceptance_eta ? { acceptance_eta } : {}) });
     return { kind: 'known', result };
   }
   exactObject(object, ['ok', 'error'], ['request_id', 'uncertain']);
@@ -102,11 +109,13 @@ export function createOrderTransport({ origin, fetchImpl = globalThis.fetch, tim
       return await Promise.race([
         (async () => {
           const response = await fetchImpl(WEB_ORDER_ENDPOINT, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...(action === 'status' ? { [ORDER_RESPONSE_VERSION_HEADER]: '2' } : {}) },
             body, credentials: 'omit', cache: 'no-store', redirect: 'error',
             referrerPolicy: 'no-referrer', mode: 'cors', signal: controller.signal,
           });
-          return decodeOrderResponse(await responseJson(response), response.status, identity, action);
+          // Never mask a missing/unsupported deployment by falling back to v1.
+          if (action === 'status' && response.headers.get(ORDER_RESPONSE_VERSION_HEADER) !== '2') invalid();
+          return decodeOrderResponse(await responseJson(response), response.status, identity, action, action === 'status' ? '2' : 'legacy');
         })(), deadline,
       ]);
     } catch {

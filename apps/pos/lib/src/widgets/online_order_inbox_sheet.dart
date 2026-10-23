@@ -593,9 +593,23 @@ class _RequestDetail extends ConsumerStatefulWidget {
 
 class _RequestDetailState extends ConsumerState<_RequestDetail> {
   bool _rejecting = false;
+  bool _accepting = false;
+
+  Future<void> _confirmAcceptance() async {
+    if (_accepting || _rejecting) return;
+    setState(() => _accepting = true);
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => _AcceptOrderDialog(requestId: widget.request.id),
+      );
+    } finally {
+      if (mounted) setState(() => _accepting = false);
+    }
+  }
 
   Future<void> _confirmRejection() async {
-    if (_rejecting) return;
+    if (_rejecting || _accepting) return;
     setState(() => _rejecting = true);
     try {
       await showDialog<void>(
@@ -732,11 +746,8 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
                     child: FilledButton.icon(
                       key: const Key('online-inbox-accept'),
                       style: style,
-                      onPressed: enabled
-                          ? () => controller.decide(
-                              request.id,
-                              OnlineOrderDecision.accept,
-                            )
+                      onPressed: enabled && !_accepting && !_rejecting
+                          ? _confirmAcceptance
                           : null,
                       icon: const Icon(Icons.check),
                       label: Text(l10n.posOnlineInboxAccept),
@@ -747,7 +758,7 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
                     child: OutlinedButton.icon(
                       key: const Key('online-inbox-reject'),
                       style: style,
-                      onPressed: enabled && !_rejecting
+                      onPressed: enabled && !_rejecting && !_accepting
                           ? _confirmRejection
                           : null,
                       icon: const Icon(Icons.close),
@@ -771,6 +782,160 @@ class _RequestDetailState extends ConsumerState<_RequestDetail> {
       children: [Text(label), Text(amount)],
     ),
   );
+}
+
+/// No selection is inferred. Closing this route never creates an intent; only
+/// explicit confirmation passes the selected integer to the guarded controller.
+class _AcceptOrderDialog extends ConsumerStatefulWidget {
+  const _AcceptOrderDialog({required this.requestId});
+  final String requestId;
+
+  @override
+  ConsumerState<_AcceptOrderDialog> createState() => _AcceptOrderDialogState();
+}
+
+class _AcceptOrderDialogState extends ConsumerState<_AcceptOrderDialog> {
+  final _custom = TextEditingController();
+  int? _quickMinutes;
+  bool _submitted = false;
+
+  @override
+  void dispose() {
+    _custom.clear();
+    _custom.dispose();
+    super.dispose();
+  }
+
+  int? get _minutes {
+    if (_quickMinutes != null) return _quickMinutes;
+    final text = _custom.text;
+    if (text.isEmpty || RegExp(r'[^0-9]').hasMatch(text)) return null;
+    final minutes = int.tryParse(text);
+    return minutes != null && minutes >= 1 && minutes <= 240 ? minutes : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final state = ref.watch(onlineOrderInboxControllerProvider);
+    final controller = ref.read(onlineOrderInboxControllerProvider.notifier);
+    final request = state.requests
+        .where((r) => r.id == widget.requestId)
+        .firstOrNull;
+    final authorized =
+        !_submitted &&
+        ref.watch(posOfflineModeProvider).phase == PosOfflinePhase.online &&
+        state.intent == null &&
+        !state.deciding &&
+        state.failure != OnlineInboxFailure.invalidSession &&
+        state.failure != OnlineInboxFailure.permissionDenied &&
+        request != null &&
+        request.status == OnlineOrderStatus.pending &&
+        !request.expiredAt(controller.now());
+    final minutes = _minutes;
+    return Dialog(
+      key: const Key('online-inbox-accept-dialog'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 600),
+        child: SingleChildScrollView(
+          key: const Key('online-inbox-accept-scroll'),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.posOnlineInboxPreparationTitle,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              Text(l10n.posOnlineInboxPreparationHint),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final value in const [10, 15, 20, 30, 45, 60])
+                    ChoiceChip(
+                      key: Key('online-inbox-preparation-$value'),
+                      label: Text(l10n.posOnlineInboxPreparationMinutes(value)),
+                      selected: _quickMinutes == value,
+                      materialTapTargetSize: MaterialTapTargetSize.padded,
+                      onSelected: authorized
+                          ? (selected) => setState(() {
+                              _quickMinutes = selected ? value : null;
+                              _custom.clear();
+                            })
+                          : null,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                key: const Key('online-inbox-preparation-custom'),
+                controller: _custom,
+                enabled: authorized,
+                keyboardType: TextInputType.number,
+                textDirection: TextDirection.ltr,
+                maxLength: 3,
+                onChanged: (_) => setState(() => _quickMinutes = null),
+                decoration: InputDecoration(
+                  labelText: l10n.posOnlineInboxPreparationCustom,
+                  errorText: _custom.text.isNotEmpty && minutes == null
+                      ? l10n.posOnlineInboxPreparationRange
+                      : null,
+                ),
+              ),
+              if (!authorized) ...[
+                const SizedBox(height: 12),
+                Text(l10n.posOnlineInboxConflict),
+              ],
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  TextButton(
+                    key: const Key('online-inbox-accept-cancel'),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      MaterialLocalizations.of(context).cancelButtonLabel,
+                    ),
+                  ),
+                  FilledButton(
+                    key: const Key('online-inbox-accept-confirm'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
+                    onPressed: authorized && minutes != null
+                        ? () {
+                            if (_submitted || !mounted) return;
+                            setState(() => _submitted = true);
+                            unawaited(
+                              controller.decide(
+                                widget.requestId,
+                                OnlineOrderDecision.accept,
+                                preparationMinutes: minutes,
+                              ),
+                            );
+                            Navigator.of(context).pop();
+                          }
+                        : null,
+                    child: Text(l10n.posOnlineInboxPreparationConfirm),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// A separate route keeps its draft alive across Inbox responsive-layout

@@ -70,6 +70,30 @@ Future<void> _pumpPreview(
 
 void main() {
   for (final locale in const ['en', 'ar', 'he']) {
+    testWidgets(
+      '$locale: Israeli international phone displays locally in preview and manual slip only',
+      (tester) async {
+        final l10n = await AppLocalizations.delegate.load(Locale(locale));
+        final order = _order(phone: '+972501234567');
+        await _pumpPreview(tester, locale, order);
+        expect(
+          find.text('${l10n.customerPhoneReceiptLabel}: 0501234567'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('+972501234567'), findsNothing);
+        final doc = buildReceiptDocument(
+          l10n,
+          order,
+          _payment(),
+          isDemo: false,
+        );
+        expect(
+          doc.lines.any((line) => line.left?.contains('0501234567') == true),
+          true,
+        );
+        expect(order.customerPhone, '+972501234567');
+      },
+    );
     testWidgets('$locale: the preview shows the phone below the name', (
       tester,
     ) async {

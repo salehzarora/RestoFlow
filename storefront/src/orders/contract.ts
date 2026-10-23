@@ -37,6 +37,13 @@ export interface WebOrderTotals {
   readonly tax_total_minor: number;
   readonly grand_total_minor: number;
 }
+/** Informational immutable estimate from a negotiated capability status read. */
+export interface AcceptanceEta {
+  readonly preparation_minutes: number;
+  readonly accepted_at: string;
+  readonly ready_at: string;
+  readonly timezone: string;
+}
 export interface WebOrderResult {
   readonly ok: true;
   readonly request_id: string;
@@ -46,6 +53,7 @@ export interface WebOrderResult {
   readonly replayed: boolean;
   /** Future explicitly public decisions only; absent for legacy/private reasons and other states. */
   readonly customer_rejection_reason?: string;
+  readonly acceptance_eta?: AcceptanceEta;
 }
 export type WebOrderErrorCode =
   | 'invalid_request' | 'not_found' | 'ordering_unavailable' | 'idempotency_conflict'

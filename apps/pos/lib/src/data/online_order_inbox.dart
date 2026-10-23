@@ -324,6 +324,7 @@ abstract class OnlineOrderInboxRepository {
     required String decisionId,
     required OnlineOrderDecision decision,
     String? reason,
+    int? preparationMinutes,
   });
 }
 
@@ -407,7 +408,14 @@ class RealOnlineOrderInboxRepository implements OnlineOrderInboxRepository {
     required String decisionId,
     required OnlineOrderDecision decision,
     String? reason,
+    int? preparationMinutes,
   }) async {
+    if (preparationMinutes != null &&
+        (decision != OnlineOrderDecision.accept ||
+            preparationMinutes < 1 ||
+            preparationMinutes > 240)) {
+      throw const OnlineInboxException(OnlineInboxFailure.invalidRequest);
+    }
     if (decision == OnlineOrderDecision.reject &&
         (reason == null ||
             reason.trim().isEmpty ||
@@ -420,6 +428,8 @@ class RealOnlineOrderInboxRepository implements OnlineOrderInboxRepository {
         'action': decision.name,
         'request_id': requestId,
         'decision_id': decisionId,
+        if (preparationMinutes != null)
+          'preparation_minutes': preparationMinutes,
         if (decision == OnlineOrderDecision.reject) 'reason': reason!.trim(),
       }, decision: true),
     );
@@ -440,6 +450,7 @@ class UnavailableOnlineOrderInboxRepository
     required String decisionId,
     required OnlineOrderDecision decision,
     String? reason,
+    int? preparationMinutes,
   }) => throw const OnlineInboxException(OnlineInboxFailure.unavailable);
 }
 

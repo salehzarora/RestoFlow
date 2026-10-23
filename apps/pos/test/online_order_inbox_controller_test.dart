@@ -84,6 +84,134 @@ Future<OnlineOrderInboxController> ready(ProviderContainer container) async {
 
 void main() {
   test(
+    'ETA is frozen through locked pending recovery and never replaced',
+    () async {
+      final lookup = Completer<OnlineInboxPage>();
+      final repo = FakeInboxRepository();
+      repo.onFetch = (id, _) =>
+          id == null ? Future.value(inboxPage()) : lookup.future;
+      repo.onDecide = (_) async {
+        if (repo.decisions.length == 1) {
+          throw const OnlineInboxException(OnlineInboxFailure.transport);
+        }
+        return OnlineInboxDecisionResult.fromJson(decisionJson());
+      };
+      final c = harness(repo);
+      final controller = await ready(c);
+      final deciding = controller.decide(
+        requestId,
+        OnlineOrderDecision.accept,
+        preparationMinutes: 45,
+      );
+      await pumpEventQueue(times: 5);
+      expect(
+        c.read(onlineOrderInboxControllerProvider).intent!.preparationMinutes,
+        45,
+      );
+      await controller.decide(
+        requestId,
+        OnlineOrderDecision.accept,
+        preparationMinutes: 10,
+      );
+      await controller.decide(
+        requestId,
+        OnlineOrderDecision.reject,
+        reason: 'No',
+      );
+      expect(repo.decisions, hasLength(1));
+      lookup.complete(inboxPage());
+      await deciding;
+      expect(repo.decisions, hasLength(2));
+      expect(repo.decisions.map((call) => call.decisionId).toSet(), {
+        decisionId,
+      });
+      expect(repo.decisions.map((call) => call.preparationMinutes).toSet(), {
+        45,
+      });
+      expect(
+        repo.decisions.every(
+          (call) => call.decision == OnlineOrderDecision.accept,
+        ),
+        true,
+      );
+    },
+  );
+
+  test('terminal locked reconciliation never resends or changes ETA', () async {
+    final repo = FakeInboxRepository();
+    repo.onDecide = (_) async =>
+        throw const OnlineInboxException(OnlineInboxFailure.transport);
+    repo.onFetch = (id, _) async => id == null
+        ? inboxPage()
+        : inboxPage(requests: [inboxRequest(status: 'accepted')]);
+    final c = harness(repo);
+    final controller = await ready(c);
+    await controller.decide(
+      requestId,
+      OnlineOrderDecision.accept,
+      preparationMinutes: 240,
+    );
+    expect(repo.decisions, hasLength(1));
+    expect(repo.decisions.single.preparationMinutes, 240);
+    expect(c.read(onlineOrderInboxControllerProvider).intent, isNull);
+  });
+
+  test(
+    'invalid ETA or reject ETA cannot create an intent or decision',
+    () async {
+      for (final minutes in [0, -1, 241]) {
+        final repo = FakeInboxRepository();
+        final c = harness(repo);
+        final controller = await ready(c);
+        await controller.decide(
+          requestId,
+          OnlineOrderDecision.accept,
+          preparationMinutes: minutes,
+        );
+        expect(repo.decisions, isEmpty);
+        expect(c.read(onlineOrderInboxControllerProvider).intent, isNull);
+        expect(
+          c.read(onlineOrderInboxControllerProvider).failure,
+          OnlineInboxFailure.invalidRequest,
+        );
+      }
+      final repo = FakeInboxRepository();
+      final c = harness(repo);
+      final controller = await ready(c);
+      await controller.decide(
+        requestId,
+        OnlineOrderDecision.reject,
+        reason: 'Sold out',
+        preparationMinutes: 15,
+      );
+      expect(repo.decisions, isEmpty);
+      expect(c.read(onlineOrderInboxControllerProvider).intent, isNull);
+    },
+  );
+
+  test('paused or resolved request cannot confirm a chosen ETA', () async {
+    final repo = FakeInboxRepository();
+    final c = harness(repo);
+    final controller = await ready(c);
+    controller.onPaused();
+    await controller.decide(
+      requestId,
+      OnlineOrderDecision.accept,
+      preparationMinutes: 15,
+    );
+    expect(repo.decisions, isEmpty);
+    repo.onFetch = (_, _) async => inboxPage(requests: []);
+    controller.onResume();
+    await pumpEventQueue(times: 10);
+    await controller.decide(
+      requestId,
+      OnlineOrderDecision.accept,
+      preparationMinutes: 15,
+    );
+    expect(repo.decisions, isEmpty);
+  });
+
+  test(
     'new authenticated POS devices join their own branch without an allowlist',
     () async {
       final identities = <String>{};

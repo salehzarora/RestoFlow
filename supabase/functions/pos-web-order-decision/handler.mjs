@@ -40,12 +40,15 @@ function configuration(getEnv) {
 function validInput(input) {
   if (!object(input) || !["accept", "reject"].includes(input.action)) return false;
   const keys = ["action", "pin_session_id", "device_id", "device_session_token", "request_id", "decision_id",
-    ...(input.action === "reject" ? ["reason"] : [])];
+    ...(input.action === "reject" ? ["reason"] : []),
+    ...(input.action === "accept" && Object.hasOwn(input, "preparation_minutes") ? ["preparation_minutes"] : [])];
   return Object.keys(input).length === keys.length && keys.every((key) => Object.hasOwn(input, key))
     && ["pin_session_id", "device_id", "request_id", "decision_id"].every((key) => UUID.test(input[key] ?? ""))
     && typeof input.device_session_token === "string" && input.device_session_token.length <= 4096
     && input.device_session_token.trim().length > 0 && !/[\x00-\x1f\x7f]/.test(input.device_session_token)
-    && (input.action !== "reject" || validReason(input.reason));
+    && (input.action !== "reject" || validReason(input.reason))
+    && (!Object.hasOwn(input, "preparation_minutes") || (Number.isInteger(input.preparation_minutes)
+      && input.preparation_minutes >= 1 && input.preparation_minutes <= 240));
 }
 
 function projectResult(result, input) {
@@ -101,7 +104,11 @@ export function createHandler({ getEnv, fetchImpl = globalThis.fetch, waitUntil,
       const args = Object.fromEntries(["pin_session_id", "device_id", "device_session_token", "request_id", "decision_id"]
         .map((key) => [`p_${key}`, input[key]]));
       if (input.action === "reject") args.p_reason = input.reason;
-      const rpc = input.action === "accept" ? "pos_accept_web_order" : "pos_reject_web_order_customer";
+      const hasEstimate = Object.hasOwn(input, "preparation_minutes");
+      if (hasEstimate) args.p_preparation_minutes = input.preparation_minutes;
+      const rpc = input.action === "accept"
+        ? (hasEstimate ? "pos_accept_web_order_with_eta" : "pos_accept_web_order")
+        : "pos_reject_web_order_customer";
       controller = new AbortController();
       const operation = (async () => {
         const upstream = await fetchImpl(`${config.base}/rest/v1/rpc/${rpc}`, {

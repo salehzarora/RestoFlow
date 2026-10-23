@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_printing/restoflow_printing.dart'
+    show formatReceiptCustomerPhone;
 
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
@@ -171,7 +173,8 @@ class ReceiptPrintPreview extends ConsumerWidget {
                           // the customer-name line above.
                           if (order.customerPhone case final phone?)
                             _Centered(
-                              text: '${l10n.customerPhoneReceiptLabel}: $phone',
+                              text:
+                                  '${l10n.customerPhoneReceiptLabel}: ${formatReceiptCustomerPhone(phone)}',
                             ),
                           _Centered(
                             text: _formatReceiptTimestamp(payment.paidAt),
@@ -472,7 +475,9 @@ PrintDocument _buildCustomerDocument(
       // text; the whole document is rasterized for ar/he downstream so the digits +
       // leading `+` render correctly.
       if (order.customerPhone case final phone?)
-        PrintLine.center('${l10n.customerPhoneReceiptLabel}: $phone'),
+        PrintLine.center(
+          '${l10n.customerPhoneReceiptLabel}: ${formatReceiptCustomerPhone(phone)}',
+        ),
       // The paid timestamp MEANS payment completion, so a bill omits it rather
       // than substituting some other time that could be read as a payment.
       if (paid) PrintLine.center(_formatReceiptTimestamp(payment.paidAt)),
