@@ -24,6 +24,63 @@ const { anchorOrder, CHROME_ANCHORS, PAGE_ANCHORS, LOCKED_MODULE_ORDER } = await
   '../scripts/module-order.mjs'
 );
 const { CATEGORIES, MENU_ITEMS, TAX_RATE_BP } = await import('../src/source/menu-fixture.ts');
+const { suggestionPool, chooseSuggestion } = await import('../src/ui/storefront/home/suggestions.ts');
+
+test('suggestions use only available canonical items in the selected category, without cross-category fallback', () => {
+  const a = { ...MENU_ITEMS[0], id: 'synthetic-a', categoryId: 'scope-a', soldOut: false, featured: false };
+  const sold = { ...a, id: 'synthetic-sold', soldOut: true, featured: true };
+  const b = { ...a, id: 'synthetic-b', categoryId: 'scope-b', featured: true };
+  assert.deepEqual(suggestionPool([a, sold, b], 'scope-a', false), [a]);
+  assert.deepEqual(suggestionPool([a, sold, b], 'absent', false), []);
+  assert.deepEqual(suggestionPool([], 'scope-a', false), []);
+  assert.deepEqual(suggestionPool([sold], 'scope-a', false), []);
+});
+
+test('manager-pick suggestions use the explicit featured flag, not name, tag, category or sales inference', () => {
+  const base = { ...MENU_ITEMS[0], soldOut: false, categoryId: 'unrelated' };
+  const featured = { ...base, id: 'selected', featured: true, name: 'arbitrary name' };
+  const tagOnly = { ...base, id: 'unselected', featured: false, signature: true, badge: 'new', name: 'Best Burger' };
+  const sold = { ...featured, id: 'sold', soldOut: true };
+  assert.deepEqual(suggestionPool([tagOnly, sold, featured], 'other', true), [featured]);
+});
+
+test('suggestion sampling selects current pool entries only and fails closed on empty or invalid samples', () => {
+  const pool = MENU_ITEMS.slice(0, 3);
+  for (const [sample, index] of [[0, 0], [1 / 3, 1], [2 / 3, 2], [0.999999, 2]]) {
+    assert.equal(chooseSuggestion(pool, sample), pool[index]);
+  }
+  for (const sample of [NaN, Infinity, -0.1, 1, 2]) assert.equal(chooseSuggestion(pool, sample), null);
+  assert.equal(chooseSuggestion([], 0), null);
+  assert.equal(pool.length, 3);
+});
+
+test('suggestion is a native capture trigger for the existing product opener, never cart or order authority', () => {
+  const chrome = code('src/ui/storefront/home/HomeChrome.tsx');
+  const preparation = chrome.slice(chrome.indexOf('const prepareSuggestion'), chrome.indexOf('const hero ='));
+  assert.ok(preparation.indexOf('delete button.dataset.sfItem') < preparation.indexOf('chooseSuggestion'));
+  assert.ok(preparation.indexOf('delete button.dataset.sfLine') < preparation.indexOf('chooseSuggestion'));
+  assert.match(preparation, /if \(button\.disabled\) return/);
+  assert.match(preparation, /button\.dataset\.sfItem = item\.id/);
+  assert.match(preparation, /button\.focus\(\{ preventScroll: true \}\)/);
+  assert.doesNotMatch(preparation, /\.add\(|\.submit\(|fetch\(|pushState|setTimeout|await|stopPropagation/);
+  assert.match(chrome, /onClickCapture=\{e => prepareSuggestion\(e\.currentTarget\)\}/);
+  assert.match(chrome, /if \(e\.key !== 'Enter' && e\.key !== ' '\) return/);
+  assert.match(chrome, /if \(e\.repeat\)/);
+  assert.match(chrome, /disabled=\{candidates\.length === 0\}/);
+  for (const locale of ['ar', 'he', 'en']) {
+    assert.ok(storefrontMessages(locale).suggestItem);
+    assert.ok(storefrontMessages(locale).suggestionEmpty);
+  }
+});
+
+test('announcement keeps one complete tenant run and decorative separators without parsing or ellipsis', () => {
+  const chrome = read('src/ui/storefront/home/HomeChrome.tsx');
+  assert.equal((chrome.match(/<TenantText>\{announcement\}<\/TenantText>/g) ?? []).length, 1);
+  assert.doesNotMatch(chrome, /announcement\.(split|replace|slice|substring)/);
+  const css = read('src/ui/storefront/home/home.module.css');
+  assert.match(css, /\.announce>span\[dir\]\{[^}]*white-space:pre-wrap[^}]*overflow-wrap:anywhere/);
+  assert.doesNotMatch(css, /\.announce[^}]*text-overflow:ellipsis/);
+});
 
 const tenant = fixtureSource.getTenant('maps-burger');
 const homeSource = read('src/ui/storefront/home/Home.tsx');
@@ -52,40 +109,15 @@ test('module order is FIXED and expressed once, in source order', () => {
   assert.deepEqual(anchorOrder(homeSource, PAGE_ANCHORS), []);
 });
 
-test('NEGATIVE CONTROL: the module-order check catches a real reorder', () => {
-  // Mutants are built in memory. The committed source is never written to.
+test('NEGATIVE CONTROL: approved source order catches reordered, deleted and duplicated markup', () => {
   const chrome = read('src/ui/storefront/home/HomeChrome.tsx');
-
-  // (1) The exact mutation that used to pass: PromoBanner moved below the menu
-  //     sections. Cutting the <PromoBanner .../> element and re-inserting it
-  //     after <StoryCard violates the locked order.
-  const promo = /\{modules\.promo === null \? null : <PromoBanner promo=\{modules\.promo\} m=\{m\} \/>\}/;
-  assert.match(homeSource, promo, 'the promo line must exist for this control to mean anything');
-  const moved = homeSource
-    .replace(promo, '')
-    .replace('<SiteFooter', '<PromoBanner /><SiteFooter');
-  const movedProblems = anchorOrder(moved, PAGE_ANCHORS);
-  assert.ok(movedProblems.length > 0, 'a reordered PromoBanner MUST be caught');
-
-  // (2) A module deleted outright.
-  const deleted = homeSource.replace('<StoryCard', '<NotAModule');
-  assert.ok(anchorOrder(deleted, PAGE_ANCHORS).length > 0, 'a missing module MUST be caught');
-
-  // (3) The ROOT CAUSE of the reviewed defect: an anchor that matches more than
-  //     once (an import line, a comment, a prop) must fail rather than silently
-  //     resolving to the wrong occurrence.
-  const duplicated = chrome.replace(
-    'data-sf-module="announce"',
-    'data-sf-module="announce" title="data-sf-module=\u0022announce\u0022"',
-  );
-  const dupProblems = anchorOrder(duplicated, CHROME_ANCHORS);
-  assert.ok(
-    dupProblems.some((x) => x.includes('occurs 2x')),
-    'a duplicated anchor MUST fail, not resolve to the first hit',
-  );
-
-  // (4) Sanity: the real, unmutated sources still pass, so the control is
-  //     discriminating rather than simply always-failing.
+  const promo = /<PromoBanner\b[^>]*\/>/;
+  assert.match(homeSource, promo, 'actual promo markup must exist');
+  const moved = homeSource.replace(promo, '').replace('<SiteFooter', '<PromoBanner /><SiteFooter');
+  assert.ok(anchorOrder(moved, PAGE_ANCHORS).length > 0);
+  assert.ok(anchorOrder(homeSource.replace('<StoryCard', '<NotAModule'), PAGE_ANCHORS).length > 0);
+  const duplicated = chrome.replace('data-sf-module="announce"', 'data-sf-module="announce" title="data-sf-module=\u0022announce\u0022"');
+  assert.ok(anchorOrder(duplicated, CHROME_ANCHORS).some(x => x.includes('occurs 2x')));
   assert.deepEqual(anchorOrder(chrome, CHROME_ANCHORS), []);
   assert.deepEqual(anchorOrder(homeSource, PAGE_ANCHORS), []);
 });
@@ -99,16 +131,11 @@ test('no module-order data or reorder mechanism exists', () => {
 
 // -------------------------------------------------------------- module toggles
 
-test('an absent module renders nothing at all - no heading, no spacer', () => {
-  // Each optional module is guarded by an explicit null check that returns null,
-  // rather than rendering an empty wrapper.
-  for (const guard of [
-    'modules.promo === null ? null :',
-    'modules.story === null ? null :',
-    'modules.popular.enabled ?',
-  ]) {
-    assert.ok(homeSource.includes(guard), `missing clean-absence guard: ${guard}`);
+test('unconfigured promo/story are absent and empty menus suppress their content', () => {
+  for (const name of ['promo', 'story']) {
+    assert.match(homeSource, new RegExp('items\\.length\\s*===\\s*0\\s*\\|\\|\\s*modules\\.' + name + '\\s*===\\s*null\\s*\\?\\s*null\\s*:'));
   }
+  assert.doesNotMatch(homeSource, /<PopularSection/, 'Kitchen picks is manager selection, not an always-rendered popularity claim');
 });
 
 test('modules-off removes every optional module and keeps the mandatory ones', () => {
@@ -169,9 +196,12 @@ test('popular:off keeps the rail but removes every ranking claim', () => {
   assert.equal(off.modules.popular.ready, false, 'but it may not claim a ranking');
 });
 
-test('sold-out items are excluded from the popular rail entirely', () => {
-  const menu = read('src/ui/storefront/home/MenuParts.tsx');
-  assert.match(menu, /items\.filter\(\(i\) => i\.signature && !i\.soldOut\)/);
+test('Kitchen picks uses manager selection and excludes unavailable products', () => {
+  const menu = code('src/ui/storefront/home/MenuParts.tsx');
+  const chrome = code('src/ui/storefront/home/HomeChrome.tsx');
+  assert.match(menu, /items\.filter\(\(i\) => i\.featured && !i\.soldOut\)/);
+  assert.match(chrome, /picks\s*\?\s*items\.filter\(i\s*=>\s*i\.featured\s*&&\s*!i\.soldOut\)/);
+  assert.doesNotMatch(chrome, /\.signature|mostOrdered|rankLabel/);
 });
 
 // ------------------------------------------------------------- service states
@@ -188,9 +218,9 @@ test('every service state maps to its own tone and word', () => {
   }
 });
 
-test('closed and paused suppress the announcement and show the notice', () => {
+test('closed and paused suppress the announcement and retain the real state notice', () => {
   assert.match(homeSource, /tenant\.service\.state !== 'open'\s*\?\s*null/);
-  assert.match(homeSource, /tenant\.service\.state === 'open' \? null : \(/);
+  assert.match(homeSource, /tenant\.service\.state === 'open'\s*\?\s*null\s*:\s*<StateNotice/);
 });
 
 test('the menu stays browsable while closed or paused', () => {
@@ -203,45 +233,41 @@ test('the menu stays browsable while closed or paused', () => {
   }
 });
 
-test('a disabled service is struck through and labelled unavailable', () => {
-  const parts = read('src/ui/storefront/home/HomeParts.tsx');
-  assert.match(parts, /service\.pickupEnabled \? '' : styles\.serviceOff/);
-  assert.match(parts, /service\.deliveryEnabled \? '' : styles\.serviceOff/);
-  assert.match(parts, /service\.pickupEnabled \? tenant\.city : m\.unavailableNow/);
-  assert.match(css, /\.serviceOff \.serviceLabel \{\s*text-decoration: line-through;/);
-  assert.match(css, /\.serviceOff \{\s*opacity: 0\.55;/);
+test('a disabled service remains struck through and labelled unavailable', () => {
+  assert.match(partsSource, /service\.pickupEnabled \? '' : styles\.serviceOff/);
+  assert.match(partsSource, /service\.deliveryEnabled \? '' : styles\.serviceOff/);
+  assert.match(partsSource, /service\.pickupEnabled \? tenant\.city : m\.unavailableNow/);
+  assert.match(css, /\.serviceOff\s+\.serviceLabel\s*\{\s*text-decoration\s*:\s*line-through\s*;?/);
+  assert.match(css, /\.serviceOff\s*\{\s*opacity\s*:\s*0\.55\s*;?/);
 });
 
 // ----------------------------------------------------------------- the rails
 
-test('category rails are navigation, never a fake tablist', () => {
-  const chrome = read('src/ui/storefront/home/HomeChrome.tsx');
-  for (const banned of ['role="tab"', 'role="tablist"', 'role="tabpanel"', 'aria-selected']) {
-    assert.ok(!chrome.includes(banned), `the rail must not use ${banned}`);
-  }
-  // It is a <nav> with a label, and current state is aria-current.
-  assert.match(chrome, /<nav className=\{styles\.rail\} aria-label=\{m\.menuLabel\} data-sf-module="categories">/);
-  assert.ok((chrome.match(/aria-current=\{category\.id === active \? 'true' : undefined\}/g) ?? []).length === 2,
-    'both rails mark the current category with aria-current');
+test('the category filter uses one named navigation and native focusable buttons', () => {
+  const chrome = code('src/ui/storefront/home/HomeChrome.tsx');
+  for (const banned of ['role="tab"', 'role="tablist"', 'role="tabpanel"', 'aria-selected']) assert.ok(!chrome.includes(banned));
+  assert.equal((chrome.match(/data-sf-module="categories"/g) ?? []).length, 1);
+  assert.match(chrome, /<nav\b[^>]*aria-label=\{m\.menuLabel\}[^>]*data-sf-module="categories"/);
+  assert.match(chrome, /<button\b[^>]*type="button"[^>]*aria-current=/);
+  assert.match(chrome, /aria-current=\{category\.id === activeCategory && !query && !picks \? 'true' : undefined\}/);
+  assert.match(homeSource, /<HomeChrome key=\{slug\}/, 'tenant navigation resets presentation state');
+  assert.match(chrome, /categories\.some\(c => c\.id === active\) \? active : categories\[0\]\?\.id/, 'a refreshed category list cannot retain a removed selection');
 });
 
-test('the compact header uses the design threshold and both rails stay in sync', () => {
-  const chrome = read('src/ui/storefront/home/HomeChrome.tsx');
-  assert.match(chrome, /const COMPACT_AT = 200;/);
-  assert.match(chrome, /const SPY_OFFSET = 116;/);
-  assert.match(chrome, /const ARROW_STEP = 180;/);
-  // The arrow honours the reading direction rather than a raw sign.
-  assert.match(chrome, /direction === 'rtl'/);
+test('approved header is sticky and category filters share its responsive offset', () => {
+  assert.match(css, /\.header\s*\{[^}]*position\s*:\s*sticky\s*;[^}]*inset-block-start\s*:\s*0/);
+  assert.match(css, /\.categoryWrap\s*\{[^}]*position\s*:\s*sticky\s*;[^}]*inset-block-start\s*:\s*var\(--header-height\)/);
+  assert.match(code('src/ui/storefront/home/HomeChrome.tsx'), /<header\b[^>]*className=\{styles\.header\}/);
 });
 
-test('the compact header neither reserves space nor shifts the document', () => {
-  // A zero-height sticky HOST is what makes both true at once: a header that
-  // merely collapses its own height still shoves the page down when it opens.
-  assert.match(css, /\.compactHost \{[\s\S]*?height: 0;[\s\S]*?\}/);
-  assert.match(css, /\.compact \{[\s\S]*?transform: translateY\(-100%\);[\s\S]*?\}/);
-  assert.match(css, /\.compactOn \{[\s\S]*?transform: translateY\(0\);[\s\S]*?\}/);
-  const chrome = read('src/ui/storefront/home/HomeChrome.tsx');
-  assert.match(chrome, /className=\{styles\.compactHost\}/);
+test('cart presentation uses the existing live aside in a native modal with focus return', () => {
+  const chrome = code('src/ui/storefront/home/HomeChrome.tsx');
+  assert.match(homeSource, /cart=\{<AsideSlot\b/);
+  assert.match(chrome, /<dialog\b[^>]*aria-label=\{m\.cart\}[^>]*onCancel=/);
+  assert.match(chrome, /node\.showModal\(\)/);
+  assert.match(chrome, /opener\.isConnected\) opener\.focus\(\)/);
+  assert.match(chrome, /href=\{cartPath\(locale, slug\)\}/);
+  assert.doesNotMatch(chrome, /localStorage|sessionStorage|fetch\(/);
 });
 
 // ------------------------------------------------------------------- styling
@@ -252,16 +278,30 @@ test('the compact header neither reserves space nor shifts the document', () => 
 // shorthands and physical values, asserts its own coverage, and carries a
 // negative control. Do not reinstate a narrower copy here.
 
-test('motion modes gate exactly the approved effects', () => {
-  // calm = entrances only: no sheen, no Ken Burns, no motif, no float.
-  assert.match(css, /\.motionFull \.heroImg,\s*\n\s*\.motionLively \.heroImg \{\s*\n\s*animation: sfKen/);
-  assert.match(css, /\.motionFull \.dockCta::before,\s*\n\s*\.motionLively \.dockCta::before/);
-  // lively adds the popular-card float, and only that.
-  assert.match(css, /\.motionLively \.popularGrid \.card \{\s*\n\s*animation: sfFloat/);
-  // INTERACTIONS.md:124 / STATE_MATRIX.json:104 - calm suppresses the motif DRAW,
-  // not the motif. The hero renders it unconditionally.
-  assert.ok(!homeSource.includes('showMotif'), 'the motif must not be gated on motion');
-  assert.match(partsSource, /<div className=\{styles\.heroMotif\}>/);
+test('motion follows the approved hover treatment without legacy continuous effects', () => {
+  const fullHover = /\.motionFull\s+\.card:hover\s+\.cardImg\s*\{\s*transform:\s*scale\(1\.045\);?\s*\}/;
+  const livelyAlias = /\.motionLively\s*\{\s*composes:\s*motionFull;?\s*\}/;
+  const reducedHover = /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.motionFull\s+\.card:hover\s+\.cardImg,\s*\.promoCta:hover\s*\{\s*transform:\s*none;?\s*\}/;
+  const assertHoverBindings = (source) => {
+    assert.match(source, fullHover);
+    assert.match(source, livelyAlias, 'lively must compose the same full-motion treatment');
+    assert.match(source, reducedHover);
+  };
+  assertHoverBindings(css);
+  for (const planted of [
+    css.replace(livelyAlias, ''),
+    css.replace(livelyAlias, '.motionLively{composes:unrelated}'),
+    css.replace(fullHover, ''),
+    css.replace(fullHover, '.motionFull .card:hover .cardImg{transform:scale(1.25)}'),
+    css.replace(reducedHover, ''),
+    css.replace(reducedHover, '@media(prefers-reduced-motion:reduce){.card:hover .cardImg,.promoCta:hover{transform:none}'),
+  ]) {
+    assert.notEqual(planted, css, 'the negative control must change the source');
+    assert.throws(() => assertHoverBindings(planted), { code: 'ERR_ASSERTION' });
+  }
+  assert.doesNotMatch(css, /animation\s*:\s*(sfKen|sfFloat)/);
+  assert.doesNotMatch(homeSource, /showMotif/);
+  assert.match(partsSource, /className=\{styles\.heroMotif\}/);
 });
 
 test('motion classes map calm to no extra class', () => {
@@ -356,7 +396,7 @@ test('both cart CTAs now have a REAL destination, and say why when they do not',
   // <button> for its whole life and navigates through the router, so the
   // destination is the argument of the push rather than an href.
   assert.ok(aside.includes('router.push(checkoutHref)'),
-    'at wide the aside CTA goes STRAIGHT to checkout, not to the cart route');
+    'the shared aside CTA goes straight to checkout from either host');
   assert.ok(!aside.includes('href={checkoutHref}'),
     'the settled control must not be a swapped-in link any more');
 
@@ -372,16 +412,17 @@ test('both cart CTAs now have a REAL destination, and say why when they do not',
   }
 });
 
-test('an empty cart hides the DOCK but keeps the ASIDE frame', () => {
-  // The dock is an overlay, so it can vanish. The aside is a 360px LAYOUT
-  // column: vanishing would reflow the page the moment the cart is read.
+test('an empty cart hides the dock and keeps the mounted shared aside frame', () => {
+  // Search retains a persistent container-sized aside. Home mounts the same
+  // content only inside its cart dialog. The mounted content keeps an honest
+  // empty frame in either host; this does not assert Home has a wide column.
   assert.match(read(LIVE_DOCK), /if \(count === 0\) return null;/);
 
   const aside = read(LIVE_ASIDE);
   const body = aside.slice(aside.indexOf('export function LiveCartAside'));
   assert.ok(!body.includes('return null'), 'the aside component must never render nothing');
-  // The frame comes FIRST and the empty state lives inside it, so an empty
-  // cart still occupies its 360px rather than collapsing the layout.
+  // The frame comes first and owns its empty state. On Search this avoids
+  // hydration reflow; in Home it supplies the opened dialog's empty content.
   assert.ok(
     body.indexOf('<aside') !== -1 && body.indexOf('<aside') < body.indexOf('asideEmpty'),
     'the empty state must sit INSIDE the aside frame',
@@ -420,22 +461,29 @@ test('every declared scenario is reachable and none leaks outside the fixture la
   }
 });
 
-test('the wide layout is keyed to CONTAINER width, not the viewport', () => {
-  // 834px must stay phone-style, and the dashboard preview must behave like a
-  // narrow container even in a wide window. That only works with @container.
-  assert.match(css, /@container storefront \(min-width: 900px\)/);
-  assert.ok(!/@media[^{]*min-width:\s*900px/.test(css), 'must not key the aside to the viewport');
-  assert.match(css, /container-type: inline-size;/);
+test('Search retains the container-sized aside; Home uses its shared content in a dialog', () => {
+  const search = code('src/ui/storefront/search/Search.tsx');
+  // Keep the responsive contract where its measured container is rendered.
+  assert.match(search, /className=\{home\.shell\}/);
+  assert.match(search, /<AsideSlot\b/);
+  assert.doesNotMatch(search, /<DockSlot\b/);
+  assert.match(css, /@container storefront\s*\(min-width:\s*900px\)/);
+  assert.ok(!/@media[^{]*min-width:\s*900px/.test(css), 'Search aside must remain container-sized');
+  assert.match(css, /container-type:\s*inline-size;/);
+  // Home's native modal reuses AsideSlot without the persistent Search host.
+  assert.match(homeSource, /cart=\{<AsideSlot\b/);
+  assert.doesNotMatch(homeSource, /className=\{styles\.shell\}/);
+  assert.match(code('src/ui/storefront/home/HomeChrome.tsx'), /<dialog\b[^>]*className=\{styles\.cartDialog\}/);
 });
 
 // ------------------------------------- unscreenshotted state evidence (H02-H06)
 
-test('H02 emptyMenu: the state exists, is reachable and suppresses every module', () => {
+test('H02 empty menu retains its route and passes an explicit empty surface into chrome', () => {
   const view = buildHome(tenant, homeOptionsFor(['empty-menu']));
   assert.equal(view.items.length, 0);
   assert.equal(view.categories.length, 0);
-  assert.match(homeSource, /empty \? \(\s*<EmptyMenu/);
-  // It is also a real route, so it is screenshotted as well.
+  assert.match(homeSource, /empty=\{items\.length === 0 \? <EmptyMenu\b/);
+  assert.match(code('src/ui/storefront/home/HomeChrome.tsx'), /\{empty\s*\?\?\s*<section/);
   assert.ok(SCENARIO_SLUGS.includes('demo-empty'));
 });
 
@@ -450,20 +498,13 @@ test('H03 pickupOff / deliveryOff render as unavailable, not as absent', () => {
   assert.equal(paused.service.deliveryEnabled, false);
 });
 
-test('H04 lively adds only the popular float, and reduced motion overrides it', () => {
-  // No scenario ROUTE carries lively: each scenario document costs ~170 KB of a
-  // hard 4 MiB ceiling, and lively differs from full only by one animation that
-  // prefers-reduced-motion then cancels. The rule is asserted directly instead.
-  assert.ok(/\.motionLively \.popularGrid \.card \{[^}]*animation: sfFloat/.test(css),
-    'lively must add the popular-card float');
-  // lively is a superset of full, never a different set.
+test('H04 motion setting and global reduced-motion protections remain active', () => {
   assert.match(homeSource, /lively: `\$\{styles\.motionFull\} \$\{styles\.motionLively\}`/);
-  // And the global reduced-motion override collapses every animation.
   const shellCss = read('src/ui/storefront/storefront.module.css');
   assert.match(shellCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(shellCss, /animation-duration: 0\.001s !important;/);
   assert.match(shellCss, /animation-iteration-count: 1 !important;/);
-  // The view layer can actually produce lively.
+  assert.match(shellCss, /transition-duration: 0\.001s !important;/);
   assert.equal(buildHome(tenant, homeOptionsFor(['lively'])).motion, 'lively');
 });
 

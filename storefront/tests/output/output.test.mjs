@@ -266,7 +266,7 @@ test('NEGATIVE CONTROL: the fabricated-cart detector fails on a document that ha
   }
 });
 
-test('the wide aside is live in the browser but carries NO cart in the bytes', () => {
+test('Search keeps its aside frame and Home ships only its zero-count cart opener', () => {
   /*
    * Phase D makes the aside functional, and this gate does NOT relax because
    * of it - it gets sharper.
@@ -281,11 +281,21 @@ test('the wide aside is live in the browser but carries NO cart in the bytes', (
    * The frame must still be there: returning nothing until hydration would
    * reflow 360px of layout the moment the cart arrives.
    *
-   * BOTH surfaces carry it: the menu and, since C2, search.
+   * Search retains that layout column. The newly approved Home uses a native
+   * dialog opened after hydration, so its static bytes must contain only the
+   * zero-count opener, never an open dialog or a visitor's cart contents.
    */
-  const withAside = emittedText().filter((d) => /(^|\/)(menu|search)\.html$/.test(d.file));
-  assert.equal(withAside.length, 8,
-    'expected one menu AND one search document per locale root');
+  const home = emittedText().filter((d) => /(^|\/)menu\.html$/.test(d.file));
+  assert.equal(home.length, 4, 'expected one menu document per locale root');
+  for (const { file, text } of home) {
+    const openers = [...text.matchAll(/<button\b[^>]*data-sf-cart-trigger=""[^>]*>([\s\S]*?)<\/button>/g)];
+    assert.equal(openers.length, 1, `${file}: expected one cart opener`);
+    assert.match(openers[0][1], /<b>0<\/b>/, `${file}: server cart count must be zero`);
+    assert.ok(!/<dialog\b/.test(text), `${file}: cart dialog must not prerender`);
+    assert.ok(!text.includes('data-sf-aside="live"'), `${file}: no persistent Home aside`);
+  }
+  const withAside = emittedText().filter((d) => /(^|\/)search\.html$/.test(d.file));
+  assert.equal(withAside.length, 4, 'expected one Search document per locale root');
   for (const { file, text } of withAside) {
     assert.ok(text.includes('data-sf-aside="live"'), `${file}: the wide aside is missing`);
     // Scoped to the <aside> ELEMENT: the document also carries an RSC payload

@@ -1,9 +1,9 @@
-// The locked home module order.
+// Approved Oct22 design module order; historical module-order evidence remains in Git.
 //
 // SOURCE OF TRUTH for the eight named modules:
 //   BIZBOT_STOREFRONT_DESIGN_HANDOFF/OPEN_QUESTIONS.md:23 - "This release ships
-//   a fixed order (announce -> hero -> service -> categories -> promo ->
-//   popular -> sections -> story)."
+//   historical fixed order, superseded for covered surfaces by the Oct22 approval:
+//   header -> hero -> announcement -> menu -> optional content -> footer.
 // 'compact', 'notice' and 'footer' are NOT named by the handoff. Their
 // positions are this implementation's and are pinned here so they cannot drift.
 //
@@ -13,8 +13,8 @@
 // below the rail, violated the locked order and the whole suite stayed green.
 // Everything below anchors to real markup and demands EXACTLY ONE occurrence.
 export const LOCKED_MODULE_ORDER = Object.freeze([
-  'announce', 'compact', 'hero', 'service', 'notice',
-  'categories', 'promo', 'popular', 'sections', 'story', 'footer',
+  'compact', 'hero', 'announce', 'notice',
+  'categories', 'sections', 'service', 'promo', 'story', 'footer',
 ]);
 
 /** Comments removed: these rules are about CODE and MARKUP, not prose. */
@@ -80,19 +80,19 @@ export function anchorOrder(source, anchors) {
 
 /** The JSX anchors. Every one is a real element or a rendered child slot. */
 export const CHROME_ANCHORS = Object.freeze([
-  ['announce', 'data-sf-module="announce"'],
   ['compact', 'data-sf-module="compact"'],
   ['hero', '{hero}'],
-  ['service', '{service}'],
+  ['announce', 'data-sf-module="announce"'],
   ['notice', '{notice}'],
   ['categories', 'data-sf-module="categories"'],
+  ['results', 'data-sf-module="sections"'],
+  ['category', '<MenuSection'],
+  ['service', '{service}'],
 ]);
 
 export const PAGE_ANCHORS = Object.freeze([
   ['chrome', '<HomeChrome'],
   ['promo', '<PromoBanner'],
-  ['popular', '<PopularSection'],
-  ['sections', '<MenuSection'],
   ['story', '<StoryCard'],
   ['footer', '<SiteFooter'],
 ]);

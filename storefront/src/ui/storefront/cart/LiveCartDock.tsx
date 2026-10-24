@@ -24,6 +24,8 @@
  * it and goes straight to checkout.
  */
 import Link from 'next/link';
+import { productImageClass } from '../contentPresentation';
+import contentStyles from '../storefront.module.css';
 import { useEffect, useRef, useState } from 'react';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
@@ -94,7 +96,7 @@ export function LiveCartDock({
           ) : (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
-              className={styles.dockThumb}
+              className={`${styles.dockThumb} ${productImageClass(line.item, contentStyles.wholeImage)}`}
               key={line.line.lineId}
               src={line.item.image}
               alt=""

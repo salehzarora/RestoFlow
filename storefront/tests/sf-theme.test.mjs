@@ -34,14 +34,32 @@ test('dark surfaces reproduce the published Maps Burger vectors', () => {
   sameColour(dark.glassLine, 'rgba(255,255,255,.14)');
 });
 
-test('light surfaces reproduce the published vectors', () => {
-  sameColour(light.bg, '#F4F6F5');
-  sameColour(light.sf, '#FFFFFF');
-  sameColour(light.sf2, '#EEF2F0');
+test('light surfaces reproduce the owner-approved Oct22 cream design vectors', () => {
+  sameColour(light.bg, '#f7f3e9');
+  sameColour(light.sf, '#f7f3e9');
+  sameColour(light.sf2, '#eeecdf');
   sameColour(light.acc, '#C2410C');
   sameColour(light.onacc, '#FFFFFF');
   sameColour(light.acct, '#c2410c');
   sameColour(light.onDock2, '#4B5563');
+});
+
+test('approved reference palette keeps large accent text and ordinary controls accessible', () => {
+  const theme = buildTheme('light', { primary: '#192922', accent: '#f1512c' });
+  sameColour(theme.bg, '#f7f3e9');
+  sameColour(theme.accLargeText, '#f1512c');
+  assert.ok(contrast(theme.accLargeText, theme.bg) >= AA_LARGE, 'Hero accent is large text, never small body copy');
+  assert.ok(contrast(theme.acct, theme.sf) >= AA, 'small accent text retains the existing contrast walk');
+  assert.ok(contrast(theme.onacc, theme.acc) >= AA, 'small CTA ink is not copied from inaccessible preview white');
+  assert.ok(contrast(theme.tx2, theme.bg) >= AA);
+});
+
+test('large Hero text keeps its contrast floor for pale and dark tenant accents', () => {
+  assert.ok(contrast('#ffffaa', '#f7f3e9') < AA_LARGE, 'pale raw accent is an actual failing baseline');
+  for (const preset of ['light', 'dark']) for (const accent of ['#ffffaa', '#ffffff', '#f1512c', '#000000', '#9a42ed']) {
+    const theme = buildTheme(preset, { primary: '#192922', accent });
+    assert.ok(contrast(theme.accLargeText, theme.bg) >= AA_LARGE, `${preset} ${accent}`);
+  }
 });
 
 test('semantic colours are fixed per preset and never derive from the brand', () => {

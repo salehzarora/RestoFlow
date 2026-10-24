@@ -27,6 +27,10 @@ export function SearchIcon() {
   );
 }
 
+export function PhoneIcon() {
+  return <Icon d="m5 3 4 5-2.5 3a15 15 0 0 0 6.5 6.5l3-2.5 5 4c-2 7-20-7-18-13L5 3Z" />;
+}
+
 /** Storefront — the pickup service. */
 export function StoreIcon() {
   return <Icon d="M4 9.5L5.2 5h13.6L20 9.5M4 9.5h16M4 9.5v9a1.5 1.5 0 001.5 1.5h13a1.5 1.5 0 001.5-1.5v-9M9.5 20v-5h5v5" />;

@@ -1,223 +1,159 @@
 /*
- * PHASE E - the received screen, the status screen and the cancel sheet.
- *
- * Every measurement is transcribed from the approved prototype
- * (prototype/Storefront.dc.html :513-:576) and cross-checked against the
- * received__* and status__* captures; the line numbers in the comments are
- * the prototype's own. Tone colours are the theme's tokens, never a literal.
- *
- * KEYFRAMES ARE DEFINED AT THE BOTTOM OF THIS FILE. CSS Modules scope
- * @keyframes per file, so nothing here may borrow a name from another module.
- *
- * NO INLINE STYLE, NO PHYSICAL PROPERTIES - the same rules as every other
- * storefront stylesheet.
- *
- * Motion: the entrance stagger (fade / rise / pop / draw) runs in every mode,
- * as the home and flow surfaces do; the decorative rings, halo and sheen run
- * only under `.motionFull` (prototype `fx`, :774). prefers-reduced-motion
- * collapses everything to one frame through the root rule, and the entrance
- * keyframes END visible, so no truth line can be hidden by a stopped
- * animation.
+ * Request views: cream/token surfaces, 760px shell, quiet semantic accents.
+ * All 97 exports retained; TSX owns state, content, focus and actions.
  */
 
-/* No min-height of its own: the root is the 100dvh column and the screen
-   fills it with flex. A second 100dvh here would add the demo disclosure's
-   height on top and make every request view scroll by exactly that much. */
 .screen {
   flex: 1;
   min-width: 0;
+  width: min(760px, 100%);
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
-  animation: sfFade 250ms both;
+  border-inline: 1px solid var(--hair);
+  background: var(--bg);
+  color: var(--tx);
 }
 
-/* The pre-hydration frame: chrome only, nothing that belongs to anyone. */
 .pendingBody {
   flex: 1;
 }
 
-/* ================================================================ received */
-
-/* :516 - brand hero, 32px bottom radius, centred column, 10px gaps. */
 .hero {
   position: relative;
-  overflow: hidden;
-  padding: 28px 20px 28px;
-  background: var(--hero);
-  color: var(--onhero);
-  text-align: center;
+  padding: 32px 24px 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  border-end-start-radius: 32px;
-  border-end-end-radius: 32px;
-  box-shadow: 0 30px 60px -36px rgba(0, 0, 0, 0.7);
+  gap: 12px;
+  border-block-end: 1px solid var(--hair);
+  background: var(--sf2);
+  color: var(--tx);
+  text-align: center;
 }
 
-/* :517 - the tenant's hero glow, :518 - a soft white wash. */
-.heroGlow {
-  position: absolute;
-  inset: 0;
-  background: var(--heroGlow);
+.heroGlow,
+.heroWash,
+.ring,
+.ringLate,
+.halo,
+.sheen {
+  display: none;
   pointer-events: none;
 }
 
-.heroWash {
-  position: absolute;
-  inset-inline: -20%;
-  inset-block-start: -45%;
-  height: 110%;
-  background: radial-gradient(50% 50% at 50% 50%, rgba(255, 255, 255, 0.1), transparent 70%);
-  pointer-events: none;
-}
-
-/* :519 - 100px stage for the disc and its rings. */
 .discStage {
   position: relative;
-  width: 100px;
-  height: 100px;
+  width: 76px;
+  height: 76px;
   display: grid;
   place-items: center;
-  margin-block-start: 6px;
 }
 
-/* :520 - two expanding rings, three cycles each, only when motion is on. */
-.ring {
-  position: absolute;
-  inset: 8px;
-  border-radius: 999px;
-  border: 2px solid var(--acc);
-  opacity: 0;
-  pointer-events: none;
-}
-
-.motionFull .ring {
-  animation: sfRing 1800ms cubic-bezier(0.2, 0.7, 0.3, 1) 300ms 3;
-}
-
-.motionFull .ringLate {
-  animation-delay: 900ms;
-}
-
-/* :521 - 78px accent disc with the drawn check. */
 .disc {
-  position: relative;
-  width: 78px;
-  height: 78px;
-  border-radius: 999px;
-  background: var(--cta);
-  color: var(--onacc);
+  width: 64px;
+  height: 64px;
   display: grid;
   place-items: center;
-  box-shadow:
-    0 0 0 9px var(--accA),
-    0 16px 36px -10px var(--accB),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  animation: sfPop 550ms var(--e-standard) both;
+  border: 1px solid var(--hair);
+  border-radius: 50%;
+  background: var(--acc);
+  color: var(--onacc);
 }
 
 .disc svg {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 3;
+  stroke-width: 3.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.disc path {
-  stroke-dasharray: 30;
-  stroke-dashoffset: 30;
-  animation: sfDraw 500ms ease-out 400ms forwards;
+.motionFull .disc {
+  animation: requestCheck 180ms ease-out both;
 }
 
-/* :523 - 24/800, then :524 code pill, :525 body; staggered 150 -> 350ms. */
 .heroTitle {
-  position: relative;
   margin: 0;
-  font: 800 24px / 1.15 var(--font);
-  color: inherit;
-  animation: sfUp 450ms var(--e-standard) 150ms both;
+  max-width: 100%;
+  font: 800 26px / 1.35 var(--font);
+  overflow-wrap: anywhere;
 }
 
 .codePill {
-  position: relative;
-  padding: 6px 14px;
-  border-radius: var(--r-pill);
-  background: var(--accA);
-  color: var(--onhero);
-  box-shadow: inset 0 0 0 1px var(--accB);
-  text-shadow: var(--glow);
-  font: 800 13.5px / 1.2 var(--font);
-  letter-spacing: 0.04em;
-  animation: sfUp 450ms var(--e-standard) 250ms both;
+  max-width: 100%;
+  padding: 6px 12px;
+  border: 1px solid var(--hair2);
+  border-radius: 6px;
+  background: var(--sf);
+  color: var(--tx);
+  font: 700 13px / 1.4 var(--font);
+  overflow-wrap: anywhere;
 }
 
 .heroBody {
-  position: relative;
   margin: 0;
-  max-width: 320px;
-  font: 400 14px / 1.45 var(--font);
-  color: var(--onhero2);
-  animation: sfUp 450ms var(--e-standard) 350ms both;
+  max-width: 440px;
+  color: var(--tx2);
+  font: 400 14px / 1.65 var(--font);
+  overflow-wrap: anywhere;
 }
 
-/* :527 - the content column. */
 .column {
-  padding: 16px 16px 40px;
+  min-width: 0;
+  padding: 24px 24px 40px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-/* :528 - the branded summary card. */
 .summaryCard {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  border-radius: 18px;
   border: 1px solid var(--hair);
-  background: linear-gradient(180deg, var(--sf), var(--sf2));
-  box-shadow: 0 16px 36px -24px rgba(0, 0, 0, 0.7);
-  overflow: hidden;
-  animation: sfUp 450ms var(--e-standard) 400ms both;
+  border-radius: 10px;
+  background: var(--sf);
 }
 
-/* :529 - logo, name, service · payment, small code pill. */
 .summaryHead {
+  min-width: 0;
+  padding: 16px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  flex-wrap: wrap;
+  gap: 10px;
   border-block-end: 1px solid var(--hair);
 }
 
-.logo {
+.logo,
+.headLogo {
   flex: none;
   width: 40px;
   height: 40px;
-  border-radius: 999px;
   padding: 2px;
-  background: var(--acc);
-  box-shadow: 0 0 0 4px var(--accA);
+  border: 1px solid var(--hair2);
+  border-radius: 50%;
+  background: var(--sf);
 }
 
 .logoInner {
   width: 100%;
   height: 100%;
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--bg);
   display: grid;
   place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--sf2);
 }
 
 .logoInner img {
+  display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  display: block;
+  object-fit: contain;
 }
 
 .logoInitial {
@@ -225,64 +161,56 @@
   height: 100%;
   display: grid;
   place-items: center;
-  background: var(--cta);
+  background: var(--acc);
   color: var(--onacc);
-  font: 900 17px / 1 var(--font);
+  font: 800 17px / 1 var(--font);
 }
 
 .summaryText {
   flex: 1;
-  min-width: 0;
+  min-width: 96px;
 }
 
 .summaryName {
-  font: 800 15px / 1.3 var(--font);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font: 800 15px / 1.5 var(--font);
+  overflow-wrap: anywhere;
 }
 
 .summarySub {
-  font: 400 12.5px / 1.3 var(--font);
-  color: var(--tx3);
+  margin-block-start: 2px;
+  color: var(--tx2);
+  font: 400 12px / 1.5 var(--font);
+  overflow-wrap: anywhere;
 }
 
 .codeSmall {
-  flex: none;
-  padding: 5px 10px;
-  border-radius: var(--r-pill);
-  background: var(--accA);
-  color: var(--acct);
-  text-shadow: var(--glow);
-  font: 800 12.5px / 1.2 var(--font);
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--hair);
+  border-radius: 6px;
+  background: var(--sf2);
+  color: var(--tx);
+  font: 700 12px / 1.4 var(--font);
+  overflow-wrap: anywhere;
 }
 
-/* :530 - the lines; :571 the status variant with 10px rows. */
 .lines {
-  padding: 4px 14px;
-  font-size: 13.5px;
+  padding: 2px 16px;
+  font: 400 14px / 1.55 var(--font);
 }
 
 .lineRow {
+  padding: 12px 0;
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  padding: 9px 0;
+  align-items: flex-start;
+  gap: 12px;
   border-block-end: 1px solid var(--hair);
-}
-
-/* On status the summary CONTAINER carries the :571 `4px 14px`; the list
-   inside it carries none, or the rows would sit 8px / 28px in. */
-.linesStatus {
-  padding: 0;
-}
-
-.linesStatus .lineRow {
-  padding: 10px 0;
 }
 
 .lineText {
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .lineQty {
@@ -292,251 +220,194 @@
 .lineTotal {
   flex: none;
   font-weight: 700;
+  white-space: nowrap;
 }
 
-/* :531 - total in the accent ink; :571 total · cash on status. */
 .totalRow {
+  padding: 14px 16px;
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
-  padding: 10px 14px 12px;
-  font: 800 15px / 1.3 var(--font);
+  gap: 12px;
+  font: 800 15px / 1.5 var(--font);
 }
 
-.linesStatus .totalRow {
-  padding: 10px 0;
-  font-size: 13.5px;
+.totalRow > :first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.totalRow > :last-child {
+  flex: none;
+  white-space: nowrap;
 }
 
 .totalAccent {
   color: var(--acct);
-  text-shadow: var(--glow);
 }
 
-/* :533-:536 - the WhatsApp CTA with its halo and sheen. */
+.linesStatus {
+  padding: 0;
+}
+
+.linesStatus .lineRow {
+  padding-block: 12px;
+}
+
+.linesStatus .totalRow {
+  padding: 14px 0;
+  font-size: 14px;
+}
+
 .ctaWrap {
   position: relative;
-  animation: sfUp 450ms var(--e-standard) 450ms both;
 }
 
-.halo {
-  position: absolute;
-  inset: 0;
-  border-radius: 18px;
-  box-shadow: 0 0 0 5px var(--accB);
-  opacity: 0;
-  pointer-events: none;
-}
-
-.motionFull .halo {
-  animation: sfHalo 2200ms cubic-bezier(0.2, 0.6, 0.3, 1) 1100ms 3;
-}
-
-.waCta {
-  position: relative;
-  overflow: hidden;
-  width: 100%;
-  height: 58px;
-  border: 0;
-  border-radius: 18px;
-  background: var(--cta);
-  color: var(--onacc);
-  box-shadow: var(--ctaSh);
-  font: 800 16px / 1 var(--font);
+.waCta,
+.secondary,
+.fallbackBtn,
+.copyBtn,
+.chatCta,
+.cancelBtn,
+.chatOutline,
+.againCta,
+.keepBtn,
+.yesBtn {
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
+  border: 1px solid var(--hair2);
+  border-radius: 8px;
+  background: var(--sf);
+  color: var(--tx);
+  font: 700 14px / 1.4 var(--font);
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
   cursor: pointer;
-  transition:
-    transform 120ms,
-    filter 200ms;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 140ms, border-color 140ms;
 }
 
-.waCta:hover {
-  filter: brightness(1.06);
+.waCta,
+.chatCta,
+.againCta {
+  width: 100%;
+  border-color: transparent;
+  background: var(--acc);
+  color: var(--onacc);
+  font-weight: 800;
 }
 
-.waCta:active {
-  transform: scale(0.985);
-}
-
-.sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.26) 50%, transparent 65%);
-  pointer-events: none;
-  display: none;
-}
-
-.motionFull .sheen {
-  display: block;
-  animation: sfSheen var(--d-sheen) var(--e-sheen) 1800ms infinite;
+.waCta {
+  min-height: 56px;
+  font-size: 16px;
 }
 
 .waGlyph {
-  position: relative;
-  width: 24px;
-  height: 24px;
-  fill: currentColor;
   flex: none;
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
 }
 
 .waLabel {
-  position: relative;
+  min-width: 0;
 }
 
-/* :537 - the secondary "track status" button. */
 .secondary {
-  height: 50px;
-  border-radius: 16px;
-  border: 1.5px solid var(--hair2);
+  width: 100%;
   background: transparent;
-  color: inherit;
-  font: 700 15px / 1 var(--font);
-  cursor: pointer;
-  transition:
-    background 200ms,
-    transform 120ms;
-  animation: sfUp 450ms var(--e-standard) 550ms both;
 }
 
-.secondary:hover {
-  background: var(--sf2);
-}
-
-.secondary:active {
-  transform: scale(0.985);
-}
-
-/* :539 - "WhatsApp didn't open?" warning block. */
 .fallback {
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: var(--warnbg);
-  color: var(--warn);
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  border: 1px solid var(--hair);
+  border-inline-start: 3px solid var(--warn);
+  border-radius: 8px;
+  background: var(--sf);
+  color: var(--tx);
 }
 
 .fallbackTitle {
-  font: 800 14px / 1.3 var(--font);
+  font: 800 14px / 1.5 var(--font);
+  overflow-wrap: anywhere;
 }
 
 .fallbackRow {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
 .fallbackBtn {
-  position: relative;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1.5px solid currentColor;
-  background: transparent;
-  color: inherit;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font: 700 13px / 1 var(--font);
-  cursor: pointer;
+  flex: 1 1 130px;
+  min-height: 44px;
+  padding: 9px 12px;
+  background: var(--sf2);
+  font-size: 13px;
 }
 
-/* The 36px visual keeps its size; the hit area reaches 44px (PACKET PX-6),
-   the same overlay the inline copy control uses. */
-.fallbackBtn::after {
-  content: '';
-  position: absolute;
-  inset-inline: 0;
-  inset-block-start: 50%;
-  height: 44px;
-  transform: translateY(-50%);
-}
-
-/* :541 - the message preview and its copy control. */
 .preview {
-  padding: 12px 14px;
-  border-radius: 16px;
+  min-width: 0;
+  padding: 16px;
   border: 1px solid var(--hair);
+  border-radius: 10px;
   background: var(--sf);
-  animation: sfUp 450ms var(--e-standard) 650ms both;
 }
 
 .previewHead {
+  margin-block-end: 10px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-block-end: 6px;
-  font: 700 12px / 1.3 var(--font);
-  color: var(--tx3);
+  color: var(--tx2);
+  font: 700 12px / 1.5 var(--font);
 }
 
-/*
- * The 30px copy control keeps its approved painted size; the 44px minimum
- * target comes from an invisible overlay (PACKET PX-6), the same rule the
- * aside steppers use.
- */
 .copyBtn {
-  position: relative;
-  height: 30px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-color: var(--hair);
   background: var(--sf2);
-  color: var(--acct);
-  font: 700 12px / 1 var(--font);
-  cursor: pointer;
+  color: var(--tx);
+  font-size: 12px;
 }
 
-.copyBtn::after {
-  content: '';
-  position: absolute;
-  inset-inline: -4px;
-  inset-block-start: 50%;
-  height: 44px;
-  transform: translateY(-50%);
-}
-
-/*
- * The message is composed in the RESTAURANT's language and keeps that
- * direction whatever the page's is (:541 `dir="rtl"`; PACKET:713).
- */
 .messageText {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font: 400 13px / 1.5 var(--font);
   color: var(--tx2);
+  font: 400 13px / 1.65 var(--font);
   text-align: start;
 }
 
-/* ================================================================== status */
-
-/* :549 - sticky header on --sf. */
 .head {
-  flex: none;
   position: sticky;
   inset-block-start: 0;
   z-index: 20;
+  flex: none;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 8px 8px;
-  background: var(--sf);
+  gap: 10px;
   border-block-end: 1px solid var(--hair);
+  background: var(--bg);
 }
 
 .headLogo {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  padding: 1.5px;
-  background: var(--acc);
+  width: 36px;
+  height: 36px;
 }
 
 .headLogo .logoInitial {
@@ -549,56 +420,60 @@
 }
 
 .headCode {
-  font: 800 16px / 1.25 var(--font);
   color: var(--tx);
+  font: 800 15px / 1.4 var(--font);
+  overflow-wrap: anywhere;
 }
 
-/* The code is an LTR island INSIDE a block that keeps the page direction, so
-   it sits at the start edge beside the name instead of jumping across. */
 .headCode .ltr {
   display: inline-block;
 }
 
 .headSub {
-  font: 400 12.5px / 1.3 var(--font);
-  color: var(--tx3);
+  color: var(--tx2);
+  font: 400 12px / 1.5 var(--font);
+  overflow-wrap: anywhere;
 }
 
-/* :553 - the scrolling body. */
 .body {
   flex: 1;
+  min-width: 0;
   min-height: 0;
-  padding: 14px 16px 32px;
+  padding: 24px 24px 40px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
-/* :554 - the status hero card; tone classes below. */
 .card {
-  padding: 16px;
-  border-radius: 18px;
+  padding: 20px;
   display: flex;
-  gap: 14px;
   align-items: flex-start;
-  border: 1px solid transparent;
+  gap: 14px;
+  border: 1px solid var(--hair);
+  border-inline-start: 3px solid var(--request-tone-ink, var(--hair2));
+  border-radius: 10px;
+  background: var(--sf);
+  color: var(--tx);
 }
 
 .cardIcon {
   flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
+  border-radius: 50%;
+  background: var(--request-tone-bed, var(--sf2));
+  color: var(--request-tone-ink, var(--tx));
 }
 
 .cardIcon svg {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2.4;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -610,111 +485,87 @@
 
 .cardTitle {
   margin: 0;
-  font: 800 18px / 1.2 var(--font);
+  color: var(--tx);
+  font: 800 21px / 1.4 var(--font);
+  overflow-wrap: anywhere;
 }
 
 .cardBody {
-  margin: 4px 0 0;
-  font: 400 13.5px / 1.45 var(--font);
-  /* The prototype dims the body to .92 (:556). The danger ink is walked to
-     AA at full opacity (PX-3a); composited at .92 it drops below 4.5:1 in the
-     shipped dark preset, so the body stays at 1 and keeps the walked pair. */
+  margin: 6px 0 0;
+  color: var(--tx2);
+  font: 400 14px / 1.65 var(--font);
+  overflow-wrap: anywhere;
 }
 
-/* :556 - the TTL pill. Its text ticks every second, so it lives OUTSIDE the
-   live region (PACKET PX-5c) and is an LTR island (CONTENT:221). */
 .ttl {
-  margin-block-start: 10px;
+  margin-block-start: 12px;
+  max-width: 100%;
+  padding: 6px 9px;
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
-  padding: 5px 10px;
-  border-radius: var(--r-pill);
-  background: rgba(0, 0, 0, 0.12);
-  font: 700 13px / 1.2 var(--font);
+  border: 1px solid var(--hair);
+  border-radius: 6px;
+  background: var(--sf2);
+  color: var(--tx);
+  font: 700 12px / 1.5 var(--font);
 }
 
 .ttl svg {
+  flex: none;
   width: 14px;
   height: 14px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2.4;
+  stroke-width: 2;
   stroke-linecap: round;
 }
 
-/* Tones (:839 `toneCss`, COMPONENT_INVENTORY.md:164). The danger ink is the
-   token walked to AA on its bed, never the raw --bad (PACKET PX-3a). */
 .toneInfo {
-  background: var(--infobg);
-  color: var(--info);
-}
-
-.toneInfo .cardIcon {
-  background: var(--info);
-  color: var(--infobg);
+  --request-tone-ink: var(--info);
+  --request-tone-bed: var(--infobg);
 }
 
 .toneWarn {
-  background: var(--warnbg);
-  color: var(--warn);
-}
-
-.toneWarn .cardIcon {
-  background: var(--warn);
-  color: var(--warnbg);
+  --request-tone-ink: var(--warn);
+  --request-tone-bed: var(--warnbg);
 }
 
 .toneOk {
-  background: var(--okbg);
-  color: var(--ok);
-}
-
-.toneOk .cardIcon {
-  background: var(--ok);
-  color: var(--okbg);
+  --request-tone-ink: var(--ok);
+  --request-tone-bed: var(--okbg);
 }
 
 .toneBad {
-  background: var(--badbg);
-  color: var(--badText);
-}
-
-.toneBad .cardIcon {
-  background: var(--bad);
-  color: var(--badbg);
+  --request-tone-ink: var(--badText);
+  --request-tone-bed: var(--badbg);
 }
 
 .toneNeutral {
-  background: var(--sf2);
-  color: var(--tx);
+  --request-tone-ink: var(--tx2);
+  --request-tone-bed: var(--sf2);
 }
 
-.toneNeutral .cardIcon {
-  background: var(--sf);
-  color: var(--tx2);
-}
-
-/* :558 - the vertical timeline. An ordered list; vertical so it never mirrors. */
 .timeline {
   margin: 0;
-  padding: 6px 16px;
+  padding: 4px 16px;
   list-style: none;
-  border-radius: 16px;
   border: 1px solid var(--hair);
+  border-radius: 10px;
   background: var(--sf);
 }
 
 .node {
+  min-height: 62px;
   display: flex;
-  gap: 14px;
   align-items: stretch;
-  min-height: 56px;
+  gap: 12px;
 }
 
 .nodeRail {
   flex: none;
-  width: 28px;
+  width: 26px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -722,173 +573,113 @@
 
 .nodeDot {
   flex: none;
-  width: 28px;
-  height: 28px;
-  margin-block-start: 14px;
-  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  margin-block-start: 16px;
   display: grid;
   place-items: center;
-  background: transparent;
-  color: transparent;
-  border: 2px solid var(--hair2);
-  transition:
-    background 200ms,
-    border-color 200ms,
-    box-shadow 200ms;
+  border: 1px solid var(--hair2);
+  border-radius: 50%;
+  background: var(--sf2);
+  color: var(--tx2);
 }
 
 .nodeDot svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 3;
+  stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-/* INTERACTIONS.md:110 - the connector fills over 300ms. */
 .nodeLine {
   flex: 1;
-  width: 2px;
-  min-height: 12px;
+  width: 1px;
+  min-height: 14px;
   margin-block-start: 4px;
   background: var(--hair2);
-  transition: background 300ms;
 }
 
 .nodeText {
   flex: 1;
   min-width: 0;
-  padding: 14px 0 12px;
+  padding: 16px 0;
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
   align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
   border-block-end: 1px solid var(--hair);
+}
+
+.nodeText > :first-child {
+  min-width: 0;
 }
 
 .node:last-child .nodeText {
   border-block-end: 0;
 }
 
-/* :846 hasLine: !last - no connector below the last node. */
 .node:last-child .nodeLine {
   display: none;
 }
 
 .nodeLabel {
   display: block;
-  font: 500 15px / 1.3 var(--font);
-  color: var(--tx3);
+  color: var(--tx2);
+  font: 500 14px / 1.5 var(--font);
+  overflow-wrap: anywhere;
 }
 
 .nodeSub {
+  margin-block-start: 3px;
   display: block;
-  margin-block-start: 2px;
-  font: 400 12.5px / 1.3 var(--font);
-  color: var(--tx3);
+  color: var(--tx2);
+  font: 400 12px / 1.5 var(--font);
+  overflow-wrap: anywhere;
 }
 
 .nodeTime {
   flex: none;
-  font: 400 12.5px / 1.3 var(--font);
-  color: var(--tx3);
+  color: var(--tx2);
+  font: 400 12px / 1.5 var(--font);
+  white-space: nowrap;
 }
 
 .nodeDone .nodeDot {
-  background: var(--ok);
-  color: var(--okbg);
   border-color: var(--ok);
+  background: var(--okbg);
+  color: var(--ok);
 }
 
 .nodeDone .nodeLine {
   background: var(--ok);
 }
 
-.nodeDone .nodeLabel {
-  font-weight: 700;
+.nodeDone .nodeLabel,
+.nodeCurrent .nodeLabel,
+.nodeTerminal .nodeLabel {
   color: var(--tx);
+  font-weight: 800;
 }
 
 .nodeCurrent .nodeDot {
-  background: var(--cta);
-  color: var(--onacc);
   border-color: var(--acc);
-  box-shadow:
-    0 0 0 4px var(--accA),
-    0 0 18px var(--accB);
+  background: var(--acc);
+  color: var(--onacc);
 }
 
-.nodeCurrent .nodeLabel {
-  font-weight: 800;
-  color: var(--tx);
-  text-shadow: var(--glow);
+.nodeTerminal .nodeDot {
+  border-color: var(--request-tone-ink, var(--hair2));
+  background: var(--request-tone-bed, var(--sf2));
+  color: var(--request-tone-ink, var(--tx2));
 }
 
-.nodeTerminal .nodeLabel {
-  font-weight: 800;
-  color: var(--tx);
-}
-
-/* The terminal node takes the hero tone's icon colours (:845-:846). */
-.nodeTerminal.toneBad .nodeDot {
-  background: var(--bad);
-  color: var(--badbg);
-  border-color: var(--bad);
-}
-
-.nodeTerminal.toneWarn .nodeDot {
-  background: var(--warn);
-  color: var(--warnbg);
-  border-color: var(--warn);
-}
-
-.nodeTerminal.toneNeutral .nodeDot {
-  background: var(--sf);
-  color: var(--tx2);
-  border-color: var(--sf);
-}
-
-/* A terminal node carries no tone background of its own. */
-.nodeTerminal {
-  background: transparent;
-  color: inherit;
-}
-
-/* :566-:569 - the action column. */
 .actions {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.chatCta {
-  position: relative;
-  overflow: hidden;
-  height: 50px;
-  border: 0;
-  border-radius: 14px;
-  background: var(--cta);
-  color: var(--onacc);
-  box-shadow: var(--ctaSh);
-  font: 800 15px / 1 var(--font);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  cursor: pointer;
-  transition:
-    transform 120ms,
-    filter 200ms;
-}
-
-.chatCta:hover {
-  filter: brightness(1.06);
-}
-
-.chatCta:active {
-  transform: scale(0.985);
 }
 
 .chatCta .waGlyph {
@@ -896,73 +687,25 @@
   height: 20px;
 }
 
-/* :567 - the danger ink on the page surface (not on the danger bed, so the
-   PX-3a walk does not apply here). */
 .cancelBtn {
-  height: 48px;
-  border-radius: 14px;
-  border: 1.5px solid var(--hair2);
   background: transparent;
-  color: var(--bad);
-  font: 700 15px / 1 var(--font);
-  cursor: pointer;
+  color: var(--tx);
 }
 
 .chatOutline {
-  height: 48px;
-  border-radius: 14px;
-  border: 1.5px solid var(--hair2);
+  width: 100%;
   background: transparent;
-  color: inherit;
-  font: 700 15px / 1 var(--font);
-  cursor: pointer;
-  transition:
-    background 200ms,
-    transform 120ms;
 }
 
-.chatOutline:hover {
-  background: var(--sf2);
-}
-
-.chatOutline:active {
-  transform: scale(0.985);
-}
-
-.againCta {
-  height: 50px;
-  border: 0;
-  border-radius: 14px;
-  background: var(--cta);
-  color: var(--onacc);
-  box-shadow: var(--ctaSh);
-  font: 800 15px / 1 var(--font);
-  cursor: pointer;
-  transition:
-    transform 120ms,
-    filter 200ms;
-}
-
-.againCta:hover {
-  filter: brightness(1.06);
-}
-
-.againCta:active {
-  transform: scale(0.985);
-}
-
-/* :571 - the order summary on status. */
 .statusSummary {
-  padding: 4px 14px;
-  border-radius: 14px;
+  min-width: 0;
+  padding: 2px 16px;
   border: 1px solid var(--hair);
+  border-radius: 10px;
   background: var(--sf);
-  font-size: 13.5px;
+  font-size: 14px;
 }
 
-/* ============================================================ cancel sheet */
-
-/* :574 - full-viewport overlay, sheet anchored at the block end. */
 .overlay {
   position: fixed;
   inset: 0;
@@ -976,151 +719,116 @@
   position: absolute;
   inset: 0;
   border: 0;
-  padding: 0;
   background: var(--scrim);
-  animation: sfFade 200ms both;
-  cursor: default;
 }
 
-/* :575 - 24px top radius, 560 max, rises over 300ms. */
 .sheet {
   position: relative;
   width: 100%;
   max-width: 560px;
-  margin: 0 auto;
-  padding: 12px 16px 20px;
-  border-start-start-radius: 24px;
-  border-start-end-radius: 24px;
-  background: var(--sf);
-  color: var(--tx);
+  max-height: 90dvh;
+  margin-inline: auto;
+  padding: 16px 20px max(24px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  animation: sfRise 300ms var(--e-standard) both;
+  gap: 12px;
+  overflow-y: auto;
+  border: 1px solid var(--hair);
+  border-block-end: 0;
+  border-start-start-radius: 16px;
+  border-start-end-radius: 16px;
+  background: var(--sf);
+  color: var(--tx);
 }
 
 .handle {
-  width: 40px;
+  width: 36px;
   height: 4px;
-  margin: 0 auto 6px;
+  margin: 0 auto 8px;
   border-radius: 2px;
   background: var(--hair2);
 }
 
 .sheetTitle {
   margin: 0;
-  font: 800 19px / 1.25 var(--font);
+  font: 800 21px / 1.4 var(--font);
+  overflow-wrap: anywhere;
 }
 
 .sheetBody {
   margin: 0;
-  font: 400 14px / 1.45 var(--font);
   color: var(--tx2);
+  font: 400 14px / 1.65 var(--font);
+  overflow-wrap: anywhere;
 }
 
 .sheetActions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
   margin-block-start: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .keepBtn {
-  height: 50px;
-  border-radius: 14px;
-  border: 1.5px solid var(--hair2);
   background: transparent;
-  color: inherit;
-  font: 700 15px / 1 var(--font);
-  cursor: pointer;
-  transition:
-    background 200ms,
-    transform 120ms;
 }
 
-.keepBtn:hover {
-  background: var(--sf2);
-}
-
-.keepBtn:active {
-  transform: scale(0.985);
-}
-
-/* "Yes, cancel": the danger fill with the ink derived on it (PACKET PX-3b),
-   not the prototype's literal white. */
 .yesBtn {
-  height: 50px;
-  border: 0;
-  border-radius: 14px;
+  border-color: transparent;
   background: var(--bad);
   color: var(--onBad);
-  font: 800 15px / 1 var(--font);
-  cursor: pointer;
+  font-weight: 800;
+}
+
+.screen :focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
 }
 
 .yesBtn[aria-disabled='true'],
-.cancelBtn[aria-disabled='true'] {
-  opacity: 0.6;
+.cancelBtn[aria-disabled='true'],
+.screen button:disabled {
+  opacity: 0.65;
   cursor: default;
 }
 
-/* ============================================================== disclosure */
-
-/*
- * The local-demo notice - an execution clarification, not original copy
- * (FINISH 4.4). Small, plain, above the content on both views.
- */
 .demoNote {
   margin: 0;
-  padding: 8px 16px;
-  font: 600 12px / 1.4 var(--font);
-  color: var(--tx3);
-  background: var(--sf);
+  padding: 10px 18px;
   border-block-end: 1px solid var(--hair);
+  background: var(--sf2);
+  color: var(--tx2);
+  font: 600 12px / 1.5 var(--font);
   text-align: center;
 }
 
-/* A simulated launch flashes the disclosure once (a remounted span restarts
-   it); under reduced motion the root rule collapses it to one frame. */
 .demoNoteFired > span {
   display: block;
-  animation: sfNoteFlash 900ms var(--e-standard) both;
+  animation: requestNotice 900ms ease-out both;
 }
 
-@keyframes sfNoteFlash {
-  0% {
-    color: var(--tx);
-    background: var(--sf2);
-  }
-  100% {
-    color: var(--tx3);
-    background: transparent;
-  }
-}
-
-/* The unknown-request answer: neutral copy on the tenant surface. */
 .missing {
-  padding: 40px 28px;
-  text-align: center;
+  padding: 48px 24px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
   align-items: center;
+  gap: 12px;
+  text-align: center;
 }
 
 .missingTitle {
   margin: 0;
-  font: 800 22px / 1.2 var(--font);
+  font: 800 24px / 1.4 var(--font);
+  overflow-wrap: anywhere;
 }
 
 .missingBody {
   margin: 0;
-  max-width: 300px;
-  font: 400 14px / 1.45 var(--font);
+  max-width: 380px;
   color: var(--tx2);
+  font: 400 14px / 1.65 var(--font);
+  overflow-wrap: anywhere;
 }
-
-/* ================================================================ islands */
 
 .ltr {
   direction: ltr;
@@ -1140,114 +848,82 @@
   border: 0;
 }
 
-/* ============================================================== keyframes */
-
-@keyframes sfFade {
-  from {
-    opacity: 0;
+@media (hover: hover) {
+  .secondary:hover,
+  .fallbackBtn:hover,
+  .copyBtn:hover,
+  .cancelBtn:hover,
+  .chatOutline:hover,
+  .keepBtn:hover {
+    border-color: var(--ring);
+    background: var(--sf2);
   }
-  to {
-    opacity: 1;
+
+  .waCta:hover,
+  .chatCta:hover,
+  .againCta:hover,
+  .yesBtn:hover {
+    border-color: currentColor;
   }
 }
 
-@keyframes sfUp {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
+@media (max-width: 650px) {
+  .column,
+  .body {
+    padding-inline: 18px;
   }
-  to {
-    opacity: 1;
-    transform: none;
+
+  .hero {
+    padding-inline: 18px;
+  }
+
+  .card {
+    padding: 16px;
+    gap: 12px;
   }
 }
 
-@keyframes sfRise {
-  from {
-    opacity: 0;
-    transform: translateY(28px);
+@media (max-width: 360px) {
+  .head {
+    padding-inline: 10px;
+    gap: 8px;
   }
-  to {
-    opacity: 1;
-    transform: none;
+
+  .column,
+  .body {
+    padding-inline: 14px;
+  }
+
+  .cardIcon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .cardTitle {
+    font-size: 19px;
+  }
+
+  .sheetActions {
+    grid-template-columns: 1fr;
   }
 }
 
-@keyframes sfPop {
-  0% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  70% {
-    transform: scale(1.08);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
+@keyframes requestCheck {
+  from { transform: scale(0.94); }
+  to { transform: scale(1); }
 }
 
-@keyframes sfRing {
-  0% {
-    opacity: 0.9;
-    transform: scale(0.7);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.9);
-  }
-}
-
-@keyframes sfDraw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes sfHalo {
-  0% {
-    opacity: 0.85;
-    transform: scale(1);
-  }
-  70%,
-  100% {
-    opacity: 0;
-    transform: scale(1.04, 1.24);
-  }
-}
-
-@keyframes sfSheen {
-  0% {
-    transform: translateX(-120%);
-  }
-  45%,
-  100% {
-    transform: translateX(120%);
-  }
+@keyframes requestNotice {
+  from { background: var(--sf); }
+  to { background: transparent; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .motionFull .ring,
-  .motionFull .halo,
-  .motionFull .sheen {
-    animation: none;
-  }
-
-  /* A sheen that does not move is a stripe painted across the CTA label. */
-  .motionFull .sheen {
-    display: none;
-  }
-
-  /*
-   * The root rule collapses every DURATION to one frame but leaves DELAYS in
-   * place, and a staggered entrance with a "both" fill sits at its first
-   * keyframe - invisible - until its delay elapses. That would hide the
-   * "not confirmed yet" line for 350ms under the very setting that promises a
-   * single frame. Delays collapse here too, so the stagger becomes one frame.
-   */
   .screen *,
   .screen *::before,
-  .screen *::after {
-    animation-delay: 0s !important;
+  .screen *::after,
+  .demoNoteFired > span {
+    animation: none !important;
+    transition: none !important;
   }
 }

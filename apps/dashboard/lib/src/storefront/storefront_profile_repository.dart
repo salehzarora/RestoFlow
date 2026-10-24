@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
 import 'storefront_models.dart';
+import 'storefront_content_repository.dart';
 import 'storefront_rpc.dart';
 
 /// STOREFRONT-PUBLISH-001 — the classified outcome of the manager read.
@@ -220,7 +221,8 @@ class SupabaseStorefrontProfileRepository
     implements
         StorefrontProfileRepository,
         StorefrontHomeContentRepository,
-        StorefrontFeaturedItemsRepository {
+        StorefrontFeaturedItemsRepository,
+        StorefrontContentRepositoryBinding {
   SupabaseStorefrontProfileRepository({
     required SyncRpcTransport transport,
     required this.organizationId,
@@ -243,6 +245,15 @@ class SupabaseStorefrontProfileRepository
   final String organizationId;
   final String restaurantId;
   final int Function() _nonce;
+
+  @override
+  late final StorefrontContentRepository contentRepository =
+      SupabaseStorefrontContentRepository(
+        transport: _t,
+        organizationId: organizationId,
+        restaurantId: restaurantId,
+        nonce: _nonce,
+      );
 
   static int _microNonce() => DateTime.now().microsecondsSinceEpoch;
 

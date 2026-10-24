@@ -1,0 +1,4 @@
+* text eol=lf
+vendor/* -text
+# Preserve upstream Unicode data bytes, including its two header-line spaces.
+vendor/emoji-data.txt whitespace=-blank-at-eol
