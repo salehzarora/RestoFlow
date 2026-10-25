@@ -1,352 +1,147 @@
 'use client';
 
-/**
- * The ONE interactive island on home.
- *
- * It owns the three things that genuinely need the client — the scroll-driven
- * compact header, the scroll-spy that keeps the category rails in sync, and
- * dismissing the announcement — and takes the hero, service strip and notice as
- * already-rendered server nodes so none of that markup is shipped as JavaScript.
- *
- * Dismissal lasts the TAB SESSION, per route slug, through the one allowlisted
- * UI-session helper (INTERACTIONS.md:41, COMPONENT_INVENTORY.md:9). The strip is
- * present in the static HTML for every visitor and is removed only after
- * hydration, in a LAYOUT effect, so the served bytes never differ and there is
- * no hydration mismatch.
- */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  isAnnouncementDismissed,
-  markAnnouncementDismissed,
-  markIntroSeen,
-} from '@/session/uiSession';
-import { storefrontMessages } from '@/i18n/storefront';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { markIntroSeen, isAnnouncementDismissed, markAnnouncementDismissed } from '@/session/uiSession';
+import { fill, storefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
-import type { Category, Tenant } from '@/source/types';
-import { ChevronIcon, CloseIcon, SearchIcon, SendIcon } from '../icons';
+import type { CampaignModule, CardMode, Category, MenuItem, Tenant } from '@/source/types';
+import { searchItems } from '@/source/search';
+import { cartPath } from '@/routes/routes';
+import { cartNavigationHref } from '@/routes/cart-navigation';
+import { CloseIcon, SearchIcon, TrolleyIcon } from '../icons';
 import { TenantText } from '../TenantText';
+
+import { RestaurantContact } from '../RestaurantContact';
+import { useCartApi } from '../cart/CartContext';
+import { BrandLockup, CampaignHero } from './HomeParts';
+import { MenuSection, GridCard, ListRow } from './MenuParts';
+import { chooseSuggestion, suggestionPool } from './suggestions';
+import { sectionGridClass, sectionLayout } from '../contentPresentation';
+import contentStyles from '../storefront.module.css';
+function NoResultsTitle({ template, query }: { template: string; query: string }) { const at = template.indexOf('{q}'); return at < 0 ? <>{template}</> : <>{template.slice(0, at)}<bdi>{query}</bdi>{template.slice(at + 3)}</>; }
+function CategoryIcon({ path, image }: { path: string; image: string | null }) {
+  return image === null ? <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={path} /></svg> : (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img className={contentStyles.categoryImage} src={image} alt="" width={24} height={24} loading="lazy" decoding="async" />
+  );
+}
 import styles from './home.module.css';
 
-/** The design's threshold: the compact header appears past 200px of scroll. */
-const COMPACT_AT = 200;
-/** Scroll-spy offset, standalone (no status bar). */
-const SPY_OFFSET = 116;
-/** One arrow tap scrolls the rail by this much, in the reading direction. */
-const ARROW_STEP = 180;
-
-/**
- * Every programmatic scroll on this screen resolves its behaviour here.
- *
- * "Programmatic scrolling switches to `auto` under reduced motion"
- * (DESIGN_HANDOFF.md:78, INTERACTIONS.md:128, TOKENS.json motion.reducedMotion),
- * and the locked prototype does exactly this (Storefront.dc.html:704).
- *
- * Read at CALL time, never at module load: the setting can change while the
- * page is open, and a module-level constant would freeze the wrong answer for
- * the life of the document.
- *
- * `auto` and not `instant`: `instant` is a late re-addition to the
- * ScrollBehavior IDL enum, and an engine that predates it throws a TypeError on
- * the dictionary rather than ignoring the member. `auto` then defers to the
- * element's computed `scroll-behavior` - which is why the two rails drop their
- * own `scroll-behavior: smooth` under reduced motion in home.module.css.
- */
-function scrollBehavior(): ScrollBehavior {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-}
-
-/** A 1px slack: fractional layout means an end is never reached exactly. */
-const EDGE_EPS = 1;
-
-/**
- * How far a rail sits from its inline START and END - direction-safe.
- *
- * No `direction` sniffing: every shipping engine follows the CSSOM-View
- * "negative" model, where scrollLeft is 0 at the inline start and runs to +max
- * (LTR) or -max (RTL), so the MAGNITUDE is the distance from the start in both.
- * A rail that cannot scroll at all reports itself at both ends, which disables
- * both arrows rather than offering an affordance that does nothing.
- */
-function railEdges(rail: HTMLElement): { atStart: boolean; atEnd: boolean } {
-  const max = rail.scrollWidth - rail.clientWidth;
-  if (max <= EDGE_EPS) return { atStart: true, atEnd: true };
-  const from = Math.abs(rail.scrollLeft);
-  return { atStart: from <= EDGE_EPS, atEnd: from >= max - EDGE_EPS };
-}
-
-function CategoryIcon({ path }: { path: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d={path} />
-    </svg>
-  );
-}
-
-export function HomeChrome({
-  tenant,
-  slug,
-  locale,
-  categories,
-  announcement,
-  hero,
-  service,
-  notice,
-  searchLabel,
-  searchHref,
-}: {
-  tenant: Tenant;
-  /** The ROUTE slug, not tenant.slug: every demo scenario resolves to the same
-      tenant, so tenant.slug would collapse several slugs onto one session key. */
-  slug: string;
-  /** The locale; the dictionary is resolved client-side (E-OPT-1). */
-  locale: Locale;
-  categories: readonly Category[];
-  announcement: string | null;
-  hero: ReactNode;
-  service: ReactNode;
-  notice: ReactNode;
-  searchLabel: string;
-  searchHref: string;
+/** Presentation state only. Product/cart/order authority stays in StorefrontRuntime. */
+export function HomeChrome({ tenant, locale, slug, language, categories, items, cardMode, announcement, announcementSegments, heroTitle, heroSubline, heroContent, service, notice, empty, cart }: {
+  tenant: Tenant; locale: Locale; slug: string; language: ReactNode;
+  categories: readonly Category[]; items: readonly MenuItem[]; cardMode: CardMode;
+  announcement: string | null; announcementSegments?: readonly string[]; heroTitle: string; heroSubline: string; heroContent?: CampaignModule['hero']; service: ReactNode; notice: ReactNode; empty: ReactNode; cart: ReactNode;
 }) {
   const m = storefrontMessages(locale);
-  const [dismissed, setDismissed] = useState(false);
-  const [compact, setCompact] = useState(false);
+  const cartHref = cartNavigationHref(cartPath(locale, slug), usePathname());
   const [active, setActive] = useState(categories[0]?.id ?? '');
-  const orbRail = useRef<HTMLDivElement>(null);
-  const chipRail = useRef<HTMLElement>(null);
-  // Both arrows start disabled. Pre-hydration they genuinely do nothing - they
-  // are onClick-only - so rendering them enabled in the static HTML was a lie;
-  // the measurement below corrects this within a frame of mount. Server and
-  // client agree on this initial value, so there is no hydration mismatch.
-  const [edges, setEdges] = useState({ atStart: true, atEnd: true });
-
-  // Reaching home is what "the intro has been seen" means for this tab: the
-  // intro CTA is the only way past it, and a deep link here is a visitor the
-  // handoff also sends straight to home (DESIGN_HANDOFF.md:27).
+  const [query, setQuery] = useState('');
+  const [picks, setPicks] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [categoryTarget, setCategoryTarget] = useState<string | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const transferringToProduct = useRef(false);
+  const search = useRef<HTMLInputElement>(null);
+  const cartApi = useCartApi();
+  const count = cartApi?.ready ? cartApi.summary.itemCount : 0;
+  useEffect(() => { markIntroSeen(slug); }, [slug]);
+  useLayoutEffect(() => { setDismissed(isAnnouncementDismissed(slug)); }, [slug]);
   useEffect(() => {
-    markIntroSeen(slug);
-  }, [slug]);
-
-  // Restore a dismissal made earlier in this tab. A LAYOUT effect, so the strip
-  // is removed in the hydration commit rather than a painted frame later.
+    if (!cartOpen) return;
+    const node = dialog.current;
+    if (!node) return;
+    const opener = document.activeElement;
+    node.showModal();
+    document.body.classList.add(styles.bodyLock);
+    return () => {
+      node.close(); document.body.classList.remove(styles.bodyLock);
+      if (!transferringToProduct.current && opener instanceof HTMLElement && opener.isConnected) opener.focus();
+      transferringToProduct.current = false;
+    };
+  }, [cartOpen]);
+  useEffect(() => {
+    const shortcut = (e: KeyboardEvent) => {
+      const target = e.target;
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && target instanceof HTMLElement && !target.closest('input,textarea,[contenteditable="true"],dialog,[role="dialog"],[aria-modal="true"]')) { e.preventDefault(); search.current?.focus(); }
+    };
+    document.addEventListener('keydown', shortcut);
+    return () => document.removeEventListener('keydown', shortcut);
+  }, []);
+  // A refreshed menu can remove the selected category while this UI is retained.
+  const activeCategory = categories.some(c => c.id === active) ? active : categories[0]?.id ?? '';
+  const shown = query.trim() ? searchItems(items, query) : picks ? items.filter(i => i.featured && !i.soldOut) : items.filter(i => i.categoryId === activeCategory);
+  const selected = categories.find(c => c.id === activeCategory);
+  const resultLayout = sectionLayout(cardMode, shown);
   useLayoutEffect(() => {
-    if (isAnnouncementDismissed(slug)) setDismissed(true);
-  }, [slug]);
-
+    if (categoryTarget === null) return;
+    const heading = document.getElementById(`sf-cat-title-${categoryTarget}`);
+    const section = document.getElementById(`sf-cat-${categoryTarget}`);
+    if (section && heading) { section.scrollIntoView({ block: 'start', behavior: 'auto' }); heading.focus({ preventScroll: true }); }
+    setCategoryTarget(null);
+  }, [categoryTarget, activeCategory]);
   useEffect(() => {
-    if (categories.length === 0) return undefined;
-    let frame = 0;
-    const read = () => {
-      frame = 0;
-      setCompact(window.scrollY > COMPACT_AT);
-      // The active category is the last section whose top has passed the offset.
-      let current = categories[0].id;
-      for (const category of categories) {
-        const section = document.getElementById(`sf-cat-${category.id}`);
-        if (section === null) continue;
-        if (section.getBoundingClientRect().top - SPY_OFFSET <= 0) current = category.id;
-      }
-      setActive(current);
+    const navigateCategory = (event: MouseEvent) => {
+      const trigger = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('button[data-sf-category]') : null;
+      const id = trigger?.dataset.sfCategory;
+      if (!trigger || trigger.disabled || !id || !categories.some(category => category.id === id) || !items.some(item => item.categoryId === id)) return;
+      event.preventDefault(); setActive(id); setPicks(false); setQuery(''); setCategoryTarget(id);
     };
-    const onScroll = () => {
-      if (frame === 0) frame = window.requestAnimationFrame(read);
-    };
-    read();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      if (frame !== 0) window.cancelAnimationFrame(frame);
-    };
-  }, [categories]);
-
-  // Keep the active chip centred in both rails whenever it changes.
-  useEffect(() => {
-    for (const rail of [orbRail.current, chipRail.current]) {
-      if (rail === null) continue;
-      const chip = rail.querySelector(`[data-category="${active}"]`);
-      if (chip === null) continue;
-      const railBox = rail.getBoundingClientRect();
-      const chipBox = chip.getBoundingClientRect();
-      const delta = chipBox.left + chipBox.width / 2 - (railBox.left + railBox.width / 2);
-      if (Math.abs(delta) > 4) rail.scrollBy({ left: delta, behavior: scrollBehavior() });
-    }
-  }, [active]);
-
-  // Arrow availability is MEASURED, never assumed: a rail already at an end -
-  // or too short to scroll at all - must not offer the affordance.
-  useEffect(() => {
-    const rail = orbRail.current;
-    if (rail === null) return undefined;
-    const measure = () =>
-      setEdges((prev) => {
-        const next = railEdges(rail);
-        // Same object when nothing changed: a smooth scroll fires this every
-        // frame and must not re-render the rail every frame.
-        return prev.atStart === next.atStart && prev.atEnd === next.atEnd ? prev : next;
-      });
-    measure();
-    rail.addEventListener('scroll', measure, { passive: true });
-    // ResizeObserver, not window.resize: the wide layout is keyed to the
-    // CONTAINER (@container storefront (min-width: 900px)), so the rail's
-    // clientWidth can change when the aside appears without the window moving.
-    const observer = new ResizeObserver(measure);
-    observer.observe(rail);
-    return () => {
-      rail.removeEventListener('scroll', measure);
-      observer.disconnect();
-    };
-  }, [categories]);
-
-  const goTo = useCallback((id: string) => {
-    const section = document.getElementById(`sf-cat-${id}`);
-    if (section === null) return;
-    setActive(id);
-    section.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
-  }, []);
-
-  const nudge = useCallback((direction: 1 | -1) => {
-    const rail = orbRail.current;
-    if (rail === null) return;
-    // In RTL the rail's scroll axis is inverted, so the reading direction is
-    // what the arrow means, not the raw sign.
-    const rtl = getComputedStyle(rail).direction === 'rtl';
-    rail.scrollBy({ left: ARROW_STEP * direction * (rtl ? -1 : 1), behavior: scrollBehavior() });
-  }, []);
-
-  return (
-    <>
-      {announcement === null || dismissed ? null : (
-        <div className={styles.announce} role="status" data-sf-module="announce">
-          <span className={styles.announceGlyph} aria-hidden="true">
-            <SendIcon />
-          </span>
-          <span className={styles.announceText}>
-            <TenantText>{announcement}</TenantText>
-          </span>
-          <button
-            className={styles.announceClose}
-            type="button"
-            aria-label={m.close}
-            onClick={() => {
-              setDismissed(true);
-              markAnnouncementDismissed(slug);
-            }}
-          >
-            <CloseIcon />
-          </button>
-        </div>
-      )}
-
-      <div className={styles.compactHost} data-sf-module="compact">
-        <div
-          className={`${styles.compact} ${compact ? styles.compactOn : ''}`}
-          data-sf-compact={compact ? 'on' : 'off'}
-        >
-        <div className={styles.compactRow}>
-          {tenant.brand.logo === null ? null : (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              className={styles.compactLogo}
-              src={tenant.brand.logo}
-              alt=""
-              width={60}
-              height={60}
-              decoding="async"
-            />
-          )}
-          {/* The run is isolated with dir="auto" on an INNER span so a Latin
-              name reads correctly without flipping the block's own alignment
-              away from the logo it belongs beside. */}
-          <span className={styles.compactName}>
-            <span dir="auto">{tenant.displayName}</span>
-          </span>
-          <a className={styles.compactBtn} href={searchHref} aria-label={searchLabel}>
-            <SearchIcon />
-          </a>
-        </div>
-        {categories.length === 0 ? null : (
-          <nav className={styles.chipRail} ref={chipRail} aria-label={m.compactMenuLabel}>
-            {categories.map((category) => (
-              <button
-                className={`${styles.chip} ${category.id === active ? styles.chipActive : ''}`}
-                key={category.id}
-                type="button"
-                data-category={category.id}
-                aria-current={category.id === active ? 'true' : undefined}
-                onClick={() => goTo(category.id)}
-              >
-                <CategoryIcon path={category.iconPath} />
-                <span className={styles.chipLabel} dir="auto">
-                  {category.name}
-                </span>
-              </button>
-            ))}
-            </nav>
-          )}
-        </div>
+    document.addEventListener('click', navigateCategory);
+    return () => document.removeEventListener('click', navigateCategory);
+  }, [categories, items]);
+  const candidates = suggestionPool(items, activeCategory, picks);
+  // Capture runs synchronously before the unchanged document-level opener.
+  // It owns URL/history, item validation, modifiers and focus restoration.
+  const prepareSuggestion = (button: HTMLButtonElement) => {
+    delete button.dataset.sfItem;
+    delete button.dataset.sfLine;
+    if (button.disabled) return;
+    const item = chooseSuggestion(candidates, Math.random());
+    if (item === null) return;
+    button.dataset.sfItem = item.id;
+    button.focus({ preventScroll: true });
+  };
+  const heroItem = heroContent?.mode === 'item' ? items.find(item => item.id === heroContent.itemId) : undefined;
+  const hero = <CampaignHero tenant={tenant} m={m} eyebrow={m.heroEyebrow} title={heroTitle} subline={heroSubline} content={heroContent} item={heroItem} suggestion={<>
+    <button className={styles.suggest} data-sf-suggest="" type="button" disabled={candidates.length === 0} aria-disabled={candidates.length === 0 ? 'true' : undefined} aria-describedby={candidates.length === 0 ? 'sf-suggest-empty' : undefined} title={candidates.length === 0 ? m.suggestionEmpty : picks ? m.chefPicks : selected?.name}
+      onClickCapture={e => prepareSuggestion(e.currentTarget)} onKeyDownCapture={e => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        if (e.repeat) { delete e.currentTarget.dataset.sfItem; delete e.currentTarget.dataset.sfLine; e.preventDefault(); return; }
+        prepareSuggestion(e.currentTarget);
+      }}><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="5" /><path d="M8 8h.01M16 8h.01M12 12h.01M8 16h.01M16 16h.01" strokeWidth="3" /></svg>{m.suggestItem}</button>
+    {candidates.length === 0 ? <span className={styles.srOnly} id="sf-suggest-empty" role="status">{m.suggestionEmpty}</span> : null}
+  </>} />;
+  const switchCategory = (id: string) => { setActive(id); setPicks(false); setQuery(''); };
+  // Close the native top layer before the existing delegated product opener runs.
+  // Enter/Space is intercepted by that opener, so waiting for click is insufficient.
+  const transferToProduct = (target: EventTarget | null) => {
+    if (!(target instanceof Element) || !target.closest('[data-sf-item]')) return;
+    transferringToProduct.current = true;
+    dialog.current?.close();
+    setCartOpen(false);
+  };
+  return <>
+    <div className={styles.topline}><div className={styles.inner}><TenantText>{tenant.city}</TenantText><TenantText>{tenant.tagline}</TenantText><span>{tenant.service.state === 'open' ? m.openNow : tenant.service.state === 'closed' ? m.closed : m.paused}</span></div></div>
+    <header className={styles.header} data-sf-module="compact">
+      <div className={`${styles.inner} ${styles.headerInner}`}>
+        <a className={styles.brandLink} href="#" aria-label={tenant.displayName}><BrandLockup tenant={tenant} /></a>
+        <nav className={styles.headerNav} aria-label={m.menuLabel}><a href="#sf-menu">{m.menuLabel}</a><button type="button" onClick={() => { setPicks(true); setQuery(''); document.getElementById('sf-menu')?.scrollIntoView({block:'start', behavior:'auto'}); }}>{m.chefPicks}</button><a href="#sf-find">{m.findUs}</a></nav>
+        <div className={styles.headerActions}><RestaurantContact publicPhone={tenant.phone} label={m.callRestaurant} iconOnly className={styles.headerPhone} />{language}<button className={styles.cartTrigger} data-sf-cart-trigger="" type="button" onClick={() => setCartOpen(true)}><TrolleyIcon /><span>{m.yourChoices}</span><b>{count}</b></button></div>
       </div>
-
-      {hero}
-      {service}
-      {notice}
-
-      {categories.length === 0 ? null : (
-        <nav className={styles.rail} aria-label={m.menuLabel} data-sf-module="categories">
-          <button
-            className={`${styles.railArrow} ${styles.railArrowStart}`}
-            type="button"
-            aria-label={m.prevCategory}
-            disabled={edges.atStart}
-            onClick={() => nudge(-1)}
-          >
-            <ChevronIcon />
-          </button>
-          <div className={styles.railTrack} ref={orbRail}>
-            {categories.map((category) => (
-              <button
-                className={`${styles.orb} ${category.id === active ? styles.orbActive : ''}`}
-                key={category.id}
-                type="button"
-                data-category={category.id}
-                aria-current={category.id === active ? 'true' : undefined}
-                onClick={() => goTo(category.id)}
-              >
-                <span className={styles.orbCircle}>
-                  {category.image === null ? (
-                    <span className={styles.orbIcon} aria-hidden="true">
-                      <CategoryIcon path={category.iconPath} />
-                    </span>
-                  ) : (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      className={styles.orbImg}
-                      src={category.image}
-                      alt=""
-                      width={128}
-                      height={128}
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  )}
-                </span>
-                <span className={styles.orbLabel} dir="auto">
-                  {category.name}
-                </span>
-              </button>
-            ))}
-          </div>
-          <button
-            className={`${styles.railArrow} ${styles.railArrowEnd}`}
-            type="button"
-            aria-label={m.nextCategory}
-            disabled={edges.atEnd}
-            onClick={() => nudge(1)}
-          >
-            <ChevronIcon />
-          </button>
-        </nav>
-      )}
-
-    </>
-  );
+    </header>
+    {hero}
+    {announcement === null || dismissed ? null : <div className={styles.announce} data-sf-module="announce" role="status"><span aria-hidden="true">✦</span><span dir="auto">{announcementSegments?.length ? announcementSegments.map((segment, index) => <Fragment key={index}>{index ? <span aria-hidden="true"> ✦ </span> : null}<TenantText>{segment}</TenantText></Fragment>) : <TenantText>{announcement}</TenantText>}</span><span aria-hidden="true">✦</span><button className={styles.announceClose} type="button" aria-label={m.close} onClick={() => { setDismissed(true); markAnnouncementDismissed(slug); }}><CloseIcon /></button></div>}
+    {notice}
+    {empty ?? <section className={`${styles.inner} ${styles.menu}`} id="sf-menu" aria-label={m.menuLabel}>
+      <div className={styles.menuHeading}><div><p className={styles.eyebrow}>{m.menuEyebrow}<span>{m.menuCaption}</span></p><h2>{m.menuHeading}</h2></div><form className={styles.searchBox} role="search" onSubmit={e => e.preventDefault()}><SearchIcon /><input ref={search} type="search" autoComplete="off" maxLength={80} value={query} onChange={e => { setQuery(e.target.value); setPicks(false); }} placeholder={m.searchPh} aria-label={m.search} />{query ? <button type="button" aria-label={m.clearSearch} onClick={() => { setQuery(''); search.current?.focus(); }}><CloseIcon /></button> : <kbd aria-hidden="true">/</kbd>}</form></div>
+      <div className={styles.categoryWrap}><nav className={styles.rail} aria-label={m.menuLabel} data-sf-module="categories">{categories.map(category => <button className={`${styles.chip} ${category.id === activeCategory && !query && !picks ? styles.chipActive : ''}`} type="button" key={category.id} aria-current={category.id === activeCategory && !query && !picks ? 'true' : undefined} onClick={() => switchCategory(category.id)}><CategoryIcon path={category.iconPath} image={category.image} /><span dir="auto">{category.name}</span><small dir="ltr">{String(items.filter(i => i.categoryId === category.id).length).padStart(2, '0')}</small></button>)}{items.some(item => item.featured && !item.soldOut) ? <button type="button" className={`${styles.chip} ${styles.picksChip} ${picks && !query ? styles.chipActive : ''}`} aria-current={picks && !query ? 'true' : undefined} onClick={() => { setPicks(true); setQuery(''); }}>{m.chefPicks}</button> : null}</nav></div>
+      {query.trim() || picks ? <section className={styles.section} data-sf-module="sections" aria-label={query.trim() ? m.search : m.chefPicks}><div className={styles.sectionHead}><h3>{picks ? m.chefPicks : m.search}</h3><span role="status">{shown.length === 1 ? m.item : fill(m.items, {n:String(shown.length)})}</span></div>{shown.length ? <div className={`${cardMode === 'grid' ? styles.gridWrap : styles.listWrap} ${sectionGridClass(resultLayout, contentStyles.cutoutGrid)}`} data-sf-layout={resultLayout}>{shown.map(item => cardMode === 'grid' ? <GridCard item={item} m={m} key={item.id} /> : <ListRow item={item} m={m} key={item.id} />)}</div> : <div className={styles.empty} role="status"><SearchIcon /><h3>{query.trim() ? <NoResultsTitle template={m.noResults} query={query.trim()} /> : m.emptyMenu}</h3><p>{m.tryOther}</p><button className={styles.promoCta} type="button" onClick={() => { setQuery(''); setPicks(false); }}>{m.browseMenu}</button></div>}</section> : selected ? <MenuSection category={selected} items={shown} cardMode={cardMode} m={m} /> : null}
+    </section>}
+    {service}
+    {cartOpen ? <dialog className={styles.cartDialog} ref={dialog} aria-label={m.cart} onCancel={() => setCartOpen(false)} onClickCapture={e => transferToProduct(e.target)} onKeyDownCapture={e => { if (e.key === 'Enter' || e.key === ' ') transferToProduct(e.target); }} onClick={e => { if (e.target === e.currentTarget) setCartOpen(false); }}><button className={styles.cartClose} type="button" aria-label={m.close} onClick={() => setCartOpen(false)}><CloseIcon /></button>{cart}<Link className={styles.cartEdit} href={cartHref} prefetch={false}>{m.edit}</Link></dialog> : null}
+  </>;
 }

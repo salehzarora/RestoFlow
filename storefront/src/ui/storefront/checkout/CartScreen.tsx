@@ -22,6 +22,10 @@
  * thing the prototype does not do and a keyboard visitor needs.
  */
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { cartNavigationHref } from '@/routes/cart-navigation';
+import { productFrameClass, productImageClass } from '../contentPresentation';
+import contentStyles from '../storefront.module.css';
 import { useCallback, useState } from 'react';
 import type { CartApi } from '@/cart/useCart';
 import { optionSummary, type ResolvedCartLine } from '@/cart/cartModel';
@@ -64,7 +68,7 @@ function CartLineCard({
 
   return (
     <li className={s.line} data-sf-cart-line={line.line.lineId}>
-      <span className={s.lineMedia}>
+      <span className={`${s.lineMedia} ${productFrameClass(line.item, contentStyles.wholeFrame)}`}>
         {line.item.image === null ? (
           <span className={s.lineNoImg} aria-hidden="true">
             {initial}
@@ -72,7 +76,7 @@ function CartLineCard({
         ) : (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            className={s.lineImg}
+            className={`${s.lineImg} ${productImageClass(line.item, contentStyles.wholeImage)}`}
             src={line.item.image}
             alt=""
             width={128}
@@ -198,6 +202,7 @@ export function CartScreen({
   estimateCopy?: string;
 }) {
   const [announcement, setAnnouncement] = useState('');
+  const navigationHref = cartNavigationHref(menuHref, usePathname());
   const lines = cart.summary.lines;
   // The one shared reason: browse-only first, then exactly 'open' proceeds,
   // anything else states why.
@@ -224,7 +229,7 @@ export function CartScreen({
 
   return (
     <div className={`${s.screen} ${motion === 'calm' ? '' : s.motionFull}`} data-sf-screen="cart">
-      <CartHeader m={m} backHref={menuHref} count={cart.summary.itemCount} />
+      <CartHeader m={m} backHref={navigationHref} count={cart.summary.itemCount} />
 
       <div className={s.body}>
         {/* STOREFRONT-READ-001: the browse-only notice, the one new string family
@@ -274,7 +279,7 @@ export function CartScreen({
             <p className={s.emptyBody}>{m.emptyCartBody}</p>
             {/* prefetch={false}: see BackLink - a static export serves no
                 per-segment RSC payload, so a prefetch is a guaranteed 404. */}
-            <Link className={s.emptyCta} href={menuHref} prefetch={false} data-sf-browse="">
+            <Link className={s.emptyCta} href={navigationHref} prefetch={false} data-sf-browse="">
               {m.browseMenu}
             </Link>
           </div>
@@ -292,7 +297,7 @@ export function CartScreen({
               ))}
             </ul>
 
-            <Totals quote={quote} m={m} />
+
             {estimateCopy ? <p className={s.help} data-sf-estimate="">{estimateCopy}</p> : null}
             {checkoutBlock ? <Banner tone="warn" icon={<InfoIcon />} title={checkoutBlock} alert={false} testId="checkout-block" /> : null}
           </>
@@ -303,7 +308,7 @@ export function CartScreen({
 
       {/* The totals block and the footer BOTH disappear with the last line
           (Storefront.dc.html:398, :407). */}
-      {lines.length === 0 ? null : (
+      {lines.length === 0 ? null : (<><div className={s.cartSummary}><Totals quote={quote} m={m} /></div>
         <FooterCta
           label={reason ?? m.checkout}
           onActivate={reason === null && !pending ? onCheckout : () => undefined}
@@ -313,7 +318,7 @@ export function CartScreen({
           live={motion !== 'calm'}
           tall
           testId="cart-checkout"
-        />
+        /></>
       )}
     </div>
   );

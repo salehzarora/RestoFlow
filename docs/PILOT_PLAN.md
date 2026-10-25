@@ -72,7 +72,7 @@ Identity used on-site (**DECISION D-004/D-005/D-006**): owner/manager personal a
 
 ### 2.2 Out of scope — DEFERRED for the pilot
 - **DEFERRED** — Tips handling (**OPEN QUESTION Q-011**).
-- **DEFERRED** — Refunds (Payment `refunded`) and any post-completion reversal; a `completed` payment cannot be voided/reversed (`completed` is TERMINAL, **DECISION D-023**). Card/non-cash payments are deferred; pilot is **cash only** (RF-054).
+- **DEFERRED** — Refunds (Payment `refunded`) and any post-completion reversal; a `completed` payment cannot be voided/reversed (`completed` is TERMINAL, **DECISION D-023**). Card/non-cash payments are deferred; pilot is **cash only** (RF-054). *(2026-10-21, **DECISION D-051**: RF-117 records `card`/`bit`/`external` tenders externally, and BIZBOT-PAYMENTS-ZCREDIT-PILOT-001 adds a flag-gated card-present PIN-pad pilot for one named tenant (Maps Burger) only — TEST mode first, production enablement separately approved; the M3 pilot day itself stays cash only unless the owner separately enables that flag-gated pilot there; refunds stay DEFERRED.)*
 - **DEFERRED** — Self-serve org signup (RF-090), platform admin panel (RF-091), owner dashboard (RF-092),
   billing (RF-093) — these are M4.
 - **DEFERRED** — Accountant / read-only role shipping decision (**OPEN QUESTION Q-017**); not required for the pilot.

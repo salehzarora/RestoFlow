@@ -48,7 +48,7 @@ select plan(62);
 -- literal, so any further anon-callable or DEFINER public function fails here
 -- until it is enumerated in its own migration + suite (D-037 point 2).
 create temp table sec001_allowlist (identity text primary key);
-insert into sec001_allowlist values ('storefront_menu(text)'), ('storefront_menu_v2(text)'), ('storefront_menu_v3(text)');
+insert into sec001_allowlist values ('storefront_menu(text)'), ('storefront_menu_v2(text)'), ('storefront_menu_v3(text)'), ('storefront_menu_v4(text)');
 
 -- ----------------------------------------------------------------------------
 -- A. anon function family guard (effective privileges, dynamic) ............ (6)

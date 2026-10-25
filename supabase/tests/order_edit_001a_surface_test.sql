@@ -267,11 +267,11 @@ select is((select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\
                     order by regexp_replace(p.oid::regprocedure::text, '^public\.', ''))
              from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
               and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)','storefront_menu_v2(text)', 'storefront_menu_v3(text)']) v), '26 T-016: anon-executable public surface is exactly the three versioned storefront readers');
+  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)','storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)']) v), '26 T-016: anon-executable public surface is exactly the four versioned storefront readers');
 select is((select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\.', ''), ', '
                     order by regexp_replace(p.oid::regprocedure::text, '^public\.', ''))
              from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and p.prosecdef),
-  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)','storefront_menu_v2(text)', 'storefront_menu_v3(text)']) v), '27 T-016: public SECURITY DEFINER surface is exactly the three versioned storefront readers');
+  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)','storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)']) v), '27 T-016: public SECURITY DEFINER surface is exactly the four versioned storefront readers');
 select ok(not has_schema_privilege('anon', 'app', 'USAGE'), '28 anon still has no USAGE on schema app');
 
 -- ===== C. the kitchen_workflow_mode single-writer guard (KITCHEN-MODE #45) ====

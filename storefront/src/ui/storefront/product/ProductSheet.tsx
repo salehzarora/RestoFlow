@@ -1,5 +1,8 @@
 'use client';
 
+import { productFrameClass, productImageClass } from '../contentPresentation';
+import contentStyles from '../storefront.module.css';
+
 /**
  * PRODUCT SHEET - screen 4 of the approved handoff.
  *
@@ -246,16 +249,16 @@ export function ProductSheet({
         onKeyDown={onKeyDown}
         data-sf-sheet="product"
       >
-        <div className={styles.media}>
+        <div className={`${styles.media} ${productFrameClass(item, contentStyles.wholeFrame)}`}>
           {item.image === null ? (
             <span className={styles.mediaNone} aria-hidden="true">
               {item.name.trim().slice(0, 1)}
             </span>
           ) : (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img className={styles.mediaImg} src={item.image} alt="" decoding="async" />
+            <img className={`${styles.mediaImg} ${productImageClass(item, contentStyles.wholeImage)}`} src={item.image} alt="" decoding="async" />
           )}
-          <span className={styles.mediaFade} aria-hidden="true" />
+          {item.imageFit === 'whole-image' ? null : <span className={styles.mediaFade} aria-hidden="true" />}
           <span className={styles.handle} aria-hidden="true" />
           <button className={styles.close} type="button" aria-label={m.close} onClick={onClose}>
             <CloseIcon />
