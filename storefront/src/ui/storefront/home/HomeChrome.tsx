@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { markIntroSeen, isAnnouncementDismissed, markAnnouncementDismissed } from '@/session/uiSession';
 import { fill, storefrontMessages } from '@/i18n/storefront';
@@ -7,6 +9,7 @@ import type { Locale } from '@/i18n/locales';
 import type { CampaignModule, CardMode, Category, MenuItem, Tenant } from '@/source/types';
 import { searchItems } from '@/source/search';
 import { cartPath } from '@/routes/routes';
+import { cartNavigationHref } from '@/routes/cart-navigation';
 import { CloseIcon, SearchIcon, TrolleyIcon } from '../icons';
 import { TenantText } from '../TenantText';
 
@@ -33,6 +36,7 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
   announcement: string | null; announcementSegments?: readonly string[]; heroTitle: string; heroSubline: string; heroContent?: CampaignModule['hero']; service: ReactNode; notice: ReactNode; empty: ReactNode; cart: ReactNode;
 }) {
   const m = storefrontMessages(locale);
+  const cartHref = cartNavigationHref(cartPath(locale, slug), usePathname());
   const [active, setActive] = useState(categories[0]?.id ?? '');
   const [query, setQuery] = useState('');
   const [picks, setPicks] = useState(false);
@@ -138,6 +142,6 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
       {query.trim() || picks ? <section className={styles.section} data-sf-module="sections" aria-label={query.trim() ? m.search : m.chefPicks}><div className={styles.sectionHead}><h3>{picks ? m.chefPicks : m.search}</h3><span role="status">{shown.length === 1 ? m.item : fill(m.items, {n:String(shown.length)})}</span></div>{shown.length ? <div className={`${cardMode === 'grid' ? styles.gridWrap : styles.listWrap} ${sectionGridClass(resultLayout, contentStyles.cutoutGrid)}`} data-sf-layout={resultLayout}>{shown.map(item => cardMode === 'grid' ? <GridCard item={item} m={m} key={item.id} /> : <ListRow item={item} m={m} key={item.id} />)}</div> : <div className={styles.empty} role="status"><SearchIcon /><h3>{query.trim() ? <NoResultsTitle template={m.noResults} query={query.trim()} /> : m.emptyMenu}</h3><p>{m.tryOther}</p><button className={styles.promoCta} type="button" onClick={() => { setQuery(''); setPicks(false); }}>{m.browseMenu}</button></div>}</section> : selected ? <MenuSection category={selected} items={shown} cardMode={cardMode} m={m} /> : null}
     </section>}
     {service}
-    {cartOpen ? <dialog className={styles.cartDialog} ref={dialog} aria-label={m.cart} onCancel={() => setCartOpen(false)} onClickCapture={e => transferToProduct(e.target)} onKeyDownCapture={e => { if (e.key === 'Enter' || e.key === ' ') transferToProduct(e.target); }} onClick={e => { if (e.target === e.currentTarget) setCartOpen(false); }}><button className={styles.cartClose} type="button" aria-label={m.close} onClick={() => setCartOpen(false)}><CloseIcon /></button>{cart}<a className={styles.cartEdit} href={cartPath(locale, slug)}>{m.edit}</a></dialog> : null}
+    {cartOpen ? <dialog className={styles.cartDialog} ref={dialog} aria-label={m.cart} onCancel={() => setCartOpen(false)} onClickCapture={e => transferToProduct(e.target)} onKeyDownCapture={e => { if (e.key === 'Enter' || e.key === ' ') transferToProduct(e.target); }} onClick={e => { if (e.target === e.currentTarget) setCartOpen(false); }}><button className={styles.cartClose} type="button" aria-label={m.close} onClick={() => setCartOpen(false)}><CloseIcon /></button>{cart}<Link className={styles.cartEdit} href={cartHref} prefetch={false}>{m.edit}</Link></dialog> : null}
   </>;
 }

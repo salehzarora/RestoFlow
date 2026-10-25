@@ -266,7 +266,8 @@ test('cart presentation uses the existing live aside in a native modal with focu
   assert.match(chrome, /<dialog\b[^>]*aria-label=\{m\.cart\}[^>]*onCancel=/);
   assert.match(chrome, /node\.showModal\(\)/);
   assert.match(chrome, /opener\.isConnected\) opener\.focus\(\)/);
-  assert.match(chrome, /href=\{cartPath\(locale, slug\)\}/);
+  assert.match(chrome, /const cartHref = cartNavigationHref\(cartPath\(locale, slug\), usePathname\(\)\)/);
+  assert.match(chrome, /<Link\b[^>]*className=\{styles\.cartEdit\}[^>]*href=\{cartHref\}[^>]*prefetch=\{false\}/);
   assert.doesNotMatch(chrome, /localStorage|sessionStorage|fetch\(/);
 });
 

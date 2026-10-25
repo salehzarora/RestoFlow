@@ -22,6 +22,8 @@
  * thing the prototype does not do and a keyboard visitor needs.
  */
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { cartNavigationHref } from '@/routes/cart-navigation';
 import { productFrameClass, productImageClass } from '../contentPresentation';
 import contentStyles from '../storefront.module.css';
 import { useCallback, useState } from 'react';
@@ -200,6 +202,7 @@ export function CartScreen({
   estimateCopy?: string;
 }) {
   const [announcement, setAnnouncement] = useState('');
+  const navigationHref = cartNavigationHref(menuHref, usePathname());
   const lines = cart.summary.lines;
   // The one shared reason: browse-only first, then exactly 'open' proceeds,
   // anything else states why.
@@ -226,7 +229,7 @@ export function CartScreen({
 
   return (
     <div className={`${s.screen} ${motion === 'calm' ? '' : s.motionFull}`} data-sf-screen="cart">
-      <CartHeader m={m} backHref={menuHref} count={cart.summary.itemCount} />
+      <CartHeader m={m} backHref={navigationHref} count={cart.summary.itemCount} />
 
       <div className={s.body}>
         {/* STOREFRONT-READ-001: the browse-only notice, the one new string family
@@ -276,7 +279,7 @@ export function CartScreen({
             <p className={s.emptyBody}>{m.emptyCartBody}</p>
             {/* prefetch={false}: see BackLink - a static export serves no
                 per-segment RSC payload, so a prefetch is a guaranteed 404. */}
-            <Link className={s.emptyCta} href={menuHref} prefetch={false} data-sf-browse="">
+            <Link className={s.emptyCta} href={navigationHref} prefetch={false} data-sf-browse="">
               {m.browseMenu}
             </Link>
           </div>

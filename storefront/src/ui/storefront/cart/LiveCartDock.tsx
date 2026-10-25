@@ -24,6 +24,8 @@
  * it and goes straight to checkout.
  */
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { cartNavigationHref } from '@/routes/cart-navigation';
 import { productImageClass } from '../contentPresentation';
 import contentStyles from '../storefront.module.css';
 import { useEffect, useRef, useState } from 'react';
@@ -46,7 +48,7 @@ export function LiveCartDock({
   state,
   orderingEnabled,
   opensAt,
-  cartHref,
+  cartHref: canonicalCartHref,
 }: {
   summary: CartSummary;
   m: StorefrontMessages;
@@ -58,6 +60,7 @@ export function LiveCartDock({
   cartHref: string;
 }) {
   const count = summary.itemCount;
+  const cartHref = cartNavigationHref(canonicalCartHref, usePathname());
   const [bump, setBump] = useState(false);
   const previous = useRef(count);
 
