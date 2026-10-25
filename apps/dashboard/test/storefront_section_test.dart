@@ -10,11 +10,15 @@ import 'package:restoflow_dashboard/src/storefront/opening_hours_editor.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_copy.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_featured_items.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_repository.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_media_publisher.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_media_slot.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_models.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_profile_repository.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_section.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_sources.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+
+import 'storefront_content_section_test.dart' as content_fixture;
 
 /// STOREFRONT-PUBLISH-001 — the Settings "Storefront" card: read before edit,
 /// the confirmed create with a PERMANENT slug, changed-keys-only CAS saves,
@@ -266,6 +270,25 @@ class _HomeProfileRepo extends _FakeProfileRepo
   }
 }
 
+class _GatedWriteRepo extends _FakeProfileRepo {
+  _GatedWriteRepo({required super.profile});
+  final gate = Completer<void>();
+  @override
+  Future<StorefrontWriteResult> save({
+    required int expectedVersion,
+    required Map<String, Object?> patch,
+    String? requestId,
+  }) async {
+    final result = await super.save(
+      expectedVersion: expectedVersion,
+      patch: patch,
+      requestId: requestId,
+    );
+    await gate.future;
+    return result;
+  }
+}
+
 class _FakeMediaRepo implements StorefrontMediaRepository {
   int lists = 0;
 
@@ -408,6 +431,7 @@ Future<void> _pump(
   WidgetTester tester,
   Widget section, {
   String locale = 'en',
+  bool settle = true,
 }) async {
   tester.view.physicalSize = const Size(1200, 4000);
   tester.view.devicePixelRatio = 1.0;
@@ -425,7 +449,12 @@ Future<void> _pump(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+  }
 }
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
@@ -476,6 +505,140 @@ void _expectPublishedWithNote(
 }
 
 void main() {
+  testWidgets(
+    'old in-flight profile completion cannot refresh or unlock replaced binding',
+    (tester) async {
+      final first = _GatedWriteRepo(profile: _profileJson());
+      await _pump(tester, StorefrontSection(seams: _seams(first)));
+      await tester.enterText(
+        find.byKey(const Key('storefront-tagline')),
+        'Held original intent',
+      );
+      await tester.pumpAndSettle();
+      tester
+          .widget<FilledButton>(find.byKey(const Key('storefront-save')))
+          .onPressed!();
+      await tester.pump();
+      final replacement = _FakeProfileRepo(profile: _profileJson());
+      await _pump(
+        tester,
+        StorefrontSection(seams: _seams(replacement)),
+        settle: false,
+      );
+      first.gate.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(first.saves, hasLength(1));
+      expect(replacement.saves, isEmpty);
+      expect(
+        replacement.reads,
+        1,
+        reason: 'Late old success cannot launch a new-binding refresh',
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('storefront-tagline')))
+            .controller!
+            .text,
+        'Held original intent',
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('storefront-tagline')))
+            .enabled,
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'replaced profile transport retains uncertain legacy request and blocks replay',
+    (tester) async {
+      final first = _FakeProfileRepo(profile: _profileJson())
+        ..saveOverrides.add(
+          const StorefrontWriteResult(
+            StorefrontWriteStatus.uncertain,
+            requestId: _retryId,
+          ),
+        );
+      await _pump(tester, StorefrontSection(seams: _seams(first)));
+      await tester.enterText(
+        find.byKey(const Key('storefront-tagline')),
+        'Original unresolved draft',
+      );
+      await tester.pumpAndSettle();
+      await _tap(tester, find.byKey(const Key('storefront-save')));
+      final original = first.saves.single;
+      final retained = tester
+          .widget<TextButton>(find.byKey(const Key('storefront-save-retry')))
+          .onPressed!;
+      final replacement = _FakeProfileRepo(profile: _profileJson());
+      await _pump(tester, StorefrontSection(seams: _seams(replacement)));
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('storefront-tagline')))
+            .controller!
+            .text,
+        'Original unresolved draft',
+      );
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const Key('storefront-save-retry')))
+            .onPressed,
+        isNull,
+      );
+      retained();
+      await tester.pumpAndSettle();
+      expect(first.saves.single, same(original));
+      expect(replacement.saves, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  for (final reReadFirst in [false, true]) {
+    testWidgets(
+      'retained media assignment cannot read or save after disposal; reread=$reReadFirst',
+      (tester) async {
+        final repo = _FakeProfileRepo(profile: _profileJson());
+        final media = _FakeMediaRepo();
+        final invoker = content_fixture.PublisherInvoker();
+        await _pump(
+          tester,
+          StorefrontSection(
+            seams: StorefrontEditorSeams(
+              scopeIdentity: 'disposed-media-scope',
+              profileRepository: repo,
+              mediaRepository: media,
+              branchSource: _FakeBranches(),
+              sourceCatalog: _FakeSources(),
+              publisher: StorefrontMediaPublisher(
+                invoker: invoker,
+                organizationId: _rest,
+                restaurantId: _rest,
+              ),
+            ),
+          ),
+        );
+        final assign = tester
+            .widget<StorefrontMediaSlot>(
+              find.byKey(const ValueKey('storefront-slot-widget-logo')),
+            )
+            .onAssign;
+        final readsBefore = repo.reads, listsBefore = media.lists;
+        await tester.pumpWidget(const SizedBox.shrink());
+        final result = await assign(
+          StorefrontSlot.logo,
+          null,
+          reReadFirst: reReadFirst,
+        );
+        expect(result.status, StorefrontWriteStatus.unavailable);
+        expect(repo.reads, readsBefore);
+        expect(media.lists, listsBefore);
+        expect(repo.saves, isEmpty);
+        expect(invoker.calls, isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   group('featured product editor', () {
     testWidgets(
       'twelve disables only additional choices; dirty branch prevents selection save',

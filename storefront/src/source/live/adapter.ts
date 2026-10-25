@@ -38,7 +38,8 @@ import { isValidSlug } from '@/theme/sanitize';
 import { fetchStorefrontMenu, liveConfig, type LiveConfig } from './client';
 import type { StorefrontMenuOk } from './decode';
 import type { StorefrontMenuV2Ok } from './decodeHomeContent';
-import { decodeStorefrontMenuV3, type StorefrontMenuV3Ok } from './decodeFeaturedItems';
+import type { StorefrontMenuV3Ok } from './decodeFeaturedItems';
+import { decodeStorefrontMenuV4, type StorefrontMenuV4Ok } from './decodeContentV1';
 import { iconPathFor } from './icons';
 import { liveOrderingEnabled, orderEndpointOrigin } from './ordering';
 
@@ -80,10 +81,13 @@ export function nextOpenParts(iso: string | null, timeZone: string): NextOpenAt 
   }
 }
 
-export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok, origin: string): StorefrontResolution {
+export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok | StorefrontMenuV4Ok, origin: string): StorefrontResolution {
   const r = envelope.restaurant;
   const home = 'home_content' in envelope ? envelope.home_content : null;
   const featured = new Set('featured_item_ids' in envelope ? envelope.featured_item_ids : []);
+  const content = 'content_v1' in envelope ? envelope.content_v1 : null;
+  const categoryPresentation = new Map(content?.category_presentation.map(c => [c.category_id, c]) ?? []);
+  const itemPresentation = new Map(content?.item_presentation.map(i => [i.item_id, i]) ?? []);
   const tenant: Tenant = {
     slug: r.slug,
     displayName: r.display_name,
@@ -162,21 +166,51 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
       soldOut: i.availability === 'unavailable',
       hasOptions: groupIds.length > 0,
       groupIds,
+      ...(content ? {
+        imageFit: itemPresentation.get(i.id)?.image_fit ?? categoryPresentation.get(i.category_id)?.image_fit ?? 'fill',
+        cardLayout: itemPresentation.get(i.id)?.card_layout ?? categoryPresentation.get(i.category_id)?.card_layout ?? 'standard',
+      } : {}),
     });
   }
   const populated = new Set(items.map((i) => i.categoryId));
   const categories: Category[] = envelope.categories
     .filter((c) => populated.has(c.id))
-    .map((c) => ({ id: c.id, name: c.name, image: null, iconPath: iconPathFor(c.icon_key), blurb: null }));
+    .map((c) => {
+      const p = categoryPresentation.get(c.id);
+      return { id: c.id, name: c.name, image: p?.image_url ? `${origin}${p.image_url}` : null,
+        iconPath: iconPathFor(c.icon_key), blurb: p?.blurb ?? null,
+        ...(content ? { heading: p?.heading ?? null, imageFit: p?.image_fit ?? null, cardLayout: p?.card_layout ?? null } : {}),
+      };
+    });
+
+  let promo: HomeView['modules']['promo'] = null;
+  if (content?.promo) {
+    const p = content.promo;
+    const copy = { kicker: p.kicker, title: p.title, body: p.body };
+    if (p.kind === 'category') promo = { kind: 'category', ...copy, categoryId: p.category_id, image: `${origin}${p.image_url}` };
+    else {
+      // The v4 decoder has already required a served available photographed
+      // item. Canonical values are reused; there is no second price/media read.
+      const item = items.find(i => i.id === p.item_id)!;
+      promo = { kind: 'item', ...copy, itemId: item.id, priceMinor: item.priceMinor, image: item.image!, imageFit: item.imageFit, hasOptions: item.hasOptions };
+    }
+  }
+  const story = content?.story ? { kicker: content.story.kicker, title: content.story.title, body: content.story.body,
+    image: `${origin}${content.story.image_url}`, facts: content.story.facts } : null;
 
   const taxRateBp = envelope.tax.enabled ? envelope.tax.rate_bp : 0;
   const view: HomeView = {
     tenant,
     modules: {
-      announcement: home?.announcement_text == null ? null : { text: home.announcement_text },
-      campaign: { title: home?.hero_headline ?? r.tagline ?? r.display_name, subline: home?.hero_subline ?? '' },
-      promo: null,
-      story: null,
+      announcement: content?.announcement_segments
+        ? { text: home?.announcement_text ?? '', segments: content.announcement_segments }
+        : home?.announcement_text == null ? null : { text: home.announcement_text },
+      campaign: { title: home?.hero_headline ?? r.tagline ?? r.display_name, subline: home?.hero_subline ?? '',
+        ...(content ? { hero: { mode: content.hero.mode, itemId: content.hero.item_id, format: content.hero.format,
+          eyebrow: content.hero.eyebrow, stamp: content.hero.stamp, footnote: content.hero.footnote } } : {}),
+      },
+      promo,
+      story,
       popular: { enabled: items.some((i) => i.signature && !i.soldOut), ready: false },
     },
     categories,
@@ -202,7 +236,7 @@ export function liveStorefrontSource(config?: LiveConfig): StorefrontSource {
     async getStorefront(slug: string): Promise<StorefrontResolution | null> {
       if (!isValidSlug(slug)) return null;
       const cfg = config ?? liveConfig();
-      const envelope = decodeStorefrontMenuV3(await fetchStorefrontMenu(slug, cfg));
+      const envelope = decodeStorefrontMenuV4(await fetchStorefrontMenu(slug, cfg));
       if (!envelope.ok) {
         if (envelope.error === 'not_found') return null;
         throw new Error(`storefront_menu answered ${envelope.error}`);

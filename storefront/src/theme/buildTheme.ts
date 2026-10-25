@@ -44,11 +44,11 @@ const SEMANTIC = {
     promoWarm2: '#E7D3B7',
   },
   light: {
-    tx: '#1F2937',
-    tx2: '#4B5563',
+    tx: '#192922',
+    tx2: '#626c62',
     tx3: '#626D79',
-    hair: '#E3E8E5',
-    hair2: '#C9D3CE',
+    hair: '#deded2',
+    hair2: '#cbd0c1',
     scrim: 'rgba(17,24,39,.55)',
     ok: '#15803D',
     okbg: '#DCFCE7',
@@ -71,15 +71,19 @@ export function buildTheme(preset: Preset, { primary, accent }: TenantColours): 
   const s = SEMANTIC[preset];
   const toWhite = dark ? '#FFFFFF' : '#000000';
 
-  const bg: Hex = dark ? mix(tone(primary, 0.09), '#101413', 0.62) : '#F4F6F5';
-  const sf: Hex = dark ? mix(tone(primary, 0.14), '#161A19', 0.58) : '#FFFFFF';
-  const sf2: Hex = dark ? mix(tone(primary, 0.19), '#1D2220', 0.55) : '#EEF2F0';
+  // The approved cream canvas is a platform design surface, never tenant data.
+  const bg: Hex = dark ? mix(tone(primary, 0.09), '#101413', 0.62) : '#f7f3e9';
+  const sf: Hex = dark ? mix(tone(primary, 0.14), '#161A19', 0.58) : '#f7f3e9';
+  const sf2: Hex = dark ? mix(tone(primary, 0.19), '#1D2220', 0.55) : '#eeecdf';
 
   const onhero = inkOn(primary);
   const onacc = inkOn(accent);
 
   // Accent as TEXT must reach AA on the card surface.
   const acct = walk(accent, sf, AA, toWhite);
+  // Large Hero type preserves a passing brand accent, including the reference
+  // orange, while pale tenant accents still clear their own canvas at 3:1.
+  const accLargeText = walk(accent, bg, AA_LARGE, toWhite);
 
   // PX-4 — focus ring: the handoff walks `ring` against the canvas only, but the
   // ring also lands on cards and on the accent selection bed. Walk against the
@@ -159,6 +163,7 @@ export function buildTheme(preset: Preset, { primary, accent }: TenantColours): 
     acc: accent,
     onacc,
     acct,
+    accLargeText,
     accOnSelection,
     ring,
     accs: accsRaw,

@@ -2,6 +2,7 @@ import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
     show MenuReadSource, MenuScope, MenuCategory;
 
 import 'storefront_models.dart';
+import 'storefront_content_models.dart';
 
 /// Presentation choices only: no private image key, price or publication write.
 class StorefrontFeaturedOption {
@@ -22,7 +23,8 @@ abstract interface class StorefrontFeaturedCatalog {
   Future<List<StorefrontFeaturedOption>?> load(String storefrontBranchId);
 }
 
-class DashboardStorefrontFeaturedCatalog implements StorefrontFeaturedCatalog {
+class DashboardStorefrontFeaturedCatalog
+    implements StorefrontFeaturedCatalog, StorefrontContentCatalog {
   const DashboardStorefrontFeaturedCatalog({
     required this.menuReadSource,
     required this.organizationId,
@@ -34,6 +36,97 @@ class DashboardStorefrontFeaturedCatalog implements StorefrontFeaturedCatalog {
   final String organizationId;
   final String restaurantId;
   final String currencyCode;
+
+  @override
+  Future<StorefrontContentCatalogData?> loadContent(
+    String savedBranchId,
+  ) async {
+    final source = menuReadSource;
+    if (source == null || !contentId(savedBranchId)) return null;
+    bool visible(String org, String restaurant, String? branch) =>
+        org.toLowerCase() == organizationId.toLowerCase() &&
+        restaurant.toLowerCase() == restaurantId.toLowerCase() &&
+        (branch == null || branch.toLowerCase() == savedBranchId);
+    try {
+      final snapshot = await source.load(
+        MenuScope(
+          organizationId: organizationId,
+          restaurantId: restaurantId,
+          branchId: savedBranchId,
+          currencyCode: currencyCode,
+        ),
+      );
+      final categories =
+          snapshot.categories
+              .where(
+                (category) =>
+                    !category.isDeleted &&
+                    category.isActive &&
+                    visible(
+                      category.organizationId,
+                      category.restaurantId,
+                      category.branchId,
+                    ),
+              )
+              .toList()
+            ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+      final categoryIds = categories
+          .map((category) => category.id.toLowerCase())
+          .toSet();
+      final items =
+          snapshot.items
+              .where(
+                (item) =>
+                    !item.isDeleted &&
+                    item.isActive &&
+                    visible(
+                      item.organizationId,
+                      item.restaurantId,
+                      item.branchId,
+                    ) &&
+                    categoryIds.contains(item.menuCategoryId.toLowerCase()),
+              )
+              .toList()
+            ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+      final itemIds = items.map((item) => item.id.toLowerCase()).toSet();
+      if (categories.length > 100 ||
+          items.length > 500 ||
+          categoryIds.length != categories.length ||
+          itemIds.length != items.length ||
+          !categoryIds.every(contentId) ||
+          !itemIds.every(contentId))
+        return null;
+      return StorefrontContentCatalogData(
+        categories: List.unmodifiable(
+          categories.map(
+            (category) => StorefrontContentChoice(
+              id: category.id.toLowerCase(),
+              name: category.name,
+              available: items.any(
+                (item) =>
+                    item.menuCategoryId.toLowerCase() ==
+                    category.id.toLowerCase(),
+              ),
+            ),
+          ),
+        ),
+        items: List.unmodifiable(
+          items.map(
+            (item) => StorefrontContentChoice(
+              id: item.id.toLowerCase(),
+              name: item.name,
+              categoryId: item.menuCategoryId.toLowerCase(),
+              available: item.availability != 'unavailable',
+              hasSourceImage:
+                  item.imagePath != null && item.imagePath!.isNotEmpty,
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   Future<List<StorefrontFeaturedOption>?> load(

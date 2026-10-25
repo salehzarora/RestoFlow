@@ -1,7 +1,7 @@
 /**
  * THE LIVE READ CLIENT - server-only, one call, no SDK.
  *
- * WHAT IT DOES. POSTs `{p_slug}` to `<origin>/rest/v1/rpc/storefront_menu_v3`
+ * WHAT IT DOES. POSTs `{p_slug}` to `<origin>/rest/v1/rpc/storefront_menu_v4`
  * with the PUBLISHABLE anon key from SERVER environment (never `NEXT_PUBLIC_`),
  * with a 5 s timeout, and returns the parsed JSON body for the decoder. That is
  * the whole read path: the same request a direct PostgREST caller could make
@@ -45,7 +45,7 @@ export function liveConfig(env: NodeJS.ProcessEnv = process.env): LiveConfig {
 /** The exact request the read makes, exposed so a test can assert its shape. */
 export function storefrontMenuRequest(config: LiveConfig, slug: string): { readonly url: string; readonly init: RequestInit } {
   return {
-    url: `${config.url}/rest/v1/rpc/storefront_menu_v3`,
+    url: `${config.url}/rest/v1/rpc/storefront_menu_v4`,
     init: {
       method: 'POST',
       headers: {

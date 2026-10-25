@@ -421,11 +421,14 @@ test('the WIDE ASIDE is wired to the cart - and to the SAME quote as every other
   // zone with free delivery would be presented as no delivery at all.
   assert.ok(aside.includes('quote.feeApplies'), 'the aside must render the delivery-fee row');
 
-  // What the aside deliberately does NOT SHOW, by design and not by omission:
-  // thumbnails, the kitchen note, Edit, Remove, and the cart notices.
-  for (const absent of ['lineMedia', 'NoteIcon', 'm.edit', 'm.remove', 'changedTitle']) {
+    // The approved cart dialog now has thumbnails and explicit line actions.
+    // It still derives no notices and retains the original cart/quote authority.
+    for (const absent of ['NoteIcon', 'changedTitle']) {
     assert.ok(!aside.includes(absent), `the aside must not carry ${absent}`);
   }
+    for (const present of ['asideThumb', 'm.edit', 'm.remove', 'data-sf-line={line.line.lineId}']) {
+      assert.ok(aside.includes(present), `the cart dialog must carry ${present}`);
+    }
 
   // But it must PRESERVE the note it does not show. A stepper that wrote back
   // a line without its note would silently erase a kitchen instruction the

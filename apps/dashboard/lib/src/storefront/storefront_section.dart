@@ -9,6 +9,9 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'opening_hours_editor.dart';
 import 'storefront_contrast.dart';
+import 'storefront_content_models.dart';
+import 'storefront_content_repository.dart';
+import 'storefront_content_section.dart';
 import 'storefront_copy.dart';
 import 'storefront_featured_items.dart';
 import 'storefront_item_images.dart';
@@ -30,9 +33,12 @@ class StorefrontEditorSeams {
     required this.branchSource,
     required this.sourceCatalog,
     this.featuredCatalog,
+    StorefrontContentRepository? contentRepository,
+    StorefrontContentCatalog? contentCatalog,
     this.publisher,
     this.publicUrlFor,
-  });
+  }) : _contentRepository = contentRepository,
+       _contentCatalog = contentCatalog;
 
   /// WHO this editor works for — the membership, organization, restaurant
   /// (and role) the repositories below were built for. The card's draft,
@@ -47,6 +53,19 @@ class StorefrontEditorSeams {
   final StorefrontBranchSource branchSource;
   final StorefrontSourceCatalog sourceCatalog;
   final StorefrontFeaturedCatalog? featuredCatalog;
+  final StorefrontContentRepository? _contentRepository;
+  final StorefrontContentCatalog? _contentCatalog;
+  StorefrontContentRepository? get contentRepository =>
+      _contentRepository ??
+      (profileRepository is StorefrontContentRepositoryBinding
+          ? (profileRepository as StorefrontContentRepositoryBinding)
+                .contentRepository
+          : null);
+  StorefrontContentCatalog? get contentCatalog =>
+      _contentCatalog ??
+      (featuredCatalog is StorefrontContentCatalog
+          ? featuredCatalog as StorefrontContentCatalog
+          : null);
 
   /// The Edge Function client (null = image publishing is not available
   /// here; the media slots then show an honest note).
@@ -342,10 +361,56 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   StorefrontProfile? get _profile => _read?.profile;
   bool get _busy =>
       _saving ||
+      _contentDirty ||
+      _contentBusy ||
+      _legacyBindingHold ||
       _mediaBusy ||
       _stale ||
       _homePending != null ||
       _featuredPending != null;
+
+  bool _contentDirty = false;
+  bool _contentBusy = false;
+  bool _legacyBindingHold = false;
+  ({StorefrontProfileRepository repository, _PendingSave attempt})?
+  _legacyOperation;
+  int _bindingGeneration = 0;
+
+  bool _currentBinding(int generation) =>
+      mounted && generation == _bindingGeneration;
+
+  @override
+  void didUpdateWidget(covariant _StorefrontEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final old = oldWidget.seams, current = widget.seams;
+    if (!identical(old?.profileRepository, current?.profileRepository) ||
+        !identical(old?.mediaRepository, current?.mediaRepository) ||
+        !identical(old?.contentRepository, current?.contentRepository) ||
+        !identical(old?.contentCatalog, current?.contentCatalog) ||
+        !identical(old?.publisher, current?.publisher)) {
+      final keepDraft =
+          _patch().isNotEmpty ||
+          _homeDirty ||
+          _featuredDirty ||
+          _banner?.retry != null ||
+          _homePending != null ||
+          _featuredPending != null;
+      if (_saving ||
+          _legacyOperation != null ||
+          (!identical(old?.profileRepository, current?.profileRepository) &&
+              (_banner?.retry != null ||
+                  _homePending != null ||
+                  _featuredPending != null))) {
+        _legacyBindingHold = true;
+      }
+      _bindingGeneration++;
+      _featuredGeneration++;
+      // Keep the current child mounted so its original uncertain/confirmed
+      // request receipt survives. The replacement parent read is read-only.
+      _stale = true;
+      if (_wired) _load(preserveVisible: true, preserveDraft: keepDraft);
+    }
+  }
 
   bool get _featuredSupported =>
       (_profile?.supportsFeaturedItems ?? false) &&
@@ -407,6 +472,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
 
   @override
   void dispose() {
+    _bindingGeneration++;
     _featuredGeneration++;
     for (final c in _controllers) {
       c.removeListener(_onTextChanged);
@@ -423,18 +489,31 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   // Loading
   // ---------------------------------------------------------------------------
 
-  Future<void> _load() async {
+  Future<void> _load({
+    bool preserveVisible = false,
+    bool preserveDraft = false,
+  }) async {
+    final generation = _bindingGeneration;
+    final seams = widget.seams!;
+    final priorProfile = _profile;
     setState(() {
-      _loading = true;
-      _banner = null;
-      _stale = false;
+      _loading = !preserveVisible;
+      if (!preserveDraft) _banner = null;
+      _stale = preserveVisible;
     });
-    final read = await _safeRead();
-    if (!mounted) return;
+    final read = await _safeRead(seams);
+    if (!_currentBinding(generation)) return;
     setState(() {
       _loading = false;
       _read = read;
-      _resetDraft();
+      _stale =
+          _legacyBindingHold ||
+          !read.isOk ||
+          (preserveDraft &&
+              (priorProfile?.version != read.profile?.version ||
+                  priorProfile?.storefrontBranchId !=
+                      read.profile?.storefrontBranchId));
+      if (!preserveDraft) _resetDraft();
     });
     if (!read.isOk) return;
     unawaited(_loadBranches());
@@ -446,14 +525,16 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   }
 
   Future<void> _loadBranches() async {
+    final generation = _bindingGeneration;
+    final source = widget.seams!.branchSource;
     setState(() => _branchesLoading = true);
     List<StorefrontBranchOption>? branches;
     try {
-      branches = await widget.seams!.branchSource.list();
+      branches = await source.list();
     } catch (_) {
       branches = null; // fail-soft: the picker says so
     }
-    if (!mounted) return;
+    if (!_currentBinding(generation)) return;
     setState(() {
       _branches = branches;
       _branchesLoading = false;
@@ -461,20 +542,23 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   }
 
   Future<void> _loadMedia() async {
-    final media = await _safeList();
-    if (!mounted) return;
+    final generation = _bindingGeneration;
+    final media = await _safeList(widget.seams!);
+    if (!_currentBinding(generation)) return;
     setState(() => _media = media);
   }
 
   Future<void> _loadSources() async {
+    final generation = _bindingGeneration;
     final seams = widget.seams!;
     if (seams.publisher == null) return;
-    final sources = await _safeSources();
-    if (!mounted) return;
+    final sources = await _safeSources(seams);
+    if (!_currentBinding(generation)) return;
     setState(() => _sources = sources);
   }
 
   Future<void> _loadFeatured() async {
+    final binding = _bindingGeneration;
     final generation = ++_featuredGeneration;
     final profile = _profile;
     final catalog = widget.seams?.featuredCatalog;
@@ -489,7 +573,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     } catch (_) {
       options = null;
     }
-    if (!mounted ||
+    if (!_currentBinding(binding) ||
         generation != _featuredGeneration ||
         _profile?.version != profile.version ||
         _profile?.storefrontBranchId != profile.storefrontBranchId)
@@ -507,22 +591,36 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     bool resetDraft = true,
     bool reloadSources = false,
   }) async {
+    final result = await _refreshAllState(
+      resetDraft: resetDraft,
+      reloadSources: reloadSources,
+    );
+    return result.profileRead && result.mediaRead;
+  }
+
+  Future<StorefrontContentRefresh> _refreshAllState({
+    bool resetDraft = true,
+    bool reloadSources = false,
+  }) async {
+    final generation = _bindingGeneration;
     final seams = widget.seams!;
     final hadProfile = _read?.exists ?? false;
     final results = await Future.wait<Object?>([
-      _safeRead(),
-      _safeList(),
-      if (reloadSources && seams.publisher != null) _safeSources(),
+      _safeRead(seams),
+      _safeList(seams),
+      if (reloadSources && seams.publisher != null) _safeSources(seams),
     ]);
-    if (!mounted) return false;
+    if (!_currentBinding(generation))
+      return const StorefrontContentRefresh.unavailable();
     final read = results[0]! as StorefrontProfileRead;
+    final media = results[1]! as StorefrontMediaList;
     setState(() {
       if (read.isOk) {
         _read = read;
-        _stale = false;
+        _stale = _legacyBindingHold;
         if (resetDraft) _resetDraft();
       }
-      _media = results[1]! as StorefrontMediaList;
+      _media = media;
       if (results.length > 2) {
         _sources = results[2]! as StorefrontSourceOptions;
       }
@@ -531,22 +629,33 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       unawaited(_loadSources());
     }
     if (read.isOk && read.exists) unawaited(_loadFeatured());
-    return read.isOk;
+    return StorefrontContentRefresh(
+      profileRead: read.isOk,
+      mediaRead: media.isOk,
+      version: read.profile?.version,
+      branchId: read.profile?.storefrontBranchId,
+    );
   }
 
   /// The seams return typed results and never throw; these guards keep a
   /// misbehaving seam from leaving the card spinning (a throw = unavailable).
-  Future<StorefrontProfileRead> _safeRead() async {
+  Future<StorefrontProfileRead> _safeRead([
+    StorefrontEditorSeams? binding,
+  ]) async {
+    final repository = (binding ?? widget.seams!).profileRepository;
     try {
-      return await widget.seams!.profileRepository.read();
+      return await repository.read();
     } catch (_) {
       return const StorefrontProfileRead.unavailable();
     }
   }
 
-  Future<StorefrontMediaList> _safeList() async {
+  Future<StorefrontMediaList> _safeList([
+    StorefrontEditorSeams? binding,
+  ]) async {
+    final repository = (binding ?? widget.seams!).mediaRepository;
     try {
-      return await widget.seams!.mediaRepository.list();
+      return await repository.list();
     } catch (_) {
       return const StorefrontMediaList.unavailable();
     }
@@ -556,14 +665,18 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   /// it to confirm a receipt-logo source is still the CURRENT receipt logo
   /// when Publish is pressed).
   Future<StorefrontSourceOptions> _reloadSources() async {
-    final sources = await _safeSources();
-    if (mounted) setState(() => _sources = sources);
+    final generation = _bindingGeneration;
+    final sources = await _safeSources(widget.seams!);
+    if (_currentBinding(generation)) setState(() => _sources = sources);
     return sources;
   }
 
-  Future<StorefrontSourceOptions> _safeSources() async {
+  Future<StorefrontSourceOptions> _safeSources([
+    StorefrontEditorSeams? binding,
+  ]) async {
+    final source = (binding ?? widget.seams!).sourceCatalog;
     try {
-      return await widget.seams!.sourceCatalog.load();
+      return await source.load();
     } catch (_) {
       return const StorefrontSourceOptions(
         receiptLogoUnavailable: true,
@@ -810,6 +923,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
 
   Future<void> _onSaveHome({_PendingSave? replay}) async {
     if (!mounted) return;
+    final generation = _bindingGeneration;
     final p = _profile;
     final repository = widget.seams?.profileRepository;
     if (p == null ||
@@ -818,6 +932,9 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         _featuredDirty ||
         _featuredPending != null ||
         _saving ||
+        _legacyBindingHold ||
+        _contentBusy ||
+        _contentDirty ||
         _mediaBusy ||
         _stale)
       return;
@@ -837,6 +954,18 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           [widget.seams!.scopeIdentity, version.toString(), jsonEncode(patch)],
           widget.nonce?.call() ?? DateTime.now().microsecondsSinceEpoch,
         );
+    _legacyOperation = (
+      repository: repository!,
+      attempt:
+          replay ??
+          _PendingSave(
+            patch: patch,
+            expectedVersion: version,
+            requestId: requestId,
+            draftPatch: patch,
+            okMessage: l10n.storefrontHomeContentSaved,
+          ),
+    );
     setState(() {
       _saving = true;
       _banner = null;
@@ -857,7 +986,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         expectedVersion: version,
       );
     }
-    if (!mounted) return;
+    if (!_currentBinding(generation)) return;
     if (replay != null &&
         result.status != StorefrontWriteStatus.ok &&
         result.status != StorefrontWriteStatus.conflict) {
@@ -923,7 +1052,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           RestoflowTone.danger,
         );
     }
-    if (!mounted) return;
+    if (!_currentBinding(generation)) return;
+    _legacyOperation = null;
     setState(() {
       _saving = false;
       _banner = banner;
@@ -933,6 +1063,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
 
   Future<void> _onSaveFeatured({_PendingSave? replay}) async {
     if (!mounted) return;
+    final generation = _bindingGeneration;
     final p = _profile;
     final repository = widget.seams?.profileRepository;
     if (p == null ||
@@ -941,6 +1072,9 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         _homeDirty ||
         _homePending != null ||
         _saving ||
+        _legacyBindingHold ||
+        _contentBusy ||
+        _contentDirty ||
         _mediaBusy ||
         _stale)
       return;
@@ -963,6 +1097,18 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           [widget.seams!.scopeIdentity, version.toString(), jsonEncode(patch)],
           widget.nonce?.call() ?? DateTime.now().microsecondsSinceEpoch,
         );
+    _legacyOperation = (
+      repository: repository!,
+      attempt:
+          replay ??
+          _PendingSave(
+            patch: patch,
+            expectedVersion: version,
+            requestId: requestId,
+            draftPatch: patch,
+            okMessage: l10n.storefrontFeaturedItemsSaved,
+          ),
+    );
     setState(() {
       _saving = true;
       _banner = null;
@@ -983,7 +1129,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         expectedVersion: version,
       );
     }
-    if (!mounted) return;
+    if (!_currentBinding(generation)) return;
     if (replay != null &&
         result.status != StorefrontWriteStatus.ok &&
         result.status != StorefrontWriteStatus.conflict) {
@@ -1049,7 +1195,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           RestoflowTone.danger,
         );
     }
-    if (!mounted) return;
+    if (!_currentBinding(generation)) return;
+    _legacyOperation = null;
     setState(() {
       _saving = false;
       _banner = banner;
@@ -1123,17 +1270,30 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     required String okMessage,
     String? requestId,
   }) async {
+    if (!mounted || _busy) return;
+    final generation = _bindingGeneration;
+    final repository = widget.seams!.profileRepository;
     final l10n = AppLocalizations.of(context);
+    _legacyOperation = (
+      repository: repository,
+      attempt: _PendingSave(
+        patch: Map<String, Object?>.unmodifiable(patch),
+        expectedVersion: expectedVersion,
+        requestId: requestId,
+        draftPatch: Map<String, Object?>.unmodifiable(draftPatch),
+        okMessage: okMessage,
+      ),
+    );
     setState(() {
       _saving = true;
       _banner = null;
     });
-    final result = await widget.seams!.profileRepository.save(
+    final result = await repository.save(
       expectedVersion: expectedVersion,
       patch: patch,
       requestId: requestId,
     );
-    if (!mounted) return;
+    if (!_currentBinding(generation)) return;
     _Banner banner;
     var stale = false;
     switch (result.status) {
@@ -1192,7 +1352,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           ),
         );
     }
-    if (!mounted) return;
+    if (!_currentBinding(generation)) return;
+    _legacyOperation = null;
     setState(() {
       _saving = false;
       _banner = banner;
@@ -1210,10 +1371,15 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     required bool reReadFirst,
     StorefrontSlotReplay? replay,
   }) async {
+    if (!mounted)
+      return const StorefrontWriteResult(StorefrontWriteStatus.unavailable);
     final seams = widget.seams!;
+    final generation = _bindingGeneration;
+    if (_contentBusy || _contentDirty || _legacyBindingHold)
+      return const StorefrontWriteResult(StorefrontWriteStatus.unavailable);
     if (reReadFirst) {
-      final fresh = await _safeRead();
-      if (!mounted)
+      final fresh = await _safeRead(seams);
+      if (!_currentBinding(generation) || _contentBusy || _contentDirty)
         return const StorefrontWriteResult(StorefrontWriteStatus.unavailable);
       if (fresh.isOk) {
         setState(() {
@@ -1241,7 +1407,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       patch: {slot.profileKey: mediaId},
       requestId: replay?.requestId,
     );
-    if (!mounted) return result;
+    if (!_currentBinding(generation)) return result;
     final fresh = await _refreshAll();
     if (!fresh &&
         mounted &&
@@ -1556,6 +1722,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     StorefrontDerived derived,
   ) {
     final dirty = _dirty;
+    final contentBinding = _bindingGeneration;
     final path = '/s/${profile.slug}';
     final pausedUntil = _pausedUntil;
     final zone = (pausedUntil ?? DateTime.now()).toLocal().timeZoneOffset;
@@ -1628,6 +1795,39 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         ),
       ]),
       ..._homeContentEditor(l10n, theme, profile),
+      if (widget.seams?.contentRepository
+          case final StorefrontContentRepository repository)
+        StorefrontContentSection(
+          key: ValueKey('storefront-content|${widget.seams!.scopeIdentity}'),
+          repository: repository,
+          catalog: widget.seams!.contentCatalog,
+          profileVersion: profile.version,
+          savedBranchId: profile.storefrontBranchId,
+          enabled:
+              !_saving &&
+              !_mediaBusy &&
+              !_stale &&
+              !_dirty &&
+              !_homeDirty &&
+              !_featuredDirty &&
+              _homePending == null &&
+              _featuredPending == null,
+          publisher: widget.seams!.publisher,
+          sources: _sources,
+          reloadSources: _reloadSources,
+          publicUrlFor: widget.seams!.publicUrlFor,
+          onRefresh: () async => _currentBinding(contentBinding)
+              ? _refreshAllState()
+              : const StorefrontContentRefresh.unavailable(),
+          onDraftChanged: (dirty) {
+            if (_currentBinding(contentBinding))
+              setState(() => _contentDirty = dirty);
+          },
+          onBusyChanged: (busy) {
+            if (_currentBinding(contentBinding))
+              setState(() => _contentBusy = busy);
+          },
+        ),
       ..._featuredEditor(l10n, theme, profile),
       const Divider(height: RestoflowSpacing.xl),
       Text(l10n.storefrontLookTitle, style: theme.textTheme.titleSmall),
@@ -2040,7 +2240,12 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               TextButton.icon(
                 key: const Key('storefront-featured-retry'),
                 onPressed:
-                    _saving || _mediaBusy || _stale || _homePending != null
+                    _saving ||
+                        _contentBusy ||
+                        _contentDirty ||
+                        _mediaBusy ||
+                        _stale ||
+                        _homePending != null
                     ? null
                     : () => _onSaveFeatured(replay: pending),
                 icon: const Icon(Icons.refresh),
@@ -2151,7 +2356,12 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
             if (pending?.requestId != null)
               TextButton.icon(
                 key: const Key('storefront-home-retry'),
-                onPressed: _saving || _mediaBusy || _stale
+                onPressed:
+                    _saving ||
+                        _contentBusy ||
+                        _contentDirty ||
+                        _mediaBusy ||
+                        _stale
                     ? null
                     : () => _onSaveHome(replay: pending),
                 icon: const Icon(Icons.refresh),
@@ -2276,13 +2486,17 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     RestoflowNoticeBanner(
       key: const Key('storefront-stale'),
       tone: RestoflowTone.warning,
-      body: l10n.storefrontStaleNote,
+      body: _legacyBindingHold
+          ? storefrontContentCopy(l10n, 'bindingChanged')
+          : l10n.storefrontStaleNote,
     ),
     Align(
       alignment: AlignmentDirectional.centerStart,
       child: TextButton.icon(
         key: const Key('storefront-reload'),
-        onPressed: _saving || _mediaBusy ? null : _load,
+        onPressed: _saving || _contentBusy || _legacyBindingHold || _mediaBusy
+            ? null
+            : _load,
         icon: const Icon(Icons.refresh),
         label: Text(l10n.storefrontReloadAction),
       ),
@@ -2567,7 +2781,13 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
             if (mounted) setState(() => _mediaBusy = busy);
           },
           nonce: widget.nonce,
-          enabled: !dirty && !_saving && !_mediaBusy && !_stale,
+          enabled:
+              !dirty &&
+              !_saving &&
+              !_contentBusy &&
+              !_contentDirty &&
+              !_mediaBusy &&
+              !_stale,
         ),
         for (final slot in StorefrontSlot.values) ...[
           StorefrontMediaSlot(
@@ -2579,7 +2799,13 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
             publisher: publisher,
             mediaRepository: seams.mediaRepository,
             publicUrlFor: seams.publicUrlFor,
-            enabled: !dirty && !_saving && !_mediaBusy && !_stale,
+            enabled:
+                !dirty &&
+                !_saving &&
+                !_contentBusy &&
+                !_contentDirty &&
+                !_mediaBusy &&
+                !_stale,
             nonce: widget.nonce,
             refusedReceiptLogo: _refusedReceiptLogo,
             onReceiptLogoRefused: (refused) {
