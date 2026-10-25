@@ -83,7 +83,7 @@ export async function guardBrowser(context) {
   const localBrandAssetExists = existsSync(path.join(settings.sourceDir, 'public/bizbot-symbol-256.png'));
   await context.route('**/*', async route => {
     const req = route.request(); const url = new URL(req.url());
-    const allowedPath = url.pathname.startsWith('/_next/static/') || url.pathname === '/favicon.ico' || (url.pathname === '/bizbot-symbol-256.png' && localBrandAssetExists) || /^\/(?:ar\/|he\/|en\/)?s\/sf-cart-nav-(?:alpha|bravo)(?:\/menu|\/cart)?$/.test(url.pathname);
+    const allowedPath = url.pathname.startsWith('/_next/static/') || url.pathname === '/favicon.ico' || (url.pathname === '/bizbot-symbol-256.png' && localBrandAssetExists) || /^\/(?:ar\/|he\/|en\/)?s\/sf-cart-nav-(?:alpha|bravo)(?:\/menu|\/cart|\/checkout|\/review)?$/.test(url.pathname);
     if (url.origin !== appOrigin || !['GET', 'HEAD'].includes(req.method()) || !allowedPath) { denied.push({ origin: url.origin, path: url.pathname, method: req.method() }); await route.abort('blockedbyclient'); return; }
     await route.continue();
   });

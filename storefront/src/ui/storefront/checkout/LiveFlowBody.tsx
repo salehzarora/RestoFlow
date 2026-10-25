@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { buildQuote } from '@/money/quote';
 import { storefrontMessages } from '@/i18n/storefront';
 import type { OrderMessages } from '@/i18n/orders';
 import { cartPath, checkoutPath, menuPath, reviewPath } from '@/routes/routes';
+import { cartNavigationHref } from '@/routes/cart-navigation';
 import { useCartApi } from '../cart/CartContext';
 import { useCheckoutDraft, EMPTY_DRAFT } from './CheckoutDraftProvider';
 import { CartScreen } from './CartScreen';
@@ -25,6 +26,7 @@ export function LiveFlowBody(props: FlowProps & { orderCopy: OrderMessages }) {
   const m = storefrontMessages(locale);
   const copy = props.orderCopy;
   const router = useRouter();
+  const pathname = usePathname();
   const cart = useCartApi();
   const draftApi = useCheckoutDraft();
   const draft = draftApi?.draft ?? EMPTY_DRAFT;
@@ -36,7 +38,12 @@ export function LiveFlowBody(props: FlowProps & { orderCopy: OrderMessages }) {
   const withinLimits = cart !== null && cart.state.lines.length <= 20 && cart.summary.itemCount <= 50;
   const reason = orderingReason(orderingBlocker(state, tenant.orderingEnabled), m, tenant.opensAt);
   const blocked = reason ?? (!tenant.pickupEnabled ? copy.orderingUnavailable : controller === null ? copy.unsupported : null);
-  const hrefs = { menu: menuPath(locale, slug), cart: cartPath(locale, slug), checkout: checkoutPath(locale, slug), review: reviewPath(locale, slug) };
+  const hrefs = {
+    menu: cartNavigationHref(menuPath(locale, slug), pathname),
+    cart: cartNavigationHref(cartPath(locale, slug), pathname),
+    checkout: cartNavigationHref(checkoutPath(locale, slug), pathname),
+    review: cartNavigationHref(reviewPath(locale, slug), pathname),
+  };
 
   useEffect(() => {
     if (leaving.current) return;
@@ -49,10 +56,10 @@ export function LiveFlowBody(props: FlowProps & { orderCopy: OrderMessages }) {
       return;
     }
     if (!ready || screen === 'cart') return;
-    if (!tenant.orderingEnabled || !withinLimits || quote.lines.length === 0) router.replace(cartPath(locale, slug));
-    else if (screen === 'payment') router.replace(details?.ok ? reviewPath(locale, slug) : checkoutPath(locale, slug));
-    else if (screen === 'review' && !details?.ok) router.replace(checkoutPath(locale, slug));
-  }, [controller, snapshot, draftApi?.reset, ready, screen, tenant.orderingEnabled, withinLimits, quote, details?.ok, router, locale, slug]);
+    if (!tenant.orderingEnabled || !withinLimits || quote.lines.length === 0) router.replace(hrefs.cart);
+    else if (screen === 'payment') router.replace(details?.ok ? hrefs.review : hrefs.checkout);
+    else if (screen === 'review' && !details?.ok) router.replace(hrefs.checkout);
+  }, [controller, snapshot, draftApi?.reset, ready, screen, tenant.orderingEnabled, withinLimits, quote, details?.ok, router, locale, slug, hrefs.cart, hrefs.checkout, hrefs.review]);
 
   if (screen === 'review' && (snapshot.result !== null || snapshot.recovered || ['unknown', 'not_found', 'unavailable'].includes(snapshot.phase))) {
     return <LiveRequestRuntime locale={locale} copy={copy} slug={slug} origin={orderEndpointOrigin} tenant={{ name: tenant.name, logo: tenant.logo ?? null }} publicPhone={tenant.publicPhone} onOrderAgain={() => {

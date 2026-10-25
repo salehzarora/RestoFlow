@@ -14,13 +14,14 @@
  * cannot progress. Checkout uses one persistent button and soft navigation so
  * quote settlement cannot replace the focused control.
  */
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import type { CartSummary } from '@/cart/cartModel';
 import { optionSummary } from '@/cart/cartModel';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney, formatRateBp } from '@/money/format';
 import type { Quote } from '@/money/quote';
 import type { ModifierSelections, ServiceState } from '@/source/types';
+import { cartNavigationHref } from '@/routes/cart-navigation';
 import { TenantText } from '../TenantText';
 import { productFrameClass, productImageClass } from '../contentPresentation';
 import contentStyles from '../storefront.module.css';
@@ -42,7 +43,7 @@ export function LiveCartAside({
   state,
   orderingEnabled,
   opensAt,
-  checkoutHref,
+  checkoutHref: canonicalCheckoutHref,
 }: {
   /** Null until this visitor's own cart has been read. */
   summary: CartSummary | null;
@@ -62,6 +63,8 @@ export function LiveCartAside({
   checkoutHref: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const checkoutHref = cartNavigationHref(canonicalCheckoutHref, pathname);
   // The ONE shared reason (eligibility.ts): browse-only first, then closed / paused.
   const reason = orderingReason(orderingBlocker(state, orderingEnabled), m, opensAt);
   const lines = summary?.lines ?? [];
