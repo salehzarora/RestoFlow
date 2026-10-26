@@ -180,9 +180,11 @@ final Map<String, _Resolve> _orderEditKeys = <String, _Resolve>{
 /// Values that are only symbols plus a placeholder, so ar/he equal en.
 const Set<String> _symbolOnlyKeys = <String>{'kdsEditQuantityIncrease'};
 
-/// The `activityLog*` key count after ORDER-EDIT-001A. ORDER-EDIT-001C adds no
-/// audit strings; a later ticket that adds `activityLog*` keys updates this.
-const int _activityLogKeyCountSnapshot = 200;
+/// The `activityLog*` key count after BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D: the
+/// ORDER-EDIT-001A count of 200 plus its 73 card_attempt.* Activity-log keys.
+/// ORDER-EDIT-001C adds no audit strings; a later ticket that adds
+/// `activityLog*` keys updates this.
+const int _activityLogKeyCountSnapshot = 273;
 
 String _arbDir() {
   for (final candidate in <String>['lib/l10n', 'packages/l10n/lib/l10n']) {

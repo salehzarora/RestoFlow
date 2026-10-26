@@ -90,6 +90,15 @@ enum _Kind {
   availabilityReason,
   kitchenChannel,
   reasonCode,
+  // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D: the card_attempt.* closed enums.
+  cardState,
+  cardMode,
+  cardRefusal,
+  cardAnomaly,
+  cardConfirmation,
+  cardResumeOutcome,
+  cardDeniedReason,
+  yesNo,
 }
 
 /// The EXPLICIT allowlist of payload keys that may ever be shown, and how to
@@ -206,9 +215,82 @@ const Map<String, _Kind> _displayableKeys = {
   'connection_type': _Kind.text,
 };
 
-/// The payload keys the presenter may ever render, exposed so the audit-coverage
-/// guard can assert every one has a localized field label.
-List<String> auditDisplayableFieldKeys() => _displayableKeys.keys.toList();
+/// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D (API §4.33): the card_attempt.* family
+/// renders ONLY the keys `app.audit_safe_detail` projects for each action, in
+/// this order, from the new values — never the global allowlist above, never
+/// old values and never the free-text reason. A hostile or legacy payload can
+/// therefore not surface a provider / terminal / credential reference, an
+/// approval or voucher number, an internal identifier or money on any action
+/// but `.started`. An unregistered card_attempt.* action renders no rows.
+const Map<String, List<String>> _cardAttemptKeys = {
+  'card_attempt.started': [
+    'attempt_state',
+    'mode',
+    'amount_minor',
+    'currency_code',
+  ],
+  'card_attempt.approved': _cardResultKeys,
+  'card_attempt.declined': _cardResultKeys,
+  'card_attempt.unknown': _cardResultKeys,
+  'card_attempt.released': _cardResultKeys,
+  'card_attempt.provider_anomaly': _cardResultKeys,
+  'card_attempt.release_requested': ['attempt_state'],
+  'card_attempt.release_failed': ['attempt_state'],
+  'card_attempt.recording_refused': ['refusal_code'],
+  'card_attempt.order_freed': ['attempt_state', 'confirmation_source'],
+  'card_attempt.recording_resume_requested': [
+    'attempt_state',
+    'prior_refusal_code',
+    'resume_count',
+    'outcome',
+    'denied_reason',
+  ],
+  'card_attempt.denied': ['denied_reason'],
+};
+
+/// The four keys of a provider-result row (approved / declined / unknown /
+/// released / provider_anomaly).
+const List<String> _cardResultKeys = [
+  'attempt_state',
+  'refusal_code',
+  'anomaly_code',
+  'release_requested',
+];
+
+/// The provider-result actions. On them the server's only `refusal_code` is
+/// `release_failed` — a terminal release fact, never a recording refusal —
+/// so it is labelled as the release status there.
+const Set<String> _cardResultActions = {
+  'card_attempt.approved',
+  'card_attempt.declined',
+  'card_attempt.unknown',
+  'card_attempt.released',
+  'card_attempt.provider_anomaly',
+};
+
+/// How each card_attempt.* key renders. Closed enums are localized; an unknown
+/// token of a projected key shows raw — an honest unknown beats a confident
+/// mislabel. `currency_code` is shown as its ISO code.
+const Map<String, _Kind> _cardFieldKinds = {
+  'attempt_state': _Kind.cardState,
+  'mode': _Kind.cardMode,
+  'amount_minor': _Kind.money,
+  'currency_code': _Kind.text,
+  'refusal_code': _Kind.cardRefusal,
+  'prior_refusal_code': _Kind.cardRefusal,
+  'anomaly_code': _Kind.cardAnomaly,
+  'release_requested': _Kind.yesNo,
+  'confirmation_source': _Kind.cardConfirmation,
+  'resume_count': _Kind.count,
+  'outcome': _Kind.cardResumeOutcome,
+  'denied_reason': _Kind.cardDeniedReason,
+};
+
+/// The payload keys the presenter may ever render (the global allowlist plus
+/// the card_attempt.* keys), exposed so the audit-coverage guard can assert
+/// every one has a localized field label.
+List<String> auditDisplayableFieldKeys() =>
+    {..._displayableKeys.keys, ..._cardFieldKinds.keys}.toList();
 
 /// The localized label for a safe detail-field key. Public so the audit-coverage
 /// guard can assert every displayable key has a real label (an unmapped key
@@ -280,6 +362,18 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   'paper_width' => l10n.activityLogFieldPaperWidth,
   'is_enabled' => l10n.activityLogFieldEnabled,
   'connection_type' => l10n.activityLogFieldConnectionType,
+  // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D: card_attempt.* safe scalars
+  // (amount_minor and denied_reason reuse the labels above).
+  'attempt_state' => l10n.activityLogFieldCardState,
+  'mode' => l10n.activityLogFieldCardMode,
+  'currency_code' => l10n.activityLogFieldCurrency,
+  'refusal_code' => l10n.activityLogFieldCardRefusal,
+  'prior_refusal_code' => l10n.activityLogFieldCardPriorRefusal,
+  'anomaly_code' => l10n.activityLogFieldCardAnomaly,
+  'release_requested' => l10n.activityLogFieldCardReleaseRequested,
+  'confirmation_source' => l10n.activityLogFieldCardConfirmationSource,
+  'resume_count' => l10n.activityLogFieldCardResumeCount,
+  'outcome' => l10n.activityLogFieldCardResumeOutcome,
   _ => key,
 };
 
@@ -376,6 +470,9 @@ class AuditEventPresenter {
   AuditEventView present(AuditEvent e) {
     final (tone, icon) = _toneIcon(e);
     final mapped = _title(e);
+    // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D: the card_attempt.* family shows no
+    // free-text reason (its writer stores none) and only its projected keys.
+    final card = _isCardAttempt(e);
     return AuditEventView(
       eventId: e.eventId,
       title: mapped ?? _categoryLabel(e.category),
@@ -386,14 +483,21 @@ class AuditEventPresenter {
       occurredAtLabel: e.occurredAtLabel,
       tone: tone,
       icon: icon,
-      isDenied: e.isDenied,
+      // The shared model matches `_denied` suffixes only; the card family's
+      // refusal is `card_attempt.denied` (a presenter-scoped Denied pill).
+      isDenied: e.isDenied || e.action == 'card_attempt.denied',
       isKnownAction: mapped != null,
       scopeLabel: _scopeLabel(e),
       deviceLabel: e.deviceLabel,
-      reason: e.reason?.trim().isNotEmpty == true ? e.reason!.trim() : null,
-      changes: _changes(e),
+      reason: !card && e.reason?.trim().isNotEmpty == true
+          ? e.reason!.trim()
+          : null,
+      changes: card ? _cardChanges(e) : _changes(e),
     );
   }
+
+  static bool _isCardAttempt(AuditEvent e) =>
+      e.action.startsWith('card_attempt.');
 
   /// The localized scope line ("Restaurant · Branch"), or whichever is present.
   String? _scopeLabel(AuditEvent e) {
@@ -482,12 +586,44 @@ class AuditEventPresenter {
     'printer.printer_device.updated' => l10n.activityLogTitlePrinterUpdated,
     'printer.printer_device.deleted' => l10n.activityLogTitlePrinterDeleted,
     'printer.printer_route.updated' => l10n.activityLogTitlePrinterRouteUpdated,
+    // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D (API §4.33): LIVE card attempts. The
+    // titles describe the PROVIDER's result — on finish rows the actor is the
+    // attempt's frozen initiating employee, who approved or declined nothing.
+    'card_attempt.started' => l10n.activityLogTitleCardAttemptStarted,
+    'card_attempt.approved' => l10n.activityLogTitleCardAttemptApproved,
+    'card_attempt.declined' => l10n.activityLogTitleCardAttemptDeclined,
+    'card_attempt.unknown' => l10n.activityLogTitleCardAttemptUnknown,
+    'card_attempt.released' => l10n.activityLogTitleCardAttemptReleased,
+    'card_attempt.provider_anomaly' => _cardAnomalyTitle(e),
+    'card_attempt.release_requested' =>
+      l10n.activityLogTitleCardAttemptReleaseRequested,
+    'card_attempt.release_failed' =>
+      l10n.activityLogTitleCardAttemptReleaseFailed,
+    'card_attempt.recording_refused' =>
+      l10n.activityLogTitleCardAttemptRecordingRefused,
+    'card_attempt.order_freed' => l10n.activityLogTitleCardAttemptOrderFreed,
+    'card_attempt.recording_resume_requested' =>
+      l10n.activityLogTitleCardAttemptResumeRequested,
+    'card_attempt.denied' => l10n.activityLogTitleCardAttemptDenied,
     _ => null,
+  };
+
+  /// The same `card_attempt.provider_anomaly` action is written when an
+  /// anomaly is RAISED (the attempt is unknown / released and a charge may
+  /// exist) and when an exact provider answer CLEARS it (approved / declined),
+  /// so its title follows the projected attempt_state, not one static label.
+  String _cardAnomalyTitle(
+    AuditEvent e,
+  ) => switch (e.newValues['attempt_state']) {
+    'unknown' || 'released' => l10n.activityLogTitleCardAttemptAnomalyRaised,
+    'approved' || 'declined' => l10n.activityLogTitleCardAttemptAnomalyCleared,
+    _ => l10n.activityLogTitleCardAttemptAnomaly,
   };
 
   /// The tone + icon, driven by category and denial. Denials read as a warning
   /// regardless of category; voids/revocations read as danger.
   (RestoflowTone, IconData) _toneIcon(AuditEvent e) {
+    if (_isCardAttempt(e)) return _cardToneIcon(e);
     if (e.isDenied) return (RestoflowTone.warning, Icons.block_outlined);
     // POS-CASH-DRAWER-MANUAL-OPEN-001: a wrong PIN on the drawer unlock counts
     // toward the shared sign-in lockout, so it reads as a warning, not routine.
@@ -510,6 +646,44 @@ class AuditEventPresenter {
       _ => (RestoflowTone.neutral, Icons.history_outlined),
     };
   }
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D: the card family's tone follows its
+  /// operational meaning — only a provider approval reads as success; a
+  /// decline, an UNKNOWN result, a possible charge, a refusal or a denial
+  /// never does.
+  (RestoflowTone, IconData) _cardToneIcon(AuditEvent e) => switch (e.action) {
+    'card_attempt.approved' => (
+      RestoflowTone.success,
+      Icons.credit_card_outlined,
+    ),
+    'card_attempt.declined' => (
+      RestoflowTone.neutral,
+      Icons.credit_card_off_outlined,
+    ),
+    'card_attempt.unknown' => (RestoflowTone.warning, Icons.help_outline),
+    'card_attempt.provider_anomaly' => switch (e.newValues['attempt_state']) {
+      'unknown' ||
+      'released' => (RestoflowTone.danger, Icons.report_problem_outlined),
+      'approved' ||
+      'declined' => (RestoflowTone.info, Icons.credit_card_outlined),
+      _ => (RestoflowTone.warning, Icons.report_problem_outlined),
+    },
+    'card_attempt.release_failed' || 'card_attempt.recording_refused' => (
+      RestoflowTone.warning,
+      Icons.report_problem_outlined,
+    ),
+    'card_attempt.order_freed' => (
+      RestoflowTone.warning,
+      Icons.lock_open_outlined,
+    ),
+    'card_attempt.recording_resume_requested' =>
+      e.newValues['outcome'] == 'dispatched'
+          ? (RestoflowTone.info, Icons.replay_outlined)
+          : (RestoflowTone.warning, Icons.replay_outlined),
+    'card_attempt.denied' => (RestoflowTone.warning, Icons.block_outlined),
+    // started, released and release_requested (and an unregistered action).
+    _ => (RestoflowTone.info, Icons.credit_card_outlined),
+  };
 
   /// The safe old→new change rows, built ONLY from allowlisted keys (plus the
   /// two allowlisted nested objects). Never emits a sensitive-looking key.
@@ -552,6 +726,53 @@ class AuditEventPresenter {
     return out;
   }
 
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D: the card_attempt.* change rows — ONLY
+  /// this action's projected keys ([_cardAttemptKeys]), from the NEW values,
+  /// scalars only. `amount_minor` (projected on `.started` only) and
+  /// `resume_count` must be integers (D-007 money is integer minor units); the
+  /// amount renders in the row's own ISO currency when well formed, else in
+  /// the page currency.
+  List<AuditChange> _cardChanges(AuditEvent e) {
+    final out = <AuditChange>[];
+    for (final key in _cardAttemptKeys[e.action] ?? const <String>[]) {
+      final value = e.newValues[key];
+      if (value == null || value is Map || value is List) continue;
+      final kind = _cardFieldKinds[key]!;
+      if ((kind == _Kind.money || kind == _Kind.count) && value is! int) {
+        continue;
+      }
+      final text = kind == _Kind.money
+          ? MoneyFormatter.formatMinor(value as int, _cardCurrency(e))
+          : _format(kind, value);
+      if (text == null) continue;
+      out.add(
+        AuditChange(
+          label: _cardFieldLabel(e.action, key, value),
+          newValue: text,
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// The field label of a card key. `refusal_code` on a provider-result row
+  /// ([_cardResultActions]) and a `prior_refusal_code` of `release_failed` are
+  /// release facts, never recording refusals, so they read as the release
+  /// status.
+  String _cardFieldLabel(String action, String key, Object value) =>
+      (key == 'refusal_code' && _cardResultActions.contains(action)) ||
+          (key == 'prior_refusal_code' && value == 'release_failed')
+      ? l10n.activityLogFieldCardReleaseStatus
+      : _fieldLabel(key);
+
+  /// The row's own ISO-4217 code when well formed, else the page currency.
+  String _cardCurrency(AuditEvent e) {
+    final code = e.newValues['currency_code'];
+    return code is String && RegExp(r'^[A-Z]{3}$').hasMatch(code)
+        ? code
+        : currencyCode;
+  }
+
   /// The three cashier capabilities as Enabled/Disabled rows (old→new).
   List<AuditChange> _capabilities(AuditEvent e) {
     final newCaps = e.newValues['capabilities'];
@@ -589,9 +810,96 @@ class AuditEventPresenter {
       _Kind.availabilityReason => _availabilityReasonLabel(value.toString()),
       _Kind.kitchenChannel => _kitchenChannelLabel(value.toString()),
       _Kind.reasonCode => _reasonCodeLabel(value.toString()),
+      _Kind.cardState => _cardStateLabel(value.toString()),
+      _Kind.cardMode => _cardModeLabel(value.toString()),
+      _Kind.cardRefusal => _cardRefusalLabel(value.toString()),
+      _Kind.cardAnomaly => _cardAnomalyLabel(value.toString()),
+      _Kind.cardConfirmation => _cardConfirmationLabel(value.toString()),
+      _Kind.cardResumeOutcome => _cardResumeOutcomeLabel(value.toString()),
+      _Kind.cardDeniedReason => _cardDeniedReasonLabel(value.toString()),
+      _Kind.yesNo => _yesNo(value),
       _Kind.text => value.toString(),
     };
   }
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D: the card attempt's state (closed
+  /// enum); an unknown token shows raw.
+  String _cardStateLabel(String state) => switch (state) {
+    'sent' => l10n.activityLogCardStateSent,
+    'approved' => l10n.activityLogCardStateApproved,
+    'declined' => l10n.activityLogCardStateDeclined,
+    'unknown' => l10n.activityLogCardStateUnknown,
+    'released' => l10n.activityLogCardStateReleased,
+    _ => state,
+  };
+
+  /// LIVE or TEST (only LIVE attempts reach the Activity log).
+  String _cardModeLabel(String mode) => switch (mode) {
+    'live' => l10n.activityLogCardModeLive,
+    'test' => l10n.activityLogCardModeTest,
+    _ => mode,
+  };
+
+  /// The recording refusal of an approved card payment (closed enum). The
+  /// tokens it shares with a denial reason reuse that label; permission_denied
+  /// is `app.record_payment`'s role refusal and keeps the shared role label.
+  String _cardRefusalLabel(String code) => switch (code) {
+    'release_failed' => l10n.activityLogCardRefusalReleaseFailed,
+    'order_not_chargeable' => l10n.activityLogDeniedOrderNotChargeable,
+    'conflict' => l10n.activityLogCardRefusalConflict,
+    'precondition_failed' => l10n.activityLogCardRefusalPreconditionFailed,
+    'revoked_employee' => l10n.activityLogCardRefusalRevokedEmployee,
+    'permission_denied' => l10n.activityLogDeniedPermission,
+    'revoked_device' => l10n.activityLogCardRefusalRevokedDevice,
+    'amount_mismatch' => l10n.activityLogDeniedAmountMismatch,
+    'payment_in_progress' => l10n.activityLogCardRefusalPaymentInProgress,
+    'card_context_lost' => l10n.activityLogDeniedContextLost,
+    'provider_recording_refused' =>
+      l10n.activityLogCardRefusalProviderRecordingRefused,
+    'nonrecoverable_refusal' => l10n.activityLogCardRefusalNonrecoverable,
+    _ => code,
+  };
+
+  /// The provider anomaly of a card attempt (closed enum).
+  String _cardAnomalyLabel(String code) => switch (code) {
+    'amount_mismatch' => l10n.activityLogCardAnomalyAmountMismatch,
+    'currency_mismatch' => l10n.activityLogCardAnomalyCurrencyMismatch,
+    'preauthorization' => l10n.activityLogCardAnomalyPreauthorization,
+    'partial_refund' => l10n.activityLogCardAnomalyPartialRefund,
+    'refunded' => l10n.activityLogCardAnomalyRefunded,
+    'voided' => l10n.activityLogCardAnomalyVoided,
+    'out_of_contract' => l10n.activityLogCardAnomalyOutOfContract,
+    _ => code,
+  };
+
+  /// Where a manager confirmed that no charge stands (closed enum).
+  String _cardConfirmationLabel(String source) => switch (source) {
+    'provider_report' => l10n.activityLogCardConfirmationProviderReport,
+    'provider_back_office' => l10n.activityLogCardConfirmationBackOffice,
+    _ => source,
+  };
+
+  /// Whether a recording retry was sent or refused (closed enum).
+  String _cardResumeOutcomeLabel(String outcome) => switch (outcome) {
+    'dispatched' => l10n.activityLogCardResumeDispatched,
+    'refused' => l10n.activityLogCardResumeRefused,
+    _ => outcome,
+  };
+
+  /// A card denial reason: on `card_attempt.denied`, `permission_denied`
+  /// covers both a non-POS device and a role not allowed to take card
+  /// payments (the card proof answers one token for both), so it has the card
+  /// family's own label; every other token keeps the shared denial label.
+  String _cardDeniedReasonLabel(String reason) => reason == 'permission_denied'
+      ? l10n.activityLogDeniedCardPermission
+      : _deniedReasonLabel(reason);
+
+  /// A yes / no flag (release_requested); anything but a boolean shows raw.
+  String _yesNo(Object value) => switch (value) {
+    true || 'true' => l10n.activityLogYes,
+    false || 'false' => l10n.activityLogNo,
+    _ => value.toString(),
+  };
 
   /// ORDER-EDIT-001A: HOW the kitchen learned of an order edit — a closed
   /// enum; an unknown token shows raw rather than guessed.
@@ -678,6 +986,28 @@ class AuditEventPresenter {
     // Also emitted by the PSC-001D void-acknowledgement refusal (the action
     // came from a device type that may not perform it); it rendered raw.
     'invalid_device_type' => l10n.activityLogDeniedInvalidDeviceType,
+    // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D: card_attempt.denied and refused
+    // recording retries (the card family's denied_reason labels
+    // permission_denied with its own key, _cardDeniedReasonLabel).
+    'ineligible_order_state' => l10n.activityLogDeniedIneligibleOrderState,
+    'max_live_amount_exceeded' => l10n.activityLogDeniedMaxLiveAmountExceeded,
+    'no_open_shift' => l10n.activityLogDeniedNoOpenShift,
+    'no_active_drawer' => l10n.activityLogDeniedNoActiveDrawer,
+    'no_recording_attempt' => l10n.activityLogDeniedNoRecordingAttempt,
+    'attempt_not_freeable' => l10n.activityLogDeniedAttemptNotFreeable,
+    'charge_may_exist' => l10n.activityLogDeniedChargeMayExist,
+    'confirmation_required' => l10n.activityLogDeniedConfirmationRequired,
+    'device_not_active' => l10n.activityLogDeniedDeviceNotActive,
+    'operation_mismatch' => l10n.activityLogDeniedOperationMismatch,
+    'resume_limit' => l10n.activityLogDeniedResumeLimit,
+    'resume_stale' => l10n.activityLogDeniedResumeStale,
+    'not_recoverable' => l10n.activityLogDeniedNotRecoverable,
+    'payment_exists' => l10n.activityLogDeniedPaymentExists,
+    'claim_inactive' => l10n.activityLogDeniedClaimInactive,
+    'order_not_chargeable' => l10n.activityLogDeniedOrderNotChargeable,
+    'context_lost' => l10n.activityLogDeniedContextLost,
+    'amount_mismatch' => l10n.activityLogDeniedAmountMismatch,
+    'refusal_not_recorded' => l10n.activityLogDeniedRefusalNotRecorded,
     _ => reason,
   };
 
