@@ -87,8 +87,15 @@ class FakeInboxRepository implements OnlineOrderInboxRepository {
     required String decisionId,
     required OnlineOrderDecision decision,
     String? reason,
+    int? preparationMinutes,
   }) {
-    final call = OnlineInboxIntentCall(requestId, decisionId, decision, reason);
+    final call = OnlineInboxIntentCall(
+      requestId,
+      decisionId,
+      decision,
+      reason,
+      preparationMinutes,
+    );
     decisions.add(call);
     return onDecide?.call(call) ??
         Future.value(
@@ -109,9 +116,11 @@ class OnlineInboxIntentCall {
     this.decisionId,
     this.decision,
     this.reason,
+    this.preparationMinutes,
   );
   final String requestId;
   final String decisionId;
   final OnlineOrderDecision decision;
   final String? reason;
+  final int? preparationMinutes;
 }

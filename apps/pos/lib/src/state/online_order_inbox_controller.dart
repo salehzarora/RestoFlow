@@ -37,11 +37,13 @@ class OnlineInboxIntent {
     required this.decisionId,
     required this.decision,
     this.reason,
+    this.preparationMinutes,
   });
   final String requestId;
   final String decisionId;
   final OnlineOrderDecision decision;
   final String? reason;
+  final int? preparationMinutes;
 }
 
 class OnlineOrderInboxState {
@@ -414,6 +416,7 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
     String requestId,
     OnlineOrderDecision decision, {
     String? reason,
+    int? preparationMinutes,
   }) async {
     final gen = _generation;
     if (!_current(gen) ||
@@ -432,6 +435,13 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
       return;
     }
     final trimmedReason = reason?.trim();
+    if (preparationMinutes != null &&
+        (decision != OnlineOrderDecision.accept ||
+            preparationMinutes < 1 ||
+            preparationMinutes > 240)) {
+      _fail(OnlineInboxFailure.invalidRequest);
+      return;
+    }
     if (decision == OnlineOrderDecision.reject &&
         (trimmedReason == null ||
             trimmedReason.isEmpty ||
@@ -445,6 +455,7 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
       decisionId: ref.read(clientIdGeneratorProvider).newId(),
       decision: decision,
       reason: trimmedReason,
+      preparationMinutes: preparationMinutes,
     );
     _revision++; // an older list response cannot overwrite this decision
     state = state.copyWith(
@@ -470,6 +481,7 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
             decisionId: intent.decisionId,
             decision: intent.decision,
             reason: intent.reason,
+            preparationMinutes: intent.preparationMinutes,
           );
       if (!_current(gen)) return;
       final expected = intent.decision == OnlineOrderDecision.accept
@@ -557,7 +569,8 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
       if (request.status == OnlineOrderStatus.pending &&
           !request.expiredAt(now())) {
         // Lookup has confirmed pending after the request lock. Retry only the
-        // ORIGINAL id, action and reason, bounded to one attempt per recovery.
+        // ORIGINAL id, action, reason and duration, bounded to one attempt per
+        // recovery. Never replace a duration after an uncertain handoff.
         await _send(gen, intent, reconcileOnFailure: false);
       } else {
         await _finish(

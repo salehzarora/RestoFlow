@@ -184,6 +184,42 @@ abstract class AppLocalizations {
   /// **'Accept order'**
   String get posOnlineInboxAccept;
 
+  /// No description provided for @posOnlineInboxPreparationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated preparation time'**
+  String get posOnlineInboxPreparationTitle;
+
+  /// No description provided for @posOnlineInboxPreparationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an approximate preparation time before accepting. This estimate is shown to the customer.'**
+  String get posOnlineInboxPreparationHint;
+
+  /// No description provided for @posOnlineInboxPreparationMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String posOnlineInboxPreparationMinutes(int minutes);
+
+  /// No description provided for @posOnlineInboxPreparationCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom time in minutes'**
+  String get posOnlineInboxPreparationCustom;
+
+  /// No description provided for @posOnlineInboxPreparationRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number from 1 to 240.'**
+  String get posOnlineInboxPreparationRange;
+
+  /// No description provided for @posOnlineInboxPreparationConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm and accept'**
+  String get posOnlineInboxPreparationConfirm;
+
   /// No description provided for @posOnlineInboxReject.
   ///
   /// In en, this message translates to:

@@ -3,6 +3,7 @@ import { readRequestJson, readStrictJson } from "./json.mjs";
 import { hashStatusToken, validateRequest } from "./validation.mjs";
 import { authorizeTestSubmission } from "./test-admission.mjs";
 import { scheduleInstantWake } from "./instant-wake.mjs";
+import { projectAcceptanceEta } from "./acceptance-eta.mjs";
 
 const DEFAULT_ORIGIN = "https://menu.bizbot.systems";
 const PUBLIC_STATUSES = new Set(["pending", "expired", "accepted", "rejected"]);
@@ -13,22 +14,26 @@ const BUSINESS_ERRORS = new Map([
   ["rate_limited", 429], ["capacity_reached", 429],
 ]);
 const MAX_TOTAL_MINOR = 10_000_000;
+const RESPONSE_VERSION_HEADER = "X-BIZBOT-Order-Response-Version";
+const ALLOWED_HEADERS = ["content-type", "authorization", "apikey", "x-client-info", RESPONSE_VERSION_HEADER.toLowerCase()];
 
-function responseHeaders(origin) {
+function responseHeaders(origin, version2 = false) {
   const headers = new Headers({
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store, max-age=0",
     "Pragma": "no-cache",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
-    "Vary": "Origin",
+    "Vary": `Origin, ${RESPONSE_VERSION_HEADER}`,
+    "Access-Control-Expose-Headers": RESPONSE_VERSION_HEADER,
   });
   if (origin) headers.set("Access-Control-Allow-Origin", origin);
+  if (version2) headers.set(RESPONSE_VERSION_HEADER, "2");
   return headers;
 }
 
-function json(body, status, origin) {
-  return new Response(JSON.stringify(body), { status, headers: responseHeaders(origin) });
+function json(body, status, origin, version2 = false) {
+  return new Response(JSON.stringify(body), { status, headers: responseHeaders(origin, version2) });
 }
 
 function credentials(getEnv) {
@@ -44,7 +49,7 @@ function credentials(getEnv) {
   return { base: url.origin, serviceKey };
 }
 
-function publicResult(result, requestId) {
+function publicResult(result, requestId, version2) {
   if (!result || typeof result !== "object" || Array.isArray(result)) return null;
   if (result.ok === false) {
     const status = BUSINESS_ERRORS.get(result.error);
@@ -62,6 +67,10 @@ function publicResult(result, requestId) {
   if (Object.hasOwn(result, "customer_rejection_reason") && (result.status !== "rejected"
     || typeof publicReason !== "string" || publicReason !== publicReason.trim()
     || [...publicReason].length < 1 || [...publicReason].length > 240 || /[\x00-\x1f\x7f\uD800-\uDFFF]/u.test(publicReason))) return null;
+  let estimate;
+  if (version2 && Object.hasOwn(result, "acceptance_eta")) {
+    if (result.status !== "accepted" || !(estimate = projectAcceptanceEta(result.acceptance_eta))) return null;
+  }
   // Project explicitly: even a future upstream field cannot expose customer data or capabilities.
   return {
     status: 200,
@@ -70,12 +79,14 @@ function publicResult(result, requestId) {
       totals: { currency_code: "ILS", subtotal_minor: totals.subtotal_minor, tax_total_minor: totals.tax_total_minor, grand_total_minor: totals.grand_total_minor },
       replayed: result.replayed,
       ...(publicReason !== undefined ? { customer_rejection_reason: publicReason } : {}),
+      ...(estimate ? { acceptance_eta: estimate } : {}),
     },
   };
 }
 
-async function callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit, pilotSubmission }) {
-  const rpc = input.action === "submit" ? (testPermit ? "submit_web_order_test_request" : pilotSubmission ? "submit_web_order_pilot_request" : "submit_web_order_platform_request") : "get_web_order_request_status";
+async function callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit, pilotSubmission, version2 }) {
+  const rpc = input.action === "submit" ? (testPermit ? "submit_web_order_test_request" : pilotSubmission ? "submit_web_order_pilot_request" : "submit_web_order_platform_request")
+    : (version2 ? "get_web_order_request_status_v2" : "get_web_order_request_status");
   const args = { p_slug: input.slug, p_client_request_id: input.request_id, p_status_token_hash: tokenHash };
   if (input.action === "submit") args.p_order = input.order;
   if (testPermit) Object.assign(args, {
@@ -108,7 +119,7 @@ async function callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, 
           if (upstream.body) void upstream.body.cancel().catch(() => {});
           return { failed: true, status: [429, 503, 504].includes(upstream.status) ? 503 : 502 };
         }
-        const result = publicResult(await readStrictJson(upstream), input.request_id);
+        const result = publicResult(await readStrictJson(upstream), input.request_id, version2);
         return result ?? { failed: true, status: 502 };
       })(),
       deadline,
@@ -126,7 +137,8 @@ export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl
   waitUntil, wakeTimeoutMs = 5000 } = {}) {
   if (typeof getEnv !== "function") throw new TypeError("getEnv is required");
   return async function handler(request) {
-    let origin;
+    let origin; let version2 = false;
+    const reply = (body, status) => json(body, status, origin, version2);
     try {
       const incomingOrigin = request.headers.get("origin");
       const allowedOrigin = getEnv("WEB_ORDERS_ALLOWED_ORIGIN") ?? DEFAULT_ORIGIN;
@@ -135,13 +147,12 @@ export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl
       if (request.method === "OPTIONS") {
         const requestedMethod = request.headers.get("access-control-request-method");
         const requestedHeaders = (request.headers.get("access-control-request-headers") ?? "").toLowerCase().split(",").map((value) => value.trim()).filter(Boolean);
-        const allowedHeaders = new Set(["content-type", "authorization", "apikey", "x-client-info"]);
-        if ((requestedMethod !== null && requestedMethod !== "POST") || requestedHeaders.some((value) => !allowedHeaders.has(value))) {
+        if ((requestedMethod !== null && requestedMethod !== "POST") || requestedHeaders.some((value) => !ALLOWED_HEADERS.includes(value))) {
           return json({ ok: false, error: "invalid_preflight" }, 403, origin);
         }
         const headers = responseHeaders(origin);
         headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-        headers.set("Access-Control-Allow-Headers", "content-type, authorization, apikey, x-client-info");
+        headers.set("Access-Control-Allow-Headers", ALLOWED_HEADERS.join(", "));
         headers.set("Access-Control-Max-Age", "600");
         return new Response(null, { status: 204, headers });
       }
@@ -150,29 +161,40 @@ export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl
         response.headers.set("Allow", "POST, OPTIONS");
         return response;
       }
-      const input = validateRequest(await readRequestJson(request));
+      const selectedVersion = request.headers.get(RESPONSE_VERSION_HEADER);
+      if (selectedVersion !== null && selectedVersion !== "1" && selectedVersion !== "2") {
+        return reply({ ok: false, error: "invalid_request" }, 400);
+      }
+      const body = await readRequestJson(request);
+      if (selectedVersion === "2") {
+        // Acknowledgment belongs only to a known status action. Malformed or
+        // unsupported negotiation and submit-v2 never acquire an acknowledgment.
+        if (body?.action === "submit") return reply({ ok: false, error: "invalid_request" }, 400);
+        version2 = body?.action === "status";
+      }
+      const input = validateRequest(body);
       let testPermit = null;
       let pilotSubmission = false;
       const enabledGates = ["WEB_ORDERS_ENABLED", "WEB_ORDERS_TEST_ENABLED", "WEB_ORDERS_PILOT_ENABLED"]
         .filter((name) => getEnv(name) === "true").length;
       if (input.action === "submit" && enabledGates > 1) {
-        return json({ ok: false, error: "ordering_unavailable" }, 503, origin);
+        return reply({ ok: false, error: "ordering_unavailable" }, 503);
       }
       if (input.action === "submit" && getEnv("WEB_ORDERS_ENABLED") !== "true") {
         testPermit = await authorizeTestSubmission({ input, request, getEnv, cryptoImpl, now });
         // This is routing, never admission authority. The private database pilot
         // enforces exact branch, approved contact, expiry and one atomic request.
         pilotSubmission = !testPermit && getEnv("WEB_ORDERS_PILOT_ENABLED") === "true" && input.slug === "mapsburger";
-        if (!testPermit && !pilotSubmission) return json({ ok: false, error: "ordering_unavailable" }, 503, origin);
+        if (!testPermit && !pilotSubmission) return reply({ ok: false, error: "ordering_unavailable" }, 503);
       }
       const configuration = credentials(getEnv);
-      if (!configuration) return json({ ok: false, error: input.action === "submit" ? "ordering_unavailable" : "status_unavailable", uncertain: false }, 503, origin);
+      if (!configuration) return reply({ ok: false, error: input.action === "submit" ? "ordering_unavailable" : "status_unavailable", uncertain: false }, 503);
       const tokenHash = await hashStatusToken(input.status_token, cryptoImpl);
-      const result = await callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit, pilotSubmission });
+      const result = await callRpc({ input, configuration, fetchImpl, timeoutMs, tokenHash, testPermit, pilotSubmission, version2 });
       if (result.failed) {
-        return json({ ok: false, error: input.action === "submit" ? "submission_outcome_unknown" : "status_unavailable", request_id: input.request_id, uncertain: input.action === "submit" }, result.status, origin);
+        return reply({ ok: false, error: input.action === "submit" ? "submission_outcome_unknown" : "status_unavailable", request_id: input.request_id, uncertain: input.action === "submit" }, result.status);
       }
-      const response = json(result.body, result.status, origin);
+      const response = reply(result.body, result.status);
       // Only a validated, committed NEW normal-live pending result, for any tenant.
       // Construct the unchanged public response first; never await notification work.
       if (input.action === "submit" && !testPermit && !pilotSubmission
@@ -181,8 +203,8 @@ export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl
       }
       return response;
     } catch (error) {
-      if (error instanceof RequestError) return json({ ok: false, error: error.code }, error.status, origin);
-      return json({ ok: false, error: "service_unavailable" }, 503, origin);
+      if (error instanceof RequestError) return reply({ ok: false, error: error.code }, error.status);
+      return reply({ ok: false, error: "service_unavailable" }, 503);
     }
   };
 }

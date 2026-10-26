@@ -88,7 +88,9 @@ void main() {
       // Order + customer + service details.
       expect(blob, contains('#BILL01'));
       expect(blob, contains('Dana'));
-      expect(blob, contains('+972500000000'));
+      expect(blob, contains('0500000000'));
+      expect(blob, isNot(contains('+972500000000')));
+      expect(_unpaidOrder.customerPhone, '+972500000000');
       expect(blob, contains('T7'));
       // Items, quantities, modifier quantities, notes.
       expect(blob, contains('2 × Classic Burger'));

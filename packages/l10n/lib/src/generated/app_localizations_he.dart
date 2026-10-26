@@ -65,6 +65,27 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posOnlineInboxAccept => 'קבלת הזמנה';
 
   @override
+  String get posOnlineInboxPreparationTitle => 'זמן הכנה משוער';
+
+  @override
+  String get posOnlineInboxPreparationHint =>
+      'יש לבחור זמן הכנה משוער לפני קבלת ההזמנה. ההערכה תוצג ללקוח.';
+
+  @override
+  String posOnlineInboxPreparationMinutes(int minutes) {
+    return '$minutes דקות';
+  }
+
+  @override
+  String get posOnlineInboxPreparationCustom => 'זמן מותאם בדקות';
+
+  @override
+  String get posOnlineInboxPreparationRange => 'יש להזין מספר שלם בין 1 ל־240.';
+
+  @override
+  String get posOnlineInboxPreparationConfirm => 'אישור וקבלת ההזמנה';
+
+  @override
   String get posOnlineInboxReject => 'דחיית הזמנה';
 
   @override

@@ -75,11 +75,13 @@ class _ClockedRepository implements OnlineOrderInboxRepository {
     required String decisionId,
     required OnlineOrderDecision decision,
     String? reason,
+    int? preparationMinutes,
   }) => delegate.decide(
     requestId: requestId,
     decisionId: decisionId,
     decision: decision,
     reason: reason,
+    preparationMinutes: preparationMinutes,
   );
 }
 

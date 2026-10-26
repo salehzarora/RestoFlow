@@ -434,6 +434,9 @@ jobs:
       - name: Tests — platform web-order acceptance and single-send races (local only)
         run: node supabase/tests/support/run_platform_online_orders_353_concurrency.mjs --container supabase_db_RestoFlow
 
+      - name: Tests — acceptance ETA winner, replay and authority races (local only)
+        run: node supabase/tests/support/run_acceptance_eta_001_concurrency.mjs --container supabase_db_RestoFlow
+
       # Only this ephemeral Actions database may run the committed-fixture
       # Featured races. The SQL suite cannot set or manufacture this marker.
       - name: Authorize Featured races in the ephemeral CI database only

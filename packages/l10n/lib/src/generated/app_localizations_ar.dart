@@ -65,6 +65,28 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posOnlineInboxAccept => 'قبول الطلب';
 
   @override
+  String get posOnlineInboxPreparationTitle => 'وقت التحضير التقريبي';
+
+  @override
+  String get posOnlineInboxPreparationHint =>
+      'اختر وقت التحضير التقريبي قبل قبول الطلب. سيظهر هذا التقدير للزبون.';
+
+  @override
+  String posOnlineInboxPreparationMinutes(int minutes) {
+    return '$minutes دقيقة';
+  }
+
+  @override
+  String get posOnlineInboxPreparationCustom => 'وقت مخصص بالدقائق';
+
+  @override
+  String get posOnlineInboxPreparationRange =>
+      'أدخل عددًا صحيحًا من 1 إلى 240.';
+
+  @override
+  String get posOnlineInboxPreparationConfirm => 'تأكيد وقبول الطلب';
+
+  @override
   String get posOnlineInboxReject => 'رفض الطلب';
 
   @override
