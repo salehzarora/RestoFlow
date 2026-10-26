@@ -17122,6 +17122,66 @@ abstract class AppLocalizations {
   /// **'Outcome unknown. Retry to check the same request.'**
   String get storefrontItemImageUnknown;
 
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: safe actionable alert feedback or historical print status.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are blocked. In Android Settings, allow notifications for POS, then enable alerts again.'**
+  String get posBackgroundOrderAlertsPermissionBlocked;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: safe actionable alert feedback or historical print status.
+  ///
+  /// In en, this message translates to:
+  /// **'In Android notification settings, set Pickup alerts to High importance and choose a sound, then enable alerts again.'**
+  String get posBackgroundOrderAlertsChannelBlocked;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: safe actionable alert feedback or historical print status.
+  ///
+  /// In en, this message translates to:
+  /// **'Alert services are unavailable in this app. Keep using Inbox and contact support.'**
+  String get posBackgroundOrderAlertsFirebaseUnavailable;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: safe actionable alert feedback or historical print status.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not obtain a notification token. Check this device\'s connection and notification services, then enable alerts again.'**
+  String get posBackgroundOrderAlertsTokenUnavailable;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: safe actionable alert feedback or historical print status.
+  ///
+  /// In en, this message translates to:
+  /// **'Background alerts are disabled for this scope. Ask an authorized administrator to check alert settings.'**
+  String get posBackgroundOrderAlertsRegistrationDisabled;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: safe actionable alert feedback or historical print status.
+  ///
+  /// In en, this message translates to:
+  /// **'Alert registration was rejected. Contact support to check registration and the existing installation binding. Do not reset pairing.'**
+  String get posBackgroundOrderAlertsRegistrationRejected;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: safe actionable alert feedback or historical print status.
+  ///
+  /// In en, this message translates to:
+  /// **'The registration result is unconfirmed. Further activation is held. Contact support for reconciliation; do not retry or reset pairing.'**
+  String get posBackgroundOrderAlertsRegistrationUncertain;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: safe actionable alert feedback or historical print status.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration was confirmed, but alerts could not bind on this device. Keep using Inbox and contact support.'**
+  String get posBackgroundOrderAlertsBindingFailed;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: safe actionable alert feedback or historical print status.
+  ///
+  /// In en, this message translates to:
+  /// **'Alert shutdown could not be confirmed. Further activation is held. Contact support before trying again.'**
+  String get posBackgroundOrderAlertsCleanupFailed;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: safe actionable alert feedback or historical print status.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier unresolved kitchen ticket'**
+  String get posOnlineInboxEarlierPrintIssue;
+
   /// BIZBOT-POS-BACKGROUND-ORDER-ALERT-001: opt-in Android notification setup.
   ///
   /// In en, this message translates to:

@@ -9641,6 +9641,46 @@ class AppLocalizationsEn extends AppLocalizations {
       'Outcome unknown. Retry to check the same request.';
 
   @override
+  String get posBackgroundOrderAlertsPermissionBlocked =>
+      'Notifications are blocked. In Android Settings, allow notifications for POS, then enable alerts again.';
+
+  @override
+  String get posBackgroundOrderAlertsChannelBlocked =>
+      'In Android notification settings, set Pickup alerts to High importance and choose a sound, then enable alerts again.';
+
+  @override
+  String get posBackgroundOrderAlertsFirebaseUnavailable =>
+      'Alert services are unavailable in this app. Keep using Inbox and contact support.';
+
+  @override
+  String get posBackgroundOrderAlertsTokenUnavailable =>
+      'Could not obtain a notification token. Check this device\'s connection and notification services, then enable alerts again.';
+
+  @override
+  String get posBackgroundOrderAlertsRegistrationDisabled =>
+      'Background alerts are disabled for this scope. Ask an authorized administrator to check alert settings.';
+
+  @override
+  String get posBackgroundOrderAlertsRegistrationRejected =>
+      'Alert registration was rejected. Contact support to check registration and the existing installation binding. Do not reset pairing.';
+
+  @override
+  String get posBackgroundOrderAlertsRegistrationUncertain =>
+      'The registration result is unconfirmed. Further activation is held. Contact support for reconciliation; do not retry or reset pairing.';
+
+  @override
+  String get posBackgroundOrderAlertsBindingFailed =>
+      'Registration was confirmed, but alerts could not bind on this device. Keep using Inbox and contact support.';
+
+  @override
+  String get posBackgroundOrderAlertsCleanupFailed =>
+      'Alert shutdown could not be confirmed. Further activation is held. Contact support before trying again.';
+
+  @override
+  String get posOnlineInboxEarlierPrintIssue =>
+      'Earlier unresolved kitchen ticket';
+
+  @override
   String get posBackgroundOrderAlerts => 'Background Pickup alerts';
 
   @override

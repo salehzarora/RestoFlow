@@ -210,6 +210,7 @@ Future<_Controller> pumpInbox(
   PosMenuData? menu,
   bool menuUnavailable = false,
   WebOrderPrintOutcome? recovery,
+  Future<WebOrderPrintOutcome?> Function()? readRecovery,
   BackgroundOrderAlerts? backgroundAlerts,
   _AlertBridge? backgroundBridge,
   BackgroundOrderAlertRegistration? register,
@@ -248,7 +249,9 @@ Future<_Controller> pumpInbox(
         ],
         if (backgroundAlerts != null)
           backgroundOrderAlertsProvider.overrideWith(() => backgroundAlerts),
-        onlineInboxPrintRecoveryProvider.overrideWith((ref) async => recovery),
+        onlineInboxPrintRecoveryProvider.overrideWith(
+          (ref) async => readRecovery == null ? recovery : readRecovery(),
+        ),
         onlineOrderInboxControllerProvider.overrideWith(() => controller),
         onlineOrderInboxIdentityProvider.overrideWithValue('test-authority'),
         posMenuProvider.overrideWith((_) async {
@@ -798,6 +801,96 @@ void main() {
     }
   }
   testWidgets(
+    'new equal print failures surface once each and dismissal changes no outcome',
+    (tester) async {
+      final controller = await pumpInbox(
+        tester,
+        button: true,
+        state: const OnlineOrderInboxState(),
+        recovery: WebOrderPrintOutcome.failed,
+      );
+      final button = find.byKey(const Key('online-inbox-button'));
+      final container = ProviderScope.containerOf(tester.element(button));
+      await tester.pumpAndSettle();
+      final first = const OnlineOrderInboxState(
+        printOutcome: WebOrderPrintOutcome.failed,
+        printResultSequence: 1,
+      );
+      controller.replace(first);
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsOneWidget);
+      final messenger = ScaffoldMessenger.of(tester.element(button));
+      messenger.removeCurrentSnackBar();
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing);
+      expect(controller.decisions, isEmpty);
+      expect(
+        container.read(onlineOrderInboxControllerProvider).printOutcome,
+        WebOrderPrintOutcome.failed,
+      );
+
+      // Refreshing either projection is not a new attempt, including after a
+      // staff member dismisses the transient message.
+      controller.replace(first.copyWith(loading: true));
+      container.invalidate(onlineInboxPrintRecoveryProvider);
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing);
+      controller.replace(first.copyWith(printResultSequence: 2));
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsOneWidget);
+      messenger.removeCurrentSnackBar();
+      await tester.pumpAndSettle();
+      expect(controller.decisions, isEmpty);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('online-inbox-earlier-print-issue')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('online-inbox-earlier-print-status')),
+        findsOneWidget,
+      );
+    },
+  );
+  testWidgets(
+    'unchanged durable print recovery stays quiet across refresh and reopen',
+    (tester) async {
+      var reads = 0;
+      final controller = await pumpInbox(
+        tester,
+        button: true,
+        state: const OnlineOrderInboxState(),
+        readRecovery: () async {
+          reads++;
+          return WebOrderPrintOutcome.failed;
+        },
+      );
+      final button = find.byKey(const Key('online-inbox-button'));
+      final container = ProviderScope.containerOf(tester.element(button));
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing);
+      for (var refresh = 0; refresh < 3; refresh++) {
+        container.invalidate(onlineInboxPrintRecoveryProvider);
+        await tester.pumpAndSettle();
+        expect(find.byType(SnackBar), findsNothing);
+      }
+      for (var opening = 0; opening < 2; opening++) {
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('online-inbox-print-status')),
+          findsOneWidget,
+        );
+        expect(find.byType(SnackBar), findsNothing);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+      }
+      expect(reads, greaterThan(1));
+      expect(controller.decisions, isEmpty);
+    },
+  );
+  testWidgets(
     'restart recovery projects durable hold without a retry control',
     (tester) async {
       await pumpInbox(
@@ -812,6 +905,43 @@ void main() {
     },
   );
   for (final locale in ['ar', 'he', 'en']) {
+    testWidgets(
+      '$locale a new success does not conceal an earlier unresolved ticket',
+      (tester) async {
+        await pumpInbox(
+          tester,
+          locale: locale,
+          state: const OnlineOrderInboxState(
+            printOutcome: WebOrderPrintOutcome.sent,
+            printResultSequence: 1,
+          ),
+          recovery: WebOrderPrintOutcome.reconciliationRequired,
+        );
+        await tester.pumpAndSettle();
+        final status = find.byKey(const Key('online-inbox-print-status'));
+        final earlier = find.byKey(
+          const Key('online-inbox-earlier-print-status'),
+        );
+        final heading = find.byKey(
+          const Key('online-inbox-earlier-print-issue'),
+        );
+        final l10n = AppLocalizations.of(tester.element(status));
+        expect(
+          tester.widget<Text>(status).data,
+          l10n.posKitchenTicketPrintedSnack,
+        );
+        expect(
+          tester.widget<Text>(earlier).data,
+          l10n.kioskKitchenLastPossibly,
+        );
+        expect(
+          tester.widget<Text>(heading).data,
+          l10n.posOnlineInboxEarlierPrintIssue,
+        );
+        expect(find.text(l10n.kioskKitchenRetry), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
     testWidgets(
       '$locale targeted print status is honest and has no automatic retry action',
       (tester) async {

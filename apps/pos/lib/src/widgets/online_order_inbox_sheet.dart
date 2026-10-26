@@ -31,19 +31,6 @@ String? _printOutcomeText(
   WebOrderPrintOutcome.kds => null,
 };
 
-WebOrderPrintOutcome? _printAttention(
-  WebOrderPrintOutcome? current,
-  WebOrderPrintOutcome? recovered,
-) {
-  if (current == WebOrderPrintOutcome.reconciliationRequired ||
-      recovered == WebOrderPrintOutcome.reconciliationRequired)
-    return WebOrderPrintOutcome.reconciliationRequired;
-  if (current == WebOrderPrintOutcome.failed ||
-      recovered == WebOrderPrintOutcome.failed)
-    return WebOrderPrintOutcome.failed;
-  return recovered ?? current;
-}
-
 /// One visible entry owns lifecycle signals; polling itself lives only in the
 /// singleton controller. The compact variant shares the existing navbar row.
 class OnlineOrderInboxButton extends ConsumerStatefulWidget {
@@ -126,25 +113,23 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
     final state = ref.watch(onlineOrderInboxControllerProvider);
     ref.watch(backgroundOrderAlertsProvider);
     ref.listen(
-      onlineOrderInboxControllerProvider.select((s) => s.printOutcome),
+      onlineOrderInboxControllerProvider.select(
+        (s) => (s.printOutcome, s.printResultSequence),
+      ),
       (previous, next) {
-        if (next == null || next == previous) return;
-        final message = _printOutcomeText(l10n, next);
+        final (outcome, _) = next;
+        if (outcome == null || next == previous) return;
+        final message = _printOutcomeText(l10n, outcome);
         if (message != null)
           ScaffoldMessenger.maybeOf(
             context,
           )?.showSnackBar(SnackBar(content: Text(message)));
       },
     );
-    ref.listen(onlineInboxPrintRecoveryProvider, (_, next) {
-      final outcome = next.valueOrNull;
-      if (outcome == null) return;
-      final message = _printOutcomeText(l10n, outcome);
-      if (message != null)
-        ScaffoldMessenger.maybeOf(
-          context,
-        )?.showSnackBar(SnackBar(content: Text(message)));
-    });
+    // Keep the durable, read-only projection current, but never announce it as
+    // a fresh print attempt on polling, resume, or reopening the Inbox. It stays
+    // discoverable in the Inbox until genuine matching evidence resolves it.
+    ref.watch(onlineInboxPrintRecoveryProvider);
     final count = state.pendingCountAt(
       ref.read(onlineOrderInboxControllerProvider.notifier).now(),
     );
@@ -200,6 +185,39 @@ class _BackgroundOrderAlertControl extends ConsumerStatefulWidget {
 class _BackgroundOrderAlertControlState
     extends ConsumerState<_BackgroundOrderAlertControl> {
   bool _confirming = false;
+
+  String _feedback(AppLocalizations l10n, BackgroundOrderAlertState alerts) {
+    if (alerts.authorizationExpired ||
+        alerts.failureReason ==
+            BackgroundOrderAlertFailure.registrationInvalidSession) {
+      return l10n.posBackgroundOrderAlertsSignIn;
+    }
+    if (!alerts.failed) return l10n.posBackgroundOrderAlertsHelp;
+    return switch (alerts.failureReason) {
+      BackgroundOrderAlertFailure.permissionDenied ||
+      BackgroundOrderAlertFailure.notificationsDisabled =>
+        l10n.posBackgroundOrderAlertsPermissionBlocked,
+      BackgroundOrderAlertFailure.channelUnavailable ||
+      BackgroundOrderAlertFailure.channelImportanceTooLow ||
+      BackgroundOrderAlertFailure.channelSoundMissing =>
+        l10n.posBackgroundOrderAlertsChannelBlocked,
+      BackgroundOrderAlertFailure.firebaseUnavailable =>
+        l10n.posBackgroundOrderAlertsFirebaseUnavailable,
+      BackgroundOrderAlertFailure.tokenUnavailable =>
+        l10n.posBackgroundOrderAlertsTokenUnavailable,
+      BackgroundOrderAlertFailure.registrationDisabled =>
+        l10n.posBackgroundOrderAlertsRegistrationDisabled,
+      BackgroundOrderAlertFailure.registrationRejected =>
+        l10n.posBackgroundOrderAlertsRegistrationRejected,
+      BackgroundOrderAlertFailure.registrationUncertain =>
+        l10n.posBackgroundOrderAlertsRegistrationUncertain,
+      BackgroundOrderAlertFailure.bindingFailed =>
+        l10n.posBackgroundOrderAlertsBindingFailed,
+      BackgroundOrderAlertFailure.cleanupFailed =>
+        l10n.posBackgroundOrderAlertsCleanupFailed,
+      _ => l10n.posBackgroundOrderAlertsUnavailable,
+    };
+  }
 
   Future<void> _change(bool value) async {
     final controller = ref.read(backgroundOrderAlertsProvider.notifier);
@@ -257,13 +275,7 @@ class _BackgroundOrderAlertControlState
           key: const Key('background-order-alert-switch'),
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.posBackgroundOrderAlerts),
-          subtitle: Text(
-            alerts.authorizationExpired
-                ? l10n.posBackgroundOrderAlertsSignIn
-                : alerts.failed
-                ? l10n.posBackgroundOrderAlertsUnavailable
-                : l10n.posBackgroundOrderAlertsHelp,
-          ),
+          subtitle: Text(_feedback(l10n, alerts)),
           value: alerts.enabled,
           onChanged: alerts.busy || _confirming ? null : _change,
         ),
@@ -326,7 +338,7 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(onlineOrderInboxControllerProvider);
     final recovery = ref.watch(onlineInboxPrintRecoveryProvider).valueOrNull;
-    final printOutcome = _printAttention(state.printOutcome, recovery);
+    final printOutcome = state.printOutcome;
     final controller = ref.read(onlineOrderInboxControllerProvider.notifier);
     final selected = state.requests
         .where((r) => r.id == _selectedId)
@@ -390,6 +402,30 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
                           child: Text(
                             _printOutcomeText(l10n, printOutcome)!,
                             key: const Key('online-inbox-print-status'),
+                          ),
+                        ),
+                      if (recovery != null &&
+                          _printOutcomeText(l10n, recovery) != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                l10n.posOnlineInboxEarlierPrintIssue,
+                                key: const Key(
+                                  'online-inbox-earlier-print-issue',
+                                ),
+                              ),
+                              Text(
+                                _printOutcomeText(l10n, recovery)!,
+                                key: Key(
+                                  printOutcome == null
+                                      ? 'online-inbox-print-status'
+                                      : 'online-inbox-earlier-print-status',
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       if (state.uncertain)

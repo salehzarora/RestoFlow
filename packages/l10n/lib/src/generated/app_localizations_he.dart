@@ -9489,6 +9489,46 @@ class AppLocalizationsHe extends AppLocalizations {
       'התוצאה לא ידועה. נסו שוב כדי לבדוק את אותה בקשה.';
 
   @override
+  String get posBackgroundOrderAlertsPermissionBlocked =>
+      'ההתראות חסומות. יש לאפשר התראות ל-POS בהגדרות Android, ואז להפעיל שוב את ההתראות.';
+
+  @override
+  String get posBackgroundOrderAlertsChannelBlocked =>
+      'בהגדרות ההתראות של Android, יש להגדיר התראות איסוף בחשיבות גבוהה ולבחור צליל, ואז להפעיל שוב את ההתראות.';
+
+  @override
+  String get posBackgroundOrderAlertsFirebaseUnavailable =>
+      'שירותי ההתראות אינם זמינים באפליקציה זו. יש להמשיך להשתמש בתיבת ההזמנות ולפנות לתמיכה.';
+
+  @override
+  String get posBackgroundOrderAlertsTokenUnavailable =>
+      'לא ניתן לקבל אסימון התראות. יש לבדוק את חיבור המכשיר ושירותי ההתראות, ואז להפעיל שוב את ההתראות.';
+
+  @override
+  String get posBackgroundOrderAlertsRegistrationDisabled =>
+      'התראות הרקע מושבתות בהיקף הרשאה זה. יש לבקש ממנהל מורשה לבדוק את הגדרות ההתראות.';
+
+  @override
+  String get posBackgroundOrderAlertsRegistrationRejected =>
+      'רישום ההתראות נדחה. יש לפנות לתמיכה לבדיקת הרישום ושיוך ההתקנה הקיים. אין לאפס את הצימוד.';
+
+  @override
+  String get posBackgroundOrderAlertsRegistrationUncertain =>
+      'תוצאת הרישום אינה מאומתת, ולכן הפעלה נוספת חסומה. יש לפנות לתמיכה לבירור; אין לנסות שוב או לאפס את הצימוד.';
+
+  @override
+  String get posBackgroundOrderAlertsBindingFailed =>
+      'הרישום אושר, אך לא ניתן לקשר את ההתראות במכשיר זה. יש להמשיך להשתמש בתיבת ההזמנות ולפנות לתמיכה.';
+
+  @override
+  String get posBackgroundOrderAlertsCleanupFailed =>
+      'לא ניתן לאמת שההתראות הופסקו, ולכן הפעלה נוספת חסומה. יש לפנות לתמיכה לפני ניסיון נוסף.';
+
+  @override
+  String get posOnlineInboxEarlierPrintIssue =>
+      'כרטיס מטבח קודם שמצבו טרם הוכרע';
+
+  @override
   String get posBackgroundOrderAlerts => 'התראות איסוף ברקע';
 
   @override

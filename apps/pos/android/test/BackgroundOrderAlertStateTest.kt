@@ -6,6 +6,24 @@ fun main() {
     fun scenario(name: String, body: () -> Unit) { body(); passed++; println("PASS $name") }
     fun pending(vararg ids: String) = ids.associateWith { 100_000L }
 
+    scenario("activation channel diagnostics preserve every permission importance and sound gate") {
+        val allowed = BackgroundOrderAlertChannelPolicy(true, true, true, true, true)
+        check(allowed.failureReason == null)
+        for ((policy, expected) in listOf(
+            allowed.copy(permissionAllowed = false) to "permission_denied",
+            allowed.copy(notificationsEnabled = false) to "notifications_disabled",
+            allowed.copy(channelPresent = false) to "channel_missing",
+            allowed.copy(channelImportanceAllowed = false) to "channel_importance_low",
+            allowed.copy(channelSoundPresent = false) to "channel_sound_missing",
+        )) {
+            check(policy.failureReason == expected)
+            check(policy.diagnostics().keys == setOf("permission_allowed", "notifications_enabled",
+                "channel_present", "channel_importance_allowed", "channel_sound_present"))
+        }
+        check(allowed.copy(channelSoundPresent = false).diagnostics()["channel_sound_present"] == false)
+        check(BackgroundOrderAlertChannelPolicy(false, false, false, false, false).failureReason == "permission_denied")
+    }
+
     scenario("first confirmed pending request alerts immediately and repeats at ten seconds") {
         val state = BackgroundOrderAlertState()
         state.replace(pending("one"), 0, 100_000, 0)

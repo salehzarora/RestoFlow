@@ -5,6 +5,32 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 
+/** Non-sensitive channel policy; never contains IDs, sound URIs or credentials. */
+internal data class BackgroundOrderAlertChannelPolicy(
+    val permissionAllowed: Boolean,
+    val notificationsEnabled: Boolean,
+    val channelPresent: Boolean,
+    val channelImportanceAllowed: Boolean,
+    val channelSoundPresent: Boolean,
+) {
+    val failureReason: String? get() = when {
+        !permissionAllowed -> "permission_denied"
+        !notificationsEnabled -> "notifications_disabled"
+        !channelPresent -> "channel_missing"
+        !channelImportanceAllowed -> "channel_importance_low"
+        !channelSoundPresent -> "channel_sound_missing"
+        else -> null
+    }
+
+    fun diagnostics(): Map<String, Boolean> = mapOf(
+        "permission_allowed" to permissionAllowed,
+        "notifications_enabled" to notificationsEnabled,
+        "channel_present" to channelPresent,
+        "channel_importance_allowed" to channelImportanceAllowed,
+        "channel_sound_present" to channelSoundPresent,
+    )
+}
+
 /** Platform-free, monotonic single cadence. Only confirmed full server sets enter here. */
 internal class BackgroundOrderAlertState {
     companion object {

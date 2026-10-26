@@ -8,6 +8,100 @@ import 'online_order_inbox_controller.dart';
 import 'pos_offline_state.dart';
 import 'pos_session.dart';
 
+/// Finite, non-sensitive outcomes only. Never retain native exception text,
+/// registration payloads, notification tokens or authority credentials here.
+enum BackgroundOrderAlertFailure {
+  unavailable,
+  permissionDenied,
+  notificationsDisabled,
+  channelUnavailable,
+  channelImportanceTooLow,
+  channelSoundMissing,
+  firebaseUnavailable,
+  tokenUnavailable,
+  registrationDisabled,
+  registrationInvalidSession,
+  registrationRejected,
+  registrationUncertain,
+  bindingFailed,
+  cleanupFailed,
+}
+
+enum BackgroundOrderAlertRegistrationResult {
+  notAttempted,
+  confirmed,
+  disabled,
+  invalidSession,
+  rejected,
+  unavailable,
+  uncertain,
+}
+
+/// A redacted activation snapshot. It contains classifications and booleans,
+/// never IDs, tokens, secrets, raw responses or platform exception details.
+class BackgroundOrderAlertDiagnostics {
+  const BackgroundOrderAlertDiagnostics({
+    this.permissionAllowed,
+    this.notificationsEnabled,
+    this.channelPresent,
+    this.channelImportanceAllowed,
+    this.channelSoundPresent,
+    this.firebaseInitialized,
+    this.tokenAcquired,
+    this.registration = BackgroundOrderAlertRegistrationResult.notAttempted,
+    this.bound,
+    this.registrationQuarantined = false,
+    this.cleanupQuarantined = false,
+  });
+
+  factory BackgroundOrderAlertDiagnostics.fromPreparation(Map prepared) {
+    final raw = prepared['diagnostics'];
+    final values = raw is Map ? raw : const {};
+    bool? flag(String key) => values[key] is bool ? values[key] as bool : null;
+    return BackgroundOrderAlertDiagnostics(
+      permissionAllowed: flag('permission_allowed'),
+      notificationsEnabled: flag('notifications_enabled'),
+      channelPresent: flag('channel_present'),
+      channelImportanceAllowed: flag('channel_importance_allowed'),
+      channelSoundPresent: flag('channel_sound_present'),
+      firebaseInitialized: flag('firebase_initialized'),
+      tokenAcquired: flag('token_acquired'),
+    );
+  }
+
+  final bool? permissionAllowed;
+  final bool? notificationsEnabled;
+  final bool? channelPresent;
+  final bool? channelImportanceAllowed;
+  final bool? channelSoundPresent;
+  final bool? firebaseInitialized;
+  final bool? tokenAcquired;
+  final BackgroundOrderAlertRegistrationResult registration;
+  final bool? bound;
+  final bool registrationQuarantined;
+  final bool cleanupQuarantined;
+
+  BackgroundOrderAlertDiagnostics withResult({
+    BackgroundOrderAlertRegistrationResult? registration,
+    bool? bound,
+    bool? registrationQuarantined,
+    bool? cleanupQuarantined,
+  }) => BackgroundOrderAlertDiagnostics(
+    permissionAllowed: permissionAllowed,
+    notificationsEnabled: notificationsEnabled,
+    channelPresent: channelPresent,
+    channelImportanceAllowed: channelImportanceAllowed,
+    channelSoundPresent: channelSoundPresent,
+    firebaseInitialized: firebaseInitialized,
+    tokenAcquired: tokenAcquired,
+    registration: registration ?? this.registration,
+    bound: bound ?? this.bound,
+    registrationQuarantined:
+        registrationQuarantined ?? this.registrationQuarantined,
+    cleanupQuarantined: cleanupQuarantined ?? this.cleanupQuarantined,
+  );
+}
+
 class BackgroundOrderAlertState {
   const BackgroundOrderAlertState({
     this.available = false,
@@ -15,12 +109,16 @@ class BackgroundOrderAlertState {
     this.busy = false,
     this.failed = false,
     this.authorizationExpired = false,
+    this.failureReason,
+    this.diagnostics = const BackgroundOrderAlertDiagnostics(),
   });
   final bool available;
   final bool enabled;
   final bool busy;
   final bool failed;
   final bool authorizationExpired;
+  final BackgroundOrderAlertFailure? failureReason;
+  final BackgroundOrderAlertDiagnostics diagnostics;
 }
 
 final backgroundOrderAlertClockProvider = Provider<DateTime Function()>(
@@ -40,6 +138,25 @@ typedef BackgroundOrderAlertRegistration =
 class _RegistrationUncertain implements Exception {
   const _RegistrationUncertain();
 }
+
+class _AlertFailure implements Exception {
+  const _AlertFailure(this.reason);
+  final BackgroundOrderAlertFailure reason;
+}
+
+BackgroundOrderAlertFailure _preparationFailure(
+  Object? reason,
+) => switch (reason) {
+  'permission_denied' => BackgroundOrderAlertFailure.permissionDenied,
+  'notifications_disabled' => BackgroundOrderAlertFailure.notificationsDisabled,
+  'channel_missing' => BackgroundOrderAlertFailure.channelUnavailable,
+  'channel_importance_low' =>
+    BackgroundOrderAlertFailure.channelImportanceTooLow,
+  'channel_sound_missing' => BackgroundOrderAlertFailure.channelSoundMissing,
+  'firebase_unavailable' => BackgroundOrderAlertFailure.firebaseUnavailable,
+  'token_unavailable' => BackgroundOrderAlertFailure.tokenUnavailable,
+  _ => BackgroundOrderAlertFailure.unavailable,
+};
 
 final backgroundOrderAlertRegisterProvider =
     Provider<BackgroundOrderAlertRegistration>((ref) {
@@ -80,8 +197,20 @@ final backgroundOrderAlertRegisterProvider =
           // of these exceptions prove rollback. Never replay automatically.
           throw const _RegistrationUncertain();
         }
-        if (!current || result is! Map || result['ok'] != true) {
+        if (!current || result is! Map) {
           throw StateError('alert_registration_unavailable');
+        }
+        if (result['ok'] != true) {
+          // Only documented business classifications escape this boundary.
+          // invalid_request is not proof of an installation ownership conflict.
+          throw _AlertFailure(switch (result['error']) {
+            'disabled' => BackgroundOrderAlertFailure.registrationDisabled,
+            'invalid_session' =>
+              BackgroundOrderAlertFailure.registrationInvalidSession,
+            'invalid_request' =>
+              BackgroundOrderAlertFailure.registrationRejected,
+            _ => BackgroundOrderAlertFailure.unavailable,
+          });
         }
         return result;
       };
@@ -288,6 +417,10 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
           state = const BackgroundOrderAlertState(
             available: true,
             failed: true,
+            failureReason: BackgroundOrderAlertFailure.cleanupFailed,
+            diagnostics: BackgroundOrderAlertDiagnostics(
+              cleanupQuarantined: true,
+            ),
           );
         }
       }
@@ -340,7 +473,19 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         _cleanupFailed ||
         _registrationUncertain) {
       if (!_disposed && _bridge != null)
-        state = const BackgroundOrderAlertState(available: true, failed: true);
+        state = BackgroundOrderAlertState(
+          available: true,
+          failed: true,
+          failureReason: _registrationUncertain
+              ? BackgroundOrderAlertFailure.registrationUncertain
+              : _cleanupFailed
+              ? BackgroundOrderAlertFailure.cleanupFailed
+              : BackgroundOrderAlertFailure.unavailable,
+          diagnostics: BackgroundOrderAlertDiagnostics(
+            registrationQuarantined: _registrationUncertain,
+            cleanupQuarantined: _cleanupFailed,
+          ),
+        );
       return Future.value();
     }
     if (state.enabled) return Future.value();
@@ -418,6 +563,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
 
   Future<void> _register(_RegistrationAttempt attempt) async {
     final bridge = attempt.bridge;
+    var diagnostics = const BackgroundOrderAlertDiagnostics();
     try {
       var explicit = _confirmed(attempt);
       var prepared = await bridge.prepare(requestPermission: explicit);
@@ -441,15 +587,22 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         prepared = await bridge.prepare();
         if (!await _foregroundFor(attempt)) return;
       }
+      diagnostics = BackgroundOrderAlertDiagnostics.fromPreparation(prepared);
       if (prepared['available'] != true || prepared['enabled'] != true) {
-        if (_confirmed(attempt)) throw StateError('alert_prepare_refused');
+        if (_confirmed(attempt)) {
+          throw _AlertFailure(_preparationFailure(prepared['failure_reason']));
+        }
         state = BackgroundOrderAlertState(
           available: prepared['available'] == true,
+          diagnostics: diagnostics,
         );
         return;
       }
       final endpoint = ref.read(backgroundOrderAlertEndpointProvider);
       if (endpoint == null) throw StateError('alert_endpoint_unavailable');
+      diagnostics = diagnostics.withResult(
+        registration: BackgroundOrderAlertRegistrationResult.unavailable,
+      );
       final result = await ref.read(backgroundOrderAlertRegisterProvider)(
         {
           'p_installation_id': prepared['installation_id'],
@@ -479,6 +632,9 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
           deadline == null ||
           !deadline.isAfter(ref.read(backgroundOrderAlertClockProvider)()))
         throw StateError('alert_registration_unavailable');
+      diagnostics = diagnostics.withResult(
+        registration: BackgroundOrderAlertRegistrationResult.confirmed,
+      );
       final bound = await bridge.bind({
         'identity': attempt.identity,
         'generation': prepared['generation'],
@@ -487,25 +643,55 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         'endpoint': endpoint,
         'authority_expires_at': deadline.toIso8601String(),
       });
+      diagnostics = diagnostics.withResult(bound: bound);
       if (!await _foregroundFor(attempt)) return;
       if (!bound ||
           !deadline.isAfter(ref.read(backgroundOrderAlertClockProvider)()))
-        throw StateError('alert_native_binding_refused');
+        throw const _AlertFailure(BackgroundOrderAlertFailure.bindingFailed);
       _authorityExpiresAt = deadline;
-      state = const BackgroundOrderAlertState(available: true, enabled: true);
+      state = BackgroundOrderAlertState(
+        available: true,
+        enabled: true,
+        diagnostics: diagnostics,
+      );
       _finishIntent();
       _publish(ref.read(onlineOrderInboxControllerProvider));
       _armAuthorityRenewal();
     } catch (error) {
       if (error is _RegistrationUncertain) _registrationUncertain = true;
+      final failure = error is _RegistrationUncertain
+          ? BackgroundOrderAlertFailure.registrationUncertain
+          : error is _AlertFailure
+          ? error.reason
+          : BackgroundOrderAlertFailure.unavailable;
+      diagnostics = diagnostics.withResult(
+        registration: switch (failure) {
+          BackgroundOrderAlertFailure.registrationUncertain =>
+            BackgroundOrderAlertRegistrationResult.uncertain,
+          BackgroundOrderAlertFailure.registrationDisabled =>
+            BackgroundOrderAlertRegistrationResult.disabled,
+          BackgroundOrderAlertFailure.registrationInvalidSession =>
+            BackgroundOrderAlertRegistrationResult.invalidSession,
+          BackgroundOrderAlertFailure.registrationRejected =>
+            BackgroundOrderAlertRegistrationResult.rejected,
+          _ => diagnostics.registration,
+        },
+        registrationQuarantined: _registrationUncertain,
+      );
       if (_owns(attempt)) {
         _authorityExpiresAt = null;
         _explicitFailure = _confirmed(attempt);
         await _revoke(bridge, suspend: true);
         if (_owns(attempt)) {
-          state = const BackgroundOrderAlertState(
+          state = BackgroundOrderAlertState(
             available: true,
             failed: true,
+            failureReason: _cleanupFailed
+                ? BackgroundOrderAlertFailure.cleanupFailed
+                : failure,
+            diagnostics: diagnostics.withResult(
+              cleanupQuarantined: _cleanupFailed,
+            ),
           );
           _finishIntent();
         }

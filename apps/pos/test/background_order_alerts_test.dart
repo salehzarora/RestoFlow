@@ -226,6 +226,157 @@ Future<void> _run(
 }
 
 void main() {
+  for (final (nativeReason, expected) in [
+    ('permission_denied', BackgroundOrderAlertFailure.permissionDenied),
+    (
+      'notifications_disabled',
+      BackgroundOrderAlertFailure.notificationsDisabled,
+    ),
+    ('channel_missing', BackgroundOrderAlertFailure.channelUnavailable),
+    (
+      'channel_importance_low',
+      BackgroundOrderAlertFailure.channelImportanceTooLow,
+    ),
+    ('channel_sound_missing', BackgroundOrderAlertFailure.channelSoundMissing),
+    ('firebase_unavailable', BackgroundOrderAlertFailure.firebaseUnavailable),
+    ('token_unavailable', BackgroundOrderAlertFailure.tokenUnavailable),
+    ('untrusted native detail', BackgroundOrderAlertFailure.unavailable),
+  ]) {
+    testWidgets('native refusal $nativeReason exposes only its safe reason', (
+      tester,
+    ) async {
+      await _run(
+        tester,
+        (c, b, r, registrations) async {
+          await c.read(backgroundOrderAlertsProvider.notifier).setEnabled(true);
+          final state = c.read(backgroundOrderAlertsProvider);
+          expect(state.enabled, false);
+          expect(state.failed, true);
+          expect(state.failureReason, expected);
+          expect(state.diagnostics.permissionAllowed, true);
+          expect(state.diagnostics.channelSoundPresent, false);
+          expect(state.diagnostics.tokenAcquired, false);
+          expect(
+            state.diagnostics.registration,
+            BackgroundOrderAlertRegistrationResult.notAttempted,
+          );
+          expect(registrations, isEmpty);
+          expect(b.bindings, isEmpty);
+          expect(r.decisions, isEmpty);
+        },
+        prepare: (_) async => {
+          'available': true,
+          'enabled': false,
+          'failure_reason': nativeReason,
+          'diagnostics': {
+            'permission_allowed': true,
+            'channel_sound_present': false,
+            'token_acquired': false,
+            'fcm_token': 'must-not-be-retained',
+          },
+        },
+      );
+    });
+  }
+  test('native diagnostics accept only booleans from named safe fields', () {
+    final diagnostics = BackgroundOrderAlertDiagnostics.fromPreparation({
+      'diagnostics': {
+        'permission_allowed': 'true',
+        'notifications_enabled': 1,
+        'channel_present': true,
+        'channel_importance_allowed': false,
+        'firebase_initialized': true,
+        'token_acquired': 'sensitive-untrusted-value',
+      },
+    });
+    expect(diagnostics.permissionAllowed, isNull);
+    expect(diagnostics.notificationsEnabled, isNull);
+    expect(diagnostics.channelPresent, true);
+    expect(diagnostics.channelImportanceAllowed, false);
+    expect(diagnostics.firebaseInitialized, true);
+    expect(diagnostics.tokenAcquired, isNull);
+  });
+  for (final (businessError, expected, registration) in [
+    (
+      'disabled',
+      BackgroundOrderAlertFailure.registrationDisabled,
+      BackgroundOrderAlertRegistrationResult.disabled,
+    ),
+    (
+      'invalid_session',
+      BackgroundOrderAlertFailure.registrationInvalidSession,
+      BackgroundOrderAlertRegistrationResult.invalidSession,
+    ),
+    (
+      'invalid_request',
+      BackgroundOrderAlertFailure.registrationRejected,
+      BackgroundOrderAlertRegistrationResult.rejected,
+    ),
+    (
+      'untrusted response detail',
+      BackgroundOrderAlertFailure.unavailable,
+      BackgroundOrderAlertRegistrationResult.unavailable,
+    ),
+  ]) {
+    testWidgets(
+      'HTTP-success business $businessError stays OFF and classified',
+      (tester) async {
+        final transport = _Transport(
+          () async => {'ok': false, 'error': businessError},
+        );
+        final store = InMemoryDeviceSessionSecretStore();
+        await store.write(
+          const DeviceSessionCredential(
+            deviceId: deviceId,
+            sessionToken: 'synthetic-device-token',
+          ),
+        );
+        await _run(
+          tester,
+          (c, b, r, _) async {
+            await c
+                .read(backgroundOrderAlertsProvider.notifier)
+                .setEnabled(true);
+            final state = c.read(backgroundOrderAlertsProvider);
+            expect(state.enabled, false);
+            expect(state.failed, true);
+            expect(state.failureReason, expected);
+            expect(state.diagnostics.registration, registration);
+            expect(state.diagnostics.registrationQuarantined, false);
+            expect(transport.calls, ['pos_register_order_alert']);
+            expect(b.bindings, isEmpty);
+            expect(r.decisions, isEmpty);
+          },
+          nativeEnabled: false,
+          transport: transport,
+          store: store,
+        );
+      },
+    );
+  }
+  testWidgets('native bind refusal is distinct from registration success', (
+    tester,
+  ) async {
+    await _run(
+      tester,
+      (c, b, r, registrations) async {
+        await c.read(backgroundOrderAlertsProvider.notifier).setEnabled(true);
+        final state = c.read(backgroundOrderAlertsProvider);
+        expect(state.failureReason, BackgroundOrderAlertFailure.bindingFailed);
+        expect(state.enabled, false);
+        expect(
+          state.diagnostics.registration,
+          BackgroundOrderAlertRegistrationResult.confirmed,
+        );
+        expect(state.diagnostics.bound, false);
+        expect(registrations, hasLength(1));
+        expect(b.bindings, hasLength(1));
+        expect(r.decisions, isEmpty);
+      },
+      nativeEnabled: false,
+      bindsAllowed: false,
+    );
+  });
   testWidgets(
     'token change during prepare re-reads latest token before one registration',
     (tester) async {
@@ -1002,6 +1153,14 @@ void main() {
       final controller = c.read(backgroundOrderAlertsProvider.notifier);
       await controller.setEnabled(false);
       expect(c.read(backgroundOrderAlertsProvider).failed, true);
+      expect(
+        c.read(backgroundOrderAlertsProvider).failureReason,
+        BackgroundOrderAlertFailure.cleanupFailed,
+      );
+      expect(
+        c.read(backgroundOrderAlertsProvider).diagnostics.cleanupQuarantined,
+        true,
+      );
       final before = b.prepares;
       await controller.setEnabled(true);
       expect(b.prepares, before);

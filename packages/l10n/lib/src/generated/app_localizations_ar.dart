@@ -9556,6 +9556,46 @@ class AppLocalizationsAr extends AppLocalizations {
       'النتيجة غير مؤكدة. أعد المحاولة للتحقق من الطلب نفسه.';
 
   @override
+  String get posBackgroundOrderAlertsPermissionBlocked =>
+      'الإشعارات محظورة. اسمح بإشعارات POS من إعدادات Android، ثم فعّل التنبيهات مجددًا.';
+
+  @override
+  String get posBackgroundOrderAlertsChannelBlocked =>
+      'من إعدادات إشعارات Android، اضبط تنبيهات طلبات الاستلام على أهمية عالية واختر صوتًا، ثم فعّل التنبيهات مجددًا.';
+
+  @override
+  String get posBackgroundOrderAlertsFirebaseUnavailable =>
+      'خدمات التنبيه غير متاحة في هذا التطبيق. تابع استخدام صندوق الطلبات وتواصل مع الدعم.';
+
+  @override
+  String get posBackgroundOrderAlertsTokenUnavailable =>
+      'تعذّر الحصول على رمز الإشعارات. تحقق من اتصال الجهاز وخدمات الإشعارات، ثم فعّل التنبيهات مجددًا.';
+
+  @override
+  String get posBackgroundOrderAlertsRegistrationDisabled =>
+      'تنبيهات الخلفية معطّلة لهذا النطاق. اطلب من مسؤول مخوّل التحقق من إعدادات التنبيه.';
+
+  @override
+  String get posBackgroundOrderAlertsRegistrationRejected =>
+      'رُفض تسجيل التنبيهات. تواصل مع الدعم لفحص التسجيل وارتباط التثبيت الحالي. لا تُعِد ضبط الاقتران.';
+
+  @override
+  String get posBackgroundOrderAlertsRegistrationUncertain =>
+      'نتيجة التسجيل غير مؤكدة، لذا أُوقف أي تفعيل إضافي. تواصل مع الدعم للمصالحة؛ لا تُعِد المحاولة أو ضبط الاقتران.';
+
+  @override
+  String get posBackgroundOrderAlertsBindingFailed =>
+      'تأكد التسجيل، لكن تعذّر ربط التنبيهات بهذا الجهاز. تابع استخدام صندوق الطلبات وتواصل مع الدعم.';
+
+  @override
+  String get posBackgroundOrderAlertsCleanupFailed =>
+      'تعذّر تأكيد إيقاف التنبيهات، لذا أُوقف أي تفعيل إضافي. تواصل مع الدعم قبل المحاولة مجددًا.';
+
+  @override
+  String get posOnlineInboxEarlierPrintIssue =>
+      'تذكرة مطبخ سابقة لم تُحسم حالتها';
+
+  @override
   String get posBackgroundOrderAlerts => 'تنبيهات الاستلام في الخلفية';
 
   @override
