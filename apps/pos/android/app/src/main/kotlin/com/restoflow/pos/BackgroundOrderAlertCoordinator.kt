@@ -125,12 +125,30 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     private fun permissionAllowed(): Boolean = Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    private fun channelAllowed(): Boolean = try {
-        permissionAllowed() && notifications().areNotificationsEnabled() &&
-            (Build.VERSION.SDK_INT < 26 || notifications().getNotificationChannel(CHANNEL_ID)?.let {
-                it.importance >= NotificationManager.IMPORTANCE_HIGH && it.sound != null
-            } == true)
-    } catch (_: Exception) { false }
+    private fun channelPolicy(): BackgroundOrderAlertChannelPolicy? = try {
+        val channel = if (Build.VERSION.SDK_INT >= 26) notifications().getNotificationChannel(CHANNEL_ID) else null
+        BackgroundOrderAlertChannelPolicy(
+            permissionAllowed(), notifications().areNotificationsEnabled(),
+            Build.VERSION.SDK_INT < 26 || channel != null,
+            Build.VERSION.SDK_INT < 26 || (channel?.importance ?: 0) >= NotificationManager.IMPORTANCE_HIGH,
+            Build.VERSION.SDK_INT < 26 || channel?.sound != null,
+        )
+    } catch (_: Exception) { null }
+
+    private fun channelAllowed(): Boolean = channelPolicy()?.let { it.failureReason == null } ?: false
+
+    private fun preparationResult(available: Boolean, enabled: Boolean, reason: String? = null,
+        policy: BackgroundOrderAlertChannelPolicy? = null, firebaseInitialized: Boolean? = null,
+        tokenAcquired: Boolean? = null): Map<String, Any?> {
+        val diagnostics = mutableMapOf<String, Boolean>()
+        policy?.let { diagnostics.putAll(it.diagnostics()) }
+        firebaseInitialized?.let { diagnostics["firebase_initialized"] = it }
+        tokenAcquired?.let { diagnostics["token_acquired"] = it }
+        return mapOf("available" to available, "enabled" to enabled,
+            "failure_reason" to reason, "diagnostics" to diagnostics)
+    }
+
+    fun permissionRefused(): Map<String, Any?> = preparationResult(true, false, "permission_denied", channelPolicy())
 
     private fun audioAllowed(): Boolean = try {
         val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -161,10 +179,13 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     fun bridge(): MethodChannel? = channel
 
     fun prepare(activity: Activity, requestPermission: Boolean, callback: (Map<String, Any?>) -> Unit) {
-        if (!initializeFirebase(context)) { callback(mapOf("available" to false, "enabled" to false)); return }
+        if (!initializeFirebase(context)) { callback(preparationResult(false, false, "firebase_unavailable", firebaseInitialized = false)); return }
         createChannel()
-        if (!channelAllowed()) { callback(mapOf("available" to true, "enabled" to false)); return }
-        if (!optIn.prepare(requestPermission)) { callback(mapOf("available" to true, "enabled" to false)); return }
+        val policy = channelPolicy()
+        if (policy == null || policy.failureReason != null) {
+            callback(preparationResult(true, false, policy?.failureReason ?: "native_unavailable", policy, true)); return
+        }
+        if (!optIn.prepare(requestPermission)) { callback(preparationResult(true, false, "opt_in_required", policy, true)); return }
         try {
             if (!record.has("installation_id")) record.put("installation_id", UUID.randomUUID().toString())
             if (!record.has("status_secret")) {
@@ -178,17 +199,17 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
             val expected = generation
             FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                 if (expected != generation) {
-                    callback(mapOf("available" to true, "enabled" to false)); return@addOnCompleteListener
+                    callback(preparationResult(true, false, "preparation_cancelled", policy, true)); return@addOnCompleteListener
                 }
                 if (!record.optBoolean("enabled") || !task.isSuccessful || task.result.isNullOrBlank()) {
                     tokenLane.finishPreparation()
-                    callback(mapOf("available" to true, "enabled" to false)); return@addOnCompleteListener
+                    callback(preparationResult(true, false, "token_unavailable", policy, true, false)); return@addOnCompleteListener
                 }
-                callback(mapOf("available" to true, "enabled" to true,
+                callback(preparationResult(true, true, policy = policy, firebaseInitialized = true, tokenAcquired = true) + mapOf(
                     "installation_id" to record.getString("installation_id"), "fcm_token" to task.result,
                     "status_secret" to record.getString("status_secret"), "generation" to generation))
             }
-        } catch (_: Exception) { clearAuthority(); callback(mapOf("available" to true, "enabled" to false)) }
+        } catch (_: Exception) { clearAuthority(); callback(preparationResult(true, false, "native_unavailable", policy, true)) }
     }
 
     private fun exactEndpoint(value: String): Boolean = try {

@@ -19,7 +19,7 @@ internal class BackgroundOrderAlertBridge(private val activity: Activity, messen
                 "prepare" -> {
                     if (args["request_permission"] == true && BackgroundOrderAlertCoordinator.initializeFirebase(activity) && Build.VERSION.SDK_INT >= 33 &&
                         ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                        if (permissionResult != null) { result.success(mapOf("available" to true, "enabled" to false)); return@setMethodCallHandler }
+                        if (permissionResult != null) { result.success(mapOf("available" to true, "enabled" to false, "failure_reason" to "preparation_pending")); return@setMethodCallHandler }
                         permissionResult = result
                         activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 381)
                     } else coordinator.prepare(activity, args["request_permission"] == true) { result.success(it) }
@@ -39,14 +39,14 @@ internal class BackgroundOrderAlertBridge(private val activity: Activity, messen
         val result = permissionResult ?: return
         permissionResult = null
         if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-            result.success(mapOf("available" to true, "enabled" to false))
+            result.success(coordinator.permissionRefused())
             return
         }
         coordinator.prepare(activity, true) { result.success(it) }
     }
 
     fun detach() {
-        permissionResult?.success(mapOf("available" to true, "enabled" to false))
+        permissionResult?.success(mapOf("available" to true, "enabled" to false, "failure_reason" to "preparation_cancelled"))
         permissionResult = null
         coordinator.detach()
     }

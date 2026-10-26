@@ -68,7 +68,11 @@ class MethodChannelBackgroundOrderAlertBridge
       'request_permission': requestPermission,
     });
     return value == null
-        ? const {'available': false, 'enabled': false}
+        ? const {
+            'available': false,
+            'enabled': false,
+            'failure_reason': 'native_unavailable',
+          }
         : Map<String, dynamic>.from(value);
   }
 

@@ -58,6 +58,7 @@ class OnlineOrderInboxState {
     this.hasMore = false,
     this.cursor,
     this.printOutcome,
+    this.printResultSequence = 0,
   });
   final List<OnlineOrderRequest> requests;
   final bool loading;
@@ -69,6 +70,11 @@ class OnlineOrderInboxState {
   final bool hasMore;
   final OnlineInboxCursor? cursor;
   final WebOrderPrintOutcome? printOutcome;
+
+  /// Presentation identity for a completed exact-request print callback. It is
+  /// unchanged by inbox/recovery refreshes, and is neither a spool ACK nor an
+  /// assertion that a ticket physically printed.
+  final int printResultSequence;
   int pendingCountAt(DateTime now) => requests
       .where((r) => r.status == OnlineOrderStatus.pending && !r.expiredAt(now))
       .length;
@@ -87,6 +93,7 @@ class OnlineOrderInboxState {
     OnlineInboxCursor? cursor,
     bool clearCursor = false,
     WebOrderPrintOutcome? printOutcome,
+    int? printResultSequence,
   }) => OnlineOrderInboxState(
     requests: requests ?? this.requests,
     loading: loading ?? this.loading,
@@ -98,6 +105,7 @@ class OnlineOrderInboxState {
     hasMore: hasMore ?? this.hasMore,
     cursor: clearCursor ? null : (cursor ?? this.cursor),
     printOutcome: printOutcome ?? this.printOutcome,
+    printResultSequence: printResultSequence ?? this.printResultSequence,
   );
 }
 
@@ -637,12 +645,16 @@ class OnlineOrderInboxController extends Notifier<OnlineOrderInboxState> {
           canonicalOrderId,
         );
         if (_current(gen) && _foreground && !_securityBlocked) {
-          state = state.copyWith(printOutcome: outcome);
+          state = state.copyWith(
+            printOutcome: outcome,
+            printResultSequence: state.printResultSequence + 1,
+          );
         }
       } catch (_) {
         if (_current(gen))
           state = state.copyWith(
             printOutcome: WebOrderPrintOutcome.reconciliationRequired,
+            printResultSequence: state.printResultSequence + 1,
           );
       }
     }

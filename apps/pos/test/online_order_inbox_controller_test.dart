@@ -36,6 +36,7 @@ ProviderContainer harness(
   List<(String, String)>? printed,
   Future<WebOrderPrintOutcome> Function(String, String)? print,
   Future<WebOrderPrintOutcome?> Function()? readRecovery,
+  List<String> decisionIds = const [decisionId],
   DeviceContext deviceContext = _context,
 }) {
   final container = ProviderContainer(
@@ -52,7 +53,7 @@ ProviderContainer harness(
       onlineOrderInboxPollIntervalProvider.overrideWithValue(interval),
       posSyncClockProvider.overrideWithValue(clock ?? () => inboxNow),
       clientIdGeneratorProvider.overrideWithValue(
-        FixedClientIdGenerator([decisionId]),
+        FixedClientIdGenerator(decisionIds),
       ),
       onlineInboxCanonicalRefreshProvider.overrideWithValue((id) async {
         refreshed?.add(id);
@@ -321,11 +322,55 @@ void main() {
       expect(refreshed, [canonicalId]);
       expect(repo.decisions, hasLength(1));
       expect(targetCallbacks, 1);
+      expect(c.read(onlineOrderInboxControllerProvider).printResultSequence, 1);
       expect(c.read(onlineOrderInboxControllerProvider).uncertain, isFalse);
       expect(
         c.read(onlineOrderInboxControllerProvider).printOutcome,
         WebOrderPrintOutcome.blocked,
       );
+    },
+  );
+  test(
+    'distinct completed failed callbacks get fresh presentation identities',
+    () async {
+      const secondRequest = '10000000-0000-4000-8000-000000000002';
+      const secondDecision = '30000000-0000-4000-8000-000000000002';
+      final secondJson = requestJson()..['request_id'] = secondRequest;
+      final repo = FakeInboxRepository();
+      repo.onFetch = (_, _) async => inboxPage(
+        requests: [inboxRequest(), OnlineOrderRequest.fromJson(secondJson)],
+      );
+      repo.onDecide = (call) async => OnlineInboxDecisionResult.fromJson({
+        ...decisionJson(),
+        'request_id': call.requestId,
+        'decision_id': call.decisionId,
+        'canonical_order_id': call.requestId == requestId
+            ? canonicalId
+            : '20000000-0000-4000-8000-000000000002',
+      });
+      final callbacks = <String>[];
+      final c = harness(
+        repo,
+        decisionIds: const [decisionId, secondDecision],
+        print: (request, _) async {
+          callbacks.add(request);
+          return WebOrderPrintOutcome.failed;
+        },
+      );
+      final controller = await ready(c);
+      await controller.decide(requestId, OnlineOrderDecision.accept);
+      expect(c.read(onlineOrderInboxControllerProvider).printResultSequence, 1);
+      await controller.decide(secondRequest, OnlineOrderDecision.accept);
+      expect(c.read(onlineOrderInboxControllerProvider).printResultSequence, 2);
+      expect(
+        c.read(onlineOrderInboxControllerProvider).printOutcome,
+        WebOrderPrintOutcome.failed,
+      );
+      expect(callbacks, [requestId, secondRequest]);
+      expect(repo.decisions, hasLength(2));
+      await controller.decide(secondRequest, OnlineOrderDecision.accept);
+      expect(callbacks, [requestId, secondRequest]);
+      expect(c.read(onlineOrderInboxControllerProvider).printResultSequence, 2);
     },
   );
   test(
@@ -375,6 +420,15 @@ void main() {
       await controller.decide(requestId, OnlineOrderDecision.accept);
       expect(printed, [(requestId, canonicalId)]);
       expect(repo.decisions, hasLength(1));
+      final resultSequence = c
+          .read(onlineOrderInboxControllerProvider)
+          .printResultSequence;
+      expect(resultSequence, 1);
+      await controller.refresh();
+      expect(
+        c.read(onlineOrderInboxControllerProvider).printResultSequence,
+        resultSequence,
+      );
       expect(
         c.read(onlineOrderInboxControllerProvider).printOutcome,
         WebOrderPrintOutcome.sent,

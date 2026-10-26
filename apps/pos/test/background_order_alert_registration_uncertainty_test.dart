@@ -169,6 +169,21 @@ void registrationUncertaintyScenario({bool gatewayFailure = false}) {
       expect(original.read(backgroundOrderAlertsProvider).busy, false);
       await enabling;
       expect(original.read(backgroundOrderAlertsProvider).failed, true);
+      expect(
+        original.read(backgroundOrderAlertsProvider).failureReason,
+        BackgroundOrderAlertFailure.registrationUncertain,
+      );
+      expect(
+        original.read(backgroundOrderAlertsProvider).diagnostics.registration,
+        BackgroundOrderAlertRegistrationResult.uncertain,
+      );
+      expect(
+        original
+            .read(backgroundOrderAlertsProvider)
+            .diagnostics
+            .registrationQuarantined,
+        true,
+      );
       expect(original.read(backgroundOrderAlertsProvider).busy, false);
       final prepares = bridge.prepares;
       await controller.setEnabled(false);
@@ -193,6 +208,10 @@ void registrationUncertaintyScenario({bool gatewayFailure = false}) {
       expect(wire.calls, 1);
       expect(bridge.prepares, prepares);
       expect(bridge.bindings, 0);
+      expect(
+        replacement.read(backgroundOrderAlertsProvider).failureReason,
+        BackgroundOrderAlertFailure.registrationUncertain,
+      );
       expect(inbox.decisions, isEmpty);
       replacement.dispose();
       // SDK JSON-isolate teardown uses real isolate messages, not fake timers.
