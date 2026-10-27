@@ -9648,4 +9648,30 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get storefrontFeaturedItemsInvalid =>
       'לא ניתן לשמור את הבחירות. טענו מחדש את המוצרים הזמינים ובדקו את הבחירה.';
+
+  @override
+  String get posOnlineInboxPrintHistory => 'היסטוריית כרטיסי מטבח שטרם הוכרעו';
+
+  @override
+  String posOnlineInboxPrintHistoryEntry(String date) {
+    return 'כרטיס מתאריך $date';
+  }
+
+  @override
+  String get posOnlineInboxPrintHistoryUnresolved =>
+      'תוצאת ההדפסה על נייר עדיין לא הוכרעה.';
+
+  @override
+  String get posOnlineInboxPrintHistoryReviewed => 'נבדק — עדיין לא הוכרע';
+
+  @override
+  String get posOnlineInboxPrintHistoryReview => 'בדקתי את הבעיה הזו';
+
+  @override
+  String get posOnlineInboxPrintHistoryConfirm =>
+      'פעולה זו מתעדת שבדקתם את ההודעה במכשיר הזה. היא אינה מאשרת הדפסה, אינה שולחת את הכרטיס שוב ואינה משנה את היסטוריית ההדפסה שלו.';
+
+  @override
+  String get posOnlineInboxPrintHistoryReviewFailed =>
+      'לא ניתן לשמור את הבדיקה. ההודעה נשארת ללא שינוי.';
 }

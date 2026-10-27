@@ -9800,4 +9800,31 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get storefrontFeaturedItemsInvalid =>
       'These choices could not be saved. Reload the available products and check the selection.';
+
+  @override
+  String get posOnlineInboxPrintHistory => 'Unresolved kitchen-ticket history';
+
+  @override
+  String posOnlineInboxPrintHistoryEntry(String date) {
+    return 'Ticket from $date';
+  }
+
+  @override
+  String get posOnlineInboxPrintHistoryUnresolved =>
+      'Paper outcome remains unresolved.';
+
+  @override
+  String get posOnlineInboxPrintHistoryReviewed =>
+      'Reviewed — still unresolved';
+
+  @override
+  String get posOnlineInboxPrintHistoryReview => 'I reviewed this issue';
+
+  @override
+  String get posOnlineInboxPrintHistoryConfirm =>
+      'This records that you reviewed this notice on this device. It does not confirm printing, resend the ticket, or change its print history.';
+
+  @override
+  String get posOnlineInboxPrintHistoryReviewFailed =>
+      'The review could not be saved. The notice remains unchanged.';
 }

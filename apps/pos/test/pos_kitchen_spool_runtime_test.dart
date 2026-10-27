@@ -11,6 +11,8 @@ import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:restoflow_pos/src/data/print_notice_review_store.dart';
 import 'package:path/path.dart' as p;
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart';
@@ -45,6 +47,7 @@ import 'package:restoflow_pos/src/spool/pos_kitchen_spool_runtime.dart';
 import 'package:restoflow_pos/src/spool/pos_secure_kitchen_mode_cache.dart';
 
 import 'support/pos_package_root.dart';
+import 'support/print_notice_preferences.dart';
 
 /// KITCHEN-MODE-001C2B — runtime gating (D1/D3/D4) + pending-ack
 /// reconciliation against a REAL dedicated spool database and scripted
@@ -505,6 +508,94 @@ void main() {
         expect((repo.claims, repo.begins), (0, 0));
       },
     );
+    test(
+      'exact history projection leaves whole spool rows and ACKs unchanged',
+      () async {
+        final db = await factory().open();
+        final store = DriftKitchenSpoolStore(db);
+        await store.insertImportedJob(
+          _job('web', localJobId: 'web-initial:request-web'),
+        );
+        await store.insertImportedJob(_job('ordinary'));
+        await db.customStatement(
+          "UPDATE kitchen_spool_jobs SET status='blocked_configuration', attempt_count=1, last_error_code='transport_unavailable' WHERE dispatch_id='d-web'",
+        );
+        final before = await store.findByDispatchId('d-web');
+        final repo = _WebPrintRepository();
+        final rt = target(repo);
+        addTearDown(rt.dispose);
+        final history = (await rt.readWebPrintHistory())!;
+        expect(history.issues, hasLength(1));
+        final original = history.issues.single;
+        expect(original.localJobId, 'web-initial:request-web');
+        expect(original.dispatchId, 'd-web');
+        expect(original.errorCode, 'transport_unavailable');
+        expect(original.attemptCount, 1);
+        expect(original.reviewable, true);
+        SharedPreferences.setMockInitialValues({});
+        installPrintNoticePreferences();
+        expect(
+          await PrintNoticeReviewStore().review(
+            original.scope,
+            original.fingerprint,
+            isCurrent: () => true,
+          ),
+          true,
+        );
+        expect(await store.findByDispatchId('d-web'), before);
+        await db.customStatement(
+          "UPDATE kitchen_spool_jobs SET server_ack_attempt_count=server_ack_attempt_count+1 WHERE dispatch_id='d-web'",
+        );
+        expect(
+          (await rt.readWebPrintHistory())!.issues.single.fingerprint,
+          original.fingerprint,
+        );
+        await db.customStatement(
+          "UPDATE kitchen_spool_jobs SET attempt_count=attempt_count+1 WHERE dispatch_id='d-web'",
+        );
+        expect(
+          (await rt.readWebPrintHistory())!.issues.single.fingerprint,
+          isNot(original.fingerprint),
+        );
+        expect((repo.claims, repo.begins, repo.finishes), (0, 0, 0));
+        expect(transport.calls, isEmpty);
+        expect(workerNetworkCalls, isEmpty);
+        await db.close();
+      },
+    );
+
+    test(
+      'history read rechecks current scope after asynchronous database read',
+      () async {
+        final db = await factory().open();
+        await DriftKitchenSpoolStore(
+          db,
+        ).insertImportedJob(_job('web', localJobId: 'web-initial:request-web'));
+        await db.close();
+        var checks = 0;
+        var context = _context;
+        final rt = runtime(
+          wireDrain: true,
+          webRepository: _WebPrintRepository(),
+          deviceContext: () => context,
+          canWebPrint: () {
+            if (++checks == 3)
+              context = const DeviceContext(
+                organizationId: 'foreign',
+                restaurantId: 'rest-1',
+                branchId: 'branch-1',
+                deviceId: 'dev-1',
+              );
+            return true;
+          },
+        );
+        addTearDown(rt.dispose);
+        expect(await rt.readWebPrintHistory(), isNull);
+        expect(transport.calls, isEmpty);
+        expect(workerNetworkCalls, isEmpty);
+      },
+    );
+
     test(
       'KDS and unresolved mode do not claim, create spool or send',
       () async {

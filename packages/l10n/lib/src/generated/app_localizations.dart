@@ -17379,6 +17379,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'These choices could not be saved. Reload the available products and check the selection.'**
   String get storefrontFeaturedItemsInvalid;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: unresolved historical kitchen-print issues; presentation only.
+  ///
+  /// In en, this message translates to:
+  /// **'Unresolved kitchen-ticket history'**
+  String get posOnlineInboxPrintHistory;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: date of one historical kitchen-print issue.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket from {date}'**
+  String posOnlineInboxPrintHistoryEntry(String date);
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: reviewing a notice never confirms paper output.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper outcome remains unresolved.'**
+  String get posOnlineInboxPrintHistoryUnresolved;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: local presentation-review marker, never a print ACK.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviewed — still unresolved'**
+  String get posOnlineInboxPrintHistoryReviewed;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: explicitly review one unchanged historical issue on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'I reviewed this issue'**
+  String get posOnlineInboxPrintHistoryReview;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: presentation-only review confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'This records that you reviewed this notice on this device. It does not confirm printing, resend the ticket, or change its print history.'**
+  String get posOnlineInboxPrintHistoryConfirm;
+
+  /// BIZBOT-POS-ALERT-PRINT-NOTICE-001: failed local persistence leaves notice state unchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The review could not be saved. The notice remains unchanged.'**
+  String get posOnlineInboxPrintHistoryReviewFailed;
 }
 
 class _AppLocalizationsDelegate

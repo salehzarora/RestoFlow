@@ -6083,5 +6083,19 @@
   },
   "@storefrontFeaturedItemsInvalid": {
     "description": "BIZBOT-STOREFRONT-FEATURED-ITEMS-001: bounded manager featured-product selection."
-  }
+  },
+  "posOnlineInboxPrintHistory": "Unresolved kitchen-ticket history",
+  "@posOnlineInboxPrintHistory": {"description":"BIZBOT-POS-ALERT-PRINT-NOTICE-001: unresolved historical kitchen-print issues; presentation only."},
+  "posOnlineInboxPrintHistoryEntry": "Ticket from {date}",
+  "@posOnlineInboxPrintHistoryEntry": {"description":"BIZBOT-POS-ALERT-PRINT-NOTICE-001: date of one historical kitchen-print issue.","placeholders":{"date":{"type":"String"}}},
+  "posOnlineInboxPrintHistoryUnresolved": "Paper outcome remains unresolved.",
+  "@posOnlineInboxPrintHistoryUnresolved": {"description":"BIZBOT-POS-ALERT-PRINT-NOTICE-001: reviewing a notice never confirms paper output."},
+  "posOnlineInboxPrintHistoryReviewed": "Reviewed — still unresolved",
+  "@posOnlineInboxPrintHistoryReviewed": {"description":"BIZBOT-POS-ALERT-PRINT-NOTICE-001: local presentation-review marker, never a print ACK."},
+  "posOnlineInboxPrintHistoryReview": "I reviewed this issue",
+  "@posOnlineInboxPrintHistoryReview": {"description":"BIZBOT-POS-ALERT-PRINT-NOTICE-001: explicitly review one unchanged historical issue on this device."},
+  "posOnlineInboxPrintHistoryConfirm": "This records that you reviewed this notice on this device. It does not confirm printing, resend the ticket, or change its print history.",
+  "@posOnlineInboxPrintHistoryConfirm": {"description":"BIZBOT-POS-ALERT-PRINT-NOTICE-001: presentation-only review confirmation."},
+  "posOnlineInboxPrintHistoryReviewFailed": "The review could not be saved. The notice remains unchanged.",
+  "@posOnlineInboxPrintHistoryReviewFailed": {"description":"BIZBOT-POS-ALERT-PRINT-NOTICE-001: failed local persistence leaves notice state unchanged."}
 }
