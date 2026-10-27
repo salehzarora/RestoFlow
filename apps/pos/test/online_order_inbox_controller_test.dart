@@ -60,7 +60,12 @@ ProviderContainer harness(
       }),
       onlineInboxCancelPrintProvider.overrideWithValue(() {}),
       if (readRecovery != null)
-        onlineInboxPrintRecoveryProvider.overrideWith((ref) => readRecovery()),
+        onlineInboxPrintRecoveryProvider.overrideWith((ref) async {
+          final outcome = await readRecovery();
+          return outcome == null
+              ? null
+              : WebOrderPrintHistory(unidentifiedOutcome: outcome);
+        }),
       onlineInboxAcceptedPrintProvider.overrideWithValue(
         print ??
             (request, order) async {
@@ -394,7 +399,7 @@ void main() {
       outcome = WebOrderPrintOutcome.failed;
       await controller.refresh();
       expect(
-        await c.read(onlineInboxPrintRecoveryProvider.future),
+        (await c.read(onlineInboxPrintRecoveryProvider.future))?.outcome,
         WebOrderPrintOutcome.failed,
       );
       expect(reads, beforeRefresh + 1);
@@ -403,7 +408,7 @@ void main() {
       controller.onResume();
       await pumpEventQueue(times: 10);
       expect(
-        await c.read(onlineInboxPrintRecoveryProvider.future),
+        (await c.read(onlineInboxPrintRecoveryProvider.future))?.outcome,
         WebOrderPrintOutcome.failed,
       );
       expect(reads, beforeResume + 1);

@@ -12,8 +12,12 @@ import '../state/online_order_inbox_controller.dart';
 import '../state/background_order_alerts.dart';
 import '../state/pos_menu_provider.dart';
 import '../state/pos_offline_state.dart';
+import '../state/print_notice_review.dart';
 import '../spool/online_order_print_hooks.dart'
-    show WebOrderPrintOutcome, onlineInboxPrintRecoveryProvider;
+    show
+        WebOrderPrintOutcome,
+        WebOrderPrintHistory,
+        onlineInboxPrintRecoveryProvider;
 
 // Existing localized kitchen-printer vocabulary; sent is transport evidence,
 // never a claim that paper physically printed. No automatic-retry control.
@@ -337,7 +341,8 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(onlineOrderInboxControllerProvider);
-    final recovery = ref.watch(onlineInboxPrintRecoveryProvider).valueOrNull;
+    final recoveryState = ref.watch(onlineInboxPrintRecoveryProvider);
+    final recovery = recoveryState.isLoading ? null : recoveryState.valueOrNull;
     final printOutcome = state.printOutcome;
     final controller = ref.read(onlineOrderInboxControllerProvider.notifier);
     final selected = state.requests
@@ -404,29 +409,10 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
                             key: const Key('online-inbox-print-status'),
                           ),
                         ),
-                      if (recovery != null &&
-                          _printOutcomeText(l10n, recovery) != null)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                l10n.posOnlineInboxEarlierPrintIssue,
-                                key: const Key(
-                                  'online-inbox-earlier-print-issue',
-                                ),
-                              ),
-                              Text(
-                                _printOutcomeText(l10n, recovery)!,
-                                key: Key(
-                                  printOutcome == null
-                                      ? 'online-inbox-print-status'
-                                      : 'online-inbox-earlier-print-status',
-                                ),
-                              ),
-                            ],
-                          ),
+                      if (recovery != null && recovery.outcome != null)
+                        _HistoricalPrintNotice(
+                          history: recovery,
+                          hasCurrentOutcome: printOutcome != null,
                         ),
                       if (state.uncertain)
                         Padding(
@@ -609,6 +595,148 @@ class _InboxContentState extends ConsumerState<_InboxContent> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Review changes this notice's presentation only. The unresolved spool row,
+/// permanent server fence and fresh print-result SnackBars remain untouched.
+class _HistoricalPrintNotice extends ConsumerWidget {
+  const _HistoricalPrintNotice({
+    required this.history,
+    required this.hasCurrentOutcome,
+  });
+  final WebOrderPrintHistory history;
+  final bool hasCurrentOutcome;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final exact = history.issues.isNotEmpty;
+    final reviewState = exact ? ref.watch(printNoticeReviewProvider) : null;
+    final view = reviewState?.isLoading == false
+        ? reviewState?.valueOrNull
+        : null;
+    final unreviewed = history.issues
+        .where((i) => !(view?.isReviewed(i) ?? false))
+        .toList();
+    final showNotice =
+        history.unidentifiedOutcome != null || unreviewed.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (showNotice) ...[
+            Text(
+              l10n.posOnlineInboxEarlierPrintIssue,
+              key: const Key('online-inbox-earlier-print-issue'),
+            ),
+            Text(
+              exact
+                  ? l10n.posOnlineInboxPrintHistoryUnresolved
+                  : _printOutcomeText(l10n, history.outcome!)!,
+              key: Key(
+                hasCurrentOutcome
+                    ? 'online-inbox-earlier-print-status'
+                    : 'online-inbox-print-status',
+              ),
+            ),
+          ],
+          if (view?.storageFailed == true || reviewState?.hasError == true)
+            Text(
+              l10n.posOnlineInboxPrintHistoryReviewFailed,
+              key: const Key('online-inbox-print-review-failed'),
+            ),
+          if (exact)
+            ExpansionTile(
+              key: const Key('online-inbox-print-history'),
+              title: Text(l10n.posOnlineInboxPrintHistory),
+              children: [
+                for (final issue in history.issues)
+                  ListTile(
+                    key: ValueKey('print-history-${issue.fingerprint}'),
+                    title: Text(
+                      l10n.posOnlineInboxPrintHistoryEntry(
+                        MaterialLocalizations.of(
+                              context,
+                            ).formatMediumDate(issue.createdAt.toLocal()) +
+                            ' ' +
+                            MaterialLocalizations.of(context).formatTimeOfDay(
+                              TimeOfDay.fromDateTime(issue.createdAt.toLocal()),
+                            ),
+                      ),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(l10n.posOnlineInboxPrintHistoryUnresolved),
+                        if (view?.isReviewed(issue) == true)
+                          Text(l10n.posOnlineInboxPrintHistoryReviewed),
+                        if (issue.reviewable && view?.isReviewed(issue) != true)
+                          TextButton(
+                            key: ValueKey('review-print-${issue.fingerprint}'),
+                            onPressed: view == null || view.saving
+                                ? null
+                                : () async {
+                                    final authority = ref.read(
+                                      onlineOrderInboxIdentityProvider,
+                                    );
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (dialogContext) => AlertDialog(
+                                        title: Text(
+                                          l10n.posOnlineInboxPrintHistoryReview,
+                                        ),
+                                        content: Text(
+                                          l10n.posOnlineInboxPrintHistoryConfirm,
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.of(
+                                              dialogContext,
+                                            ).pop(false),
+                                            child: Text(
+                                              MaterialLocalizations.of(
+                                                dialogContext,
+                                              ).cancelButtonLabel,
+                                            ),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.of(
+                                              dialogContext,
+                                            ).pop(true),
+                                            child: Text(
+                                              l10n.posOnlineInboxPrintHistoryReview,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirmed != true ||
+                                        !context.mounted ||
+                                        authority !=
+                                            ref.read(
+                                              onlineOrderInboxIdentityProvider,
+                                            ))
+                                      return;
+                                    // Review ONLY the displayed snapshot, never newly
+                                    // fetched/arriving issues or an entire scope.
+                                    await ref
+                                        .read(
+                                          printNoticeReviewProvider.notifier,
+                                        )
+                                        .review(issue);
+                                  },
+                            child: Text(l10n.posOnlineInboxPrintHistoryReview),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 }

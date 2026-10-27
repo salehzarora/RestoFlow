@@ -2918,5 +2918,12 @@
   "storefrontFeaturedItemsSeparateEdits": "שמרו או בטלו תחילה את שאר השינויים בדף הבית או בפרופיל. אם בשני החלקים יש שינויים, בטלו אחד מהם.",
   "storefrontFeaturedItemsUncertain": "תוצאת השמירה אינה ידועה. הבחירות וזהות הבקשה נשמרו. ניסיון חוזר מברר את אותה בקשה; אל תתחילו שמירה אחרת.",
   "storefrontFeaturedItemsProfileMissing": "הפרופיל אינו זמין עוד. טענו מחדש וצרו אותו תחילה בהגדרות הפרופיל הרגילות.",
-  "storefrontFeaturedItemsInvalid": "לא ניתן לשמור את הבחירות. טענו מחדש את המוצרים הזמינים ובדקו את הבחירה."
+  "storefrontFeaturedItemsInvalid": "לא ניתן לשמור את הבחירות. טענו מחדש את המוצרים הזמינים ובדקו את הבחירה.",
+  "posOnlineInboxPrintHistory": "היסטוריית כרטיסי מטבח שטרם הוכרעו",
+  "posOnlineInboxPrintHistoryEntry": "כרטיס מתאריך {date}",
+  "posOnlineInboxPrintHistoryUnresolved": "תוצאת ההדפסה על נייר עדיין לא הוכרעה.",
+  "posOnlineInboxPrintHistoryReviewed": "נבדק — עדיין לא הוכרע",
+  "posOnlineInboxPrintHistoryReview": "בדקתי את הבעיה הזו",
+  "posOnlineInboxPrintHistoryConfirm": "פעולה זו מתעדת שבדקתם את ההודעה במכשיר הזה. היא אינה מאשרת הדפסה, אינה שולחת את הכרטיס שוב ואינה משנה את היסטוריית ההדפסה שלו.",
+  "posOnlineInboxPrintHistoryReviewFailed": "לא ניתן לשמור את הבדיקה. ההודעה נשארת ללא שינוי."
 }

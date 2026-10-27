@@ -26,6 +26,7 @@ import 'package:restoflow_printing/restoflow_printing.dart'
 import '../data/outbox_repository.dart' show OrderSubmitPhoneLookupKey;
 import '../data/round_print_claim_store.dart' show PosRoundPrintClaimState;
 import '../data/online_order_print_repository.dart';
+import '../data/sync_cursor_store.dart' show PosSyncScope;
 import 'flutter_secure_kitchen_spool_key_store.dart';
 import 'kitchen_contained_ack.dart';
 import 'kitchen_destination_resolver.dart';
@@ -174,7 +175,10 @@ final class KitchenTargetSpoolInitialization {
 }
 
 final class PosKitchenSpoolRuntime
-    implements PosKitchenSpoolLifecycleHooks, PosWebOrderPrintHooks {
+    implements
+        PosKitchenSpoolLifecycleHooks,
+        PosWebOrderPrintHooks,
+        PosWebOrderPrintHistoryHooks {
   PosKitchenSpoolRuntime({
     required PosKitchenSpoolPlatform platform,
     required DeviceContext? Function() deviceContext,
@@ -427,13 +431,20 @@ final class PosKitchenSpoolRuntime
 
   @override
   Future<WebOrderPrintOutcome?> readWebPrintRecovery() async {
+    return (await readWebPrintHistory())?.outcome;
+  }
+
+  @override
+  Future<WebOrderPrintHistory?> readWebPrintHistory() async {
     if (_disposed || !_canPrintWebOrder() || !_platform.supportsSecureSpool)
       return null;
     final context = _deviceContext();
     if (context?.deviceId == null || context?.restaurantId == null) return null;
     try {
       final factory = _databaseFactoryBuilder();
-      if (_db == null && !await factory.spoolFileExists()) return null;
+      if (_db == null && !await factory.spoolFileExists()) {
+        return WebOrderPrintHistory();
+      }
       final db = await _openDatabase(factory);
       if (_disposed || !_canPrintWebOrder()) return null;
       final rows =
@@ -448,22 +459,49 @@ final class PosKitchenSpoolRuntime
                     isTargetedWebPrintJob(row),
               )
               .toList();
-      if (rows.isEmpty) return null;
-      if (rows.any(
-        (row) =>
-            row.status == KitchenSpoolJobStatus.printing ||
-            row.status == KitchenSpoolJobStatus.possiblyPrinted,
-      )) {
-        return WebOrderPrintOutcome.reconciliationRequired;
-      }
-      if (rows.any(
-        (row) => row.status == KitchenSpoolJobStatus.blockedConfiguration,
-      )) {
-        return WebOrderPrintOutcome.failed;
-      }
-      return WebOrderPrintOutcome.attention;
+      // Recheck after the asynchronous read; never expose a previous tenant or
+      // device's evidence after a pairing/context transition.
+      if (_disposed ||
+          !_canPrintWebOrder() ||
+          !_sameScope(context, _deviceContext()))
+        return null;
+      return WebOrderPrintHistory(
+        issues: rows.map(
+          (row) => WebOrderPrintHistoryIssue(
+            scope: PosSyncScope(
+              organizationId: row.organizationId,
+              restaurantId: row.restaurantId,
+              branchId: row.branchId,
+              deviceId: row.deviceId,
+            ),
+            localJobId: row.localJobId,
+            dispatchId: row.dispatchId,
+            createdAt: row.createdAt,
+            localStatus: row.status.wireName,
+            attemptCount: row.attemptCount,
+            lastAttemptAt: row.lastAttemptAt,
+            errorCode: row.lastErrorCode,
+            terminalCode: row.serverAckTerminalCode,
+            supersededByDispatchId: row.supersededByDispatchId,
+            outcome: switch (row.status) {
+              KitchenSpoolJobStatus.printing ||
+              KitchenSpoolJobStatus.possiblyPrinted =>
+                WebOrderPrintOutcome.reconciliationRequired,
+              KitchenSpoolJobStatus.blockedConfiguration =>
+                WebOrderPrintOutcome.failed,
+              _ => WebOrderPrintOutcome.attention,
+            },
+          ),
+        ),
+      );
     } catch (_) {
-      return WebOrderPrintOutcome.reconciliationRequired;
+      if (_disposed ||
+          !_canPrintWebOrder() ||
+          !_sameScope(context, _deviceContext()))
+        return null;
+      return WebOrderPrintHistory(
+        unidentifiedOutcome: WebOrderPrintOutcome.reconciliationRequired,
+      );
     }
   }
 

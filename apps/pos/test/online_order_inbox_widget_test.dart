@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/online_order_inbox.dart';
 import 'package:restoflow_pos/src/media/background_order_alert_bridge.dart';
@@ -26,6 +27,11 @@ import 'package:restoflow_pos/src/widgets/outbox_status_indicator.dart';
 import 'package:restoflow_pos/src/widgets/ready_notification_bell.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
 import 'package:restoflow_pos/src/spool/online_order_print_hooks.dart';
+import 'package:restoflow_pos/src/data/print_notice_review_store.dart';
+import 'package:restoflow_pos/src/data/sync_cursor_store.dart';
+import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
+import 'package:restoflow_pos/src/state/print_notice_review.dart';
+import 'support/print_notice_preferences.dart';
 
 import 'online_order_inbox_fixtures.dart';
 
@@ -211,6 +217,9 @@ Future<_Controller> pumpInbox(
   bool menuUnavailable = false,
   WebOrderPrintOutcome? recovery,
   Future<WebOrderPrintOutcome?> Function()? readRecovery,
+  Future<WebOrderPrintHistory?> Function()? readHistory,
+  PrintNoticeReviewStore? reviewStore,
+  StateProvider<String?>? authority,
   BackgroundOrderAlerts? backgroundAlerts,
   _AlertBridge? backgroundBridge,
   BackgroundOrderAlertRegistration? register,
@@ -249,11 +258,30 @@ Future<_Controller> pumpInbox(
         ],
         if (backgroundAlerts != null)
           backgroundOrderAlertsProvider.overrideWith(() => backgroundAlerts),
-        onlineInboxPrintRecoveryProvider.overrideWith(
-          (ref) async => readRecovery == null ? recovery : readRecovery(),
-        ),
+        onlineInboxPrintRecoveryProvider.overrideWith((ref) async {
+          if (readHistory != null) return readHistory();
+          final outcome = readRecovery == null
+              ? recovery
+              : await readRecovery();
+          return outcome == null
+              ? null
+              : WebOrderPrintHistory(unidentifiedOutcome: outcome);
+        }),
+        if (readHistory != null)
+          posSyncScopeProvider.overrideWithValue(
+            const PosSyncScope(
+              organizationId: 'org',
+              restaurantId: 'restaurant',
+              branchId: 'branch',
+              deviceId: 'device',
+            ),
+          ),
+        if (reviewStore != null)
+          printNoticeReviewStoreProvider.overrideWithValue(reviewStore),
         onlineOrderInboxControllerProvider.overrideWith(() => controller),
-        onlineOrderInboxIdentityProvider.overrideWithValue('test-authority'),
+        onlineOrderInboxIdentityProvider.overrideWith(
+          (ref) => authority == null ? 'test-authority' : ref.watch(authority),
+        ),
         posMenuProvider.overrideWith((_) async {
           if (menuUnavailable) throw const PosMenuUnavailable();
           return menu ??
@@ -283,6 +311,219 @@ Future<_Controller> pumpInbox(
 }
 
 void main() {
+  WebOrderPrintHistoryIssue historyIssue({String job = 'one'}) =>
+      WebOrderPrintHistoryIssue(
+        scope: const PosSyncScope(
+          organizationId: 'org',
+          restaurantId: 'restaurant',
+          branchId: 'branch',
+          deviceId: 'device',
+        ),
+        localJobId: 'web-initial:$job',
+        dispatchId: 'dispatch-$job',
+        createdAt: DateTime.utc(2026, 10, 1),
+        localStatus: 'blocked_configuration',
+        attemptCount: 1,
+        lastAttemptAt: DateTime.utc(2026, 10, 1),
+        errorCode: 'transport_unavailable',
+        terminalCode: null,
+        supersededByDispatchId: null,
+        outcome: WebOrderPrintOutcome.failed,
+      );
+
+  for (final language in ['ar', 'he', 'en']) {
+    for (final width in [390.0, 1440.0]) {
+      testWidgets(
+        '$language $width historical review retains history and new failure',
+        (tester) async {
+          SharedPreferences.setMockInitialValues({});
+          installPrintNoticePreferences();
+          var history = WebOrderPrintHistory(issues: [historyIssue()]);
+          final inbox = await pumpInbox(
+            tester,
+            locale: language,
+            size: Size(width, 1000),
+            state: const OnlineOrderInboxState(),
+            readHistory: () async => history,
+          );
+          await tester.pumpAndSettle();
+          final title = find.byKey(
+            const Key('online-inbox-earlier-print-issue'),
+          );
+          expect(title, findsOneWidget);
+          final l10n = AppLocalizations.of(tester.element(title));
+          await tester.tap(find.byKey(const Key('online-inbox-print-history')));
+          await tester.pumpAndSettle();
+          final reviewButton = find.byKey(
+            ValueKey('review-print-${historyIssue().fingerprint}'),
+          );
+          await tester.ensureVisible(reviewButton);
+          await tester.tap(reviewButton);
+          await tester.pumpAndSettle();
+          expect(
+            find.text(l10n.posOnlineInboxPrintHistoryConfirm),
+            findsOneWidget,
+          );
+          await tester.tap(
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.widgetWithText(
+                TextButton,
+                l10n.posOnlineInboxPrintHistoryReview,
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(title, findsNothing);
+          expect(
+            find.text(l10n.posOnlineInboxPrintHistoryReviewed),
+            findsOneWidget,
+          );
+          expect(
+            find.text(l10n.posOnlineInboxPrintHistoryUnresolved),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(ValueKey('print-history-${historyIssue().fingerprint}')),
+            findsOneWidget,
+          );
+          expect(find.byType(SnackBar), findsNothing);
+          final container = ProviderScope.containerOf(
+            tester.element(find.byType(OnlineOrderInboxSheet)),
+          );
+          container.invalidate(onlineInboxPrintRecoveryProvider);
+          await tester.pumpAndSettle();
+          expect(title, findsNothing);
+          history = WebOrderPrintHistory(
+            issues: [
+              historyIssue(),
+              historyIssue(job: 'new'),
+            ],
+          );
+          container.invalidate(onlineInboxPrintRecoveryProvider);
+          await tester.pumpAndSettle();
+          expect(title, findsOneWidget);
+          // A refresh revalidates the snapshot and closes its expansion. The
+          // new failure is prominent; reopen history to inspect its own action.
+          await tester.tap(find.byKey(const Key('online-inbox-print-history')));
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(
+              ValueKey('review-print-${historyIssue(job: 'new').fingerprint}'),
+            ),
+            findsOneWidget,
+          );
+          expect(inbox.decisions, isEmpty);
+          expect(find.text(l10n.kioskKitchenRetry), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets(
+    'cancel or authority change while review dialog is open writes nothing',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final presentation = installPrintNoticePreferences();
+      final authority = StateProvider<String?>((_) => 'device-session|pin-a');
+      final inbox = await pumpInbox(
+        tester,
+        state: const OnlineOrderInboxState(),
+        authority: authority,
+        readHistory: () async => WebOrderPrintHistory(issues: [historyIssue()]),
+      );
+      await tester.pumpAndSettle();
+      final title = find.byKey(const Key('online-inbox-earlier-print-issue'));
+      final l10n = AppLocalizations.of(tester.element(title));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnlineOrderInboxSheet)),
+      );
+      await tester.tap(find.byKey(const Key('online-inbox-print-history')));
+      await tester.pumpAndSettle();
+      final button = find.byKey(
+        ValueKey('review-print-${historyIssue().fingerprint}'),
+      );
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      final dialog = find.byType(AlertDialog);
+      final cancel = MaterialLocalizations.of(
+        tester.element(dialog),
+      ).cancelButtonLabel;
+      await tester.tap(
+        find.descendant(
+          of: dialog,
+          matching: find.widgetWithText(TextButton, cancel),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect((await SharedPreferences.getInstance()).getKeys(), isEmpty);
+      expect(presentation.values, isEmpty);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      container.read(authority.notifier).state = 'device-session|pin-b';
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: dialog,
+          matching: find.widgetWithText(
+            TextButton,
+            l10n.posOnlineInboxPrintHistoryReview,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect((await SharedPreferences.getInstance()).getKeys(), isEmpty);
+      expect(presentation.values, isEmpty);
+      expect(title, findsOneWidget);
+      expect(inbox.decisions, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'review persistence failure leaves notice and unresolved history visible',
+    (tester) async {
+      final inbox = await pumpInbox(
+        tester,
+        state: const OnlineOrderInboxState(),
+        readHistory: () async => WebOrderPrintHistory(issues: [historyIssue()]),
+        reviewStore: PrintNoticeReviewStore(
+          preferences: () => throw StateError('synthetic_unavailable'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final title = find.byKey(const Key('online-inbox-earlier-print-issue'));
+      final l10n = AppLocalizations.of(tester.element(title));
+      await tester.tap(find.byKey(const Key('online-inbox-print-history')));
+      await tester.pumpAndSettle();
+      final button = find.byKey(
+        ValueKey('review-print-${historyIssue().fingerprint}'),
+      );
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(
+            TextButton,
+            l10n.posOnlineInboxPrintHistoryReview,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(title, findsOneWidget);
+      expect(
+        find.byKey(const Key('online-inbox-print-review-failed')),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.posOnlineInboxPrintHistoryReviewed), findsNothing);
+      expect(inbox.decisions, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
   Future<void> openAcceptance(WidgetTester tester) async {
     await tester.tap(find.byKey(const ValueKey('online-request-$requestId')));
     await tester.pump();

@@ -2918,5 +2918,12 @@
   "storefrontFeaturedItemsSeparateEdits": "احفظ تعديلات الرئيسية أو الملف الأخرى أو تجاهلها أولًا. إذا عُدّل القسمان، تجاهل تعديلات أحدهما.",
   "storefrontFeaturedItemsUncertain": "نتيجة الحفظ غير معروفة. احتفظنا باختياراتك ومعرّف الطلب نفسه. إعادة المحاولة تراجع الطلب نفسه؛ لا تبدأ حفظًا آخر.",
   "storefrontFeaturedItemsProfileMissing": "لم يعد الملف متاحًا. أعد التحميل وأنشئه أولًا من إعداد الملف المعتاد.",
-  "storefrontFeaturedItemsInvalid": "تعذّر حفظ هذه الاختيارات. أعد تحميل المنتجات المتاحة وتحقق من الاختيار."
+  "storefrontFeaturedItemsInvalid": "تعذّر حفظ هذه الاختيارات. أعد تحميل المنتجات المتاحة وتحقق من الاختيار.",
+  "posOnlineInboxPrintHistory": "سجل تذاكر المطبخ غير المحسومة",
+  "posOnlineInboxPrintHistoryEntry": "تذكرة بتاريخ {date}",
+  "posOnlineInboxPrintHistoryUnresolved": "لم تُحسم نتيجة الطباعة على الورق بعد.",
+  "posOnlineInboxPrintHistoryReviewed": "تمت المراجعة — ما زالت غير محسومة",
+  "posOnlineInboxPrintHistoryReview": "راجعت هذه المشكلة",
+  "posOnlineInboxPrintHistoryConfirm": "يسجّل هذا أنك راجعت هذا التنبيه على هذا الجهاز. لا يؤكد الطباعة، ولا يعيد إرسال التذكرة، ولا يغيّر سجل طباعتها.",
+  "posOnlineInboxPrintHistoryReviewFailed": "تعذّر حفظ المراجعة. يبقى التنبيه دون تغيير."
 }

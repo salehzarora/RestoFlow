@@ -9715,4 +9715,31 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get storefrontFeaturedItemsInvalid =>
       'تعذّر حفظ هذه الاختيارات. أعد تحميل المنتجات المتاحة وتحقق من الاختيار.';
+
+  @override
+  String get posOnlineInboxPrintHistory => 'سجل تذاكر المطبخ غير المحسومة';
+
+  @override
+  String posOnlineInboxPrintHistoryEntry(String date) {
+    return 'تذكرة بتاريخ $date';
+  }
+
+  @override
+  String get posOnlineInboxPrintHistoryUnresolved =>
+      'لم تُحسم نتيجة الطباعة على الورق بعد.';
+
+  @override
+  String get posOnlineInboxPrintHistoryReviewed =>
+      'تمت المراجعة — ما زالت غير محسومة';
+
+  @override
+  String get posOnlineInboxPrintHistoryReview => 'راجعت هذه المشكلة';
+
+  @override
+  String get posOnlineInboxPrintHistoryConfirm =>
+      'يسجّل هذا أنك راجعت هذا التنبيه على هذا الجهاز. لا يؤكد الطباعة، ولا يعيد إرسال التذكرة، ولا يغيّر سجل طباعتها.';
+
+  @override
+  String get posOnlineInboxPrintHistoryReviewFailed =>
+      'تعذّر حفظ المراجعة. يبقى التنبيه دون تغيير.';
 }
