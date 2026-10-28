@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import '../media/background_order_alert_bridge.dart';
+import 'background_alert_delegation.dart';
 
 /// The paired device context of THIS POS station, published by the pairing
 /// gate (device settings sprint).
@@ -42,8 +43,16 @@ class PosDeviceContextController extends Notifier<DeviceContext?> {
                 old.deviceId != device.deviceId ||
                 old.deviceSessionId != device.deviceSessionId ||
                 old.deviceType != device.deviceType));
-    if (changed && ref.exists(backgroundOrderAlertBridgeProvider)) {
-      unawaited(ref.read(backgroundOrderAlertBridgeProvider).disable());
+    if (changed) {
+      ref.read(backgroundAlertInactivityLockProvider.notifier).clear();
+      if (ref.exists(backgroundOrderAlertBridgeProvider)) {
+        unawaited(
+          revokeBackgroundAlertBridge(
+            ref.read(backgroundOrderAlertBridgeProvider),
+            BackgroundAlertRevocationReason.identityOrPairingChanged,
+          ).catchError((_) => false),
+        );
+      }
     }
     state = device;
     ref.read(posDeviceRestorePendingProvider.notifier).end();

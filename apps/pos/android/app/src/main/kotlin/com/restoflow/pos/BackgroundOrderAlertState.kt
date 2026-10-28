@@ -4,6 +4,150 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+
+/** Acquire a service/job before FCM releases its callback; never await network here. */
+internal object BackgroundOrderAlertCallbackHandoff {
+    const val BUDGET_MS = 1_000L
+    fun run(post: (() -> Unit) -> Unit, fallback: () -> Unit,
+        await: (CountDownLatch) -> Boolean = { it.await(BUDGET_MS, TimeUnit.MILLISECONDS) }, action: () -> Unit) {
+        val finished = CountDownLatch(1)
+        val cancelled = AtomicBoolean(false)
+        try {
+            post {
+                try { if (!cancelled.get()) action() }
+                catch (_: Exception) { fallback() }
+                finally { finished.countDown() }
+            }
+            if (await(finished)) return
+        } catch (_: Exception) { /* Failed handoff must acquire an independent job. */ }
+        cancelled.set(true)
+        fallback()
+    }
+}
+
+/** Identity-fenced ownership of one JobService invocation, independent from the FGS. */
+internal class BackgroundOrderAlertJobOwnership {
+    class Work internal constructor(internal val done: () -> Unit)
+    var current: Work? = null
+        private set
+    fun begin(done: () -> Unit): Work? {
+        if (current != null) return null
+        return Work(done).also { current = it }
+    }
+    fun complete(work: Work): Boolean {
+        if (!cancel(work)) return false
+        work.done()
+        return true
+    }
+    fun cancel(work: Work): Boolean {
+        if (current !== work) return false
+        current = null
+        return true
+    }
+}
+
+/** Batch only obligations acquired BEFORE a read, never arrivals during its snapshot. */
+internal class BackgroundOrderAlertJobQueue<T>(private val take: () -> T?, private val complete: (T) -> Unit) {
+    private var batch: List<T> = emptyList()
+    fun beginRead(): Boolean {
+        check(batch.isEmpty())
+        val pending = mutableListOf<T>()
+        // Bound main-thread work. Additional items remain OS-owned for a later read.
+        while (pending.size < 64) pending.add(take() ?: break)
+        batch = pending
+        return batch.isNotEmpty()
+    }
+    fun completeRead() {
+        val done = batch
+        batch = emptyList()
+        done.forEach(complete)
+    }
+}
+
+/** Closed diagnostic vocabulary: no payload, identifier, credential or exception text is accepted. */
+internal object BackgroundOrderAlertObservation {
+    enum class Event { FCM_ENTER, FCM_RETURN, HINT, AUTHORITY, FGS_REQUEST, FGS_START, FGS_STOP,
+        JOB_ENQUEUE, JOB_START, JOB_STOP, STATUS_BEGIN, STATUS_COMPLETE, PENDING_APPLIED, NOTIFY_REQUESTED, AUDIO_START, AUDIO_STOP_REQUEST, AUDIO_STOP }
+    enum class Result { ENTER, RETURN, ACCEPTED, REFUSED, REQUESTED, STARTED, STOPPED, APPLIED,
+        DENIED, MALFORMED, UNAVAILABLE_OR_INVALID, STALE, TIMEOUT, FAILED, START_DENIED, SECURITY_DENIED,
+        FINISHED, POLICY, FOREGROUND, EXPIRED, EMPTY, INACTIVITY_UI_LOCK, EXPLICIT_SIGN_OUT,
+        USER_NOTIFICATION_OFF, USER_NOTIFICATION_STOP, IDENTITY_OR_PAIRING_CHANGED,
+        SERVER_AUTH_REVOKED, AUTHORITY_EXPIRED, SECURITY_FAILURE }
+    enum class Kind { PENDING, CANCEL, OTHER }
+    enum class Authority { VALID, FEATURE_OFF, OPTED_OUT, BINDING_MISSING, ENDPOINT_INVALID, BOOT_CHANGED, EXPIRED }
+    enum class Channel { ALLOWED, PERMISSION_DENIED, NOTIFICATIONS_DISABLED, MISSING, LOW_IMPORTANCE, SOUND_MISSING, UNKNOWN }
+
+    fun encode(event: Event, result: Result, sequence: Long, utcMs: Long, elapsedMs: Long,
+        kind: Kind? = null, high: Boolean? = null, authority: Authority? = null, channel: Channel? = null,
+        foreground: Boolean? = null, pendingCount: Int? = null, read: Long? = null): String {
+        require(sequence >= 0 && utcMs >= 0 && elapsedMs >= 0 && (read == null || read >= 0))
+        require(pendingCount == null || pendingCount in 0..50)
+        return "v=1 seq=$sequence utc_ms=$utcMs elapsed_ms=$elapsedMs event=${event.name} result=${result.name}" +
+            " kind=${kind?.name ?: "NULL"} high=${high?.toString() ?: "NULL"}" +
+            " authority=${authority?.name ?: "NULL"} channel=${channel?.name ?: "NULL"} foreground=${foreground?.toString() ?: "NULL"}" +
+            " pending_count=${pendingCount?.toString() ?: "NULL"} read=${read?.toString() ?: "NULL"}"
+    }
+}
+
+/** Only a trusted inactivity proof may retain an EXISTING notification grant. */
+internal enum class BackgroundOrderAlertRevocationReason {
+    INACTIVITY_UI_LOCK, EXPLICIT_SIGN_OUT, USER_NOTIFICATION_OFF, USER_NOTIFICATION_STOP,
+    IDENTITY_OR_PAIRING_CHANGED, SERVER_AUTH_REVOKED, AUTHORITY_EXPIRED, SECURITY_FAILURE;
+
+    companion object {
+        fun parse(value: Any?): BackgroundOrderAlertRevocationReason =
+            entries.firstOrNull { it.name == value } ?: SECURITY_FAILURE
+    }
+    val observation: BackgroundOrderAlertObservation.Result get() = when (this) {
+        INACTIVITY_UI_LOCK -> BackgroundOrderAlertObservation.Result.INACTIVITY_UI_LOCK
+        EXPLICIT_SIGN_OUT -> BackgroundOrderAlertObservation.Result.EXPLICIT_SIGN_OUT
+        USER_NOTIFICATION_OFF -> BackgroundOrderAlertObservation.Result.USER_NOTIFICATION_OFF
+        USER_NOTIFICATION_STOP -> BackgroundOrderAlertObservation.Result.USER_NOTIFICATION_STOP
+        IDENTITY_OR_PAIRING_CHANGED -> BackgroundOrderAlertObservation.Result.IDENTITY_OR_PAIRING_CHANGED
+        SERVER_AUTH_REVOKED -> BackgroundOrderAlertObservation.Result.SERVER_AUTH_REVOKED
+        AUTHORITY_EXPIRED -> BackgroundOrderAlertObservation.Result.AUTHORITY_EXPIRED
+        SECURITY_FAILURE -> BackgroundOrderAlertObservation.Result.SECURITY_FAILURE
+    }
+}
+
+/** Device/installation scope already confirmed by bind; never a new credential. */
+internal class BackgroundOrderAlertInactivityGrant(
+    val identity: String, val installation: String, val registration: String, val registrationGeneration: String,
+) {
+    fun matches(other: BackgroundOrderAlertInactivityGrant): Boolean = identity == other.identity &&
+        installation == other.installation && registration == other.registration &&
+        registrationGeneration == other.registrationGeneration
+    override fun toString(): String = "BackgroundOrderAlertInactivityGrant(REDACTED)"
+}
+
+/** Activity visibility cannot reopen authenticated Inbox ownership behind a PIN lock. */
+internal class BackgroundOrderAlertUiLock(initiallyLocked: Boolean = false) {
+    var activityForeground = false
+        private set
+    // Process recreation/Activity visibility is not fresh authenticated Inbox proof.
+    // Existing bounded native authority may still reconcile status behind the PIN.
+    var authenticatedUiAvailable = false
+        private set
+    var inactivityLocked = initiallyLocked
+        private set
+    val effectiveForeground: Boolean get() = activityForeground && authenticatedUiAvailable && !inactivityLocked
+
+    fun activity(value: Boolean) { activityForeground = value }
+    fun retain(identity: String?, confirmedIdentity: String?, optedIn: Boolean, enabled: Boolean,
+        scopeComplete: Boolean, authorityValid: Boolean, preparing: Boolean, uncertainWrite: Boolean): Boolean {
+        if (identity.isNullOrBlank() || identity.length > 512 || identity != confirmedIdentity || !optedIn ||
+            !enabled || !scopeComplete || !authorityValid || preparing || uncertainWrite) return false
+        inactivityLocked = true
+        authenticatedUiAvailable = false
+        return true
+    }
+    fun confirmedBind() { inactivityLocked = false; authenticatedUiAvailable = true }
+    fun detachUi() { authenticatedUiAvailable = false }
+    fun revoke() { inactivityLocked = false; authenticatedUiAvailable = false }
+}
 
 /** Non-sensitive channel policy; never contains IDs, sound URIs or credentials. */
 internal data class BackgroundOrderAlertChannelPolicy(
@@ -121,11 +265,13 @@ internal class BackgroundOrderAlertReconciliation(
     private val eligible: () -> Boolean,
     private val keepPolling: () -> Boolean,
     private val read: (Read) -> (() -> Unit),
-    private val failClosed: () -> Unit,
+    private val failClosed: (BackgroundOrderAlertObservation.Result) -> Unit,
 ) {
     companion object {
         const val HINT_FLOOR_MS = 5_000L
-        const val PERIOD_MS = 60_000L
+        // Only the existing verified, actively ringing FGS may keep this timer.
+        // Six full-set reads/minute at most without hints, never idle polling.
+        const val PERIOD_MS = 10_000L
         // Includes executor queueing, headers, body and main-thread completion.
         const val READ_BUDGET_MS = 20_000L
     }
@@ -137,6 +283,7 @@ internal class BackgroundOrderAlertReconciliation(
     private var cancelScheduled: (() -> Unit)? = null
     private var lastReadAt = -PERIOD_MS
     private var again = false
+    val hasWork: Boolean get() = flight != null || cancelScheduled != null
 
     fun request() {
         if (!eligible()) { cancel(); return }
@@ -155,13 +302,13 @@ internal class BackgroundOrderAlertReconciliation(
             lastReadAt = now()
             again = false
             cancelWatchdog = schedule(READ_BUDGET_MS) {
-                if (flight === work) { cancel(); failClosed() }
+                if (flight === work) { cancel(); failClosed(BackgroundOrderAlertObservation.Result.TIMEOUT) }
             }
             try {
                 val cancellation = read(work)
                 if (flight === work) cancelRead = cancellation else cancellation()
             } catch (_: Exception) {
-                if (flight === work) { cancel(); failClosed() }
+                if (flight === work) { cancel(); failClosed(BackgroundOrderAlertObservation.Result.FAILED) }
             }
         }
     }
@@ -170,7 +317,7 @@ internal class BackgroundOrderAlertReconciliation(
     fun complete(work: Read, apply: () -> Unit): Boolean {
         if (flight !== work) return false
         // A delayed main looper may deliver the completion before its queued watchdog.
-        if (now() - work.startedAt >= READ_BUDGET_MS) { cancel(); failClosed(); return false }
+        if (now() - work.startedAt >= READ_BUDGET_MS) { cancel(); failClosed(BackgroundOrderAlertObservation.Result.TIMEOUT); return false }
         cancelWatchdog?.invoke()
         cancelWatchdog = null
         cancelRead = null
@@ -178,7 +325,7 @@ internal class BackgroundOrderAlertReconciliation(
         if (!eligible()) { cancel(); return false }
         val followUp = again
         again = false
-        try { apply() } catch (_: Exception) { cancel(); failClosed(); return false }
+        try { apply() } catch (_: Exception) { cancel(); failClosed(BackgroundOrderAlertObservation.Result.FAILED); return false }
         if (!eligible()) { cancel(); return true }
         if (cancelScheduled != null) return true
         if (followUp) request()

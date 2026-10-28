@@ -26,8 +26,11 @@ internal class BackgroundOrderAlertBridge(private val activity: Activity, messen
                 }
                 "bind" -> result.success(coordinator.bind(args))
                 "pending" -> result.success(coordinator.pending(args))
-                "suspend" -> { coordinator.clearAuthority(args["retain_opt_in"] == true); result.success(null) }
-                "disable" -> { coordinator.disable(); result.success(null) }
+                "retainInactivity" -> result.success(coordinator.retainInactivity(args))
+                "suspend" -> { coordinator.clearAuthority(args["retain_opt_in"] == true,
+                    BackgroundOrderAlertRevocationReason.parse(args["reason"])); result.success(null) }
+                "disable" -> { coordinator.disable(if (args.containsKey("reason")) BackgroundOrderAlertRevocationReason.parse(args["reason"])
+                    else BackgroundOrderAlertRevocationReason.EXPLICIT_SIGN_OUT); result.success(null) }
                 "consumeInboxTap" -> result.success(coordinator.consumeTap())
                 else -> result.notImplemented()
             }

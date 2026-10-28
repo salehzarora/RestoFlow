@@ -330,8 +330,10 @@ fun main() {
             check(fixture.state.count(0) == 1 && fixture.reads == 1)
             fixture.server = emptyMap()
             // No audio tick, UI resume, FCM hint or new order drives this read.
-            fixture.clock.advanceTo(60_000)
-            check(fixture.reads == 2 && !fixture.state.active(60_000))
+            fixture.clock.advanceTo(9_999)
+            check(fixture.reads == 1 && fixture.state.active(9_999))
+            fixture.clock.advanceTo(10_000)
+            check(fixture.reads == 2 && !fixture.state.active(10_000))
         }
     }
     scenario("resolving A in the background preserves B and the retained ten-second cadence") {
@@ -358,9 +360,9 @@ fun main() {
         check(fixture.reads == 1)
         fixture.clock.advanceTo(5_000)
         check(fixture.reads == 2)
-        fixture.clock.advanceTo(64_999)
+        fixture.clock.advanceTo(14_999)
         check(fixture.reads == 2)
-        fixture.clock.advanceTo(65_000)
+        fixture.clock.advanceTo(15_000)
         check(fixture.reads == 3)
     }
     scenario("queued or stalled status work cannot retain stale ringing past its absolute budget") {
@@ -481,6 +483,356 @@ fun main() {
         fixture.clock.advanceTo(0)
         check(fixture.state.active(12_299) && !fixture.state.active(12_300))
     }
+    scenario("cold FCM callback acquires an OS owner before returning, without awaiting HTTP") {
+        var acquired = false
+        var callbackReturned = false
+        var networkStarted = false
+        var queued: (() -> Unit)? = null
+        BackgroundOrderAlertCallbackHandoff.run(
+            post = { queued = it }, fallback = { error("unexpected fallback") },
+            action = { check(!callbackReturned); acquired = true },
+            await = { latch -> queued!!(); check(latch.count == 0L); true },
+        )
+        callbackReturned = true
+        check(acquired && !networkStarted)
+        // The service/job can safely own the subsequent asynchronous status read.
+        networkStarted = true
+        check(networkStarted)
+    }
+    scenario("a delayed main handoff acquires a job before callback return and cancels stale dispatch") {
+        var queued: (() -> Unit)? = null
+        var jobs = 0
+        BackgroundOrderAlertCallbackHandoff.run(
+            post = { queued = it }, fallback = { jobs++ },
+            action = { error("late FGS start outside FCM callback") }, await = { false },
+        )
+        check(jobs == 1)
+        queued!!()
+        check(jobs == 1)
+    }
+    scenario("failed dispatch or service acquisition falls back without losing callback lifetime") {
+        for (failure in listOf("post", "service")) {
+            var jobs = 0
+            BackgroundOrderAlertCallbackHandoff.run(
+                post = { if (failure == "post") error("synthetic scheduling failure") else it() },
+                fallback = { jobs++ }, action = { error("synthetic FGS refusal") },
+                await = { it.count == 0L },
+            )
+            check(jobs == 1)
+        }
+    }
+    scenario("one job owner coalesces duplicates and stale completion cannot finish a newer job") {
+        val owner = BackgroundOrderAlertJobOwnership()
+        var completions = 0
+        val first = owner.begin { completions++ }!!
+        check(owner.begin { error("duplicate owner") } == null)
+        check(owner.complete(first) && completions == 1)
+        val next = owner.begin { completions++ }!!
+        check(!owner.complete(first) && !owner.cancel(first) && owner.current === next)
+        check(owner.complete(next) && completions == 2)
+    }
+    scenario("OS cancellation releases only its job and does not acknowledge or retry stale work") {
+        val owner = BackgroundOrderAlertJobOwnership()
+        val cancelled = owner.begin { error("OS-stopped job must not call jobFinished") }!!
+        check(owner.cancel(cancelled))
+        val next = owner.begin {}!!
+        check(!owner.complete(cancelled) && owner.current === next)
+        check(owner.cancel(next) && owner.current == null)
+    }
+    scenario("timed-out callback enqueues a fresh obligation behind an older snapshot") {
+        val pendingWork = java.util.ArrayDeque<Int>()
+        val completedWork = mutableListOf<Int>()
+        pendingWork.add(1)
+        val queue = BackgroundOrderAlertJobQueue(take = { pendingWork.pollFirst() }, complete = { id: Int -> completedWork.add(id); Unit })
+        check(queue.beginRead()) // Old snapshot is now in flight.
+        var delayed: (() -> Unit)? = null
+        BackgroundOrderAlertCallbackHandoff.run(
+            post = { delayed = it }, fallback = { pendingWork.add(2); Unit },
+            await = { false }, action = { error("late FGS acquisition") },
+        )
+        delayed!!()
+        queue.completeRead()
+        check(completedWork == listOf(1) && pendingWork.toList() == listOf(2))
+        check(queue.beginRead()) // New pending/terminal state requires another full read.
+        queue.completeRead()
+        check(completedWork == listOf(1, 2) && !queue.beginRead())
+    }
+    scenario("job queue coalesces queued hints but never consumes an arrival at completion") {
+        val pendingWork = java.util.ArrayDeque<Int>()
+        val completed = mutableListOf<Int>()
+        pendingWork.addAll(listOf(1, 2, 3))
+        val queue = BackgroundOrderAlertJobQueue(take = { pendingWork.pollFirst() }, complete = { id: Int -> completed.add(id); Unit })
+        check(queue.beginRead())
+        pendingWork.add(4)
+        queue.completeRead()
+        check(completed == listOf(1, 2, 3))
+        check(queue.beginRead())
+        queue.completeRead()
+        check(completed == listOf(1, 2, 3, 4))
+        check(!queue.beginRead()) // OS dequeue, rather than jobFinished, owns empty/arrival race.
+    }
+    scenario("coalesced terminal hint retains the fallback owner through the required follow-up full set") {
+        val fixture = ReconciliationFixture()
+        fixture.polling = false
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        val first = fixture.held.single()
+        fixture.loop.request() // terminal/deleted hint while the earlier snapshot is in flight
+        fixture.loop.complete(first) { fixture.state.replace(pending("A", "B"), 0, 100_000, 0) }
+        check(fixture.loop.hasWork)
+        fixture.clock.advanceTo(5_000)
+        fixture.loop.complete(fixture.held.last()) { fixture.state.replace(pending("B"), 5_000, 95_000, 5_000) }
+        check(!fixture.loop.hasWork && fixture.state.count(5_000) == 1)
+        check(fixture.state.shouldPlay(5_000)) // A resolution cannot silence genuinely pending B.
+    }
+    scenario("lost terminal hint removes only resolved A at the accelerated read and preserves B cadence") {
+        val fixture = ReconciliationFixture()
+        fixture.server = pending("A", "B")
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        fixture.state.played(0)
+        fixture.server = pending("B")
+        fixture.clock.advanceTo(10_000) // Deliberately no FCM, foreground or UI callback.
+        check(fixture.reads == 2 && fixture.state.count(10_000) == 1)
+        check(fixture.state.shouldPlay(10_000))
+        fixture.state.played(10_000)
+        check(!fixture.state.shouldPlay(10_001))
+        fixture.server = emptyMap()
+        fixture.clock.advanceTo(20_000)
+        check(!fixture.state.active(20_000) && !fixture.loop.hasWork)
+    }
+    scenario("an empty verified full set never creates idle periodic polling") {
+        val fixture = ReconciliationFixture()
+        fixture.loop.request()
+        fixture.clock.advanceTo(120_000)
+        check(fixture.reads == 1 && !fixture.loop.hasWork)
+    }
+    scenario("active accelerated reconciliation cannot extend its hard episode or create a new sound owner") {
+        val fixture = ReconciliationFixture()
+        fixture.authorityUntil = 2_000_000
+        fixture.server = mapOf("A" to 2_000_000)
+        fixture.loop.request()
+        fixture.clock.advanceTo(1_000_000)
+        check(!fixture.state.active(1_000_000) && !fixture.loop.hasWork)
+        check(fixture.reads <= 91) // Initial read + at most90 periodic reads in15min.
+    }
+    scenario("closed observation vocabulary cannot serialize payloads credentials or exception messages") {
+        val canary = "SECRET_TOKEN_CUSTOMER_CANARY"
+        val records = mutableListOf<String>()
+        for (event in BackgroundOrderAlertObservation.Event.entries) {
+            for (result in BackgroundOrderAlertObservation.Result.entries) {
+                records += BackgroundOrderAlertObservation.encode(event, result, 1, 1, 1)
+            }
+        }
+        for (authority in BackgroundOrderAlertObservation.Authority.entries) {
+            for (channel in BackgroundOrderAlertObservation.Channel.entries) {
+                records += BackgroundOrderAlertObservation.encode(BackgroundOrderAlertObservation.Event.AUTHORITY,
+                    BackgroundOrderAlertObservation.Result.REFUSED, 2, 2, 2,
+                    authority = authority, channel = channel, pendingCount = 50, foreground = false)
+            }
+        }
+        val fixture = ReconciliationFixture()
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        fixture.loop.complete(fixture.held.single()) { error(canary) }
+        records += BackgroundOrderAlertObservation.encode(BackgroundOrderAlertObservation.Event.STATUS_COMPLETE,
+            fixture.failureResult!!, 3, 3, 3)
+        check(records.none { it.contains(canary) || it.contains("Bearer") || it.contains("Exception") })
+        check(records.all { it.length < 450 && it.matches(Regex("[A-Za-z0-9_= ]+")) })
+        check(records.first().contains("authority=NULL") && records.first().contains("pending_count=NULL"))
+        check(fixture.failureResult == BackgroundOrderAlertObservation.Result.FAILED)
+    }
+    scenario("invalid diagnostic counters are rejected rather than widened or silently clamped") {
+        for (count in listOf(-1, 51)) {
+            check(runCatching { BackgroundOrderAlertObservation.encode(BackgroundOrderAlertObservation.Event.PENDING_APPLIED,
+                BackgroundOrderAlertObservation.Result.APPLIED, 1, 1, 1, pendingCount = count) }.isFailure)
+        }
+    }
+    scenario("trusted inactivity preserves a confirmed grant but keeps a resumed PIN UI out of Inbox ownership") {
+        val ui = BackgroundOrderAlertUiLock()
+        val owner = BackgroundOrderAlertOwnership()
+        ui.confirmedBind()
+        ui.activity(true)
+        owner.setForeground(ui.effectiveForeground)
+        val beforeLock = owner.generation
+        check(ui.effectiveForeground)
+        check(ui.retain("scope|device-session|pin", "scope|device-session|pin", true, true, true, true, false, false))
+        owner.invalidate() // Coordinator's local completion fence, not a registration-generation change.
+        owner.setForeground(ui.effectiveForeground)
+        check(!ui.effectiveForeground && !owner.foreground && !owner.current(beforeLock))
+        ui.activity(false)
+        ui.activity(true) // Android Activity resume cannot reauthenticate the PIN screen.
+        check(!ui.effectiveForeground)
+        check(backgroundOrderAlertHintAction(ui.effectiveForeground, false, true, true) == BackgroundOrderAlertHintAction.start)
+        check(backgroundOrderAlertHintAction(ui.effectiveForeground, true, true, true) == BackgroundOrderAlertHintAction.reconcile)
+        ui.confirmedBind() // Only the new genuinely authenticated bind unlocks this native UI fence.
+        check(ui.effectiveForeground)
+    }
+    scenario("null changed identity opt-out incomplete scope expiry and uncertain writes cannot be called inactivity") {
+        for (refusal in listOf("null", "blank", "identity", "opt-out", "disabled", "scope", "expired", "reboot", "preparing", "uncertain")) {
+            val ui = BackgroundOrderAlertUiLock()
+            ui.confirmedBind()
+            ui.activity(true)
+            val identity = when (refusal) { "null" -> null; "blank" -> " "; "identity" -> "other-scope"; else -> "confirmed" }
+            check(!ui.retain(identity, "confirmed", refusal != "opt-out", refusal != "disabled",
+                refusal != "scope", refusal !in listOf("expired", "reboot"), refusal == "preparing", refusal == "uncertain"))
+            check(!ui.inactivityLocked && ui.effectiveForeground)
+        }
+    }
+    scenario("persistent inactivity marker is tied to exact installation registration generation and authenticated identity") {
+        val original = BackgroundOrderAlertInactivityGrant("employee-scope", "install-A", "registration-A", "generation-A")
+        check(original.matches(BackgroundOrderAlertInactivityGrant("employee-scope", "install-A", "registration-A", "generation-A")))
+        for (changed in listOf(
+            BackgroundOrderAlertInactivityGrant("other-employee-scope", "install-A", "registration-A", "generation-A"),
+            BackgroundOrderAlertInactivityGrant("employee-scope", "install-B", "registration-A", "generation-A"),
+            BackgroundOrderAlertInactivityGrant("employee-scope", "install-A", "registration-B", "generation-A"),
+            BackgroundOrderAlertInactivityGrant("employee-scope", "install-A", "registration-A", "generation-B"),
+        )) check(!original.matches(changed))
+        check(!original.toString().contains("employee-scope") && !original.toString().contains("install-A"))
+        val restarted = BackgroundOrderAlertUiLock(initiallyLocked = true)
+        restarted.activity(true)
+        check(!restarted.effectiveForeground) // Process recreation cannot assume Activity visibility means PIN proof.
+        restarted.confirmedBind()
+        check(restarted.effectiveForeground)
+    }
+    scenario("ordinary process recreation keeps a visible PIN screen on native status-only ownership without inventing inactivity") {
+        val restored = BackgroundOrderAlertUiLock() // Existing vault grant, no persisted inactivity marker.
+        restored.activity(true)
+        check(!restored.inactivityLocked && !restored.authenticatedUiAvailable && !restored.effectiveForeground)
+        check(backgroundOrderAlertHintAction(restored.effectiveForeground, false, true, true) == BackgroundOrderAlertHintAction.start)
+        check(backgroundOrderAlertHintAction(restored.effectiveForeground, false, false, true) == BackgroundOrderAlertHintAction.fallback)
+        check(backgroundOrderAlertHintAction(restored.effectiveForeground, true, true, true) == BackgroundOrderAlertHintAction.reconcile)
+        restored.activity(false)
+        restored.activity(true)
+        check(!restored.effectiveForeground) // Repeated resume/pending hints are not fresh PIN authority.
+        restored.confirmedBind()
+        check(restored.authenticatedUiAvailable && restored.effectiveForeground)
+        check(backgroundOrderAlertHintAction(restored.effectiveForeground, true, true, true) == BackgroundOrderAlertHintAction.foreground)
+    }
+    scenario("an engine detach removes only UI eligibility until a fresh bind and cannot unlock an inactivity marker") {
+        val ui = BackgroundOrderAlertUiLock()
+        ui.activity(true)
+        ui.confirmedBind()
+        check(ui.effectiveForeground)
+        ui.detachUi()
+        check(!ui.authenticatedUiAvailable && !ui.effectiveForeground && !ui.inactivityLocked)
+        ui.activity(true)
+        check(!ui.effectiveForeground)
+        check(ui.retain("confirmed", "confirmed", true, true, true, true, false, false))
+        ui.detachUi()
+        check(ui.inactivityLocked && !ui.effectiveForeground)
+        ui.revoke()
+        check(!ui.inactivityLocked && !ui.authenticatedUiAvailable && !ui.effectiveForeground)
+        ui.activity(true)
+        check(!ui.effectiveForeground)
+    }
+    scenario("one retained handoff read recovers pending truth without a local Inbox projection or perpetual polling") {
+        val ui = BackgroundOrderAlertUiLock()
+        ui.activity(true)
+        ui.confirmedBind()
+        val fixture = ReconciliationFixture()
+        fixture.polling = false // Existing one-shot JobService, not an active FGS.
+        fixture.server = pending("arrived-during-ui-handoff")
+        check(fixture.state.count(0) == 0)
+        check(ui.retain("confirmed", "confirmed", true, true, true, true, false, false))
+        check(!ui.effectiveForeground)
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        check(fixture.reads == 1 && fixture.applied == 1 && fixture.state.count(0) == 1)
+        fixture.clock.advanceTo(60_000)
+        check(fixture.reads == 1 && !fixture.loop.hasWork) // No idle polling/authority renewal.
+    }
+    scenario("retention handoff supersedes a pre-lock status read and still coalesces into one fresh owner") {
+        val fixture = ReconciliationFixture()
+        fixture.polling = false
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        val preLock = fixture.held.single()
+        fixture.loop.cancel() // Successful retention fences the prior UI epoch.
+        fixture.loop.request()
+        fixture.loop.request() // Existing OS job/FCM hints share the same singleflight.
+        fixture.clock.advanceTo(5_000)
+        check(fixture.reads == 2 && fixture.aborted == 1)
+        check(!fixture.loop.complete(preLock) { error("stale pre-lock response must never apply") })
+        check(fixture.loop.complete(fixture.held.last()) { fixture.applied++ })
+        fixture.clock.advanceTo(60_000)
+        check(fixture.applied == 1 && fixture.reads == 2 && !fixture.loop.hasWork)
+        val refused = BackgroundOrderAlertUiLock()
+        check(!refused.retain("changed", "confirmed", true, true, true, true, false, false))
+        check(!refused.inactivityLocked && !refused.authenticatedUiAvailable)
+    }
+    scenario("inactivity retention never extends authority and fails at the original absolute cutoff") {
+        val ui = BackgroundOrderAlertUiLock()
+        val absoluteDeadline = 8 * 60 * 60_000L
+        var now = 30 * 60_000L
+        check(ui.retain("confirmed", "confirmed", true, true, true, now < absoluteDeadline, false, false))
+        val unchangedDeadline = absoluteDeadline
+        now = absoluteDeadline
+        check(!ui.retain("confirmed", "confirmed", true, true, true, now < absoluteDeadline, false, false))
+        check(unchangedDeadline == absoluteDeadline)
+        val state = BackgroundOrderAlertState()
+        state.replace(mapOf("A" to absoluteDeadline + 60_000), now, absoluteDeadline - now, now)
+        check(!state.active(now)) // A locked UI does not manufacture notification time after expiry.
+    }
+    scenario("every explicit security revocation reason remains closed and cannot be mistaken for inactivity") {
+        val reasons = BackgroundOrderAlertRevocationReason.entries
+        check(reasons.size == 8)
+        for (reason in reasons) {
+            check(BackgroundOrderAlertRevocationReason.parse(reason.name) == reason)
+            val wire = BackgroundOrderAlertObservation.encode(BackgroundOrderAlertObservation.Event.AUTHORITY,
+                reason.observation, 1, 1, 1)
+            check(wire.contains("result=${reason.name}") && !wire.contains("confirmed"))
+            if (reason == BackgroundOrderAlertRevocationReason.INACTIVITY_UI_LOCK) continue
+            val ui = BackgroundOrderAlertUiLock()
+            check(ui.retain("confirmed", "confirmed", true, true, true, true, false, false))
+            ui.revoke()
+            check(!ui.inactivityLocked)
+            check(!ui.retain("confirmed", "confirmed", false, false, false, false, false, false))
+        }
+        check(BackgroundOrderAlertRevocationReason.parse(null) == BackgroundOrderAlertRevocationReason.SECURITY_FAILURE)
+        check(BackgroundOrderAlertRevocationReason.parse("inactivity_ui_lock") == BackgroundOrderAlertRevocationReason.SECURITY_FAILURE)
+        check(BackgroundOrderAlertRevocationReason.parse(mapOf("reason" to "INACTIVITY_UI_LOCK")) == BackgroundOrderAlertRevocationReason.SECURITY_FAILURE)
+    }
+    scenario("idle-locked Activity keeps the single status owner and does not reset the retained sound cadence") {
+        val ui = BackgroundOrderAlertUiLock()
+        ui.activity(true)
+        check(ui.retain("confirmed", "confirmed", true, true, true, true, false, false))
+        val fixture = ReconciliationFixture()
+        fixture.server = pending("A", "B")
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        fixture.state.played(0)
+        ui.activity(false)
+        ui.activity(true)
+        fixture.server = pending("B")
+        fixture.clock.advanceTo(1_000)
+        check(!ui.effectiveForeground)
+        fixture.loop.request() // A cancel on the foregrounded PIN screen still reaches native status.
+        fixture.clock.advanceTo(5_000)
+        check(fixture.reads == 2 && fixture.state.count(5_000) == 1 && !fixture.state.shouldPlay(5_000))
+        check(fixture.state.shouldPlay(10_000))
+        fixture.server = emptyMap()
+        fixture.clock.advanceTo(15_000)
+        check(!fixture.state.active(15_000) && !fixture.loop.hasWork)
+    }
+    scenario("an inactivity epoch fences queued pre-lock preparation and old authenticated projection") {
+        val owner = BackgroundOrderAlertOwnership()
+        val preparedBeforeLock = owner.generation
+        val ui = BackgroundOrderAlertUiLock()
+        ui.activity(true)
+        check(ui.retain("confirmed", "confirmed", true, true, true, true, false, false))
+        owner.invalidate()
+        check(!owner.current(preparedBeforeLock) && !ui.effectiveForeground)
+        ui.activity(true)
+        check(!ui.effectiveForeground) // Matching old identity/pending callbacks alone do not call confirmedBind.
+        owner.invalidate() // Real OFF/logout supersedes even a later queued callback.
+        ui.revoke()
+        check(!owner.current(preparedBeforeLock))
+        check(!ui.retain("confirmed", "confirmed", false, false, false, false, false, false))
+    }
     println("$passed native background state scenarios passed")
 }
 
@@ -511,6 +863,8 @@ private class ReconciliationFixture {
     val clock = ReconciliationClock()
     val state = BackgroundOrderAlertState()
     var authorized = true
+    var authorityUntil = 100_000L
+    var failureResult: BackgroundOrderAlertObservation.Result? = null
     var polling = true
     var holdRead = false
     var throwRead = false
@@ -524,20 +878,20 @@ private class ReconciliationFixture {
         now = { clock.now },
         schedule = clock::schedule,
         eligible = { authorized },
-        keepPolling = { polling },
+        keepPolling = { polling && state.active(clock.now) },
         read = { work ->
             reads++
             if (throwRead) error("synthetic executor rejection")
             held.add(work)
             if (!holdRead) clock.schedule(0) {
                 loop.complete(work) {
-                    state.replace(server, clock.now, 100_000 - clock.now, clock.now)
+                    state.replace(server, clock.now, authorityUntil - clock.now, clock.now)
                     applied++
                 }
             }
             val cancel: () -> Unit = { aborted++ }
             cancel
         },
-        failClosed = { failed++; state.clear(); authorized = false },
+        failClosed = { result -> failureResult = result; failed++; state.clear(); authorized = false },
     )
 }

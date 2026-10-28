@@ -14,6 +14,9 @@ import android.os.IBinder
 import android.os.PowerManager
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.restoflow.pos.BackgroundOrderAlertObservation.Event as AlertEvent
+import com.restoflow.pos.BackgroundOrderAlertObservation.Result as AlertResult
+import com.restoflow.pos.BackgroundOrderAlertObservation.Kind as AlertKind
 
 /** No boot restart, sticky restart, exact alarm, printer or Flutter engine. */
 class BackgroundOrderAlertService : Service() {
@@ -32,7 +35,10 @@ class BackgroundOrderAlertService : Service() {
             verificationAwake()
             coordinator.serviceStarted(this)
             START_NOT_STICKY
-        } catch (_: Exception) { coordinator.serviceStartRefused(); stopSelf(); START_NOT_STICKY }
+        } catch (error: Exception) {
+            coordinator.serviceStartRefused(if (error is SecurityException) AlertResult.SECURITY_DENIED else AlertResult.FAILED)
+            stopSelf(); START_NOT_STICKY
+        }
     }
 
     internal fun keepAwake() {
@@ -60,6 +66,7 @@ class BackgroundOrderAlertService : Service() {
     }
 
     override fun onDestroy() {
+        BackgroundOrderAlertCoordinator.observe(AlertEvent.FGS_STOP, AlertResult.STOPPED)
         BackgroundOrderAlertCoordinator.get(this).serviceDestroyed(this)
         try { if (wakeLock?.isHeld == true) wakeLock?.release() } catch (_: Exception) { }
         wakeLock = null
@@ -76,14 +83,26 @@ class BackgroundOrderAlertMessagingService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        if (!BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS) return
-        BackgroundOrderAlertCoordinator.get(this).hint(message.data, message.priority == RemoteMessage.PRIORITY_HIGH)
+        val kind = when (message.data["kind"]) { "pending" -> AlertKind.PENDING; "cancel" -> AlertKind.CANCEL; else -> AlertKind.OTHER }
+        val high = message.priority == RemoteMessage.PRIORITY_HIGH
+        BackgroundOrderAlertCoordinator.observe(AlertEvent.FCM_ENTER, AlertResult.ENTER, kind = kind, high = high)
+        try {
+            if (!BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS) return
+            BackgroundOrderAlertCoordinator.get(this).hint(message.data, high)
+        } finally {
+            BackgroundOrderAlertCoordinator.observe(AlertEvent.FCM_RETURN, AlertResult.RETURN, kind = kind, high = high)
+        }
+    }
+
+    override fun onDeletedMessages() {
+        if (BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS) BackgroundOrderAlertCoordinator.get(this).messagesDeleted()
     }
 }
 
 class BackgroundOrderAlertStopReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action == BackgroundOrderAlertCoordinator.STOP_ALERTS) BackgroundOrderAlertCoordinator.get(context).disable()
+        if (intent?.action == BackgroundOrderAlertCoordinator.STOP_ALERTS) BackgroundOrderAlertCoordinator.get(context)
+            .disable(BackgroundOrderAlertRevocationReason.USER_NOTIFICATION_STOP)
     }
 }
 

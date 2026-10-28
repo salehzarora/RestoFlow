@@ -5,6 +5,125 @@ No hosted installation, activation, official v64 build or device test is part
 of this change. Notification failure must not gate checkout, Inbox polling,
 acceptance or printing.
 
+## Inactivity UI lock — local candidate, not released
+
+`BIZBOT-POS-IDLE-LOCK-ALERT-DELEGATION-001` distinguishes the existing
+30-minute UI inactivity lock from explicit sign-out. The PIN gate still removes
+all privileged POS/Inbox surfaces. Only a scoped, ephemeral inactivity handoff
+may retain an already confirmed, opted-in native grant under its original
+installation, registration generation, PIN/device authority and hard deadlines.
+It cannot register, renew, claim token ownership or extend expiry behind PIN.
+Absolute eight-hour expiry wins when both expiry conditions match.
+
+Explicit OFF, Android Stop, sign-out, identity/pairing changes, server rejection,
+authority expiry and security failure remain revocations. Null identity,
+provider disposal, offline transitions and failed authentication are not proof
+of inactivity. New sign-in invalidates the old handoff before authentication.
+Provider cleanup and native completion fencing cover delayed work too.
+
+While the PIN screen is foregrounded, including after ordinary process
+recreation without an inactivity marker, Android uses the bounded native
+status-only path and a private generic notification, without privileged Dart
+Inbox refresh or order/customer details. Activity visibility alone cannot
+establish authenticated UI availability. A fresh authorized bind is required
+to return audio ownership to the ordinary foreground UI. First retention
+hands off through the existing bounded status reconciliation, so a hint that
+crosses PIN removal is not dependent on a disappearing Inbox listener.
+Force Stop and reboot-before-first-launch limitations are unchanged.
+
+The earlier P20 disable is consistent with idle resume but remains PROBABLE:
+the historical request contains no caller-reason evidence. Local regression
+tests do not establish physical notification success. PR373 stays Draft,
+hosted SQL stays NO-GO, and v73 plus the reviewed terminal migration stay
+unchanged. A later integrated QA build and physical verification need separate
+authorization; no version or installation is consumed by this local repair.
+
+## Background lifecycle repair — local review, not released
+
+`BIZBOT-POS-BACKGROUND-ALERTS-RELIABILITY-001` closes an implementation gap:
+the FCM callback previously returned before its posted main-thread handoff
+or fallback HTTP read had an Android lifecycle owner. A bounded one-second
+handoff now requests the existing eligible FGS before returning. On timeout,
+normal-priority delivery, FGS refusal or lost-message notification, a private
+API 26+ JobService owns the authenticated full-set read. Empty JobWorkItems
+retain arrivals during an older snapshot; normal completion uses atomic
+`dequeueWork()` completion, rather than a racing `jobFinished()` call.
+Each fallback job invocation has an absolute 25-second budget, including the
+existing five-second read floor. No credentials or request data enter job extras.
+
+Existing consent, channel, tenant, generation, revocation and single sound-owner
+checks remain. Native delegation still expires with PIN/device authority,
+is capped locally at eight hours, and fails after a boot-count change until
+foreground authentication binds fresh authority. This repair does not provide
+reboot-before-first-launch or expired-PIN coverage. Broader device-scoped
+enrollment requires a separately reviewed security/product decision.
+
+The implementation defect is established; attribution of the owner's historical
+missed notification remains UNKNOWN. The reported persistent ringing also remains
+UNKNOWN for the original incident: independent native 60-second reconciliation existed, with a
+20-second read budget. Server dispatch/status metadata alone cannot establish
+response application or physical audio stop. Physical start/stop latency and
+the foreground/background/process-death/locked-screen matrix are NOT_RUN for
+this repair. No v71 rebuild, installation, activation, order, print or ACK is
+part of local verification. Historical pilot/application sections below retain
+their original scope; this repair adds no restaurant or device activation list.
+
+## Two-device continuity increment — local only, v72 preserved
+
+The preserved v72 QA artifact and seven-file review are unchanged. This successor
+source extends that repair; it has not been built into or installed as another APK.
+The 2026-10-28 10:50 UTC hosted incident proves one distinct defect: the same
+registration received a pending delivery, renewed its generation, then failed
+terminal eligibility because the claim query required that older pending delivery
+to have the current generation. P20's terminal `sent` row does not prove receipt
+or explain its reported approximately 60-second local stop. OnePlus's missed
+background arrival also remains unproven physically.
+
+The continuity migration depends on the six already applied observation/ownership
+migrations through 20261027142721. Their exact reviewed bytes are included as
+source prerequisites, not new production applications. It extends the deployed
+post-reconciliation claim function, including its shared writer lock. It uses only
+prior pending evidence on the SAME registration and exact organization/restaurant/
+branch, requires current effective authority, and creates a terminal row at the
+CURRENT generation. Historical ledger rows and retired-owner attribution remain
+unchanged; claim/send/finish fences still use current generation/token. A finite
+two-minute past-expiry relevance window and deduplication before the bounded
+batch prevent historical replay. An FCM cancel is only a refresh signal; the
+authenticated full pending set remains authoritative.
+
+The existing single-flight full-set reconciliation runs every 10 seconds only
+while its FGS owns a verified, nonempty, still-authorized ringing episode.
+There is no idle, per-request or JobService poller. Hints retain the five-second
+floor and can request an earlier read. The 20-second absolute read watchdog,
+request/authority expiry and 15-minute hard episode remain. Periodic load is at
+most six reads/minute during that episode (initial read plus at most 90 periodic
+reads); healthy lost-hint stop targets 10 seconds plus response latency. Android
+suspension prevents a strict wall-clock guarantee. Empty/invalid/denied/offline
+state stops coverage, and resolving A never silences genuinely pending B.
+
+Temporary native diagnostics use only the fixed `BizbotAlertState` tag and a
+closed enum/counter serializer: UTC/elapsed time, process-local ordinal, callback
+kind/priority, authority/channel classification, FGS/job/status stage, bounded
+pending count and MediaPlayer start/stop calls. No payload, customer data, token,
+capability, identifier or exception message is accepted by the sink. OS log PID
+and process-local ordinal identify native events; a cloud `sent` timestamp alone
+never proves their correlation. A stop call is not a claim of physical silence.
+These diagnostics add no scheduler, public API, credential access or remote
+telemetry. Retire them after the remaining physical unknowns are resolved.
+
+Physical acceptance remains NOT_RUN for the successor. With separately approved
+code application/build/update, start bounded read-only captures on both verified
+APK/device identities BEFORE naturally occurring legitimate requests. Keep POS
+backgrounded until evidence is preserved. Correlate server decision/terminal
+ledger, FCM callback kind, authority, FGS/job, full-set application/count and
+audio start/stop; owner hearing supplies audibility and start/stop latency.
+Compare foreground/background/normal process termination, remote accept and
+reject, and a naturally occurring A+B overlap with only A resolved. Separately
+record offline/expiry/reboot/Force Stop limits; never create orders, revoke a live
+session, change pairing, print, ACK or replay history for this check. Current
+v71 lacks these native stages; absence in its logs is UNKNOWN. No DONE claim
+until arrival and prompt stop are verified on BOTH real devices.
+
 ## HOME identity retarget — PREPARED / NOT APPLIED
 
 `BIZBOT-HOME-ALERT-ALLOWLIST-RETARGET-001` prepares an exclusive notification
@@ -127,14 +246,14 @@ local coverage, and an absent terminal hint cannot leave an indefinite notice.
 No fallback timer polls the server or repeats sound. State hints share the
 existing single-flight read and five-second coalescing boundary.
 
-This fallback is **best effort**, not guaranteed delivery: Android may kill
-the process after `onMessageReceived` returns before asynchronous verification
-finishes. No sound is authorized without a successful read. API 24/25 omit
+This fallback is **best effort**, not guaranteed delivery: the private job owns
+verification after the callback, but Android may delay, refuse or stop it.
+No sound is authorized without a successful read. API 24/25 omit
 the no-FGS fallback because they lack platform timeout enforcement after
 process death; the regular eligible FGS path is unchanged. Force Stop cannot
-be worked around and requires reopening POS. A future lifecycle-managed
-fallback job would require separate scope; no such job or additional polling
-is introduced here. Android may still suppress/throttle channel sound and
+be worked around and requires reopening POS. The fallback job processes only
+received refresh obligations; it does not add periodic polling or renew
+authority. Android may still suppress/throttle channel sound and
 heads-up presentation even when the app requests them.
 
 Primary references: [service types](https://developer.android.com/develop/background-work/services/fgs/service-types),

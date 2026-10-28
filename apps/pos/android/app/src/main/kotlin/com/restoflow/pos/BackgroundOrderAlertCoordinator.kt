@@ -17,6 +17,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import com.google.firebase.FirebaseApp
@@ -33,6 +34,13 @@ import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicLong
+import com.restoflow.pos.BackgroundOrderAlertObservation.Event as AlertEvent
+import com.restoflow.pos.BackgroundOrderAlertObservation.Result as AlertResult
+import com.restoflow.pos.BackgroundOrderAlertObservation.Authority as AlertAuthority
+import com.restoflow.pos.BackgroundOrderAlertObservation.Kind as AlertKind
+import com.restoflow.pos.BackgroundOrderAlertObservation.Channel as AlertChannel
+import com.restoflow.pos.BackgroundOrderAlertRevocationReason as AlertRevocation
 
 /** Process singleton: foreground clip transport and bounded background coordinator share ownership. */
 internal class BackgroundOrderAlertCoordinator private constructor(context: Context) {
@@ -43,6 +51,18 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         const val OPEN_INBOX = "com.restoflow.pos.OPEN_ONLINE_INBOX"
         const val STOP_ALERTS = "com.restoflow.pos.STOP_ONLINE_ALERTS"
         private var instance: BackgroundOrderAlertCoordinator? = null
+        private val observationSequence = AtomicLong()
+        // This sink accepts only a closed vocabulary, booleans and bounded counters.
+        // Never pass a message/response/exception object or a credential to logging.
+        internal fun observe(event: AlertEvent, result: AlertResult, kind: AlertKind? = null,
+            high: Boolean? = null, authority: AlertAuthority? = null, channel: AlertChannel? = null, foreground: Boolean? = null,
+            pendingCount: Int? = null, read: Long? = null) {
+            try {
+                Log.i("BizbotAlertState", BackgroundOrderAlertObservation.encode(event, result,
+                    observationSequence.incrementAndGet(), System.currentTimeMillis(), SystemClock.elapsedRealtime(),
+                    kind, high, authority, channel, foreground, pendingCount, read))
+            } catch (_: Exception) { /* Observation cannot fail normal notification work. */ }
+        }
         @Synchronized fun get(context: Context): BackgroundOrderAlertCoordinator =
             instance ?: BackgroundOrderAlertCoordinator(context.applicationContext).also { instance = it }
 
@@ -68,6 +88,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     private val ownership = BackgroundOrderAlertOwnership()
     private val hints = BackgroundOrderAlertHints()
     private var record = vault.read() ?: JSONObject()
+    private val uiLock = BackgroundOrderAlertUiLock(record.has("ui_inactivity_lock"))
     private val optIn = BackgroundOrderAlertOptIn(record.optBoolean("opt_in"))
     private val generation: Long get() = ownership.generation
     private val foreground: Boolean get() = ownership.foreground
@@ -76,6 +97,8 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     private var pendingInboxTap = false
     private var visibilityEpoch = 0L
     private var fallbackWanted = false
+    private var readSequence = 0L
+    private val fallbackJobs = BackgroundOrderAlertJobOwnership()
     private val tokenLane = BackgroundOrderAlertTokenLane()
     // Visibility expiry must not invalidate an authenticated read already in flight for B.
     private val expireFallback = Runnable { notifications().cancel(FALLBACK_NOTIFICATION_ID) }
@@ -88,9 +111,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
             cancel
         },
         eligible = { !foreground && (service != null || fallbackWanted) && authorityValid() },
-        keepPolling = { service != null },
+        keepPolling = { service != null && state.active(SystemClock.elapsedRealtime()) },
         read = { readStatus(it) },
-        failClosed = { state.clear(); stopBackground() },
+        failClosed = { result -> observe(AlertEvent.STATUS_COMPLETE, result); state.clear(); stopBackground(result) },
     )
     private val playback = OnlineOrderAlertPlayback(
         createClip = { BackgroundAlertClip(context) },
@@ -137,6 +160,18 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
 
     private fun channelAllowed(): Boolean = channelPolicy()?.let { it.failureReason == null } ?: false
 
+    private fun channelState(): AlertChannel = channelPolicy()?.let {
+        when (it.failureReason) {
+            null -> AlertChannel.ALLOWED
+            "permission_denied" -> AlertChannel.PERMISSION_DENIED
+            "notifications_disabled" -> AlertChannel.NOTIFICATIONS_DISABLED
+            "channel_missing" -> AlertChannel.MISSING
+            "channel_importance_low" -> AlertChannel.LOW_IMPORTANCE
+            "channel_sound_missing" -> AlertChannel.SOUND_MISSING
+            else -> AlertChannel.UNKNOWN
+        }
+    } ?: AlertChannel.UNKNOWN
+
     private fun preparationResult(available: Boolean, enabled: Boolean, reason: String? = null,
         policy: BackgroundOrderAlertChannelPolicy? = null, firebaseInitialized: Boolean? = null,
         tokenAcquired: Boolean? = null): Map<String, Any?> {
@@ -175,7 +210,12 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         channel = MethodChannel(messenger, "restoflow.pos/background_order_alert")
     }
 
-    fun detach() { channel?.setMethodCallHandler(null); channel = null }
+    fun detach() {
+        channel?.setMethodCallHandler(null)
+        channel = null
+        uiLock.detachUi()
+        applyForeground()
+    }
     fun bridge(): MethodChannel? = channel
 
     fun prepare(activity: Activity, requestPermission: Boolean, callback: (Map<String, Any?>) -> Unit) {
@@ -241,13 +281,82 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
             .put("authority_deadline", SystemClock.elapsedRealtime() + remaining.coerceAtMost(8 * 60 * 60_000L))
             .put("boot_count", vault.bootCount())
         record.remove("token_refresh_unconfirmed")
-        return try { persist(); true } catch (_: Exception) { clearAuthority(); false }
+        record.remove("ui_inactivity_lock")
+        return try {
+            persist()
+            uiLock.confirmedBind()
+            applyForeground()
+            true
+        } catch (_: Exception) { clearAuthority(); false }
     }
 
-    private fun authorityValid(): Boolean = BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS && record.optBoolean("enabled") &&
-        record.has("registration_id") && record.has("status_secret") && exactEndpoint(record.optString("endpoint")) &&
-        record.optInt("boot_count", -1) >= 0 && record.optInt("boot_count", -1) == vault.bootCount() &&
-        record.optLong("authority_deadline") > SystemClock.elapsedRealtime()
+    private fun confirmedInactivityGrant(): BackgroundOrderAlertInactivityGrant? {
+        val identity = record.optString("identity")
+        val installation = record.optString("installation_id")
+        val registration = record.optString("registration_id")
+        val registrationGeneration = record.optString("registration_generation")
+        if (identity.isBlank() || identity.length > 512 || !uuid(installation) || !uuid(registration) ||
+            !uuid(registrationGeneration)) return null
+        return BackgroundOrderAlertInactivityGrant(identity, installation, registration, registrationGeneration)
+    }
+
+    private fun retainedScopeMatches(): Boolean {
+        return try {
+            val saved = record.optJSONObject("ui_inactivity_lock") ?: return false
+            val current = confirmedInactivityGrant() ?: return false
+            val original = BackgroundOrderAlertInactivityGrant(saved.getString("identity"), saved.getString("installation_id"),
+                saved.getString("registration_id"), saved.getString("registration_generation"))
+            original.matches(current) && optIn.enabled && record.optBoolean("opt_in")
+        } catch (_: Exception) { false }
+    }
+
+    private fun retainedGrantValid(): Boolean = try { retainedScopeMatches() && authorityValid() } catch (_: Exception) { false }
+
+    /** Called only for the exact identity from the trusted Dart inactivity transition. */
+    fun retainInactivity(args: Map<*, *>): Boolean {
+        if (AlertRevocation.parse(args["reason"]) != AlertRevocation.INACTIVITY_UI_LOCK) return false
+        val grant = confirmedInactivityGrant() ?: return false
+        val validAuthority = try { authorityValid() } catch (_: Exception) { false }
+        val alreadyRetained = uiLock.inactivityLocked && retainedGrantValid()
+        if (!uiLock.retain(args["identity"] as? String, grant.identity, optIn.enabled && record.optBoolean("opt_in"),
+                record.optBoolean("enabled"), true, validAuthority, tokenLane.preparing,
+                record.optBoolean("token_refresh_unconfirmed"))) return false
+        if (alreadyRetained) return true
+        record.put("ui_inactivity_lock", JSONObject().put("identity", grant.identity)
+            .put("installation_id", grant.installation).put("registration_id", grant.registration)
+            .put("registration_generation", grant.registrationGeneration))
+        return try {
+            persist() // Existing encrypted vault only; no authority deadline or server generation is changed.
+            ownership.invalidate() // Fence a delayed pre-lock prepare/bind/status completion.
+            tokenLane.finishPreparation()
+            reconciliation.cancel()
+            applyForeground()
+            // A hint may have reached the disappearing Inbox just before this
+            // MethodChannel handoff. Acquire one existing bounded status owner
+            // even when no local pending projection/FGS was available yet.
+            // Idempotent retention above cannot enqueue another obligation.
+            if (!foreground) fallbackNotification()
+            observe(AlertEvent.AUTHORITY, AlertResult.INACTIVITY_UI_LOCK, authority = observedAuthority(), foreground = foreground)
+            true
+        } catch (_: Exception) { clearAuthority(reason = AlertRevocation.SECURITY_FAILURE); false }
+    }
+
+    private fun authorityValid(): Boolean = authorityState() == AlertAuthority.VALID
+
+    // Extra observation must not introduce a new Settings/vault failure on a stop path.
+    private fun observedAuthority(): AlertAuthority? = try { authorityState() } catch (_: Exception) { null }
+
+    // Same short-circuit order as the original guard. No vault contents leave this method.
+    private fun authorityState(): AlertAuthority = when {
+        !BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS -> AlertAuthority.FEATURE_OFF
+        !record.optBoolean("enabled") -> AlertAuthority.OPTED_OUT
+        !record.has("registration_id") || !record.has("status_secret") -> AlertAuthority.BINDING_MISSING
+        !exactEndpoint(record.optString("endpoint")) -> AlertAuthority.ENDPOINT_INVALID
+        record.optInt("boot_count", -1) < 0 || record.optInt("boot_count", -1) != vault.bootCount() -> AlertAuthority.BOOT_CHANGED
+        record.optLong("authority_deadline") <= SystemClock.elapsedRealtime() -> AlertAuthority.EXPIRED
+        record.has("ui_inactivity_lock") && !retainedScopeMatches() -> AlertAuthority.BINDING_MISSING
+        else -> AlertAuthority.VALID
+    }
 
     fun pending(args: Map<*, *>): Boolean {
         if (!foreground || !authorityValid() || args["identity"] != record.optString("identity")) return false
@@ -267,11 +376,20 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     }
 
     fun foreground(value: Boolean) {
-        if (foreground == value) return
-        ownership.setForeground(value)
+        uiLock.activity(value)
+        // A persisted lock is meaningful only for the exact still-valid original grant.
+        if (uiLock.inactivityLocked && !retainedGrantValid()) clearAuthority(reason = AlertRevocation.SECURITY_FAILURE)
+        applyForeground()
+    }
+
+    private fun applyForeground() {
+        val effective = uiLock.effectiveForeground
+        if (foreground == effective) return
+        ownership.setForeground(effective)
+        observe(AlertEvent.AUTHORITY, AlertResult.FOREGROUND, authority = observedAuthority(), foreground = effective)
         visibilityEpoch++
         playback.setForeground(true) // Shared clip eligibility; audio policy and ownership remain independently fenced.
-        if (value) {
+        if (effective) {
             handler.removeCallbacks(tick)
             reconciliation.cancel()
             cancelFallback()
@@ -297,7 +415,11 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     fun consumeTap(): Boolean = pendingInboxTap.also { pendingInboxTap = false }
     fun onIntent(intent: Intent?) { if (intent?.action == OPEN_INBOX) pendingInboxTap = true }
 
-    fun clearAuthority(retainOptIn: Boolean = false) {
+    fun clearAuthority(retainOptIn: Boolean = false, reason: AlertRevocation = AlertRevocation.SECURITY_FAILURE) {
+        // A reason string alone cannot retain authority; only retainInactivity may do that.
+        val revocation = if (reason == AlertRevocation.INACTIVITY_UI_LOCK) AlertRevocation.SECURITY_FAILURE else reason
+        observe(AlertEvent.AUTHORITY, revocation.observation)
+        uiLock.revoke()
         tokenLane.finishPreparation()
         ownership.invalidate()
         state.clear()
@@ -313,9 +435,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         try { vault.clear(); if (record.length() > 0) persist() } catch (_: Exception) { /* No in-memory authority remains. */ }
     }
 
-    fun disable() {
+    fun disable(reason: AlertRevocation = AlertRevocation.EXPLICIT_SIGN_OUT) {
         val old = record.toString()
-        clearAuthority()
+        clearAuthority(reason = reason)
         try { if (initializeFirebase(context)) FirebaseMessaging.getInstance().isAutoInitEnabled = false } catch (_: Exception) { }
         network.execute { try { request(JSONObject(old), true) } catch (_: Exception) { /* Local stop never waits on network. */ } }
     }
@@ -323,6 +445,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     fun tokenChanged(token: String) {
         handler.post {
             if (!BackgroundOrderAlertTokenRefresh.validToken(token)) return@post
+            // PIN-locked status-only retention grants no new token ownership. The
+            // ordinary authenticated foreground prepare reads the latest SDK token.
+            if (!uiLock.authenticatedUiAvailable) return@post
             if (foreground || tokenLane.preparing) {
                 // Keep the generation/status secret stable while a serialized
                 // foreground prepare/bind may be in flight. That owner reads
@@ -331,7 +456,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                 return@post
             }
             if (!authorityValid()) {
-                clearAuthority(true)
+                clearAuthority(true, if (observedAuthority() == AlertAuthority.EXPIRED) AlertRevocation.AUTHORITY_EXPIRED else AlertRevocation.SECURITY_FAILURE)
                 channel?.invokeMethod("tokenChanged", null)
                 return@post
             }
@@ -374,7 +499,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                 }
                 var committedGeneration: String? = null
                 if (denied) {
-                    clearAuthority(true)
+                    clearAuthority(true, AlertRevocation.SERVER_AUTH_REVOKED)
                 } else if (response != null) {
                     try {
                         check(response.getBoolean("ok") &&
@@ -402,12 +527,22 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     }
 
     fun hint(data: Map<String, String>, highPriority: Boolean) {
-        handler.post {
-            if (!authorityValid() || !hints.accept(data, record.optString("registration_id"), System.currentTimeMillis(), SystemClock.elapsedRealtime())) return@post
+        BackgroundOrderAlertCallbackHandoff.run(
+            post = { handler.post(it) }, fallback = { BackgroundOrderAlertJobService.enqueue(context) },
+        ) handoff@ {
+            val authority = authorityState()
+            if (authority != AlertAuthority.VALID) {
+                observe(AlertEvent.AUTHORITY, AlertResult.REFUSED, authority = authority, foreground = foreground)
+                return@handoff
+            }
+            val accepted = hints.accept(data, record.optString("registration_id"), System.currentTimeMillis(), SystemClock.elapsedRealtime())
+            observe(AlertEvent.HINT, if (accepted) AlertResult.ACCEPTED else AlertResult.REFUSED,
+                authority = authority, channel = channelState(), foreground = foreground)
+            if (!accepted) return@handoff
             // Cancellation is only a reason to read the FULL set, including when no FGS exists.
             if (!foreground && service == null && data["kind"] == "cancel") {
                 fallbackNotification()
-                return@post
+                return@handoff
             }
             when (backgroundOrderAlertHintAction(foreground, service != null, highPriority, channelAllowed())) {
                 BackgroundOrderAlertHintAction.foreground -> channel?.invokeMethod("pendingHint", null)
@@ -421,19 +556,38 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         }
     }
 
+    fun messagesDeleted() {
+        BackgroundOrderAlertCallbackHandoff.run(
+            post = { handler.post(it) }, fallback = { BackgroundOrderAlertJobService.enqueue(context) },
+        ) {
+            if (foreground) channel?.invokeMethod("pendingHint", null)
+            else fallbackNotification() // A lost hint grants no authority; read the full set.
+        }
+    }
+
     private fun startBackground() {
-        if (!authorityValid() || !channelAllowed()) return
+        if (!authorityValid() || !channelAllowed()) {
+            observe(AlertEvent.FGS_REQUEST, AlertResult.REFUSED, authority = observedAuthority(), channel = channelState(), foreground = foreground)
+            return
+        }
+        observe(AlertEvent.FGS_REQUEST, AlertResult.REQUESTED, authority = observedAuthority(), channel = channelState(), foreground = foreground)
         try {
             val intent = Intent(context, BackgroundOrderAlertService::class.java)
             ContextCompat.startForegroundService(context, intent)
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             // Includes Android 12+ ForegroundServiceStartNotAllowedException and permission failures.
+            observe(AlertEvent.FGS_REQUEST, when {
+                Build.VERSION.SDK_INT >= 31 && error is android.app.ForegroundServiceStartNotAllowedException -> AlertResult.START_DENIED
+                error is SecurityException -> AlertResult.SECURITY_DENIED
+                else -> AlertResult.FAILED
+            })
             fallbackNotification()
             playback.stop()
         }
     }
 
     fun serviceStarted(value: BackgroundOrderAlertService) {
+        observe(AlertEvent.FGS_START, AlertResult.STARTED, authority = observedAuthority(), foreground = foreground)
         if (foreground || !authorityValid() || !channelAllowed()) { value.stopSelf(); return }
         if (service === value) { scheduleReconcile(); return }
         service = value
@@ -443,7 +597,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         scheduleReconcile() // Fresh authenticated truth before any background clip, including handoff.
     }
 
-    fun serviceStartRefused() { if (service == null) playback.stop(); fallbackNotification() }
+    fun serviceStartRefused(result: AlertResult = AlertResult.REFUSED) { observe(AlertEvent.FGS_START, result); if (service == null) playback.stop(); fallbackNotification() }
 
     fun serviceDestroyed(value: BackgroundOrderAlertService) {
         if (service !== value) return
@@ -453,7 +607,8 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         playback.stop()
     }
 
-    private fun stopBackground() {
+    private fun stopBackground(reason: AlertResult = AlertResult.STOPPED) {
+        observe(AlertEvent.AUDIO_STOP_REQUEST, reason)
         handler.removeCallbacks(tick)
         reconciliation.cancel()
         service?.stopSelf()
@@ -468,9 +623,12 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     }
 
     private fun readStatus(work: BackgroundOrderAlertReconciliation.Read): () -> Unit {
+        val ordinal = ++readSequence
+        observe(AlertEvent.STATUS_BEGIN, AlertResult.ENTER, read = ordinal)
         val expected = generation
         val expectedVisibility = visibilityEpoch
         val expectedService = service
+        val expectedJob = fallbackJobs.current
         val startedAt = SystemClock.elapsedRealtime()
         val snapshot = JSONObject(record.toString())
         val cancelled = AtomicBoolean(false)
@@ -485,14 +643,15 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                     })
             } catch (_: AuthorityDenied) { denied = true; null } catch (_: Exception) { null }
             handler.post {
-                reconciliation.complete(work) completion@ {
+                val completed = reconciliation.complete(work) completion@ {
                     if (expected != generation || expectedVisibility != visibilityEpoch || foreground ||
                         service !== expectedService || (service == null && !fallbackWanted) || !authorityValid() ||
                         snapshot.optString("registration_id") != record.optString("registration_id")) {
                         if (!foreground && (service != null || fallbackWanted) && authorityValid()) scheduleReconcile()
+                        observe(AlertEvent.STATUS_COMPLETE, AlertResult.STALE, read = ordinal)
                         return@completion
                     }
-                    if (denied) { clearAuthority(); return@completion }
+                    if (denied) { observe(AlertEvent.STATUS_COMPLETE, AlertResult.DENIED, read = ordinal); clearAuthority(reason = AlertRevocation.SERVER_AUTH_REVOKED); return@completion }
                     try {
                         check(response != null && response.getBoolean("ok"))
                         check(response.getString("registration_id") == record.optString("registration_id"))
@@ -509,18 +668,25 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                         }
                         val conservativeServerNow = serverTime + (SystemClock.elapsedRealtime() - startedAt)
                         val remaining = minOf(expiry - conservativeServerNow, record.optLong("authority_deadline") - SystemClock.elapsedRealtime())
+                        observe(AlertEvent.STATUS_COMPLETE, AlertResult.ACCEPTED, read = ordinal)
                         if (service == null) showVerifiedFallback(values, conservativeServerNow, remaining)
                         else {
                             state.replace(values, conservativeServerNow, remaining, SystemClock.elapsedRealtime())
+                            observe(AlertEvent.PENDING_APPLIED, AlertResult.APPLIED,
+                                pendingCount = state.count(SystemClock.elapsedRealtime()), read = ordinal)
                             handler.removeCallbacks(tick)
                             tick.run()
                         }
                     } catch (_: Exception) {
                         // Unknown state is not permission to continue ringing indefinitely.
+                        val failure = AlertResult.UNAVAILABLE_OR_INVALID
+                        observe(AlertEvent.STATUS_COMPLETE, failure, read = ordinal)
                         state.clear()
-                        stopBackground()
+                        stopBackground(failure)
                     }
                 }
+                if (!completed) observe(AlertEvent.STATUS_COMPLETE, AlertResult.STALE, read = ordinal)
+                if (expectedService == null && expectedJob != null && !reconciliation.hasWork) finishFallbackJob(expectedJob)
             }
         }
         return {
@@ -580,12 +746,34 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         if (service != null) { scheduleReconcile(); return }
         // API 24/25 cannot enforce notification expiry after process death. Fail silent there.
         if (Build.VERSION.SDK_INT < 26) return
+        if (fallbackJobs.current != null) { scheduleReconcile(); return }
+        BackgroundOrderAlertJobService.enqueue(context)
+    }
+
+    /** Called only by the OS JobService, on main; status authority is never renewed here. */
+    fun startFallbackJob(done: () -> Unit): (() -> Unit)? {
+        if (foreground || service != null || !authorityValid() || !channelAllowed() || Build.VERSION.SDK_INT < 26) return null
+        val work = fallbackJobs.begin(done) ?: return null
         fallbackWanted = true
         scheduleReconcile()
+        return {
+            if (fallbackJobs.cancel(work)) {
+                fallbackWanted = false
+                reconciliation.cancel()
+                cancelFallback()
+            }
+        }
+    }
+
+    private fun finishFallbackJob(work: BackgroundOrderAlertJobOwnership.Work) {
+        if (fallbackJobs.current !== work) return
+        fallbackWanted = false
+        fallbackJobs.complete(work)
     }
 
     private fun cancelFallback() {
         fallbackWanted = false
+        fallbackJobs.current?.let { finishFallbackJob(it) }
         handler.removeCallbacks(expireFallback)
         notifications().cancel(FALLBACK_NOTIFICATION_ID)
     }
@@ -601,12 +789,15 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         }
         val plan = BackgroundOrderAlertFallback.plan(values, serverTime, authorityRemaining, now, heard,
             audioAllowed(), { ownership.reservePlayback(now) })
+        observe(AlertEvent.PENDING_APPLIED, AlertResult.APPLIED,
+            pendingCount = if (authorityRemaining > 0) values.values.count { it > serverTime } else 0)
         if (plan.timeoutMs == 0L) { cancelFallback(); return }
         // Durable fence BEFORE asking the OS to alert. A failed/uncertain notify is never retried audibly.
         record.put("fallback_heard", JSONObject(plan.heard))
         persist()
         handler.removeCallbacks(expireFallback)
         notifications().notify(FALLBACK_NOTIFICATION_ID, notification(false, plan.audible, plan.timeoutMs))
+        observe(AlertEvent.NOTIFY_REQUESTED, AlertResult.REQUESTED)
         handler.postDelayed(expireFallback, plan.timeoutMs)
     }
 
@@ -621,7 +812,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         builder.setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(context.getString(R.string.background_order_title))
             .setContentText(context.getString(if (ongoing) R.string.background_order_active else R.string.background_order_open))
-            .setContentIntent(tap).setVisibility(Notification.VISIBILITY_PUBLIC).setCategory(Notification.CATEGORY_STATUS)
+            // A foreground PIN screen remains notification-only, with no order/customer details.
+            .setContentIntent(tap).setVisibility(if (!uiLock.authenticatedUiAvailable) Notification.VISIBILITY_PRIVATE else Notification.VISIBILITY_PUBLIC)
+            .setCategory(Notification.CATEGORY_STATUS)
             .setOngoing(ongoing).setOnlyAlertOnce(ongoing || !audible)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .addAction(NotificationCompat.Action.Builder(android.R.drawable.ic_media_pause, context.getString(R.string.background_order_stop), stop).build())
@@ -654,7 +847,13 @@ private class BackgroundAlertClip(context: Context) : OnlineOrderAlertPlayback.C
         player.setOnErrorListener { _, _, _ -> onError(); true }
         player.prepareAsync()
     }
-    override fun start() = player.start()
-    override fun stop() = player.stop()
+    override fun start() {
+        player.start()
+        BackgroundOrderAlertCoordinator.observe(AlertEvent.AUDIO_START, AlertResult.STARTED)
+    }
+    override fun stop() {
+        player.stop()
+        BackgroundOrderAlertCoordinator.observe(AlertEvent.AUDIO_STOP, AlertResult.STOPPED)
+    }
     override fun release() = player.release()
 }
