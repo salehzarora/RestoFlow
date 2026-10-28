@@ -4,6 +4,73 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Closed local lifecycle classifications. Never includes credentials or scope.
+enum BackgroundAlertRevocationReason {
+  inactivityUiLock,
+  explicitSignOut,
+  userNotificationOff,
+  userNotificationStop,
+  identityOrPairingChanged,
+  serverAuthRevoked,
+  authorityExpired,
+  securityFailure;
+
+  String get wireName => switch (this) {
+    inactivityUiLock => 'INACTIVITY_UI_LOCK',
+    explicitSignOut => 'EXPLICIT_SIGN_OUT',
+    userNotificationOff => 'USER_NOTIFICATION_OFF',
+    userNotificationStop => 'USER_NOTIFICATION_STOP',
+    identityOrPairingChanged => 'IDENTITY_OR_PAIRING_CHANGED',
+    serverAuthRevoked => 'SERVER_AUTH_REVOKED',
+    authorityExpired => 'AUTHORITY_EXPIRED',
+    securityFailure => 'SECURITY_FAILURE',
+  };
+}
+
+/// Retains only a previously confirmed native grant; cannot create authority.
+abstract interface class BackgroundOrderAlertInactivityRetention {
+  Future<bool> retainForInactivity(String identity);
+}
+
+abstract interface class BackgroundOrderAlertReasonedRevocation {
+  Future<bool> revokeForReason(
+    BackgroundAlertRevocationReason reason, {
+    bool suspend = false,
+    bool retainOptIn = false,
+  });
+}
+
+Future<bool> revokeBackgroundAlertBridge(
+  BackgroundOrderAlertBridge bridge,
+  BackgroundAlertRevocationReason reason, {
+  bool suspend = false,
+  bool retainOptIn = false,
+}) async {
+  try {
+    if (bridge is BackgroundOrderAlertReasonedRevocation) {
+      return (bridge as BackgroundOrderAlertReasonedRevocation).revokeForReason(
+        reason,
+        suspend: suspend,
+        retainOptIn: retainOptIn,
+      );
+    }
+    if (bridge is BackgroundOrderAlertRevocation) {
+      return (bridge as BackgroundOrderAlertRevocation).revoke(
+        suspend: suspend,
+        retainOptIn: retainOptIn,
+      );
+    }
+    if (suspend) {
+      await bridge.suspend(retainOptIn: retainOptIn);
+    } else {
+      await bridge.disable();
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// Notification-only delegation. Never contains a POS pairing/PIN credential,
 /// customer data, a customer status capability or a printing operation.
 abstract class BackgroundOrderAlertBridge {
@@ -42,7 +109,11 @@ final backgroundOrderAlertBridgeProvider = Provider<BackgroundOrderAlertBridge>(
 );
 
 class MethodChannelBackgroundOrderAlertBridge
-    implements BackgroundOrderAlertBridge, BackgroundOrderAlertRevocation {
+    implements
+        BackgroundOrderAlertBridge,
+        BackgroundOrderAlertRevocation,
+        BackgroundOrderAlertInactivityRetention,
+        BackgroundOrderAlertReasonedRevocation {
   MethodChannelBackgroundOrderAlertBridge({MethodChannel? channel})
     : _channel =
           channel ??
@@ -99,6 +170,38 @@ class MethodChannelBackgroundOrderAlertBridge
       return true; // native void success returns null, not a boolean
     } catch (_) {
       return false; // no raw platform diagnostics or credentials escape
+    }
+  }
+
+  @override
+  Future<bool> retainForInactivity(String identity) async {
+    if (_disposed || identity.isEmpty || identity.length > 512) return false;
+    return await _call<bool>('retainInactivity', {
+          'identity': identity,
+          'reason': BackgroundAlertRevocationReason.inactivityUiLock.wireName,
+        }).timeout(const Duration(seconds: 2), onTimeout: () => false) ??
+        false;
+  }
+
+  @override
+  Future<bool> revokeForReason(
+    BackgroundAlertRevocationReason reason, {
+    bool suspend = false,
+    bool retainOptIn = false,
+  }) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+    // Retention has a separate, validated handshake. A revoke cannot grant it.
+    final effective = reason == BackgroundAlertRevocationReason.inactivityUiLock
+        ? BackgroundAlertRevocationReason.securityFailure
+        : reason;
+    try {
+      await _channel.invokeMethod<void>(suspend ? 'suspend' : 'disable', {
+        'reason': effective.wireName,
+        if (suspend) 'retain_opt_in': retainOptIn,
+      });
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 

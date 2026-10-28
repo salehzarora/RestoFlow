@@ -650,6 +650,189 @@ fun main() {
                 BackgroundOrderAlertObservation.Result.APPLIED, 1, 1, 1, pendingCount = count) }.isFailure)
         }
     }
+    scenario("trusted inactivity preserves a confirmed grant but keeps a resumed PIN UI out of Inbox ownership") {
+        val ui = BackgroundOrderAlertUiLock()
+        val owner = BackgroundOrderAlertOwnership()
+        ui.confirmedBind()
+        ui.activity(true)
+        owner.setForeground(ui.effectiveForeground)
+        val beforeLock = owner.generation
+        check(ui.effectiveForeground)
+        check(ui.retain("scope|device-session|pin", "scope|device-session|pin", true, true, true, true, false, false))
+        owner.invalidate() // Coordinator's local completion fence, not a registration-generation change.
+        owner.setForeground(ui.effectiveForeground)
+        check(!ui.effectiveForeground && !owner.foreground && !owner.current(beforeLock))
+        ui.activity(false)
+        ui.activity(true) // Android Activity resume cannot reauthenticate the PIN screen.
+        check(!ui.effectiveForeground)
+        check(backgroundOrderAlertHintAction(ui.effectiveForeground, false, true, true) == BackgroundOrderAlertHintAction.start)
+        check(backgroundOrderAlertHintAction(ui.effectiveForeground, true, true, true) == BackgroundOrderAlertHintAction.reconcile)
+        ui.confirmedBind() // Only the new genuinely authenticated bind unlocks this native UI fence.
+        check(ui.effectiveForeground)
+    }
+    scenario("null changed identity opt-out incomplete scope expiry and uncertain writes cannot be called inactivity") {
+        for (refusal in listOf("null", "blank", "identity", "opt-out", "disabled", "scope", "expired", "reboot", "preparing", "uncertain")) {
+            val ui = BackgroundOrderAlertUiLock()
+            ui.confirmedBind()
+            ui.activity(true)
+            val identity = when (refusal) { "null" -> null; "blank" -> " "; "identity" -> "other-scope"; else -> "confirmed" }
+            check(!ui.retain(identity, "confirmed", refusal != "opt-out", refusal != "disabled",
+                refusal != "scope", refusal !in listOf("expired", "reboot"), refusal == "preparing", refusal == "uncertain"))
+            check(!ui.inactivityLocked && ui.effectiveForeground)
+        }
+    }
+    scenario("persistent inactivity marker is tied to exact installation registration generation and authenticated identity") {
+        val original = BackgroundOrderAlertInactivityGrant("employee-scope", "install-A", "registration-A", "generation-A")
+        check(original.matches(BackgroundOrderAlertInactivityGrant("employee-scope", "install-A", "registration-A", "generation-A")))
+        for (changed in listOf(
+            BackgroundOrderAlertInactivityGrant("other-employee-scope", "install-A", "registration-A", "generation-A"),
+            BackgroundOrderAlertInactivityGrant("employee-scope", "install-B", "registration-A", "generation-A"),
+            BackgroundOrderAlertInactivityGrant("employee-scope", "install-A", "registration-B", "generation-A"),
+            BackgroundOrderAlertInactivityGrant("employee-scope", "install-A", "registration-A", "generation-B"),
+        )) check(!original.matches(changed))
+        check(!original.toString().contains("employee-scope") && !original.toString().contains("install-A"))
+        val restarted = BackgroundOrderAlertUiLock(initiallyLocked = true)
+        restarted.activity(true)
+        check(!restarted.effectiveForeground) // Process recreation cannot assume Activity visibility means PIN proof.
+        restarted.confirmedBind()
+        check(restarted.effectiveForeground)
+    }
+    scenario("ordinary process recreation keeps a visible PIN screen on native status-only ownership without inventing inactivity") {
+        val restored = BackgroundOrderAlertUiLock() // Existing vault grant, no persisted inactivity marker.
+        restored.activity(true)
+        check(!restored.inactivityLocked && !restored.authenticatedUiAvailable && !restored.effectiveForeground)
+        check(backgroundOrderAlertHintAction(restored.effectiveForeground, false, true, true) == BackgroundOrderAlertHintAction.start)
+        check(backgroundOrderAlertHintAction(restored.effectiveForeground, false, false, true) == BackgroundOrderAlertHintAction.fallback)
+        check(backgroundOrderAlertHintAction(restored.effectiveForeground, true, true, true) == BackgroundOrderAlertHintAction.reconcile)
+        restored.activity(false)
+        restored.activity(true)
+        check(!restored.effectiveForeground) // Repeated resume/pending hints are not fresh PIN authority.
+        restored.confirmedBind()
+        check(restored.authenticatedUiAvailable && restored.effectiveForeground)
+        check(backgroundOrderAlertHintAction(restored.effectiveForeground, true, true, true) == BackgroundOrderAlertHintAction.foreground)
+    }
+    scenario("an engine detach removes only UI eligibility until a fresh bind and cannot unlock an inactivity marker") {
+        val ui = BackgroundOrderAlertUiLock()
+        ui.activity(true)
+        ui.confirmedBind()
+        check(ui.effectiveForeground)
+        ui.detachUi()
+        check(!ui.authenticatedUiAvailable && !ui.effectiveForeground && !ui.inactivityLocked)
+        ui.activity(true)
+        check(!ui.effectiveForeground)
+        check(ui.retain("confirmed", "confirmed", true, true, true, true, false, false))
+        ui.detachUi()
+        check(ui.inactivityLocked && !ui.effectiveForeground)
+        ui.revoke()
+        check(!ui.inactivityLocked && !ui.authenticatedUiAvailable && !ui.effectiveForeground)
+        ui.activity(true)
+        check(!ui.effectiveForeground)
+    }
+    scenario("one retained handoff read recovers pending truth without a local Inbox projection or perpetual polling") {
+        val ui = BackgroundOrderAlertUiLock()
+        ui.activity(true)
+        ui.confirmedBind()
+        val fixture = ReconciliationFixture()
+        fixture.polling = false // Existing one-shot JobService, not an active FGS.
+        fixture.server = pending("arrived-during-ui-handoff")
+        check(fixture.state.count(0) == 0)
+        check(ui.retain("confirmed", "confirmed", true, true, true, true, false, false))
+        check(!ui.effectiveForeground)
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        check(fixture.reads == 1 && fixture.applied == 1 && fixture.state.count(0) == 1)
+        fixture.clock.advanceTo(60_000)
+        check(fixture.reads == 1 && !fixture.loop.hasWork) // No idle polling/authority renewal.
+    }
+    scenario("retention handoff supersedes a pre-lock status read and still coalesces into one fresh owner") {
+        val fixture = ReconciliationFixture()
+        fixture.polling = false
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        val preLock = fixture.held.single()
+        fixture.loop.cancel() // Successful retention fences the prior UI epoch.
+        fixture.loop.request()
+        fixture.loop.request() // Existing OS job/FCM hints share the same singleflight.
+        fixture.clock.advanceTo(5_000)
+        check(fixture.reads == 2 && fixture.aborted == 1)
+        check(!fixture.loop.complete(preLock) { error("stale pre-lock response must never apply") })
+        check(fixture.loop.complete(fixture.held.last()) { fixture.applied++ })
+        fixture.clock.advanceTo(60_000)
+        check(fixture.applied == 1 && fixture.reads == 2 && !fixture.loop.hasWork)
+        val refused = BackgroundOrderAlertUiLock()
+        check(!refused.retain("changed", "confirmed", true, true, true, true, false, false))
+        check(!refused.inactivityLocked && !refused.authenticatedUiAvailable)
+    }
+    scenario("inactivity retention never extends authority and fails at the original absolute cutoff") {
+        val ui = BackgroundOrderAlertUiLock()
+        val absoluteDeadline = 8 * 60 * 60_000L
+        var now = 30 * 60_000L
+        check(ui.retain("confirmed", "confirmed", true, true, true, now < absoluteDeadline, false, false))
+        val unchangedDeadline = absoluteDeadline
+        now = absoluteDeadline
+        check(!ui.retain("confirmed", "confirmed", true, true, true, now < absoluteDeadline, false, false))
+        check(unchangedDeadline == absoluteDeadline)
+        val state = BackgroundOrderAlertState()
+        state.replace(mapOf("A" to absoluteDeadline + 60_000), now, absoluteDeadline - now, now)
+        check(!state.active(now)) // A locked UI does not manufacture notification time after expiry.
+    }
+    scenario("every explicit security revocation reason remains closed and cannot be mistaken for inactivity") {
+        val reasons = BackgroundOrderAlertRevocationReason.entries
+        check(reasons.size == 8)
+        for (reason in reasons) {
+            check(BackgroundOrderAlertRevocationReason.parse(reason.name) == reason)
+            val wire = BackgroundOrderAlertObservation.encode(BackgroundOrderAlertObservation.Event.AUTHORITY,
+                reason.observation, 1, 1, 1)
+            check(wire.contains("result=${reason.name}") && !wire.contains("confirmed"))
+            if (reason == BackgroundOrderAlertRevocationReason.INACTIVITY_UI_LOCK) continue
+            val ui = BackgroundOrderAlertUiLock()
+            check(ui.retain("confirmed", "confirmed", true, true, true, true, false, false))
+            ui.revoke()
+            check(!ui.inactivityLocked)
+            check(!ui.retain("confirmed", "confirmed", false, false, false, false, false, false))
+        }
+        check(BackgroundOrderAlertRevocationReason.parse(null) == BackgroundOrderAlertRevocationReason.SECURITY_FAILURE)
+        check(BackgroundOrderAlertRevocationReason.parse("inactivity_ui_lock") == BackgroundOrderAlertRevocationReason.SECURITY_FAILURE)
+        check(BackgroundOrderAlertRevocationReason.parse(mapOf("reason" to "INACTIVITY_UI_LOCK")) == BackgroundOrderAlertRevocationReason.SECURITY_FAILURE)
+    }
+    scenario("idle-locked Activity keeps the single status owner and does not reset the retained sound cadence") {
+        val ui = BackgroundOrderAlertUiLock()
+        ui.activity(true)
+        check(ui.retain("confirmed", "confirmed", true, true, true, true, false, false))
+        val fixture = ReconciliationFixture()
+        fixture.server = pending("A", "B")
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        fixture.state.played(0)
+        ui.activity(false)
+        ui.activity(true)
+        fixture.server = pending("B")
+        fixture.clock.advanceTo(1_000)
+        check(!ui.effectiveForeground)
+        fixture.loop.request() // A cancel on the foregrounded PIN screen still reaches native status.
+        fixture.clock.advanceTo(5_000)
+        check(fixture.reads == 2 && fixture.state.count(5_000) == 1 && !fixture.state.shouldPlay(5_000))
+        check(fixture.state.shouldPlay(10_000))
+        fixture.server = emptyMap()
+        fixture.clock.advanceTo(15_000)
+        check(!fixture.state.active(15_000) && !fixture.loop.hasWork)
+    }
+    scenario("an inactivity epoch fences queued pre-lock preparation and old authenticated projection") {
+        val owner = BackgroundOrderAlertOwnership()
+        val preparedBeforeLock = owner.generation
+        val ui = BackgroundOrderAlertUiLock()
+        ui.activity(true)
+        check(ui.retain("confirmed", "confirmed", true, true, true, true, false, false))
+        owner.invalidate()
+        check(!owner.current(preparedBeforeLock) && !ui.effectiveForeground)
+        ui.activity(true)
+        check(!ui.effectiveForeground) // Matching old identity/pending callbacks alone do not call confirmedBind.
+        owner.invalidate() // Real OFF/logout supersedes even a later queued callback.
+        ui.revoke()
+        check(!owner.current(preparedBeforeLock))
+        check(!ui.retain("confirmed", "confirmed", false, false, false, false, false, false))
+    }
     println("$passed native background state scenarios passed")
 }
 

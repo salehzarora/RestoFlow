@@ -101,7 +101,8 @@ class BackgroundOrderAlertMessagingService : FirebaseMessagingService() {
 
 class BackgroundOrderAlertStopReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action == BackgroundOrderAlertCoordinator.STOP_ALERTS) BackgroundOrderAlertCoordinator.get(context).disable()
+        if (intent?.action == BackgroundOrderAlertCoordinator.STOP_ALERTS) BackgroundOrderAlertCoordinator.get(context)
+            .disable(BackgroundOrderAlertRevocationReason.USER_NOTIFICATION_STOP)
     }
 }
 

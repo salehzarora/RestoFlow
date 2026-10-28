@@ -1,12 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 
 import '../data/online_order_inbox.dart';
 import '../media/background_order_alert_bridge.dart';
+import 'background_alert_delegation.dart';
 import 'online_order_inbox_controller.dart';
 import 'pos_offline_state.dart';
 import 'pos_session.dart';
+import 'pos_device_context.dart';
 
 /// Finite, non-sensitive outcomes only. Never retain native exception text,
 /// registration payloads, notification tokens or authority credentials here.
@@ -272,6 +275,9 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   DateTime? _authorityExpiresAt;
   DateTime? _lastRegistrationAttempt;
   Timer? _authorityRenewal;
+  BackgroundAlertInactivityLock? _lastInactivityProof;
+  DeviceContext? _lastDeviceContext;
+  DateTime Function() _proofClock = DateTime.now;
 
   @override
   BackgroundOrderAlertState build() {
@@ -279,8 +285,25 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     _buildEnabled = enabledBuild;
     final previousIdentity = _identity;
     _identity = ref.watch(onlineOrderInboxIdentityProvider);
-    if (previousIdentity != _identity && _bridge != null) {
-      unawaited(_revoke(_bridge!));
+    _lastInactivityProof = ref.read(backgroundAlertInactivityLockProvider);
+    // Capture the explicit handoff BEFORE the identity dependency invalidates
+    // this provider. Watching it would run old cleanup while its ref is already
+    // invalid, before the new proof could be read.
+    ref.listen(backgroundAlertInactivityLockProvider, (_, next) {
+      _lastInactivityProof = next;
+    });
+    _lastDeviceContext = ref.watch(posDeviceContextProvider);
+    _proofClock = ref.read(backgroundOrderAlertClockProvider);
+    final retainingInactivity = _retainingInactivity();
+    if (previousIdentity != _identity &&
+        _bridge != null &&
+        !retainingInactivity) {
+      unawaited(
+        _revoke(
+          _bridge!,
+          reason: BackgroundAlertRevocationReason.identityOrPairingChanged,
+        ),
+      );
     }
     _disposed = false;
     final gen = ++_generation;
@@ -298,7 +321,12 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     _bridge = bridge;
     ref.listen(posOfflineModeProvider.select((s) => s.phase), (_, next) {
       if (next != PosOfflinePhase.online) {
-        unawaited(_cancel(retainOptIn: _intent == null));
+        unawaited(
+          _cancel(
+            retainOptIn: _intent == null,
+            reason: BackgroundAlertRevocationReason.securityFailure,
+          ),
+        );
       } else if (_foreground) {
         _kick();
       }
@@ -306,7 +334,9 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     ref.listen(onlineOrderInboxControllerProvider, (_, next) {
       if (next.failure == OnlineInboxFailure.invalidSession ||
           next.failure == OnlineInboxFailure.permissionDenied) {
-        unawaited(_cancel());
+        unawaited(
+          _cancel(reason: BackgroundAlertRevocationReason.serverAuthRevoked),
+        );
       } else {
         _publish(next);
         if (_foreground && next.failure == null) _kick();
@@ -326,6 +356,10 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       },
     );
     ref.onDispose(() {
+      // Only the session controller's explicit, scope-matched inactivity
+      // handoff can protect existing native authority during PIN removal.
+      // A null identity, disposal or background transition alone cannot.
+      final retainExisting = _retainingInactivity();
       _disposed = true;
       _active?.retainOptInOnExit = false;
       _generation++;
@@ -335,6 +369,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       _wake();
       // Paused, already-bound delegation remains bounded in native code.
       // An unfinished enable must instead be revoked, including late completion.
+      if (retainExisting) return;
       if (_active != null) {
         unawaited(_revoke(bridge));
       } else if (_foreground) {
@@ -345,6 +380,25 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       if (_current(gen)) _kick();
     });
     return const BackgroundOrderAlertState(available: true);
+  }
+
+  bool _retainingInactivity() {
+    var proof = _lastInactivityProof;
+    var context = _lastDeviceContext;
+    try {
+      proof = ref.read(backgroundAlertInactivityLockProvider);
+      context = ref.read(posDeviceContextProvider);
+    } catch (_) {
+      // Container teardown cannot manufacture proof. Only the exact explicit
+      // handoff last observed while live may survive engine disposal; native
+      // still independently enforces its original grant and deadline.
+    }
+    return proof != null &&
+        _active == null &&
+        !_off &&
+        (_identity == null || _identity == proof.identity) &&
+        proof.matchesContext(context) &&
+        proof.validAt(_proofClock());
   }
 
   bool _current(int gen) =>
@@ -391,22 +445,20 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     BackgroundOrderAlertBridge bridge, {
     bool suspend = false,
     bool retainOptIn = false,
+    BackgroundAlertRevocationReason reason =
+        BackgroundAlertRevocationReason.securityFailure,
   }) {
     final previous = _revocation;
     final work = () async {
       if (previous != null) await previous;
       try {
-        if (bridge is BackgroundOrderAlertRevocation) {
-          final observed = bridge as BackgroundOrderAlertRevocation;
-          if (!await observed.revoke(
-            suspend: suspend,
-            retainOptIn: retainOptIn,
-          ))
-            throw StateError('alert_cleanup_unavailable');
-        } else if (suspend) {
-          await bridge.suspend(retainOptIn: retainOptIn);
-        } else {
-          await bridge.disable();
+        if (!await revokeBackgroundAlertBridge(
+          bridge,
+          reason,
+          suspend: suspend,
+          retainOptIn: retainOptIn,
+        )) {
+          throw StateError('alert_cleanup_unavailable');
         }
         _cleanupFailed = false;
       } catch (_) {
@@ -441,7 +493,10 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     bool failed = false,
     bool retainOptIn = false,
     bool authorizationExpired = false,
+    BackgroundAlertRevocationReason reason =
+        BackgroundAlertRevocationReason.securityFailure,
   }) {
+    ref.read(backgroundAlertInactivityLockProvider.notifier).clear();
     _generation++;
     _active?.retainOptInOnExit = retainOptIn;
     _off = !retainOptIn;
@@ -460,13 +515,21 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     final bridge = _bridge;
     return bridge == null
         ? Future.value()
-        : _revoke(bridge, suspend: retainOptIn, retainOptIn: retainOptIn);
+        : _revoke(
+            bridge,
+            suspend: retainOptIn,
+            retainOptIn: retainOptIn,
+            reason: reason,
+          );
   }
 
   int get authorityGeneration => _generation;
 
   Future<void> setEnabled(bool value) {
-    if (!value) return _cancel();
+    if (!value)
+      return _cancel(
+        reason: BackgroundAlertRevocationReason.userNotificationOff,
+      );
     if (!_buildEnabled) return Future.value();
     if (_bridge == null ||
         !_authorized(_generation) ||
@@ -530,7 +593,12 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       // Notification delegation cannot outlive the employee authority. Keep
       // the opt-in only; the ordinary PIN flow must establish a new identity.
       unawaited(
-        _cancel(failed: true, retainOptIn: true, authorizationExpired: true),
+        _cancel(
+          failed: true,
+          retainOptIn: true,
+          authorizationExpired: true,
+          reason: BackgroundAlertRevocationReason.authorityExpired,
+        ),
       );
       return;
     }

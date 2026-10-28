@@ -5,6 +5,39 @@ No hosted installation, activation, official v64 build or device test is part
 of this change. Notification failure must not gate checkout, Inbox polling,
 acceptance or printing.
 
+## Inactivity UI lock — local candidate, not released
+
+`BIZBOT-POS-IDLE-LOCK-ALERT-DELEGATION-001` distinguishes the existing
+30-minute UI inactivity lock from explicit sign-out. The PIN gate still removes
+all privileged POS/Inbox surfaces. Only a scoped, ephemeral inactivity handoff
+may retain an already confirmed, opted-in native grant under its original
+installation, registration generation, PIN/device authority and hard deadlines.
+It cannot register, renew, claim token ownership or extend expiry behind PIN.
+Absolute eight-hour expiry wins when both expiry conditions match.
+
+Explicit OFF, Android Stop, sign-out, identity/pairing changes, server rejection,
+authority expiry and security failure remain revocations. Null identity,
+provider disposal, offline transitions and failed authentication are not proof
+of inactivity. New sign-in invalidates the old handoff before authentication.
+Provider cleanup and native completion fencing cover delayed work too.
+
+While the PIN screen is foregrounded, including after ordinary process
+recreation without an inactivity marker, Android uses the bounded native
+status-only path and a private generic notification, without privileged Dart
+Inbox refresh or order/customer details. Activity visibility alone cannot
+establish authenticated UI availability. A fresh authorized bind is required
+to return audio ownership to the ordinary foreground UI. First retention
+hands off through the existing bounded status reconciliation, so a hint that
+crosses PIN removal is not dependent on a disappearing Inbox listener.
+Force Stop and reboot-before-first-launch limitations are unchanged.
+
+The earlier P20 disable is consistent with idle resume but remains PROBABLE:
+the historical request contains no caller-reason evidence. Local regression
+tests do not establish physical notification success. PR373 stays Draft,
+hosted SQL stays NO-GO, and v73 plus the reviewed terminal migration stay
+unchanged. A later integrated QA build and physical verification need separate
+authorization; no version or installation is consumed by this local repair.
+
 ## Background lifecycle repair — local review, not released
 
 `BIZBOT-POS-BACKGROUND-ALERTS-RELIABILITY-001` closes an implementation gap:

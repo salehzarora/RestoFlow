@@ -11,6 +11,7 @@ import '../data/secure_session_store.dart';
 import '../data/shift_repository.dart';
 import '../data/sync_cursor_store.dart' show PosSyncScope;
 import '../media/background_order_alert_bridge.dart';
+import 'background_alert_delegation.dart';
 import 'cart_controller.dart' show posActiveCorrectionSourceProvider;
 import 'outbox_controller.dart' show outboxControllerProvider;
 import 'pos_device_context.dart';
@@ -229,6 +230,13 @@ class PosPinSessionBinding {
 /// precondition failure (42501), or a transient transport error all resolve to
 /// `null` (fail-closed) - there is no path to a fake or forced session.
 class PosSessionController extends AsyncNotifier<SyncSession?> {
+  int _authenticationEpoch = 0;
+  // An inactivity lock deliberately keeps the bounded offline record. Remember
+  // only its storage scope so a later explicit logout can still destroy it
+  // after the privileged PIN binding has been removed.
+  PosSyncScope? _lockedStoredScope;
+  String? _lockedDeviceSessionId;
+
   /// The exact pairing context the CURRENT session was established under, or null
   /// when no session is active. Read via [posPinSessionBindingProvider]; compared
   /// by the PIN gate and the sync-scope provider. Never trusted by the server.
@@ -291,25 +299,126 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
     final pausedAt = _pausedAt;
     _pausedAt = null;
     final now = clock();
-    if (!policy.isExpired(
-      startedAt: started,
-      lastActivityAt: pausedAt ?? now,
-      now: now,
-    )) {
+    // Absolute authority expiry wins even when the same resume also crosses
+    // the inactivity boundary. A backward clock is not evidence of safe idle.
+    if (now.isBefore(started)) {
+      endSession(
+        clearStoredSession: false,
+        reason: BackgroundAlertRevocationReason.securityFailure,
+      );
+      return true;
+    }
+    final absoluteExpiry = started.add(policy.maxAge);
+    if (!now.isBefore(absoluteExpiry)) {
+      endSession(
+        clearStoredSession: false,
+        reason: BackgroundAlertRevocationReason.authorityExpired,
+      );
+      return true;
+    }
+    if (pausedAt == null ||
+        now.isBefore(pausedAt.add(policy.inactivityTimeout))) {
       return false;
     }
-    // [POS-OFFLINE-OPERATIONS-002] The CLIENT-side idle/max-age expiry ends
-    // the in-memory session but deliberately KEEPS the secure store record:
-    // its own hard offline window (min(serverExpiry, lastOnlineVerify + 8h))
-    // still bounds any restore, and the restore paths re-require the same
-    // operator at the PIN gate. Only an explicit logout/unpair or a SERVER
-    // auth refusal destroys the offline-continuity record.
-    endSession(clearStoredSession: false);
+    _endSessionForInactivity(absoluteExpiry);
     return true;
+  }
+
+  /// The only trusted creator of inactivity proof. UI authorization is removed
+  /// synchronously; native retention is a bounded validation of its EXISTING
+  /// grant, never registration, renewal or restoration from the secure store.
+  void _endSessionForInactivity(DateTime absoluteExpiry) {
+    final session = state.valueOrNull;
+    final binding = _binding;
+    final device = ref.read(posDeviceContextProvider);
+    final employee = ref.read(posSignedInEmployeeProfileIdProvider);
+    final scope = _scopeOfBinding(binding);
+    final bridge = ref.exists(backgroundOrderAlertBridgeProvider)
+        ? ref.read(backgroundOrderAlertBridgeProvider)
+        : null;
+    if (_restoredOffline ||
+        session == null ||
+        binding == null ||
+        device == null ||
+        !device.isPaired ||
+        device.deviceType != 'pos' ||
+        !binding.matchesContext(device) ||
+        session.deviceId != device.deviceId ||
+        scope == null ||
+        employee == null ||
+        employee.isEmpty ||
+        bridge == null ||
+        bridge is! BackgroundOrderAlertInactivityRetention) {
+      endSession(
+        clearStoredSession: false,
+        reason: BackgroundAlertRevocationReason.securityFailure,
+      );
+      return;
+    }
+    final retentionBridge = bridge as BackgroundOrderAlertInactivityRetention;
+    final proofOwner = ref.read(backgroundAlertInactivityLockProvider.notifier);
+    final proof = proofOwner.begin(
+      identity:
+          '${scope.key}|${binding.deviceSessionId}|${session.pinSessionId}',
+      organizationId: device.organizationId,
+      restaurantId: device.restaurantId,
+      branchId: device.branchId,
+      deviceId: session.deviceId,
+      deviceSessionId: binding.deviceSessionId!,
+      pinSessionId: session.pinSessionId,
+      employeeProfileId: employee,
+      validUntil: absoluteExpiry,
+    );
+    _lockedStoredScope = scope;
+    _lockedDeviceSessionId = binding.deviceSessionId;
+    // Set proof before dropping PIN: provider cleanup may quarantine the old
+    // delegation while native validates, but cannot start new privileged work.
+    _clearStaffSession(clearStoredSession: false);
+    unawaited(() async {
+      var retained = false;
+      try {
+        retained = await retentionBridge.retainForInactivity(proof.identity);
+      } catch (_) {
+        // Native unavailability is a security failure, not an idle grant.
+      }
+      try {
+        if (!proofOwner.isCurrent(proof)) return;
+        if (retained &&
+            proof.matchesContext(ref.read(posDeviceContextProvider)) &&
+            proof.validAt(clock())) {
+          proofOwner.confirm(proof);
+          return;
+        }
+        if (proofOwner.clearIfCurrent(proof)) {
+          await revokeBackgroundAlertBridge(
+            bridge,
+            BackgroundAlertRevocationReason.securityFailure,
+          );
+        }
+      } catch (_) {
+        // A destroyed container cannot confirm this proof OR issue an
+        // unscoped cleanup that might revoke a newer container's binding.
+        // Native retention independently validates its existing bounded grant;
+        // no Dart continuation here may grant, renew, or restore authority.
+      }
+    }());
+  }
+
+  void _revokeBackgroundDelegation(BackgroundAlertRevocationReason reason) {
+    ref.read(backgroundAlertInactivityLockProvider.notifier).clear();
+    if (ref.exists(backgroundOrderAlertBridgeProvider)) {
+      unawaited(
+        revokeBackgroundAlertBridge(
+          ref.read(backgroundOrderAlertBridgeProvider),
+          reason,
+        ).catchError((_) => false),
+      );
+    }
   }
 
   @override
   FutureOr<SyncSession?> build() {
+    _authenticationEpoch++;
     // A SESSION DIES WITH ITS PAIRING. Watching the device context means ANY
     // pairing transition — unpair, re-pair, restore into a different context —
     // re-runs this build and DROPS the imperatively-established session (and its
@@ -319,6 +428,23 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
     // publishes the context once per genuine transition (init / restore / paired /
     // unpair), never per rebuild, so this cannot churn a live session.
     final ctx = ref.watch(posDeviceContextProvider);
+    final lockedScope = _lockedStoredScope;
+    if (lockedScope != null &&
+        (ctx == null ||
+            ctx.organizationId != lockedScope.organizationId ||
+            (ctx.restaurantId ?? '') != lockedScope.restaurantId ||
+            ctx.branchId != lockedScope.branchId ||
+            ctx.deviceId != lockedScope.deviceId ||
+            ctx.deviceSessionId != _lockedDeviceSessionId)) {
+      _lockedStoredScope = null;
+      _lockedDeviceSessionId = null;
+      unawaited(
+        ref
+            .read(posSecureSessionStoreProvider)
+            .clear(lockedScope)
+            .catchError((_) {}),
+      );
+    }
     // [POS-OFFLINE-OPERATIONS-002] When a PAIRING TRANSITION (unpair / re-pair
     // into a different context) drops a bound session, the persisted offline
     // copy dies with it: a till unpaired from branch A must never restore
@@ -363,13 +489,17 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
     SyncRpcTransport transport,
     PosRealSessionConfig config,
   ) async {
+    final epoch = _authenticationEpoch;
     final result = await PinSessionService(transport).startPinSession(
       deviceSessionId: config.deviceSessionId,
       employeeProfileId: config.employeeProfileId,
       pinVerifier: config.pinVerifier,
     );
+    if (epoch != _authenticationEpoch) return null;
     return result.fold<SyncSession?>(
       (started) {
+        _lockedStoredScope = null;
+        _lockedDeviceSessionId = null;
         final session = SyncSession(
           pinSessionId: started.pinSessionId,
           deviceId: config.deviceId,
@@ -566,15 +696,30 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
     required String pin,
     String? employeeDisplayName,
   }) async {
+    // A new authentication attempt cannot inherit an idle predecessor's grant,
+    // even if the PIN is wrong or the network is unavailable. Real sign-in may
+    // obtain new authority later through the normal authenticated path only.
+    final hadIdleProof =
+        ref.read(backgroundAlertInactivityLockProvider) != null;
+    if (hadIdleProof || state.valueOrNull != null) {
+      endSession(
+        clearStoredSession: false,
+        reason: BackgroundAlertRevocationReason.identityOrPairingChanged,
+      );
+    }
     final transport = ref.read(posAuthTransportProvider);
     if (transport == null) return PinLoginError.unavailable;
+    final epoch = ++_authenticationEpoch;
     final result = await PinSessionService(transport).startPinSession(
       deviceSessionId: deviceSessionId,
       employeeProfileId: employeeProfileId,
       pinVerifier: pin,
     );
+    if (epoch != _authenticationEpoch) return PinLoginError.unavailable;
     return result.fold<PinLoginError?>(
       (started) {
+        _lockedStoredScope = null;
+        _lockedDeviceSessionId = null;
         final session = SyncSession(
           pinSessionId: started.pinSessionId,
           deviceId: deviceId,
@@ -632,14 +777,28 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   /// server auth refusal. The RF-118 client idle/max-age expiry passes FALSE:
   /// the record's own hard window still bounds any restore, and destroying it
   /// there would brick a till that merely sat idle offline.
-  void endSession({bool clearStoredSession = true}) {
+  void endSession({
+    bool clearStoredSession = true,
+    BackgroundAlertRevocationReason reason =
+        BackgroundAlertRevocationReason.explicitSignOut,
+  }) {
     // Local sign-out is authoritative even if the server PIN has not expired.
     // Revoke only notification delegation; never alter pairing or print state.
-    if (ref.exists(backgroundOrderAlertBridgeProvider)) {
-      unawaited(ref.read(backgroundOrderAlertBridgeProvider).disable());
-    }
+    // Callers cannot manufacture inactivity retention by supplying an enum.
+    _revokeBackgroundDelegation(
+      reason == BackgroundAlertRevocationReason.inactivityUiLock
+          ? BackgroundAlertRevocationReason.securityFailure
+          : reason,
+    );
+    _clearStaffSession(clearStoredSession: clearStoredSession);
+  }
+
+  void _clearStaffSession({required bool clearStoredSession}) {
+    _authenticationEpoch++;
     if (clearStoredSession) {
-      final scope = _scopeOfBinding(_binding);
+      final scope = _scopeOfBinding(_binding) ?? _lockedStoredScope;
+      _lockedStoredScope = null;
+      _lockedDeviceSessionId = null;
       if (scope != null) {
         final store = ref.read(posSecureSessionStoreProvider);
         unawaited(store.clear(scope).catchError((_) {}));
@@ -925,11 +1084,14 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   /// and stay exactly where they are. Idempotent: with no live session this
   /// is a no-op, so one failing batch signals the seam once.
   void handleServerAuthRefusal() {
-    if (state.valueOrNull == null) return;
+    if (state.valueOrNull == null &&
+        ref.read(backgroundAlertInactivityLockProvider) == null) {
+      return;
+    }
     try {
       ref.read(posSessionReauthNoticeProvider.notifier).set();
     } catch (_) {}
-    endSession();
+    endSession(reason: BackgroundAlertRevocationReason.serverAuthRevoked);
   }
 }
 

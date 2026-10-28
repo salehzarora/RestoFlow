@@ -73,7 +73,9 @@ internal object BackgroundOrderAlertObservation {
         JOB_ENQUEUE, JOB_START, JOB_STOP, STATUS_BEGIN, STATUS_COMPLETE, PENDING_APPLIED, NOTIFY_REQUESTED, AUDIO_START, AUDIO_STOP_REQUEST, AUDIO_STOP }
     enum class Result { ENTER, RETURN, ACCEPTED, REFUSED, REQUESTED, STARTED, STOPPED, APPLIED,
         DENIED, MALFORMED, UNAVAILABLE_OR_INVALID, STALE, TIMEOUT, FAILED, START_DENIED, SECURITY_DENIED,
-        FINISHED, POLICY, FOREGROUND, EXPIRED, EMPTY }
+        FINISHED, POLICY, FOREGROUND, EXPIRED, EMPTY, INACTIVITY_UI_LOCK, EXPLICIT_SIGN_OUT,
+        USER_NOTIFICATION_OFF, USER_NOTIFICATION_STOP, IDENTITY_OR_PAIRING_CHANGED,
+        SERVER_AUTH_REVOKED, AUTHORITY_EXPIRED, SECURITY_FAILURE }
     enum class Kind { PENDING, CANCEL, OTHER }
     enum class Authority { VALID, FEATURE_OFF, OPTED_OUT, BINDING_MISSING, ENDPOINT_INVALID, BOOT_CHANGED, EXPIRED }
     enum class Channel { ALLOWED, PERMISSION_DENIED, NOTIFICATIONS_DISABLED, MISSING, LOW_IMPORTANCE, SOUND_MISSING, UNKNOWN }
@@ -88,6 +90,63 @@ internal object BackgroundOrderAlertObservation {
             " authority=${authority?.name ?: "NULL"} channel=${channel?.name ?: "NULL"} foreground=${foreground?.toString() ?: "NULL"}" +
             " pending_count=${pendingCount?.toString() ?: "NULL"} read=${read?.toString() ?: "NULL"}"
     }
+}
+
+/** Only a trusted inactivity proof may retain an EXISTING notification grant. */
+internal enum class BackgroundOrderAlertRevocationReason {
+    INACTIVITY_UI_LOCK, EXPLICIT_SIGN_OUT, USER_NOTIFICATION_OFF, USER_NOTIFICATION_STOP,
+    IDENTITY_OR_PAIRING_CHANGED, SERVER_AUTH_REVOKED, AUTHORITY_EXPIRED, SECURITY_FAILURE;
+
+    companion object {
+        fun parse(value: Any?): BackgroundOrderAlertRevocationReason =
+            entries.firstOrNull { it.name == value } ?: SECURITY_FAILURE
+    }
+    val observation: BackgroundOrderAlertObservation.Result get() = when (this) {
+        INACTIVITY_UI_LOCK -> BackgroundOrderAlertObservation.Result.INACTIVITY_UI_LOCK
+        EXPLICIT_SIGN_OUT -> BackgroundOrderAlertObservation.Result.EXPLICIT_SIGN_OUT
+        USER_NOTIFICATION_OFF -> BackgroundOrderAlertObservation.Result.USER_NOTIFICATION_OFF
+        USER_NOTIFICATION_STOP -> BackgroundOrderAlertObservation.Result.USER_NOTIFICATION_STOP
+        IDENTITY_OR_PAIRING_CHANGED -> BackgroundOrderAlertObservation.Result.IDENTITY_OR_PAIRING_CHANGED
+        SERVER_AUTH_REVOKED -> BackgroundOrderAlertObservation.Result.SERVER_AUTH_REVOKED
+        AUTHORITY_EXPIRED -> BackgroundOrderAlertObservation.Result.AUTHORITY_EXPIRED
+        SECURITY_FAILURE -> BackgroundOrderAlertObservation.Result.SECURITY_FAILURE
+    }
+}
+
+/** Device/installation scope already confirmed by bind; never a new credential. */
+internal class BackgroundOrderAlertInactivityGrant(
+    val identity: String, val installation: String, val registration: String, val registrationGeneration: String,
+) {
+    fun matches(other: BackgroundOrderAlertInactivityGrant): Boolean = identity == other.identity &&
+        installation == other.installation && registration == other.registration &&
+        registrationGeneration == other.registrationGeneration
+    override fun toString(): String = "BackgroundOrderAlertInactivityGrant(REDACTED)"
+}
+
+/** Activity visibility cannot reopen authenticated Inbox ownership behind a PIN lock. */
+internal class BackgroundOrderAlertUiLock(initiallyLocked: Boolean = false) {
+    var activityForeground = false
+        private set
+    // Process recreation/Activity visibility is not fresh authenticated Inbox proof.
+    // Existing bounded native authority may still reconcile status behind the PIN.
+    var authenticatedUiAvailable = false
+        private set
+    var inactivityLocked = initiallyLocked
+        private set
+    val effectiveForeground: Boolean get() = activityForeground && authenticatedUiAvailable && !inactivityLocked
+
+    fun activity(value: Boolean) { activityForeground = value }
+    fun retain(identity: String?, confirmedIdentity: String?, optedIn: Boolean, enabled: Boolean,
+        scopeComplete: Boolean, authorityValid: Boolean, preparing: Boolean, uncertainWrite: Boolean): Boolean {
+        if (identity.isNullOrBlank() || identity.length > 512 || identity != confirmedIdentity || !optedIn ||
+            !enabled || !scopeComplete || !authorityValid || preparing || uncertainWrite) return false
+        inactivityLocked = true
+        authenticatedUiAvailable = false
+        return true
+    }
+    fun confirmedBind() { inactivityLocked = false; authenticatedUiAvailable = true }
+    fun detachUi() { authenticatedUiAvailable = false }
+    fun revoke() { inactivityLocked = false; authenticatedUiAvailable = false }
 }
 
 /** Non-sensitive channel policy; never contains IDs, sound URIs or credentials. */

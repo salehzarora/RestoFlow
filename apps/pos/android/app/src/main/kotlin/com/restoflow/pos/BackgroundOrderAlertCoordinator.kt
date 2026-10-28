@@ -40,6 +40,7 @@ import com.restoflow.pos.BackgroundOrderAlertObservation.Result as AlertResult
 import com.restoflow.pos.BackgroundOrderAlertObservation.Authority as AlertAuthority
 import com.restoflow.pos.BackgroundOrderAlertObservation.Kind as AlertKind
 import com.restoflow.pos.BackgroundOrderAlertObservation.Channel as AlertChannel
+import com.restoflow.pos.BackgroundOrderAlertRevocationReason as AlertRevocation
 
 /** Process singleton: foreground clip transport and bounded background coordinator share ownership. */
 internal class BackgroundOrderAlertCoordinator private constructor(context: Context) {
@@ -87,6 +88,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     private val ownership = BackgroundOrderAlertOwnership()
     private val hints = BackgroundOrderAlertHints()
     private var record = vault.read() ?: JSONObject()
+    private val uiLock = BackgroundOrderAlertUiLock(record.has("ui_inactivity_lock"))
     private val optIn = BackgroundOrderAlertOptIn(record.optBoolean("opt_in"))
     private val generation: Long get() = ownership.generation
     private val foreground: Boolean get() = ownership.foreground
@@ -208,7 +210,12 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         channel = MethodChannel(messenger, "restoflow.pos/background_order_alert")
     }
 
-    fun detach() { channel?.setMethodCallHandler(null); channel = null }
+    fun detach() {
+        channel?.setMethodCallHandler(null)
+        channel = null
+        uiLock.detachUi()
+        applyForeground()
+    }
     fun bridge(): MethodChannel? = channel
 
     fun prepare(activity: Activity, requestPermission: Boolean, callback: (Map<String, Any?>) -> Unit) {
@@ -274,7 +281,64 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
             .put("authority_deadline", SystemClock.elapsedRealtime() + remaining.coerceAtMost(8 * 60 * 60_000L))
             .put("boot_count", vault.bootCount())
         record.remove("token_refresh_unconfirmed")
-        return try { persist(); true } catch (_: Exception) { clearAuthority(); false }
+        record.remove("ui_inactivity_lock")
+        return try {
+            persist()
+            uiLock.confirmedBind()
+            applyForeground()
+            true
+        } catch (_: Exception) { clearAuthority(); false }
+    }
+
+    private fun confirmedInactivityGrant(): BackgroundOrderAlertInactivityGrant? {
+        val identity = record.optString("identity")
+        val installation = record.optString("installation_id")
+        val registration = record.optString("registration_id")
+        val registrationGeneration = record.optString("registration_generation")
+        if (identity.isBlank() || identity.length > 512 || !uuid(installation) || !uuid(registration) ||
+            !uuid(registrationGeneration)) return null
+        return BackgroundOrderAlertInactivityGrant(identity, installation, registration, registrationGeneration)
+    }
+
+    private fun retainedScopeMatches(): Boolean {
+        return try {
+            val saved = record.optJSONObject("ui_inactivity_lock") ?: return false
+            val current = confirmedInactivityGrant() ?: return false
+            val original = BackgroundOrderAlertInactivityGrant(saved.getString("identity"), saved.getString("installation_id"),
+                saved.getString("registration_id"), saved.getString("registration_generation"))
+            original.matches(current) && optIn.enabled && record.optBoolean("opt_in")
+        } catch (_: Exception) { false }
+    }
+
+    private fun retainedGrantValid(): Boolean = try { retainedScopeMatches() && authorityValid() } catch (_: Exception) { false }
+
+    /** Called only for the exact identity from the trusted Dart inactivity transition. */
+    fun retainInactivity(args: Map<*, *>): Boolean {
+        if (AlertRevocation.parse(args["reason"]) != AlertRevocation.INACTIVITY_UI_LOCK) return false
+        val grant = confirmedInactivityGrant() ?: return false
+        val validAuthority = try { authorityValid() } catch (_: Exception) { false }
+        val alreadyRetained = uiLock.inactivityLocked && retainedGrantValid()
+        if (!uiLock.retain(args["identity"] as? String, grant.identity, optIn.enabled && record.optBoolean("opt_in"),
+                record.optBoolean("enabled"), true, validAuthority, tokenLane.preparing,
+                record.optBoolean("token_refresh_unconfirmed"))) return false
+        if (alreadyRetained) return true
+        record.put("ui_inactivity_lock", JSONObject().put("identity", grant.identity)
+            .put("installation_id", grant.installation).put("registration_id", grant.registration)
+            .put("registration_generation", grant.registrationGeneration))
+        return try {
+            persist() // Existing encrypted vault only; no authority deadline or server generation is changed.
+            ownership.invalidate() // Fence a delayed pre-lock prepare/bind/status completion.
+            tokenLane.finishPreparation()
+            reconciliation.cancel()
+            applyForeground()
+            // A hint may have reached the disappearing Inbox just before this
+            // MethodChannel handoff. Acquire one existing bounded status owner
+            // even when no local pending projection/FGS was available yet.
+            // Idempotent retention above cannot enqueue another obligation.
+            if (!foreground) fallbackNotification()
+            observe(AlertEvent.AUTHORITY, AlertResult.INACTIVITY_UI_LOCK, authority = observedAuthority(), foreground = foreground)
+            true
+        } catch (_: Exception) { clearAuthority(reason = AlertRevocation.SECURITY_FAILURE); false }
     }
 
     private fun authorityValid(): Boolean = authorityState() == AlertAuthority.VALID
@@ -290,6 +354,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         !exactEndpoint(record.optString("endpoint")) -> AlertAuthority.ENDPOINT_INVALID
         record.optInt("boot_count", -1) < 0 || record.optInt("boot_count", -1) != vault.bootCount() -> AlertAuthority.BOOT_CHANGED
         record.optLong("authority_deadline") <= SystemClock.elapsedRealtime() -> AlertAuthority.EXPIRED
+        record.has("ui_inactivity_lock") && !retainedScopeMatches() -> AlertAuthority.BINDING_MISSING
         else -> AlertAuthority.VALID
     }
 
@@ -311,12 +376,20 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     }
 
     fun foreground(value: Boolean) {
-        if (foreground == value) return
-        ownership.setForeground(value)
-        observe(AlertEvent.AUTHORITY, AlertResult.FOREGROUND, authority = observedAuthority(), foreground = value)
+        uiLock.activity(value)
+        // A persisted lock is meaningful only for the exact still-valid original grant.
+        if (uiLock.inactivityLocked && !retainedGrantValid()) clearAuthority(reason = AlertRevocation.SECURITY_FAILURE)
+        applyForeground()
+    }
+
+    private fun applyForeground() {
+        val effective = uiLock.effectiveForeground
+        if (foreground == effective) return
+        ownership.setForeground(effective)
+        observe(AlertEvent.AUTHORITY, AlertResult.FOREGROUND, authority = observedAuthority(), foreground = effective)
         visibilityEpoch++
         playback.setForeground(true) // Shared clip eligibility; audio policy and ownership remain independently fenced.
-        if (value) {
+        if (effective) {
             handler.removeCallbacks(tick)
             reconciliation.cancel()
             cancelFallback()
@@ -342,7 +415,11 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     fun consumeTap(): Boolean = pendingInboxTap.also { pendingInboxTap = false }
     fun onIntent(intent: Intent?) { if (intent?.action == OPEN_INBOX) pendingInboxTap = true }
 
-    fun clearAuthority(retainOptIn: Boolean = false) {
+    fun clearAuthority(retainOptIn: Boolean = false, reason: AlertRevocation = AlertRevocation.SECURITY_FAILURE) {
+        // A reason string alone cannot retain authority; only retainInactivity may do that.
+        val revocation = if (reason == AlertRevocation.INACTIVITY_UI_LOCK) AlertRevocation.SECURITY_FAILURE else reason
+        observe(AlertEvent.AUTHORITY, revocation.observation)
+        uiLock.revoke()
         tokenLane.finishPreparation()
         ownership.invalidate()
         state.clear()
@@ -358,9 +435,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         try { vault.clear(); if (record.length() > 0) persist() } catch (_: Exception) { /* No in-memory authority remains. */ }
     }
 
-    fun disable() {
+    fun disable(reason: AlertRevocation = AlertRevocation.EXPLICIT_SIGN_OUT) {
         val old = record.toString()
-        clearAuthority()
+        clearAuthority(reason = reason)
         try { if (initializeFirebase(context)) FirebaseMessaging.getInstance().isAutoInitEnabled = false } catch (_: Exception) { }
         network.execute { try { request(JSONObject(old), true) } catch (_: Exception) { /* Local stop never waits on network. */ } }
     }
@@ -368,6 +445,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     fun tokenChanged(token: String) {
         handler.post {
             if (!BackgroundOrderAlertTokenRefresh.validToken(token)) return@post
+            // PIN-locked status-only retention grants no new token ownership. The
+            // ordinary authenticated foreground prepare reads the latest SDK token.
+            if (!uiLock.authenticatedUiAvailable) return@post
             if (foreground || tokenLane.preparing) {
                 // Keep the generation/status secret stable while a serialized
                 // foreground prepare/bind may be in flight. That owner reads
@@ -376,7 +456,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                 return@post
             }
             if (!authorityValid()) {
-                clearAuthority(true)
+                clearAuthority(true, if (observedAuthority() == AlertAuthority.EXPIRED) AlertRevocation.AUTHORITY_EXPIRED else AlertRevocation.SECURITY_FAILURE)
                 channel?.invokeMethod("tokenChanged", null)
                 return@post
             }
@@ -419,7 +499,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                 }
                 var committedGeneration: String? = null
                 if (denied) {
-                    clearAuthority(true)
+                    clearAuthority(true, AlertRevocation.SERVER_AUTH_REVOKED)
                 } else if (response != null) {
                     try {
                         check(response.getBoolean("ok") &&
@@ -571,7 +651,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                         observe(AlertEvent.STATUS_COMPLETE, AlertResult.STALE, read = ordinal)
                         return@completion
                     }
-                    if (denied) { observe(AlertEvent.STATUS_COMPLETE, AlertResult.DENIED, read = ordinal); clearAuthority(); return@completion }
+                    if (denied) { observe(AlertEvent.STATUS_COMPLETE, AlertResult.DENIED, read = ordinal); clearAuthority(reason = AlertRevocation.SERVER_AUTH_REVOKED); return@completion }
                     try {
                         check(response != null && response.getBoolean("ok"))
                         check(response.getString("registration_id") == record.optString("registration_id"))
@@ -732,7 +812,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         builder.setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(context.getString(R.string.background_order_title))
             .setContentText(context.getString(if (ongoing) R.string.background_order_active else R.string.background_order_open))
-            .setContentIntent(tap).setVisibility(Notification.VISIBILITY_PUBLIC).setCategory(Notification.CATEGORY_STATUS)
+            // A foreground PIN screen remains notification-only, with no order/customer details.
+            .setContentIntent(tap).setVisibility(if (!uiLock.authenticatedUiAvailable) Notification.VISIBILITY_PRIVATE else Notification.VISIBILITY_PUBLIC)
+            .setCategory(Notification.CATEGORY_STATUS)
             .setOngoing(ongoing).setOnlyAlertOnce(ongoing || !audible)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .addAction(NotificationCompat.Action.Builder(android.R.drawable.ic_media_pause, context.getString(R.string.background_order_stop), stop).build())

@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_pos/src/data/online_order_inbox.dart';
 import 'package:restoflow_pos/src/media/background_order_alert_bridge.dart';
 import 'package:restoflow_pos/src/state/background_order_alerts.dart';
+import 'package:restoflow_pos/src/state/background_alert_delegation.dart';
 import 'package:restoflow_pos/src/state/online_order_inbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_offline_state.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
@@ -153,6 +154,7 @@ Future<void> _run(
   _Transport? transport,
   DeviceSessionSecretStore? store,
   DateTime Function()? clock,
+  DeviceContext? deviceContext,
 }) async {
   final bridge = _Bridge()
     ..prepareHandler = prepare
@@ -208,6 +210,9 @@ Future<void> _run(
       ),
     ],
   );
+  if (deviceContext != null) {
+    container.read(posDeviceContextProvider.notifier).set(deviceContext);
+  }
   final subscription = container.listen(
     backgroundOrderAlertsProvider,
     (_, __) {},
@@ -226,6 +231,134 @@ Future<void> _run(
 }
 
 void main() {
+  testWidgets(
+    'inactivity handshake timeout is fail closed and cannot become a late success',
+    (tester) async {
+      const channel = MethodChannel('restoflow.pos/idle-timeout-test');
+      final completion = Completer<bool>();
+      final methods = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        call,
+      ) async {
+        methods.add(call.method);
+        expect(call.method, 'retainInactivity');
+        expect((call.arguments as Map)['reason'], 'INACTIVITY_UI_LOCK');
+        return completion.future;
+      });
+      final bridge = MethodChannelBackgroundOrderAlertBridge(channel: channel);
+      var result = true;
+      final pending = bridge
+          .retainForInactivity('synthetic-confirmed-identity')
+          .then((value) {
+            result = value;
+          });
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await pending;
+      expect(result, false);
+      completion.complete(true);
+      await tester.pump();
+      expect(result, false);
+      expect(methods, ['retainInactivity']);
+      await bridge.dispose();
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      );
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+  const lockedDevice = DeviceContext(
+    organizationId: 'idle-org',
+    restaurantId: 'idle-restaurant',
+    branchId: 'idle-branch',
+    deviceId: deviceId,
+    deviceType: 'pos',
+    deviceSessionId: 'idle-device-session',
+  );
+  void retainProof(ProviderContainer c, {bool matchingScope = true}) {
+    final proofOwner = c.read(backgroundAlertInactivityLockProvider.notifier);
+    final proof = proofOwner.begin(
+      identity: c.read(onlineOrderInboxIdentityProvider)!,
+      organizationId: matchingScope ? lockedDevice.organizationId : 'other-org',
+      restaurantId: lockedDevice.restaurantId,
+      branchId: lockedDevice.branchId,
+      deviceId: deviceId,
+      deviceSessionId: lockedDevice.deviceSessionId!,
+      pinSessionId: pinId,
+      employeeProfileId: 'idle-employee',
+      validUntil: DateTime.now().add(const Duration(hours: 1)),
+    );
+    proofOwner.confirm(proof);
+  }
+
+  testWidgets(
+    'trusted inactivity null identity survives rebuild and disposal without prepare or renewal',
+    (tester) async {
+      await _run(tester, (c, b, r, reg) async {
+        expect(c.read(backgroundOrderAlertsProvider).enabled, true);
+        final prepares = b.prepares;
+        final registrations = reg.length;
+        expect(b.suspends, 0, reason: 'no cleanup before the inactivity proof');
+        retainProof(c);
+        c.read(_identity.notifier).state = null;
+        await tester.pump(Duration.zero);
+        expect(b.disables, 0);
+        expect(b.suspends, 0);
+        c.invalidate(backgroundOrderAlertsProvider);
+        c.read(backgroundOrderAlertsProvider);
+        await tester.pump(Duration.zero);
+        expect(b.disables, 0);
+        expect(b.suspends, 0);
+        expect(b.prepares, prepares);
+        expect(reg.length, registrations);
+        expect(r.decisions, isEmpty);
+        c.read(backgroundOrderAlertsProvider.notifier).onResume();
+        await tester.pump();
+        expect(b.prepares, prepares);
+        expect(reg.length, registrations);
+      }, deviceContext: lockedDevice);
+    },
+  );
+  testWidgets('arbitrary null identity without trusted proof still revokes', (
+    tester,
+  ) async {
+    await _run(tester, (c, b, r, reg) async {
+      c.read(_identity.notifier).state = null;
+      await tester.pump(Duration.zero);
+      expect(b.disables + b.suspends, greaterThan(0));
+      expect(r.decisions, isEmpty);
+    }, deviceContext: lockedDevice);
+  });
+  testWidgets('foreign scope proof cannot preserve native delegation', (
+    tester,
+  ) async {
+    await _run(tester, (c, b, r, reg) async {
+      retainProof(c, matchingScope: false);
+      c.read(_identity.notifier).state = null;
+      await tester.pump(Duration.zero);
+      expect(b.disables + b.suspends, greaterThan(0));
+      expect(r.decisions, isEmpty);
+    }, deviceContext: lockedDevice);
+  });
+  testWidgets('explicit OFF clears idle proof and cannot re-enable on resume', (
+    tester,
+  ) async {
+    await _run(tester, (c, b, r, reg) async {
+      retainProof(c);
+      c.read(_identity.notifier).state = null;
+      await tester.pump(Duration.zero);
+      final registrations = reg.length;
+      await c.read(backgroundOrderAlertsProvider.notifier).setEnabled(false);
+      await tester.pump(Duration.zero);
+      expect(c.read(backgroundAlertInactivityLockProvider), isNull);
+      expect(b.disables, greaterThan(0));
+      c.read(backgroundOrderAlertsProvider.notifier).onResume();
+      await tester.pump();
+      expect(reg.length, registrations);
+      expect(r.decisions, isEmpty);
+    }, deviceContext: lockedDevice);
+  });
   for (final (nativeReason, expected) in [
     ('permission_denied', BackgroundOrderAlertFailure.permissionDenied),
     (
