@@ -330,8 +330,10 @@ fun main() {
             check(fixture.state.count(0) == 1 && fixture.reads == 1)
             fixture.server = emptyMap()
             // No audio tick, UI resume, FCM hint or new order drives this read.
-            fixture.clock.advanceTo(60_000)
-            check(fixture.reads == 2 && !fixture.state.active(60_000))
+            fixture.clock.advanceTo(9_999)
+            check(fixture.reads == 1 && fixture.state.active(9_999))
+            fixture.clock.advanceTo(10_000)
+            check(fixture.reads == 2 && !fixture.state.active(10_000))
         }
     }
     scenario("resolving A in the background preserves B and the retained ten-second cadence") {
@@ -358,9 +360,9 @@ fun main() {
         check(fixture.reads == 1)
         fixture.clock.advanceTo(5_000)
         check(fixture.reads == 2)
-        fixture.clock.advanceTo(64_999)
+        fixture.clock.advanceTo(14_999)
         check(fixture.reads == 2)
-        fixture.clock.advanceTo(65_000)
+        fixture.clock.advanceTo(15_000)
         check(fixture.reads == 3)
     }
     scenario("queued or stalled status work cannot retain stale ringing past its absolute budget") {
@@ -481,6 +483,173 @@ fun main() {
         fixture.clock.advanceTo(0)
         check(fixture.state.active(12_299) && !fixture.state.active(12_300))
     }
+    scenario("cold FCM callback acquires an OS owner before returning, without awaiting HTTP") {
+        var acquired = false
+        var callbackReturned = false
+        var networkStarted = false
+        var queued: (() -> Unit)? = null
+        BackgroundOrderAlertCallbackHandoff.run(
+            post = { queued = it }, fallback = { error("unexpected fallback") },
+            action = { check(!callbackReturned); acquired = true },
+            await = { latch -> queued!!(); check(latch.count == 0L); true },
+        )
+        callbackReturned = true
+        check(acquired && !networkStarted)
+        // The service/job can safely own the subsequent asynchronous status read.
+        networkStarted = true
+        check(networkStarted)
+    }
+    scenario("a delayed main handoff acquires a job before callback return and cancels stale dispatch") {
+        var queued: (() -> Unit)? = null
+        var jobs = 0
+        BackgroundOrderAlertCallbackHandoff.run(
+            post = { queued = it }, fallback = { jobs++ },
+            action = { error("late FGS start outside FCM callback") }, await = { false },
+        )
+        check(jobs == 1)
+        queued!!()
+        check(jobs == 1)
+    }
+    scenario("failed dispatch or service acquisition falls back without losing callback lifetime") {
+        for (failure in listOf("post", "service")) {
+            var jobs = 0
+            BackgroundOrderAlertCallbackHandoff.run(
+                post = { if (failure == "post") error("synthetic scheduling failure") else it() },
+                fallback = { jobs++ }, action = { error("synthetic FGS refusal") },
+                await = { it.count == 0L },
+            )
+            check(jobs == 1)
+        }
+    }
+    scenario("one job owner coalesces duplicates and stale completion cannot finish a newer job") {
+        val owner = BackgroundOrderAlertJobOwnership()
+        var completions = 0
+        val first = owner.begin { completions++ }!!
+        check(owner.begin { error("duplicate owner") } == null)
+        check(owner.complete(first) && completions == 1)
+        val next = owner.begin { completions++ }!!
+        check(!owner.complete(first) && !owner.cancel(first) && owner.current === next)
+        check(owner.complete(next) && completions == 2)
+    }
+    scenario("OS cancellation releases only its job and does not acknowledge or retry stale work") {
+        val owner = BackgroundOrderAlertJobOwnership()
+        val cancelled = owner.begin { error("OS-stopped job must not call jobFinished") }!!
+        check(owner.cancel(cancelled))
+        val next = owner.begin {}!!
+        check(!owner.complete(cancelled) && owner.current === next)
+        check(owner.cancel(next) && owner.current == null)
+    }
+    scenario("timed-out callback enqueues a fresh obligation behind an older snapshot") {
+        val pendingWork = java.util.ArrayDeque<Int>()
+        val completedWork = mutableListOf<Int>()
+        pendingWork.add(1)
+        val queue = BackgroundOrderAlertJobQueue(take = { pendingWork.pollFirst() }, complete = { id: Int -> completedWork.add(id); Unit })
+        check(queue.beginRead()) // Old snapshot is now in flight.
+        var delayed: (() -> Unit)? = null
+        BackgroundOrderAlertCallbackHandoff.run(
+            post = { delayed = it }, fallback = { pendingWork.add(2); Unit },
+            await = { false }, action = { error("late FGS acquisition") },
+        )
+        delayed!!()
+        queue.completeRead()
+        check(completedWork == listOf(1) && pendingWork.toList() == listOf(2))
+        check(queue.beginRead()) // New pending/terminal state requires another full read.
+        queue.completeRead()
+        check(completedWork == listOf(1, 2) && !queue.beginRead())
+    }
+    scenario("job queue coalesces queued hints but never consumes an arrival at completion") {
+        val pendingWork = java.util.ArrayDeque<Int>()
+        val completed = mutableListOf<Int>()
+        pendingWork.addAll(listOf(1, 2, 3))
+        val queue = BackgroundOrderAlertJobQueue(take = { pendingWork.pollFirst() }, complete = { id: Int -> completed.add(id); Unit })
+        check(queue.beginRead())
+        pendingWork.add(4)
+        queue.completeRead()
+        check(completed == listOf(1, 2, 3))
+        check(queue.beginRead())
+        queue.completeRead()
+        check(completed == listOf(1, 2, 3, 4))
+        check(!queue.beginRead()) // OS dequeue, rather than jobFinished, owns empty/arrival race.
+    }
+    scenario("coalesced terminal hint retains the fallback owner through the required follow-up full set") {
+        val fixture = ReconciliationFixture()
+        fixture.polling = false
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        val first = fixture.held.single()
+        fixture.loop.request() // terminal/deleted hint while the earlier snapshot is in flight
+        fixture.loop.complete(first) { fixture.state.replace(pending("A", "B"), 0, 100_000, 0) }
+        check(fixture.loop.hasWork)
+        fixture.clock.advanceTo(5_000)
+        fixture.loop.complete(fixture.held.last()) { fixture.state.replace(pending("B"), 5_000, 95_000, 5_000) }
+        check(!fixture.loop.hasWork && fixture.state.count(5_000) == 1)
+        check(fixture.state.shouldPlay(5_000)) // A resolution cannot silence genuinely pending B.
+    }
+    scenario("lost terminal hint removes only resolved A at the accelerated read and preserves B cadence") {
+        val fixture = ReconciliationFixture()
+        fixture.server = pending("A", "B")
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        fixture.state.played(0)
+        fixture.server = pending("B")
+        fixture.clock.advanceTo(10_000) // Deliberately no FCM, foreground or UI callback.
+        check(fixture.reads == 2 && fixture.state.count(10_000) == 1)
+        check(fixture.state.shouldPlay(10_000))
+        fixture.state.played(10_000)
+        check(!fixture.state.shouldPlay(10_001))
+        fixture.server = emptyMap()
+        fixture.clock.advanceTo(20_000)
+        check(!fixture.state.active(20_000) && !fixture.loop.hasWork)
+    }
+    scenario("an empty verified full set never creates idle periodic polling") {
+        val fixture = ReconciliationFixture()
+        fixture.loop.request()
+        fixture.clock.advanceTo(120_000)
+        check(fixture.reads == 1 && !fixture.loop.hasWork)
+    }
+    scenario("active accelerated reconciliation cannot extend its hard episode or create a new sound owner") {
+        val fixture = ReconciliationFixture()
+        fixture.authorityUntil = 2_000_000
+        fixture.server = mapOf("A" to 2_000_000)
+        fixture.loop.request()
+        fixture.clock.advanceTo(1_000_000)
+        check(!fixture.state.active(1_000_000) && !fixture.loop.hasWork)
+        check(fixture.reads <= 91) // Initial read + at most90 periodic reads in15min.
+    }
+    scenario("closed observation vocabulary cannot serialize payloads credentials or exception messages") {
+        val canary = "SECRET_TOKEN_CUSTOMER_CANARY"
+        val records = mutableListOf<String>()
+        for (event in BackgroundOrderAlertObservation.Event.entries) {
+            for (result in BackgroundOrderAlertObservation.Result.entries) {
+                records += BackgroundOrderAlertObservation.encode(event, result, 1, 1, 1)
+            }
+        }
+        for (authority in BackgroundOrderAlertObservation.Authority.entries) {
+            for (channel in BackgroundOrderAlertObservation.Channel.entries) {
+                records += BackgroundOrderAlertObservation.encode(BackgroundOrderAlertObservation.Event.AUTHORITY,
+                    BackgroundOrderAlertObservation.Result.REFUSED, 2, 2, 2,
+                    authority = authority, channel = channel, pendingCount = 50, foreground = false)
+            }
+        }
+        val fixture = ReconciliationFixture()
+        fixture.holdRead = true
+        fixture.loop.request()
+        fixture.clock.advanceTo(0)
+        fixture.loop.complete(fixture.held.single()) { error(canary) }
+        records += BackgroundOrderAlertObservation.encode(BackgroundOrderAlertObservation.Event.STATUS_COMPLETE,
+            fixture.failureResult!!, 3, 3, 3)
+        check(records.none { it.contains(canary) || it.contains("Bearer") || it.contains("Exception") })
+        check(records.all { it.length < 450 && it.matches(Regex("[A-Za-z0-9_= ]+")) })
+        check(records.first().contains("authority=NULL") && records.first().contains("pending_count=NULL"))
+        check(fixture.failureResult == BackgroundOrderAlertObservation.Result.FAILED)
+    }
+    scenario("invalid diagnostic counters are rejected rather than widened or silently clamped") {
+        for (count in listOf(-1, 51)) {
+            check(runCatching { BackgroundOrderAlertObservation.encode(BackgroundOrderAlertObservation.Event.PENDING_APPLIED,
+                BackgroundOrderAlertObservation.Result.APPLIED, 1, 1, 1, pendingCount = count) }.isFailure)
+        }
+    }
     println("$passed native background state scenarios passed")
 }
 
@@ -511,6 +680,8 @@ private class ReconciliationFixture {
     val clock = ReconciliationClock()
     val state = BackgroundOrderAlertState()
     var authorized = true
+    var authorityUntil = 100_000L
+    var failureResult: BackgroundOrderAlertObservation.Result? = null
     var polling = true
     var holdRead = false
     var throwRead = false
@@ -524,20 +695,20 @@ private class ReconciliationFixture {
         now = { clock.now },
         schedule = clock::schedule,
         eligible = { authorized },
-        keepPolling = { polling },
+        keepPolling = { polling && state.active(clock.now) },
         read = { work ->
             reads++
             if (throwRead) error("synthetic executor rejection")
             held.add(work)
             if (!holdRead) clock.schedule(0) {
                 loop.complete(work) {
-                    state.replace(server, clock.now, 100_000 - clock.now, clock.now)
+                    state.replace(server, clock.now, authorityUntil - clock.now, clock.now)
                     applied++
                 }
             }
             val cancel: () -> Unit = { aborted++ }
             cancel
         },
-        failClosed = { failed++; state.clear(); authorized = false },
+        failClosed = { result -> failureResult = result; failed++; state.clear(); authorized = false },
     )
 }
