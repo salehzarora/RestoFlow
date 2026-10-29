@@ -10,6 +10,8 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../branding/restaurant_logo_repository.dart';
 import '../branding/restaurant_logo_section.dart';
 import '../branding/restaurant_logo_storage.dart';
+import '../online_orders/online_order_settings_repository.dart';
+import '../online_orders/online_order_settings_section.dart';
 import '../quick_notes/quick_notes_repository.dart';
 import '../quick_notes/quick_notes_section.dart';
 import '../storefront/storefront_section.dart';
@@ -67,6 +69,7 @@ class RealSettingsView extends StatefulWidget {
     this.currencyCode,
     this.policyRepository,
     this.orderEditSettingsRepository,
+    this.onlineOrderSettingsRepository,
     this.settingsRepository,
     this.currencyChangeGuard,
     this.brandingRepository,
@@ -101,6 +104,10 @@ class RealSettingsView extends StatefulWidget {
   /// there is no authenticated transport or no concrete branch in scope — the
   /// section is then omitted entirely.
   final BranchOrderEditSettingsRepository? orderEditSettingsRepository;
+
+  /// The versioned, CAS-protected Online Orders contract for this exact branch.
+  /// Omitted without an authenticated concrete branch, and in support mode.
+  final OnlineOrderSettingsRepository? onlineOrderSettingsRepository;
 
   /// RF-116: the settings read/write seam for the owner-only editable branch/
   /// restaurant fields. Null when there is no authenticated transport or no
@@ -723,6 +730,20 @@ class _RealSettingsViewState extends State<RealSettingsView> {
           StorefrontSection(
             seams: widget.storefrontSeams,
             defaultDisplayName: membership.restaurantName,
+          ),
+        ],
+        if (membership.restaurantId != null &&
+            membership.branchId != null &&
+            widget.onlineOrderSettingsRepository != null) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          OnlineOrderSettingsSection(
+            repository: widget.onlineOrderSettingsRepository!,
+            branchName: membership.branchName,
+            canManage:
+                membership.status == 'active' &&
+                (membership.role == MembershipRole.orgOwner ||
+                    membership.role == MembershipRole.restaurantOwner ||
+                    membership.role == MembershipRole.manager),
           ),
         ],
         if (widget.kitchenWorkflowRepository != null) ...[
