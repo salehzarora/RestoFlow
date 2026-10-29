@@ -13,6 +13,13 @@ do $$declare server_address inet:=inet_server_addr();client_address inet:=inet_c
     raise exception 'ONLINE_CONTROLS_DISPOSABLE_LOCAL_DATABASE_REQUIRED';
   end if;
 end;$$;
+do $$begin
+  if not (session_user='supabase_admin' and current_database() like 'online_controls_%'
+    and current_setting('bizbot.online_controls_ephemeral',true) is not distinct from 'BIZBOT-DASHBOARD-ONLINE-ORDER-CONTROLS-001')
+    and (inet_server_addr() is null or inet_server_port() is null) then
+    raise exception 'ONLINE_CONTROLS_DISPOSABLE_SERVER_ADDRESS_REQUIRED';
+  end if;
+end;$$;
 set statement_timeout='30s';
 set lock_timeout='5s';
 create extension if not exists pgtap with schema extensions;
@@ -41,13 +48,17 @@ create function pg_temp.ocrwait(conn text) returns boolean language plpgsql as $
   perform pg_stat_clear_snapshot();
   if exists(select 1 from pg_stat_activity where pid=(select pid from ocr_backends where name=conn) and wait_event_type='Lock') then return true;end if;
   if clock_timestamp()>deadline then return false;end if;perform pg_sleep(0.02);end loop;end;$$;
--- Local fixture administration uses only its Unix socket. Required CI already
--- uses the public, fixed postgres/postgres ephemeral fixture credential for its
--- dblink suites; the same loopback-only contract is used here. This is never a
--- retrieved password or hosted endpoint. All business calls use authenticated.
-select dblink_connect('ocr_a',case when session_user='supabase_admin' then 'host=/var/run/postgresql' else 'host=127.0.0.1 port=5432 password=postgres' end
+-- Only the explicitly marked local administrative fixture uses its Unix socket.
+-- CI uses its current disposable server address/port and the public, fixed
+-- postgres/postgres fixture credential, matching the existing dblink suites.
+-- No credential lookup or hosted endpoint. All business calls use authenticated.
+select dblink_connect('ocr_a',case when session_user='supabase_admin' and current_database() like 'online_controls_%'
+  and current_setting('bizbot.online_controls_ephemeral',true) is not distinct from 'BIZBOT-DASHBOARD-ONLINE-ORDER-CONTROLS-001'
+  then 'host=/var/run/postgresql' else 'host='||host(inet_server_addr())||' port='||inet_server_port()||' password=postgres connect_timeout=3' end
   ||' dbname='||quote_ident(current_database())||' user=postgres application_name=online_controls_race_a');
-select dblink_connect('ocr_b',case when session_user='supabase_admin' then 'host=/var/run/postgresql' else 'host=127.0.0.1 port=5432 password=postgres' end
+select dblink_connect('ocr_b',case when session_user='supabase_admin' and current_database() like 'online_controls_%'
+  and current_setting('bizbot.online_controls_ephemeral',true) is not distinct from 'BIZBOT-DASHBOARD-ONLINE-ORDER-CONTROLS-001'
+  then 'host=/var/run/postgresql' else 'host='||host(inet_server_addr())||' port='||inet_server_port()||' password=postgres connect_timeout=3' end
   ||' dbname='||quote_ident(current_database())||' user=postgres application_name=online_controls_race_b');
 insert into ocr_backends select 'ocr_a',pid from dblink('ocr_a','select pg_backend_pid()') as x(pid integer);
 insert into ocr_backends select 'ocr_b',pid from dblink('ocr_b','select pg_backend_pid()') as x(pid integer);
