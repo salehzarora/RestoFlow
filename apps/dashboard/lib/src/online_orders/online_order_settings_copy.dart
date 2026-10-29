@@ -18,39 +18,39 @@ class OnlineOrderSettingsCopy {
 
   String get title => _text('طلبات الموقع', 'הזמנות מהאתר', 'Online orders');
   String get scope => _text(
-    'للفرع المحدد فقط. نشر الموقع وPickup وساعات العمل والإيقاف المؤقت لها إعداداتها المستقلة.',
-    'לסניף הנבחר בלבד. פרסום האתר, איסוף עצמי, שעות פתיחה והשהיה זמנית מנוהלים בנפרד.',
-    'For the selected branch only. Website publication, Pickup, opening hours and temporary pause are managed separately.',
+    'لهذا الفرع فقط. نشر الموقع والاستلام من المطعم وساعات العمل والإيقاف المؤقت لها إعداداتها الخاصة.',
+    'לסניף הנבחר בלבד. פרסום האתר, איסוף עצמי, שעות הפתיחה והשהיה זמנית מנוהלים בנפרד.',
+    'For this branch only. Website publication, pickup, opening hours and temporary pauses have separate settings.',
   );
   String get ordering => _text(
-    'استقبال الطلبات من الموقع',
-    'קבלת הזמנות מהאתר',
-    'Website order intake',
+    'السماح للزبائن بالطلب من الموقع',
+    'לאפשר ללקוחות להזמין מהאתר',
+    'Allow customers to order from the website',
   );
   String get orderingHelp => _text(
-    'يهيّئ الفرع لاستقبال طلبات موقع جديدة، مع استمرار شروط نشر الموقع وقناة الاستقبال وحالة الفرع وساعات العمل. لا يغيّر الطلبات القائمة.',
-    'מגדיר קבלת הזמנות אתר חדשות בסניף, בכפוף לפרסום האתר, לערוץ קבלת ההזמנות, לזמינות הסניף ולשעות הפתיחה. אינו משנה הזמנות קיימות.',
-    'Configures new website intake for this branch, subject to website publication, the intake channel, branch availability and opening hours. Existing requests are unchanged.',
+    'يسمح للزبائن بإرسال طلبات جديدة عندما يكون الموقع منشورًا والمطعم مفتوحًا. إيقافه لا يؤثر على الطلبات السابقة.',
+    'מאפשר ללקוחות לשלוח הזמנות חדשות כשהאתר מפורסם והמסעדה פתוחה. כיבוי אינו משפיע על הזמנות קודמות.',
+    'Allows customers to send new orders when the website is published and the restaurant is open. Turning this off does not affect previous orders.',
   );
   String get alerts => _text(
-    'تنبيهات طلبات الموقع للفرع',
-    'התראות הזמנות מהאתר לסניף',
-    'Branch online-order alerts',
+    'إشعارات الطلبات على أجهزة الكاشير',
+    'התראות הזמנות במכשירי הקופה',
+    'Order alerts on cash register devices',
   );
   String get alertsHelp => _text(
-    'إعداد للفرع مستقل عن مفتاح المشغّل العام وموافقة كل جهاز وصلاحية التنبيهات. إيقافه قد يلغي تفويض التنبيهات وتفعيلها المحفوظ محليًا على الجهاز. تشغيله لاحقًا لا يعيد تفعيل الأجهزة تلقائيًا؛ قد يحتاج الموظف المخوّل إلى تفعيل التنبيهات بالطريقة المعتادة داخل POS المفتوح مجددًا.',
-    'הגדרת סניף נפרדת מהמתג הכללי, מהסכמת כל מכשיר ומתוקף הרשאת ההתראות. כיבוי עשוי להסיר את ההרשאה ואת ההסכמה המקומית במכשיר. הפעלה מחדש אינה מפעילה מכשירים אוטומטית; ייתכן שעובד מורשה יצטרך להפעיל שוב התראות בדרך הרגילה כאשר POS פתוח.',
-    'A branch setting, independent of the global operator switch, device consent and notification-authority expiry. Turning it OFF can clear a device’s local alert authorization and opt-in. Turning it ON does not re-enable devices automatically; authorized staff may need to enable alerts normally in foreground POS again.',
+    'يسمح لأجهزة الكاشير المفعّلة باستقبال تنبيهات الطلبات الجديدة. إيقافه لا يمنع وصول الطلبات. تشغيله مجددًا لا يعيد تفعيل الأجهزة تلقائيًا؛ قد تحتاج إلى تفعيل الإشعارات من داخل تطبيق الكاشير على كل جهاز.',
+    'מאפשר למכשירי קופה שבהם ההתראות מופעלות לקבל התראות על הזמנות חדשות. כיבוי אינו מונע קבלת הזמנות. הפעלה מחדש אינה מפעילה מכשירים אוטומטית; ייתכן שצריך להפעיל שוב התראות מתוך אפליקציית הקופה בכל מכשיר.',
+    'Allows cash register devices with alerts enabled to receive new-order alerts. Turning this off does not block incoming orders. Turning it back on does not re-enable devices automatically; you may need to enable alerts again in the cash register app on each device.',
   );
   String get printing => _text(
-    'أهلية طباعة طلبات الموقع الجديدة',
-    'זכאות להדפסת הזמנות אתר חדשות',
-    'New web-order printing eligibility',
+    'السماح بطباعة طلبات الموقع الجديدة',
+    'לאפשר הדפסת הזמנות חדשות מהאתר',
+    'Allow printing of new website orders',
   );
   String get printingHelp => _text(
-    'إعداد أهلية فقط، وليس تأكيدًا لجاهزية الطابعة أو السماح التشغيلي. لا يطبع طلبًا قديمًا أو يعيد طباعته، ولا يغيّر الحجوزات التاريخية.',
-    'הגדרת זכאות בלבד, לא אישור למוכנות מדפסת או להיתר תפעולי. אינו מדפיס מחדש הזמנות קודמות ואינו משנה חסימות היסטוריות.',
-    'Configured eligibility only, not confirmation of printer or containment readiness. Does not print or replay old requests or change historical holds.',
+    'يسمح بطباعة طلبات الموقع الجديدة عند قبولها إذا كانت الطابعة جاهزة والطباعة مسموحة. لا يطبع الطلبات القديمة أو يعيد طباعتها.',
+    'מאפשר הדפסת הזמנות חדשות מהאתר בעת אישורן, אם המדפסת מוכנה וההדפסה מותרת. אינו מדפיס הזמנות ישנות או מדפיס אותן מחדש.',
+    'Allows new website orders to print when accepted, if the printer is ready and printing is permitted. Does not print or reprint old orders.',
   );
   String get loading => _text(
     'جارٍ قراءة إعدادات الفرع…',
@@ -58,8 +58,7 @@ class OnlineOrderSettingsCopy {
     'Reading branch settings…',
   );
   String get saving => _text('جارٍ الحفظ…', 'שומר…', 'Saving…');
-  String get save =>
-      _text('حفظ تغييرات الفرع', 'שמירת שינויי הסניף', 'Save branch changes');
+  String get save => _text('حفظ الإعدادات', 'שמירת ההגדרות', 'Save settings');
   String get dirty =>
       _text('تغييرات غير محفوظة', 'שינויים שלא נשמרו', 'Unsaved changes');
   String get saved => _text(
@@ -120,13 +119,10 @@ class OnlineOrderSettingsCopy {
     'Resend the same save',
   );
   String get reload => _text(
-    'تجاهل المسودة وقراءة الحالة الحالية',
-    'ביטול הטיוטה וקריאת המצב הנוכחי',
-    'Discard draft and read current settings',
+    'تجاهل التغييرات غير المحفوظة وتحديث الإعدادات',
+    'ביטול השינויים שלא נשמרו ורענון ההגדרות',
+    'Discard unsaved changes and refresh settings',
   );
-  String get read => _text(
-    'إعادة قراءة الإعدادات',
-    'קריאת ההגדרות שוב',
-    'Read settings again',
-  );
+  String get read =>
+      _text('تحديث الإعدادات', 'רענון ההגדרות', 'Refresh settings');
 }
