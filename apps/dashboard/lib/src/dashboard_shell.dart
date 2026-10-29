@@ -21,6 +21,7 @@ import 'dashboard_home_screen.dart';
 import 'devices/device_pairing_panel.dart';
 import 'activity/activity_log_screen.dart';
 import 'orders/orders_screen.dart';
+import 'online_orders/online_order_settings_repository.dart';
 import 'printers/printers_repository.dart';
 import 'printers/printers_screen.dart';
 import 'setup/device_summary_card.dart';
@@ -329,6 +330,29 @@ class _DashboardShellState extends State<DashboardShell> {
       return null;
     }
     return SupabaseBranchOrderEditSettingsRepository(
+      transport: transport,
+      organizationId: membership.organizationId,
+      restaurantId: restaurantId,
+      branchId: branchId,
+    );
+  }
+
+  late final OnlineOrderSettingsRepository? _onlineOrderSettingsRepo =
+      _buildOnlineOrderSettingsRepo();
+
+  OnlineOrderSettingsRepository? _buildOnlineOrderSettingsRepo() {
+    final membership = widget.membership;
+    final transport = widget.reportsTransport;
+    final restaurantId = membership?.restaurantId;
+    final branchId = membership?.branchId;
+    if (transport == null ||
+        membership == null ||
+        restaurantId == null ||
+        branchId == null ||
+        membership.status != 'active') {
+      return null;
+    }
+    return SupabaseOnlineOrderSettingsRepository(
       transport: transport,
       organizationId: membership.organizationId,
       restaurantId: restaurantId,
@@ -710,6 +734,9 @@ class _DashboardShellState extends State<DashboardShell> {
                   orderEditSettingsRepository: supportMode
                       ? null
                       : _orderEditSettingsRepo,
+                  onlineOrderSettingsRepository: supportMode
+                      ? null
+                      : _onlineOrderSettingsRepo,
                   settingsRepository: _settingsRepo,
                   currencyChangeGuard: _currencyGuard,
                   brandingRepository: _brandingRepo,
