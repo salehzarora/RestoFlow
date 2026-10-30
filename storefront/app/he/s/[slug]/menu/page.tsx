@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation';
-import { getStorefront, storefrontSlugs } from '@/source/storefront';
+import type { Metadata } from 'next';
+import { storefrontSlugs } from '@/source/storefront';
+import { getMenuResolution, menuMetadata } from '@/seo/menu';
 import { storefrontPath } from '@/routes/routes';
 import { Home } from '@/ui/storefront/home/Home';
 
@@ -22,9 +24,16 @@ export function generateStaticParams() {
   return storefrontSlugs().map((slug) => ({ slug }));
 }
 
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const resolved = await getMenuResolution(slug);
+  if (resolved === null) notFound();
+  return menuMetadata(slug, resolved);
+}
+
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const resolved = await getStorefront(slug);
+  const resolved = await getMenuResolution(slug);
   if (resolved === null) notFound();
   return (
     <Home

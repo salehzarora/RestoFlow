@@ -14,6 +14,24 @@ import { measure, checkBudgets, cssAcceptance } from './measure-firstload.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'out');
 
+/** A canonical link describes a document; it does not load a resource. Exempt
+ * only the exact menu canonical for this snapshot document. Other attributes
+ * on that tag and every loading element still pass through the resource scan.
+ */
+export function withoutMenuCanonicalHref(html, documentPath) {
+  const menu = /^(?:(?:ar|en|he)\/)?s\/([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\/menu\.html$/.exec(documentPath);
+  if (!menu) return html;
+  const canonical = `https://menu.bizbot.systems/s/${menu[1]}/menu`;
+  return html.replace(/<link\b[^>]*>/gi, (tag) => {
+    // Recognize only the two-attribute shape Next emits, in either order.
+    // Ambiguous/duplicate attributes, other quoting or loading relations fail
+    // closed through the original resource audit instead of being exempted.
+    const match = /^<link\s+(?:rel="canonical"\s+href="([^"]+)"|href="([^"]+)"\s+rel="canonical")\s*\/?>$/i.exec(tag);
+    if (!match || (match[1] ?? match[2]) !== canonical) return tag;
+    return tag.replace(/\shref="([^"]*)"/gi, (attribute, href) => href === canonical ? ' ' : attribute);
+  });
+}
+
 export function walk(dir) {
   const found = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -91,7 +109,8 @@ export function auditOutput(outDir = OUT) {
     if (ext === '.html') {
       const imgSrcs = new Set();
       for (const m of text.matchAll(/<img\b[^>]*\ssrc\s*=\s*"([^"]+)"/gi)) imgSrcs.add(m[1]);
-      for (const m of text.matchAll(/(?:src|href|action)\s*=\s*"([^"]+)"/gi)) {
+      const resourceHtml = withoutMenuCanonicalHref(text, rel(f.path));
+      for (const m of resourceHtml.matchAll(/(?:src|href|action)\s*=\s*"([^"]+)"/gi)) {
         if (!offOrigin(m[1])) continue;
         if (imgSrcs.has(m[1]) && allowedImage(m[1])) continue;
         problems.push(`${rel(f.path)} loads off-origin resource: ${m[1]}`);
