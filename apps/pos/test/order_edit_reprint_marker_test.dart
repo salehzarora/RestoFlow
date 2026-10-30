@@ -36,7 +36,8 @@ import 'support/pos_package_root.dart';
 /// (`editCount > 0`) therefore prints the ORDER-NOW change slip — "ORDER
 /// CHANGED · Change N", every LIVE line of the AUTHORITATIVE detail, "Replaces
 /// earlier tickets" — and never the local snapshot, even when one exists. An
-/// unedited order reprints exactly as before (ORDER-REPRINT-CHOOSER-038).
+/// unedited order uses the ordinary ticket seam with authoritative lines and
+/// retains its local snapshot only when the detail is unavailable.
 ///
 /// The detail is a REAL post-edit `pos_order_detail` captured on local
 /// PostgreSQL (test/fixtures/order_edit_slip/a_every_op.json).
@@ -283,13 +284,38 @@ void main() {
     expect(find.text(l10n.posKitchenTicketPrintedSnack), findsOneWidget);
   });
 
-  testWidgets('an UNEDITED order is unchanged: its local snapshot through the '
-      'ticket seam, no fetch, no slip', (tester) async {
-    final h = await _pump(tester, row: _paidRow(editCount: 0));
+  testWidgets('an UNEDITED order uses authoritative lines through the ordinary '
+      'ticket seam, never the change-slip seam', (tester) async {
+    final detail = PosOrderDetail(
+      orderId: _orderId,
+      orderCode: _code,
+      orderType: 'dine_in',
+      status: 'served',
+      revision: 4,
+      currencyCode: 'ILS',
+      subtotalMinor: 3000,
+      discountTotalMinor: 0,
+      taxTotalMinor: 0,
+      grandTotalMinor: 3000,
+      items: const [
+        PosOrderDetailItem(
+          name: 'Current Burger',
+          quantity: 1,
+          unitPriceMinor: 3000,
+          lineDiscountMinor: 0,
+          lineTotalMinor: 3000,
+          modifiers: [],
+        ),
+      ],
+      rounds: const [],
+    );
+    final h = await _pump(tester, row: _paidRow(editCount: 0), detail: detail);
     await _reprintKitchen(tester);
-    expect(h.repo.fetches, 0);
+    expect(h.repo.fetches, 1);
     expect(h.slips.sent, isEmpty);
-    expect(h.tickets.orders.single.lines.single.name, 'Stale Burger');
+    expect(h.tickets.orders.single.lines.single.name, 'Current Burger');
+    expect(h.tickets.orders.single.lines.single.quantity, 1);
+    expect(h.bridge.documents, isEmpty);
     expect(find.text(l10n.posKitchenTicketPrintedSnack), findsOneWidget);
   });
 
