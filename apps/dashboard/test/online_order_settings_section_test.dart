@@ -9,12 +9,49 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/src/online_orders/online_order_settings_copy.dart';
 import 'package:restoflow_dashboard/src/online_orders/online_order_settings_repository.dart';
 import 'package:restoflow_dashboard/src/online_orders/online_order_settings_section.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 const _initial = OnlineOrderSettings(
   revision: '40',
   values: OnlineOrderValues(ordering: true, alerts: true, printing: false),
 );
+
+const _ownerLabels = {
+  'ar': [
+    'السماح للزبائن بالطلب من الموقع',
+    'إشعارات الطلبات على أجهزة الكاشير',
+    'السماح بطباعة طلبات الموقع الجديدة',
+  ],
+  'he': [
+    'לאפשר ללקוחות להזמין מהאתר',
+    'התראות הזמנות במכשירי הקופה',
+    'לאפשר הדפסת הזמנות חדשות מהאתר',
+  ],
+  'en': [
+    'Allow customers to order from the website',
+    'Order alerts on cash register devices',
+    'Allow printing of new website orders',
+  ],
+};
+
+const _ownerActions = {
+  'ar': [
+    'حفظ الإعدادات',
+    'تحديث الإعدادات',
+    'تجاهل التغييرات غير المحفوظة وتحديث الإعدادات',
+  ],
+  'he': [
+    'שמירת ההגדרות',
+    'רענון ההגדרות',
+    'ביטול השינויים שלא נשמרו ורענון ההגדרות',
+  ],
+  'en': [
+    'Save settings',
+    'Refresh settings',
+    'Discard unsaved changes and refresh settings',
+  ],
+};
 
 class _Repo implements OnlineOrderSettingsRepository {
   OnlineOrderSettings state = _initial;
@@ -62,6 +99,29 @@ class _Repo implements OnlineOrderSettingsRepository {
   }
 }
 
+ThemeData _captureFontTheme(ThemeData theme) {
+  // Brand button styles retain their own text styles. Use the real capture
+  // font there too, preserving every other production style property.
+  ButtonStyle? buttonFont(ButtonStyle? style) => style?.copyWith(
+    textStyle: WidgetStateProperty.resolveWith(
+      (states) =>
+          style.textStyle?.resolve(states)?.copyWith(fontFamily: 'QAArial'),
+    ),
+  );
+  return theme.copyWith(
+    textTheme: theme.textTheme.apply(fontFamily: 'QAArial'),
+    filledButtonTheme: FilledButtonThemeData(
+      style: buttonFont(theme.filledButtonTheme.style),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: buttonFont(theme.outlinedButtonTheme.style),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: buttonFont(theme.textButtonTheme.style),
+    ),
+  );
+}
+
 Future<void> _pump(
   WidgetTester tester,
   _Repo repo, {
@@ -71,18 +131,16 @@ Future<void> _pump(
   double textScale = 1,
   bool settle = true,
 }) async {
+  final theme = restoflowLightBrandTheme();
   tester.view.physicalSize = Size(width, 1500);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     MaterialApp(
-      theme: ThemeData(
-        fontFamily:
-            Platform.environment['BIZBOT_ONLINE_CONTROLS_CAPTURE_DIR'] != null
-            ? 'QAArial'
-            : null,
-      ),
+      theme: Platform.environment['BIZBOT_ONLINE_CONTROLS_CAPTURE_DIR'] != null
+          ? _captureFontTheme(theme)
+          : theme,
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(
           context,
@@ -92,12 +150,12 @@ Future<void> _pump(
       locale: Locale(language),
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
-      home: RepaintBoundary(
-        key: const Key('capture'),
-        child: Scaffold(
-          body: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: RepaintBoundary(
+              key: const Key('capture'),
               child: OnlineOrderSettingsSection(
                 repository: repo,
                 canManage: canManage,
@@ -171,6 +229,17 @@ void main() {
         final repo = _Repo();
         final copy = OnlineOrderSettingsCopy(language);
         await _pump(tester, repo, language: language);
+        expect([
+          copy.ordering,
+          copy.alerts,
+          copy.printing,
+        ], _ownerLabels[language]);
+        for (final label in _ownerLabels[language]!) {
+          expect(find.text(label), findsOneWidget);
+        }
+        expect([copy.save, copy.read, copy.reload], _ownerActions[language]);
+        expect(find.text(copy.save), findsOneWidget);
+        expect(find.text(copy.read), findsOneWidget);
         expect(find.text(copy.title), findsOneWidget);
         expect(find.text(copy.orderingHelp), findsOneWidget);
         expect(find.text(copy.alertsHelp), findsOneWidget);
@@ -185,9 +254,49 @@ void main() {
         expect(
           copy.alertsHelp,
           contains(switch (language) {
-            'ar' => 'داخل POS المفتوح مجددًا',
-            'he' => 'בדרך הרגילה כאשר POS פתוח',
-            _ => 'enable alerts normally in foreground POS again',
+            'ar' => 'من داخل تطبيق الكاشير على كل جهاز',
+            'he' => 'מתוך אפליקציית הקופה בכל מכשיר',
+            _ => 'in the cash register app on each device',
+          }),
+        );
+        expect(
+          copy.alertsHelp,
+          contains(switch (language) {
+            'ar' => 'إيقافه لا يمنع وصول الطلبات',
+            'he' => 'כיבוי אינו מונע קבלת הזמנות',
+            _ => 'Turning this off does not block incoming orders',
+          }),
+        );
+        expect(
+          copy.orderingHelp,
+          contains(switch (language) {
+            'ar' => 'عندما يكون الموقع منشورًا والمطعم مفتوحًا',
+            'he' => 'כשהאתר מפורסם והמסעדה פתוחה',
+            _ => 'when the website is published and the restaurant is open',
+          }),
+        );
+        expect(
+          copy.scope,
+          contains(switch (language) {
+            'ar' => 'الاستلام من المطعم وساعات العمل والإيقاف المؤقت',
+            'he' => 'איסוף עצמי, שעות הפתיחה והשהיה זמנית',
+            _ => 'pickup, opening hours and temporary pauses',
+          }),
+        );
+        expect(
+          copy.printingHelp,
+          contains(switch (language) {
+            'ar' => 'إذا كانت الطابعة جاهزة والطباعة مسموحة',
+            'he' => 'אם המדפסת מוכנה וההדפסה מותרת',
+            _ => 'if the printer is ready and printing is permitted',
+          }),
+        );
+        expect(
+          copy.printingHelp,
+          contains(switch (language) {
+            'ar' => 'لا يطبع الطلبات القديمة أو يعيد طباعتها',
+            'he' => 'אינו מדפיס הזמנות ישנות או מדפיס אותן מחדש',
+            _ => 'Does not print or reprint old orders',
           }),
         );
         expect(find.text(copy.printingHelp), findsOneWidget);
@@ -204,6 +313,8 @@ void main() {
         await _capture(tester, '$language-authoritative');
         await _tap(tester, 'online-order-alerts-toggle');
         expect(find.text(copy.dirty), findsOneWidget);
+        expect(find.text(copy.reload), findsOneWidget);
+        expect(find.text(copy.read), findsNothing);
         expect(repo.writes, isEmpty);
         expect(_toggle(tester, 'ordering').value, true);
         expect(_toggle(tester, 'printing').value, false);
@@ -498,12 +609,80 @@ void main() {
     expect(next.reads, 1);
   });
 
-  testWidgets('390px RTL at large text remains usable without overflow', (
-    tester,
-  ) async {
-    await _pump(tester, _Repo(), language: 'ar', width: 390, textScale: 2);
-    await tester.ensureVisible(find.byKey(const Key('online-order-save')));
-    await _capture(tester, 'ar-mobile');
-    expect(tester.takeException(), isNull);
-  });
+  for (final language in ['ar', 'he', 'en']) {
+    for (final width in [390.0, 1440.0]) {
+      for (final textScale in [1.0, 2.0]) {
+        testWidgets(
+          '$language at ${width.toInt()}px and ${textScale}x text keeps copy accessible without overflow or writes',
+          (tester) async {
+            final semantics = tester.ensureSemantics();
+            try {
+              final repo = _Repo();
+              final copy = OnlineOrderSettingsCopy(language);
+              await _pump(
+                tester,
+                repo,
+                language: language,
+                width: width,
+                textScale: textScale,
+              );
+              final section = find.byKey(
+                const Key('online-order-settings-section'),
+              );
+              expect(
+                Directionality.of(tester.element(section)),
+                language == 'en' ? TextDirection.ltr : TextDirection.rtl,
+              );
+              final help = [
+                copy.orderingHelp,
+                copy.alertsHelp,
+                copy.printingHelp,
+              ];
+              for (var index = 0; index < 3; index++) {
+                final key = ['ordering', 'alerts', 'printing'][index];
+                final toggle = find.byKey(Key('online-order-$key-toggle'));
+                await tester.ensureVisible(toggle);
+                await tester.pumpAndSettle();
+                final data = tester.getSemantics(toggle).getSemanticsData();
+                expect(data.label, contains(_ownerLabels[language]![index]));
+                expect(data.label, contains(help[index]));
+                expect(
+                  data.flagsCollection.isToggled,
+                  index == 2 ? ui.Tristate.isFalse : ui.Tristate.isTrue,
+                );
+                expect(data.flagsCollection.isEnabled, ui.Tristate.isTrue);
+                expect(data.hasAction(ui.SemanticsAction.tap), true);
+                expect(
+                  data.textDirection,
+                  language == 'en' ? TextDirection.ltr : TextDirection.rtl,
+                );
+              }
+              for (final text
+                  in find
+                      .descendant(of: section, matching: find.byType(RichText))
+                      .evaluate()) {
+                final paragraph = text.renderObject! as RenderParagraph;
+                expect(paragraph.didExceedMaxLines, false);
+              }
+              await tester.ensureVisible(
+                find.byKey(const Key('online-order-save')),
+              );
+              expect(repo.reads, 1);
+              expect(repo.writes, isEmpty);
+              expect(repo.reconciles, 0);
+              expect(_toggle(tester, 'ordering').value, true);
+              expect(_toggle(tester, 'alerts').value, true);
+              expect(_toggle(tester, 'printing').value, false);
+              expect(tester.takeException(), isNull);
+              if (textScale == 1) {
+                await _capture(tester, '$language-${width.toInt()}-card');
+              }
+            } finally {
+              semantics.dispose();
+            }
+          },
+        );
+      }
+    }
+  }
 }
