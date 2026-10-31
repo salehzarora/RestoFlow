@@ -15,6 +15,9 @@ import '../online_orders/online_order_settings_section.dart';
 import '../quick_notes/quick_notes_repository.dart';
 import '../quick_notes/quick_notes_section.dart';
 import '../storefront/storefront_section.dart';
+import '../storefront/seo_consent_repository.dart';
+import '../storefront/seo_consent_section.dart';
+import '../storefront/seo_consent_operations.dart';
 import 'branch_kitchen_workflow_repository.dart';
 import 'branch_order_edit_settings_repository.dart';
 import 'branch_shift_close_policy_repository.dart';
@@ -77,6 +80,7 @@ class RealSettingsView extends StatefulWidget {
     this.kitchenWorkflowRepository,
     this.quickNotesRepository,
     this.storefrontSeams,
+    this.seoConsentRepository,
     super.key,
   });
 
@@ -108,6 +112,9 @@ class RealSettingsView extends StatefulWidget {
   /// The versioned, CAS-protected Online Orders contract for this exact branch.
   /// Omitted without an authenticated concrete branch, and in support mode.
   final OnlineOrderSettingsRepository? onlineOrderSettingsRepository;
+
+  /// Owner consent for future indexing; separate from publication and orders.
+  final SeoConsentRepository? seoConsentRepository;
 
   /// RF-116: the settings read/write seam for the owner-only editable branch/
   /// restaurant fields. Null when there is no authenticated transport or no
@@ -730,6 +737,28 @@ class _RealSettingsViewState extends State<RealSettingsView> {
           StorefrontSection(
             seams: widget.storefrontSeams,
             defaultDisplayName: membership.restaurantName,
+          ),
+        ],
+        if (membership.restaurantId != null &&
+            widget.seoConsentRepository != null) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          SeoConsentSection(
+            key: ValueKey(
+              'seo-consent|${membership.id}|${membership.organizationId}|${membership.restaurantId}|${membership.role.name}|${membership.status}',
+            ),
+            scopeIdentity:
+                '${membership.id}|${membership.organizationId}|${membership.restaurantId}|${membership.role.name}|${membership.status}',
+            operationScope: SeoConsentOperationScope(
+              membershipId: membership.id,
+              organizationId: membership.organizationId,
+              restaurantId: membership.restaurantId!,
+            ),
+            repository: widget.seoConsentRepository!,
+            restaurantName: membership.restaurantName,
+            canManage:
+                membership.status == 'active' &&
+                (membership.role == MembershipRole.orgOwner ||
+                    membership.role == MembershipRole.restaurantOwner),
           ),
         ],
         if (membership.restaurantId != null &&

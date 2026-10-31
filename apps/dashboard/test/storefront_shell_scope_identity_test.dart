@@ -16,6 +16,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_dashboard/src/admin/real_admin_views.dart';
 import 'package:restoflow_dashboard/src/dashboard_shell.dart';
@@ -187,6 +188,7 @@ Future<void> _revealStorefront(WidgetTester tester) async {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets(
     'real shell supplies complete catalog loaded for saved storefront branch, not membership branch',
     (tester) async {

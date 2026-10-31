@@ -35,6 +35,7 @@ import 'storefront/storefront_media_publisher.dart';
 import 'storefront/storefront_media_repository.dart';
 import 'storefront/storefront_profile_repository.dart';
 import 'storefront/storefront_section.dart';
+import 'storefront/seo_consent_repository.dart';
 import 'storefront/storefront_sources.dart';
 import 'storefront/storefront_featured_items.dart';
 import 'analytics/dashboard_destination.dart';
@@ -339,6 +340,40 @@ class _DashboardShellState extends State<DashboardShell> {
 
   late final OnlineOrderSettingsRepository? _onlineOrderSettingsRepo =
       _buildOnlineOrderSettingsRepo();
+
+  // Consent belongs to the restaurant: no selected branch is required.
+  SeoConsentRepository? _seoConsentRepository;
+  String? _seoConsentIdentity;
+  SyncRpcTransport? _seoConsentTransport;
+
+  SeoConsentRepository? get _seoConsentRepo {
+    final identity =
+        '${dashboardShellIdentity(widget.membership, currencyCode: widget.currencyCode)}|${widget.membership?.status}|${widget.storefrontEditorEnabled}';
+    if (_seoConsentIdentity != identity ||
+        !identical(_seoConsentTransport, widget.reportsTransport)) {
+      _seoConsentRepository = _buildSeoConsentRepo();
+      _seoConsentIdentity = identity;
+      _seoConsentTransport = widget.reportsTransport;
+    }
+    return _seoConsentRepository;
+  }
+
+  SeoConsentRepository? _buildSeoConsentRepo() {
+    final membership = widget.membership;
+    final transport = widget.reportsTransport;
+    final restaurantId = membership?.restaurantId;
+    if (!widget.storefrontEditorEnabled ||
+        transport == null ||
+        membership == null ||
+        restaurantId == null ||
+        membership.status != 'active')
+      return null;
+    return SupabaseSeoConsentRepository(
+      transport: transport,
+      organizationId: membership.organizationId,
+      restaurantId: restaurantId,
+    );
+  }
 
   OnlineOrderSettingsRepository? _buildOnlineOrderSettingsRepo() {
     final membership = widget.membership;
@@ -748,6 +783,7 @@ class _DashboardShellState extends State<DashboardShell> {
                   // profile or media RPC and no storefront-media-publish call
                   // in a support session. The lazy seams are not even built.
                   storefrontSeams: supportMode ? null : _storefrontSeams,
+                  seoConsentRepository: supportMode ? null : _seoConsentRepo,
                 ),
       },
     );
