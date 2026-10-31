@@ -19,6 +19,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_dashboard/src/admin/real_admin_views.dart';
 import 'package:restoflow_dashboard/src/dashboard_shell.dart';
@@ -255,6 +256,7 @@ File _repoFile(String rel) {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   late AppLocalizations l10n;
   setUpAll(() async {
     l10n = await AppLocalizations.delegate.load(const Locale('en'));
