@@ -919,6 +919,61 @@ class AppLocalizationsEn extends AppLocalizations {
   String get activityLogTitlePaymentRecorded => 'Payment recorded';
 
   @override
+  String get activityLogTitleCardAttemptStarted =>
+      'Card payment started at the terminal';
+
+  @override
+  String get activityLogTitleCardAttemptApproved =>
+      'Card payment approved by the provider';
+
+  @override
+  String get activityLogTitleCardAttemptDeclined =>
+      'Card payment declined by the provider';
+
+  @override
+  String get activityLogTitleCardAttemptUnknown =>
+      'Card payment result unknown';
+
+  @override
+  String get activityLogTitleCardAttemptReleased =>
+      'Card payment request released at the terminal';
+
+  @override
+  String get activityLogTitleCardAttemptAnomalyRaised =>
+      'Card payment flagged: a charge may exist';
+
+  @override
+  String get activityLogTitleCardAttemptAnomalyCleared =>
+      'Card payment flag cleared by the provider result';
+
+  @override
+  String get activityLogTitleCardAttemptAnomaly =>
+      'Card payment provider anomaly';
+
+  @override
+  String get activityLogTitleCardAttemptReleaseRequested =>
+      'Card payment release requested';
+
+  @override
+  String get activityLogTitleCardAttemptReleaseFailed =>
+      'Card payment release failed';
+
+  @override
+  String get activityLogTitleCardAttemptRecordingRefused =>
+      'Approved card payment could not be recorded';
+
+  @override
+  String get activityLogTitleCardAttemptOrderFreed =>
+      'Order unlocked after a card payment check';
+
+  @override
+  String get activityLogTitleCardAttemptResumeRequested =>
+      'Card payment recording retry requested';
+
+  @override
+  String get activityLogTitleCardAttemptDenied => 'Card payment action denied';
+
+  @override
   String get activityLogTitleOrganizationCreated => 'Organization created';
 
   @override
@@ -6200,6 +6255,201 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get activityLogDeniedInvalidDeviceType =>
       'Not allowed from this device';
+
+  @override
+  String get activityLogFieldCardState => 'Card payment state';
+
+  @override
+  String get activityLogFieldCardMode => 'Payment mode';
+
+  @override
+  String get activityLogFieldCurrency => 'Currency';
+
+  @override
+  String get activityLogFieldCardRefusal => 'Recording refusal';
+
+  @override
+  String get activityLogFieldCardReleaseStatus => 'Release status';
+
+  @override
+  String get activityLogFieldCardAnomaly => 'Provider anomaly';
+
+  @override
+  String get activityLogFieldCardReleaseRequested => 'Release requested';
+
+  @override
+  String get activityLogFieldCardConfirmationSource => 'Confirmed via';
+
+  @override
+  String get activityLogFieldCardPriorRefusal => 'Previous refusal';
+
+  @override
+  String get activityLogFieldCardResumeCount => 'Earlier retries';
+
+  @override
+  String get activityLogFieldCardResumeOutcome => 'Retry result';
+
+  @override
+  String get activityLogCardStateSent => 'Sent to the terminal';
+
+  @override
+  String get activityLogCardStateApproved => 'Approved';
+
+  @override
+  String get activityLogCardStateDeclined => 'Declined';
+
+  @override
+  String get activityLogCardStateUnknown => 'Unknown';
+
+  @override
+  String get activityLogCardStateReleased => 'Released at the terminal';
+
+  @override
+  String get activityLogCardModeLive => 'Live';
+
+  @override
+  String get activityLogCardModeTest => 'Test';
+
+  @override
+  String get activityLogCardAnomalyAmountMismatch => 'Amount mismatch';
+
+  @override
+  String get activityLogCardAnomalyCurrencyMismatch => 'Currency mismatch';
+
+  @override
+  String get activityLogCardAnomalyPreauthorization => 'Pre-authorization only';
+
+  @override
+  String get activityLogCardAnomalyPartialRefund => 'Partially refunded';
+
+  @override
+  String get activityLogCardAnomalyRefunded => 'Refunded';
+
+  @override
+  String get activityLogCardAnomalyVoided => 'Voided by the provider';
+
+  @override
+  String get activityLogCardAnomalyOutOfContract => 'Unexpected provider reply';
+
+  @override
+  String get activityLogCardRefusalReleaseFailed => 'Release failed';
+
+  @override
+  String get activityLogCardRefusalConflict => 'Conflicting change';
+
+  @override
+  String get activityLogCardRefusalPreconditionFailed =>
+      'Order or shift state changed';
+
+  @override
+  String get activityLogCardRefusalRevokedEmployee =>
+      'Employee no longer active';
+
+  @override
+  String get activityLogCardRefusalRevokedDevice =>
+      'Device no longer authorized';
+
+  @override
+  String get activityLogCardRefusalPaymentInProgress =>
+      'Another payment is in progress';
+
+  @override
+  String get activityLogCardRefusalProviderRecordingRefused =>
+      'Recording refused after approval';
+
+  @override
+  String get activityLogCardRefusalNonrecoverable => 'Needs manual resolution';
+
+  @override
+  String get activityLogCardConfirmationProviderReport => 'Provider report';
+
+  @override
+  String get activityLogCardConfirmationBackOffice => 'Provider back office';
+
+  @override
+  String get activityLogCardResumeDispatched => 'Retry sent';
+
+  @override
+  String get activityLogCardResumeRefused => 'Retry refused';
+
+  @override
+  String get activityLogDeniedIneligibleOrderState =>
+      'The order can’t take a card payment now';
+
+  @override
+  String get activityLogDeniedMaxLiveAmountExceeded =>
+      'Above the card payment limit';
+
+  @override
+  String get activityLogDeniedNoOpenShift => 'No open shift on this device';
+
+  @override
+  String get activityLogDeniedNoActiveDrawer => 'No active cash drawer';
+
+  @override
+  String get activityLogDeniedNoRecordingAttempt =>
+      'No recording attempt to report';
+
+  @override
+  String get activityLogDeniedAttemptNotFreeable =>
+      'This card payment can’t unlock the order';
+
+  @override
+  String get activityLogDeniedChargeMayExist =>
+      'A charge may exist — check with the provider';
+
+  @override
+  String get activityLogDeniedConfirmationRequired =>
+      'Provider confirmation required';
+
+  @override
+  String get activityLogDeniedDeviceNotActive => 'Device not active';
+
+  @override
+  String get activityLogDeniedOperationMismatch =>
+      'The retry doesn’t match the original payment';
+
+  @override
+  String get activityLogDeniedResumeLimit => 'Retry limit reached';
+
+  @override
+  String get activityLogDeniedResumeStale => 'A newer retry already exists';
+
+  @override
+  String get activityLogDeniedNotRecoverable => 'Can’t be retried';
+
+  @override
+  String get activityLogDeniedPaymentExists => 'Payment already recorded';
+
+  @override
+  String get activityLogDeniedClaimInactive =>
+      'The card payment is no longer active';
+
+  @override
+  String get activityLogDeniedOrderNotChargeable =>
+      'The order can no longer be charged';
+
+  @override
+  String get activityLogDeniedContextLost =>
+      'Shift or cash drawer no longer open';
+
+  @override
+  String get activityLogDeniedAmountMismatch =>
+      'Amount doesn’t match the order';
+
+  @override
+  String get activityLogDeniedRefusalNotRecorded =>
+      'The last refusal isn’t reported yet';
+
+  @override
+  String get activityLogDeniedCardPermission =>
+      'Not permitted on this device or for this role';
+
+  @override
+  String get activityLogYes => 'Yes';
+
+  @override
+  String get activityLogNo => 'No';
 
   @override
   String get activityLogKitchenChannelKds => 'Kitchen screen';

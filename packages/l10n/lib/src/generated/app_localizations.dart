@@ -1648,6 +1648,90 @@ abstract class AppLocalizations {
   /// **'Payment recorded'**
   String get activityLogTitlePaymentRecorded;
 
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.started: a LIVE card payment was sent to the payment terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment started at the terminal'**
+  String get activityLogTitleCardAttemptStarted;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.approved: the payment provider reported an approval (a provider result, not a staff decision).
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment approved by the provider'**
+  String get activityLogTitleCardAttemptApproved;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.declined: the payment provider reported a decline (a provider result, not a staff decision).
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment declined by the provider'**
+  String get activityLogTitleCardAttemptDeclined;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.unknown: the provider result could not be established yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment result unknown'**
+  String get activityLogTitleCardAttemptUnknown;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.released: the pending card payment request was released (cancelled) at the terminal; provisional — a later status lookup may still resolve it to approved or declined.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment request released at the terminal'**
+  String get activityLogTitleCardAttemptReleased;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.provider_anomaly when attempt_state is unknown or released: a provider anomaly was RAISED and a charge may exist.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment flagged: a charge may exist'**
+  String get activityLogTitleCardAttemptAnomalyRaised;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.provider_anomaly when attempt_state is approved or declined: an exact provider result CLEARED the earlier anomaly.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment flag cleared by the provider result'**
+  String get activityLogTitleCardAttemptAnomalyCleared;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.provider_anomaly when no known attempt_state is projected (neutral fallback).
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment provider anomaly'**
+  String get activityLogTitleCardAttemptAnomaly;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.release_requested: a release (cancellation) of the pending terminal request was asked for.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment release requested'**
+  String get activityLogTitleCardAttemptReleaseRequested;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.release_failed: the terminal release did not succeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment release failed'**
+  String get activityLogTitleCardAttemptReleaseFailed;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.recording_refused: the provider approved the card payment but recording it on the order was refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved card payment could not be recorded'**
+  String get activityLogTitleCardAttemptRecordingRefused;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.order_freed: a manager confirmed with provider evidence that no charge stands, so the order can be paid another way.
+  ///
+  /// In en, this message translates to:
+  /// **'Order unlocked after a card payment check'**
+  String get activityLogTitleCardAttemptOrderFreed;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.recording_resume_requested: a manager asked to retry recording an approved card payment (the outcome field says whether it was sent or refused).
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment recording retry requested'**
+  String get activityLogTitleCardAttemptResumeRequested;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log TITLE for card_attempt.denied: a card payment request was refused (the denied_reason field says why).
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment action denied'**
+  String get activityLogTitleCardAttemptDenied;
+
   /// No description provided for @activityLogTitleOrganizationCreated.
   ///
   /// In en, this message translates to:
@@ -11151,6 +11235,360 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not allowed from this device'**
   String get activityLogDeniedInvalidDeviceType;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log FIELD LABEL for the card key attempt_state.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment state'**
+  String get activityLogFieldCardState;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log FIELD LABEL for the card key mode (live or test).
+  ///
+  /// In en, this message translates to:
+  /// **'Payment mode'**
+  String get activityLogFieldCardMode;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log FIELD LABEL for the card key currency_code (shown as its ISO code).
+  ///
+  /// In en, this message translates to:
+  /// **'Currency'**
+  String get activityLogFieldCurrency;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log FIELD LABEL for the card key refusal_code on card_attempt.recording_refused (the refused recording of an approved card payment); the provider-result actions use activityLogFieldCardReleaseStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording refusal'**
+  String get activityLogFieldCardRefusal;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log FIELD LABEL for the card key refusal_code on the five provider-result actions (approved / declined / unknown / released / provider_anomaly), where the server writes only release_failed: a terminal release fact, not a recording refusal; also for prior_refusal_code=release_failed on card_attempt.recording_resume_requested (the stored release fact).
+  ///
+  /// In en, this message translates to:
+  /// **'Release status'**
+  String get activityLogFieldCardReleaseStatus;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log FIELD LABEL for the card key anomaly_code.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider anomaly'**
+  String get activityLogFieldCardAnomaly;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log FIELD LABEL for the card key release_requested (yes / no).
+  ///
+  /// In en, this message translates to:
+  /// **'Release requested'**
+  String get activityLogFieldCardReleaseRequested;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log FIELD LABEL for the card key confirmation_source.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed via'**
+  String get activityLogFieldCardConfirmationSource;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log FIELD LABEL for the card key prior_refusal_code (except release_failed, which uses activityLogFieldCardReleaseStatus).
+  ///
+  /// In en, this message translates to:
+  /// **'Previous refusal'**
+  String get activityLogFieldCardPriorRefusal;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log FIELD LABEL for the card key resume_count: the number of recording retries already made before this request (0 on the first retry), not an ordinal.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier retries'**
+  String get activityLogFieldCardResumeCount;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log FIELD LABEL for the card key outcome (dispatched or refused).
+  ///
+  /// In en, this message translates to:
+  /// **'Retry result'**
+  String get activityLogFieldCardResumeOutcome;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for attempt_state=sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to the terminal'**
+  String get activityLogCardStateSent;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for attempt_state=approved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get activityLogCardStateApproved;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for attempt_state=declined.
+  ///
+  /// In en, this message translates to:
+  /// **'Declined'**
+  String get activityLogCardStateDeclined;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for attempt_state=unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get activityLogCardStateUnknown;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for attempt_state=released: the pending terminal request was released (cancelled at the pad); provisional — a later status lookup may still resolve it to approved or declined.
+  ///
+  /// In en, this message translates to:
+  /// **'Released at the terminal'**
+  String get activityLogCardStateReleased;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for mode=live (a real payment).
+  ///
+  /// In en, this message translates to:
+  /// **'Live'**
+  String get activityLogCardModeLive;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for mode=test.
+  ///
+  /// In en, this message translates to:
+  /// **'Test'**
+  String get activityLogCardModeTest;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for anomaly_code=amount_mismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount mismatch'**
+  String get activityLogCardAnomalyAmountMismatch;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for anomaly_code=currency_mismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency mismatch'**
+  String get activityLogCardAnomalyCurrencyMismatch;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for anomaly_code=preauthorization.
+  ///
+  /// In en, this message translates to:
+  /// **'Pre-authorization only'**
+  String get activityLogCardAnomalyPreauthorization;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for anomaly_code=partial_refund.
+  ///
+  /// In en, this message translates to:
+  /// **'Partially refunded'**
+  String get activityLogCardAnomalyPartialRefund;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for anomaly_code=refunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded'**
+  String get activityLogCardAnomalyRefunded;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for anomaly_code=voided.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided by the provider'**
+  String get activityLogCardAnomalyVoided;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for anomaly_code=out_of_contract.
+  ///
+  /// In en, this message translates to:
+  /// **'Unexpected provider reply'**
+  String get activityLogCardAnomalyOutOfContract;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for refusal_code=release_failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Release failed'**
+  String get activityLogCardRefusalReleaseFailed;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for refusal_code=conflict.
+  ///
+  /// In en, this message translates to:
+  /// **'Conflicting change'**
+  String get activityLogCardRefusalConflict;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for refusal_code=precondition_failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Order or shift state changed'**
+  String get activityLogCardRefusalPreconditionFailed;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for refusal_code=revoked_employee.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee no longer active'**
+  String get activityLogCardRefusalRevokedEmployee;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for refusal_code=revoked_device.
+  ///
+  /// In en, this message translates to:
+  /// **'Device no longer authorized'**
+  String get activityLogCardRefusalRevokedDevice;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for refusal_code=payment_in_progress.
+  ///
+  /// In en, this message translates to:
+  /// **'Another payment is in progress'**
+  String get activityLogCardRefusalPaymentInProgress;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for refusal_code=provider_recording_refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording refused after approval'**
+  String get activityLogCardRefusalProviderRecordingRefused;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for refusal_code=nonrecoverable_refusal.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs manual resolution'**
+  String get activityLogCardRefusalNonrecoverable;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for confirmation_source=provider_report.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider report'**
+  String get activityLogCardConfirmationProviderReport;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for confirmation_source=provider_back_office.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider back office'**
+  String get activityLogCardConfirmationBackOffice;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for outcome=dispatched (the retry was sent).
+  ///
+  /// In en, this message translates to:
+  /// **'Retry sent'**
+  String get activityLogCardResumeDispatched;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for outcome=refused (the retry was refused; denied_reason says why).
+  ///
+  /// In en, this message translates to:
+  /// **'Retry refused'**
+  String get activityLogCardResumeRefused;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=ineligible_order_state.
+  ///
+  /// In en, this message translates to:
+  /// **'The order can’t take a card payment now'**
+  String get activityLogDeniedIneligibleOrderState;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=max_live_amount_exceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Above the card payment limit'**
+  String get activityLogDeniedMaxLiveAmountExceeded;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=no_open_shift.
+  ///
+  /// In en, this message translates to:
+  /// **'No open shift on this device'**
+  String get activityLogDeniedNoOpenShift;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=no_active_drawer.
+  ///
+  /// In en, this message translates to:
+  /// **'No active cash drawer'**
+  String get activityLogDeniedNoActiveDrawer;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=no_recording_attempt.
+  ///
+  /// In en, this message translates to:
+  /// **'No recording attempt to report'**
+  String get activityLogDeniedNoRecordingAttempt;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=attempt_not_freeable.
+  ///
+  /// In en, this message translates to:
+  /// **'This card payment can’t unlock the order'**
+  String get activityLogDeniedAttemptNotFreeable;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=charge_may_exist.
+  ///
+  /// In en, this message translates to:
+  /// **'A charge may exist — check with the provider'**
+  String get activityLogDeniedChargeMayExist;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=confirmation_required.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider confirmation required'**
+  String get activityLogDeniedConfirmationRequired;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=device_not_active.
+  ///
+  /// In en, this message translates to:
+  /// **'Device not active'**
+  String get activityLogDeniedDeviceNotActive;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=operation_mismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The retry doesn’t match the original payment'**
+  String get activityLogDeniedOperationMismatch;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=resume_limit.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry limit reached'**
+  String get activityLogDeniedResumeLimit;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=resume_stale.
+  ///
+  /// In en, this message translates to:
+  /// **'A newer retry already exists'**
+  String get activityLogDeniedResumeStale;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=not_recoverable.
+  ///
+  /// In en, this message translates to:
+  /// **'Can’t be retried'**
+  String get activityLogDeniedNotRecoverable;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=payment_exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment already recorded'**
+  String get activityLogDeniedPaymentExists;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=claim_inactive.
+  ///
+  /// In en, this message translates to:
+  /// **'The card payment is no longer active'**
+  String get activityLogDeniedClaimInactive;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=order_not_chargeable (also refusal_code=order_not_chargeable).
+  ///
+  /// In en, this message translates to:
+  /// **'The order can no longer be charged'**
+  String get activityLogDeniedOrderNotChargeable;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=context_lost (also refusal_code=card_context_lost).
+  ///
+  /// In en, this message translates to:
+  /// **'Shift or cash drawer no longer open'**
+  String get activityLogDeniedContextLost;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=amount_mismatch (also refusal_code=amount_mismatch).
+  ///
+  /// In en, this message translates to:
+  /// **'Amount doesn’t match the order'**
+  String get activityLogDeniedAmountMismatch;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=refusal_not_recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'The last refusal isn’t reported yet'**
+  String get activityLogDeniedRefusalNotRecorded;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for denied_reason=permission_denied on card_attempt.denied: the card proof answers that token both for a non-POS device and for a role not allowed to take card payments. A refusal or prior refusal of permission_denied is app.record_payment's role refusal and keeps activityLogDeniedPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'Not permitted on this device or for this role'**
+  String get activityLogDeniedCardPermission;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for a yes / no field such as release_requested=true.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get activityLogYes;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D Activity-log VALUE for a yes / no field such as release_requested=false.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get activityLogNo;
 
   /// ORDER-EDIT-001A Activity-log VALUE for kitchen_channel=kds: the kitchen sees the edit on its kitchen display screen.
   ///

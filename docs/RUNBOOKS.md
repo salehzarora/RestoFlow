@@ -472,11 +472,14 @@ queries + expected results instead. Prints **PASS/FAIL**.
   expire 90 days after creation; set an incident hold on the TEST attempt or on a single TEST private
   event (`app.card_attempt_set_incident_hold`, operator only, a private operator event, **D-057** point 8)
   before expiry when a TEST run belongs to an open incident; the operator purge
-  (`app.purge_expired_test_card_attempts`, under each device's terminal lock and the exclusive purge barrier, never inside a TEST run's PRE / POST window, keeping each purged identity and its keys in
-  the tombstone set, **D-058** point 7) deletes only expired, unheld TEST rows and every
-  `mode='test'` private event past its own `retention_until` that is itself unheld and whose attempt,
-  if any, is unheld
-  (never an `operator.*` event) and records counts only, as a private operator event; no phase-1
+  (`app.purge_expired_test_card_attempts(p_reason, p_operator_reference, p_actor_app_user_id, p_max_devices)`,
+  one bounded batch, **D-059** point 3: its cut-off fixed first, at most `p_max_devices` devices when given
+  (1–1000) selected in device order, their terminal locks and then the exclusive purge barrier, never inside a
+  TEST run's PRE / POST window, keeping each purged identity and its keys in the tombstone set, **D-058** point 7)
+  deletes only that device set's expired, unheld TEST rows and its expired `mode='test'` private events past
+  their own `retention_until` that are themselves unheld and whose attempt, if it still exists, is unheld
+  (never an `operator.*` event), reports what stays eligible outside the set as deferred — run further
+  batches until nothing is deferred — and records only the counts and its cut-off, as a private operator event; no phase-1
   application role, RPC or the TEST purge deletes LIVE evidence (final legal retention per **D-013** /
   **Q-005**).
 - **Terminal binding lifecycle (D-057 point 4; D-058 point 6):** the till's `app.payment_terminals` row

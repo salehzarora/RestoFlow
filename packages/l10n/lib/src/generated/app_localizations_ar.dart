@@ -916,6 +916,62 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogTitlePaymentRecorded => 'تم تسجيل دفعة';
 
   @override
+  String get activityLogTitleCardAttemptStarted =>
+      'بدأ الدفع بالبطاقة على جهاز الدفع';
+
+  @override
+  String get activityLogTitleCardAttemptApproved =>
+      'وافق مزوّد الدفع على الدفع بالبطاقة';
+
+  @override
+  String get activityLogTitleCardAttemptDeclined =>
+      'رفض مزوّد الدفع عملية الدفع بالبطاقة';
+
+  @override
+  String get activityLogTitleCardAttemptUnknown =>
+      'نتيجة الدفع بالبطاقة غير معروفة';
+
+  @override
+  String get activityLogTitleCardAttemptReleased =>
+      'أُلغي طلب الدفع بالبطاقة على جهاز الدفع';
+
+  @override
+  String get activityLogTitleCardAttemptAnomalyRaised =>
+      'تنبيه دفع بالبطاقة: قد يكون المبلغ قد خُصم من البطاقة';
+
+  @override
+  String get activityLogTitleCardAttemptAnomalyCleared =>
+      'أُزيل تنبيه الدفع بالبطاقة وفق نتيجة مزوّد الدفع';
+
+  @override
+  String get activityLogTitleCardAttemptAnomaly =>
+      'حالة غير اعتيادية من مزوّد الدفع بالبطاقة';
+
+  @override
+  String get activityLogTitleCardAttemptReleaseRequested =>
+      'طُلب إلغاء طلب الدفع بالبطاقة على جهاز الدفع';
+
+  @override
+  String get activityLogTitleCardAttemptReleaseFailed =>
+      'تعذّر إلغاء طلب الدفع بالبطاقة على جهاز الدفع';
+
+  @override
+  String get activityLogTitleCardAttemptRecordingRefused =>
+      'تعذّر تسجيل دفع بالبطاقة وافق عليه مزوّد الدفع';
+
+  @override
+  String get activityLogTitleCardAttemptOrderFreed =>
+      'فُكّ قفل الطلب بعد التحقق من الدفع بالبطاقة';
+
+  @override
+  String get activityLogTitleCardAttemptResumeRequested =>
+      'طُلبت إعادة محاولة تسجيل الدفع بالبطاقة';
+
+  @override
+  String get activityLogTitleCardAttemptDenied =>
+      'رُفض إجراء على الدفع بالبطاقة';
+
+  @override
   String get activityLogTitleOrganizationCreated => 'تم إنشاء المنشأة';
 
   @override
@@ -6160,6 +6216,200 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogDeniedInvalidDeviceType => 'غير مسموح من هذا الجهاز';
+
+  @override
+  String get activityLogFieldCardState => 'حالة الدفع بالبطاقة';
+
+  @override
+  String get activityLogFieldCardMode => 'وضع الدفع';
+
+  @override
+  String get activityLogFieldCurrency => 'العملة';
+
+  @override
+  String get activityLogFieldCardRefusal => 'سبب رفض التسجيل';
+
+  @override
+  String get activityLogFieldCardReleaseStatus => 'حالة الإلغاء';
+
+  @override
+  String get activityLogFieldCardAnomaly => 'حالة غير اعتيادية لدى مزوّد الدفع';
+
+  @override
+  String get activityLogFieldCardReleaseRequested => 'طُلب الإلغاء';
+
+  @override
+  String get activityLogFieldCardConfirmationSource => 'تم التأكيد عبر';
+
+  @override
+  String get activityLogFieldCardPriorRefusal => 'الرفض السابق';
+
+  @override
+  String get activityLogFieldCardResumeCount =>
+      'عدد مرات إعادة المحاولة السابقة';
+
+  @override
+  String get activityLogFieldCardResumeOutcome => 'نتيجة إعادة المحاولة';
+
+  @override
+  String get activityLogCardStateSent => 'أُرسل إلى جهاز الدفع';
+
+  @override
+  String get activityLogCardStateApproved => 'مقبول';
+
+  @override
+  String get activityLogCardStateDeclined => 'رفضه مزوّد الدفع';
+
+  @override
+  String get activityLogCardStateUnknown => 'غير معروف';
+
+  @override
+  String get activityLogCardStateReleased => 'أُلغي طلب الدفع على جهاز الدفع';
+
+  @override
+  String get activityLogCardModeLive => 'فعلي';
+
+  @override
+  String get activityLogCardModeTest => 'تجريبي';
+
+  @override
+  String get activityLogCardAnomalyAmountMismatch => 'عدم تطابق المبلغ';
+
+  @override
+  String get activityLogCardAnomalyCurrencyMismatch => 'عدم تطابق العملة';
+
+  @override
+  String get activityLogCardAnomalyPreauthorization => 'تفويض مسبق فقط';
+
+  @override
+  String get activityLogCardAnomalyPartialRefund => 'مسترد جزئيًا';
+
+  @override
+  String get activityLogCardAnomalyRefunded => 'مسترد';
+
+  @override
+  String get activityLogCardAnomalyVoided => 'ألغاه مزوّد الدفع';
+
+  @override
+  String get activityLogCardAnomalyOutOfContract =>
+      'رد غير متوقع من مزوّد الدفع';
+
+  @override
+  String get activityLogCardRefusalReleaseFailed =>
+      'تعذّر الإلغاء على جهاز الدفع';
+
+  @override
+  String get activityLogCardRefusalConflict => 'تعارض مع تغيير آخر';
+
+  @override
+  String get activityLogCardRefusalPreconditionFailed =>
+      'تغيّرت حالة الطلب أو الوردية';
+
+  @override
+  String get activityLogCardRefusalRevokedEmployee => 'لم يعد الموظف نشطًا';
+
+  @override
+  String get activityLogCardRefusalRevokedDevice => 'لم يعد الجهاز مخوّلًا';
+
+  @override
+  String get activityLogCardRefusalPaymentInProgress =>
+      'هناك دفع آخر قيد التنفيذ';
+
+  @override
+  String get activityLogCardRefusalProviderRecordingRefused =>
+      'رُفض التسجيل بعد الموافقة';
+
+  @override
+  String get activityLogCardRefusalNonrecoverable => 'يتطلب معالجة يدوية';
+
+  @override
+  String get activityLogCardConfirmationProviderReport => 'تقرير مزوّد الدفع';
+
+  @override
+  String get activityLogCardConfirmationBackOffice => 'لوحة إدارة مزوّد الدفع';
+
+  @override
+  String get activityLogCardResumeDispatched => 'أُرسلت إعادة المحاولة';
+
+  @override
+  String get activityLogCardResumeRefused => 'رُفضت إعادة المحاولة';
+
+  @override
+  String get activityLogDeniedIneligibleOrderState =>
+      'لا يمكن دفع هذا الطلب بالبطاقة الآن';
+
+  @override
+  String get activityLogDeniedMaxLiveAmountExceeded =>
+      'يتجاوز حد الدفع بالبطاقة';
+
+  @override
+  String get activityLogDeniedNoOpenShift =>
+      'لا توجد وردية مفتوحة على هذا الجهاز';
+
+  @override
+  String get activityLogDeniedNoActiveDrawer => 'لا يوجد درج نقود نشط';
+
+  @override
+  String get activityLogDeniedNoRecordingAttempt =>
+      'لا توجد محاولة تسجيل للإبلاغ عنها';
+
+  @override
+  String get activityLogDeniedAttemptNotFreeable =>
+      'لا يمكن فكّ قفل الطلب بهذا الدفع بالبطاقة';
+
+  @override
+  String get activityLogDeniedChargeMayExist =>
+      'قد يكون المبلغ قد خُصم من البطاقة — تحقّق مع مزوّد الدفع';
+
+  @override
+  String get activityLogDeniedConfirmationRequired =>
+      'مطلوب تأكيد من مزوّد الدفع';
+
+  @override
+  String get activityLogDeniedDeviceNotActive => 'الجهاز غير نشط';
+
+  @override
+  String get activityLogDeniedOperationMismatch =>
+      'إعادة المحاولة لا تطابق الدفع الأصلي';
+
+  @override
+  String get activityLogDeniedResumeLimit =>
+      'تم بلوغ الحد الأقصى لإعادة المحاولة';
+
+  @override
+  String get activityLogDeniedResumeStale => 'توجد إعادة محاولة أحدث بالفعل';
+
+  @override
+  String get activityLogDeniedNotRecoverable => 'لا يمكن إعادة المحاولة';
+
+  @override
+  String get activityLogDeniedPaymentExists => 'الدفع مسجّل بالفعل';
+
+  @override
+  String get activityLogDeniedClaimInactive => 'لم يعد الدفع بالبطاقة نشطًا';
+
+  @override
+  String get activityLogDeniedOrderNotChargeable =>
+      'لم يعد بالإمكان تحصيل الطلب';
+
+  @override
+  String get activityLogDeniedContextLost => 'أُغلقت الوردية أو درج النقود';
+
+  @override
+  String get activityLogDeniedAmountMismatch => 'المبلغ لا يطابق الطلب';
+
+  @override
+  String get activityLogDeniedRefusalNotRecorded => 'لم يُبلَّغ عن آخر رفض بعد';
+
+  @override
+  String get activityLogDeniedCardPermission =>
+      'غير مسموح على هذا الجهاز أو لهذا الدور';
+
+  @override
+  String get activityLogYes => 'نعم';
+
+  @override
+  String get activityLogNo => 'لا';
 
   @override
   String get activityLogKitchenChannelKds => 'شاشة المطبخ';
