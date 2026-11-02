@@ -644,7 +644,7 @@ class _StorefrontMediaSlotState extends State<StorefrontMediaSlot> {
   static String _slotTitle(AppLocalizations l10n, StorefrontSlot slot) =>
       switch (slot) {
         StorefrontSlot.logo => l10n.storefrontSlotLogoTitle,
-        StorefrontSlot.hero => l10n.storefrontSlotHeroTitle,
+        StorefrontSlot.hero => storefrontContentCopy(l10n, 'backgroundImage'),
       };
 
   /// The rows this slot manages: its own variant, plus any row the slot
@@ -711,7 +711,7 @@ class _StorefrontMediaSlotState extends State<StorefrontMediaSlot> {
           Text(
             widget.slot == StorefrontSlot.logo
                 ? l10n.storefrontSlotLogoHelp
-                : l10n.storefrontSlotHeroHelp,
+                : storefrontContentCopy(l10n, 'backgroundImageHelp'),
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: RestoflowSpacing.sm),
