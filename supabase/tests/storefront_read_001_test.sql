@@ -230,18 +230,18 @@ grant execute on procedure public.zz_read001_probe_proc() to anon;
 select is(
   (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public\.', ''))
      from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)', 'storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)', 'zz_read001_probe_proc()']) v),
+  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)', 'storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)', 'storefront_seo_page_v1(text)', 'storefront_seo_discovery_v1(text,integer,integer)', 'zz_read001_probe_proc()']) v),
   'A6c. NEGATIVE CONTROL: an anon-executable SECURITY DEFINER PROCEDURE is caught by the widened anon-set guard (prokind f + p)');
 select is(
   (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public\.', ''))
      from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and p.prosecdef),
-  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)', 'storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)', 'zz_read001_probe_proc()']) v),
+  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)', 'storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)', 'storefront_seo_page_v1(text)', 'storefront_seo_discovery_v1(text,integer,integer)', 'zz_read001_probe_proc()']) v),
   'A6d. NEGATIVE CONTROL: the widened SECURITY DEFINER-set guard reports the procedure too');
 drop procedure public.zz_read001_probe_proc();
 select is(
   (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public\.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public\.', ''))
      from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)', 'storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)']) v),
+  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)', 'storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)', 'storefront_seo_page_v1(text)', 'storefront_seo_discovery_v1(text,integer,integer)']) v),
   'A6e. ...and once the probe is dropped the anon-executable routine set is exactly the allowlist again');
 select ok(has_function_privilege('anon', 'public.storefront_menu(text)', 'EXECUTE'),
   'A7. anon holds EXECUTE on public.storefront_menu(text)');
