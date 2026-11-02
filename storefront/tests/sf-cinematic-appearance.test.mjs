@@ -81,7 +81,8 @@ test('explicit appearance remains exact, including owner-chosen low-contrast col
   const baseline = buildCinematicTheme(brand);
   assert.deepEqual(buildCinematicTheme({ ...brand, text: null, buttonText: null }), baseline);
   const custom = buildCinematicTheme({ ...brand, text: '#123AbC', buttonText: '#112233' });
-  for (const key of ['tx', 'tx2', 'tx3', 'onhero', 'onhero2', 'onDock2']) assert.equal(custom[key], '#123abc');
+  for (const key of ['tx', 'tx2', 'tx3', 'onhero2', 'onDock2']) assert.equal(custom[key], '#123abc');
   assert.equal(custom.onacc, '#112233');
+  assert.equal(custom.onhero, '#112233');
   assert.deepEqual(buildCinematicTheme({ ...brand, text: 'var(--fake)', buttonText: '#fff\n' }), baseline);
 });

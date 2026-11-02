@@ -10,7 +10,7 @@ import styles from './home.module.css';
 
 function Media({ item, m, rankLabel }: { item: MenuItem; m: StorefrontMessages; rankLabel?: string }) {
   const badge = item.soldOut ? m.soldOut : item.featured ? m.chefPick : item.badge === 'new' ? m.badgeNew : item.badge === 'deal' ? m.badgeDeal : null;
-  return <div className={`${styles.cardMediaGrid} ${productFrameClass(item, contentStyles.wholeFrame)}`}>
+  return <div className={`${styles.cardMediaGrid} ${productFrameClass(item, contentStyles.wholeFrame)}`} data-sf-image-fit={item.imageFit ?? 'fill'}>
     {item.image === null ? <span className={styles.cardNoImage} aria-hidden="true">{item.name.slice(0, 1)}</span> : (
       /* eslint-disable-next-line @next/next/no-img-element */
       <img className={`${styles.cardImg} ${productImageClass(item, contentStyles.wholeImage)}`} src={item.image} alt="" width={600} height={600} loading="lazy" decoding="async" />

@@ -45,7 +45,8 @@ export function buildCinematicTheme(
   const muted = (amount: number): Hex => copySurfaces.reduce((colour, background) => walk(colour, background, AA, automaticInk), mix(tx, primary, amount));
   const tx2 = explicitText ?? muted(0.2);
   const tx3 = explicitText ?? muted(0.34);
-  const onacc = appearanceColour(brand.buttonText) ?? inkOn(accent);
+  const buttonText = appearanceColour(brand.buttonText);
+  const onacc = buttonText ?? inkOn(accent);
   const accs = mix(accent, sf, 0.82);
   const surfaces = [...copySurfaces, accs];
   const focusInk = Math.min(...surfaces.map(background => contrast('#ffffff', background))) >= Math.min(...surfaces.map(background => contrast('#000000', background))) ? '#ffffff' : '#000000';
@@ -63,7 +64,7 @@ export function buildCinematicTheme(
     bg: primary, sf, sf2,
     tx, tx2, tx3,
     hair: rgba(tx, 0.12), hair2: rgba(tx, 0.24),
-    hero: primary, onhero: tx, onhero2: tx2,
+    hero: primary, onhero: buttonText ?? tx, onhero2: tx2,
     acc: accent, onacc,
     acct: walk(accent, sf, AA, automaticInk),
     accLargeText: walk(accent, primary, AA_LARGE, automaticInk),

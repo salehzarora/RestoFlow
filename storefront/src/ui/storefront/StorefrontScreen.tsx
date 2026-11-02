@@ -1,15 +1,8 @@
-/**
- * Composition root for one tenant's storefront.
- *
- * Order matters: raw tenant input is SANITISED, then the theme is DERIVED from
- * the sanitised values, then the derived tokens are handed to ThemeScope which
- * applies them via CSSOM. No component below this point ever sees a raw tenant
- * colour, and none of them contains a resolved colour of their own.
- */
+/** Welcome composition; tenant colours are validated by the cinematic theme. */
 import { dirOf, type Locale } from '@/i18n/locales';
-import { buildTheme, type Preset } from '@/theme/buildTheme';
-import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
-import type { MotionMode, Tenant } from '@/source/types';
+import type { Preset } from '@/theme/buildTheme';
+import { buildCinematicTheme } from '@/theme/buildCinematicTheme';
+import type { CampaignModule, MotionMode, Tenant } from '@/source/types';
 import { storefrontPath } from '@/routes/routes';
 import { Intro } from './Intro';
 import { IntroGate } from './IntroGate';
@@ -20,7 +13,7 @@ export function StorefrontScreen({
   tenant,
   locale,
   slug,
-  preset = 'dark',
+  campaign,
   motion = 'full',
 }: {
   tenant: Tenant;
@@ -30,17 +23,15 @@ export function StorefrontScreen({
       the same string there); the intro route must READ it with the same one. */
   slug: string;
   preset?: Preset;
+  campaign?: CampaignModule;
   motion?: MotionMode;
 }) {
-  const tokens = buildTheme(preset, {
-    primary: sanitizePrimary(tenant.brand.primary),
-    accent: sanitizeAccent(tenant.brand.accent, preset),
-  });
+  const tokens = buildCinematicTheme(tenant.brand);
 
   return (
     <ThemeScope tokens={tokens} className={`${shell.root}`} dir={dirOf(locale)}>
       <IntroGate slug={slug} homeHref={`${storefrontPath(locale, slug)}/menu`}>
-        <Intro tenant={tenant} locale={locale} motion={motion} />
+        <Intro tenant={tenant} locale={locale} campaign={campaign} motion={motion} />
       </IntroGate>
     </ThemeScope>
   );
