@@ -1,0 +1,718 @@
+{
+  "menuVersion": "37.1793008654",
+  "items": [
+    {
+      "id": "8ee6e82d-7a09-4b54-8e41-42ccfa4e12e2",
+      "categoryId": "cab0e9a4-1c85-48dc-8159-845f42414a5d",
+      "name": "golden pops",
+      "description": "",
+      "priceMinor": 3500,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/f3bb4d896712f0acb9dc1359495e5c2aa3ca0025afff4b39e7fa8bc0118ad2b6.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "b2d952db-ad93-4259-958c-58b6c200d895",
+      "categoryId": "cab0e9a4-1c85-48dc-8159-845f42414a5d",
+      "name": "maps monster",
+      "description": "",
+      "priceMinor": 5500,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/a6117ad9cd3e9bb37cfb856dbd2ff46b2e24802ee1477edacaf46988bfd0260d.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "338bd2c8-07a8-49d9-9648-4b2e8c6646cf",
+      "categoryId": "85899d6b-7b23-4722-ad61-812f9e7d8af4",
+      "name": "Cup Map x Cheesy Fries",
+      "description": "",
+      "priceMinor": 1000,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/698cee5bb2f9281e3be57d78adbc100685b1a8d04969f8248fe6ebe12609106e.webp",
+      "featured": false,
+      "signature": false,
+      "badge": "new",
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "4afa95e4-ca37-4e21-9c11-75913fbd6302",
+      "categoryId": "cab0e9a4-1c85-48dc-8159-845f42414a5d",
+      "name": "map x",
+      "description": "بطاطا مع جبنة مع صوصات",
+      "priceMinor": 3000,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/943966daaeb96efb87827ea66e187ec5e010056919167c7f23409df099941bb5.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "8a7b43d0-5011-4376-bd5a-8cb518db81e1",
+      "categoryId": "dd0ba105-889c-4cb5-84e8-34d9acd7f0db",
+      "name": "كلاسيك برجر",
+      "description": "",
+      "priceMinor": 4000,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/5bcfca1884ff3d0cb5dea89a4553664a4f2c205c65081781918e2e75b8ead994.webp",
+      "featured": false,
+      "signature": true,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": true,
+      "groupIds": [
+        "5368acba-ba9b-4295-993c-031eb39e2d4c",
+        "a6671c77-1298-4d0b-9278-4aff448eeda1"
+      ],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "1094c5e8-111a-45fa-9727-4262d347c248",
+      "categoryId": "dd0ba105-889c-4cb5-84e8-34d9acd7f0db",
+      "name": "🇮🇹 إيطاليانو برجر",
+      "description": "",
+      "priceMinor": 5600,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/40607002cdbeefa78f77160b5210e51d01b374109ecad771f678243557fc3532.webp",
+      "featured": true,
+      "signature": true,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": true,
+      "groupIds": [
+        "b7aefbc6-6b43-4b49-9d08-a5f5b099e5c1",
+        "458b73a8-7795-495a-8550-8adf04dac442"
+      ],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "3a0bd3b4-4800-49a0-a718-1b1dba5da64a",
+      "categoryId": "85899d6b-7b23-4722-ad61-812f9e7d8af4",
+      "name": "Cup Map Volcano Cheesy Fries",
+      "description": "",
+      "priceMinor": 1500,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/6fc319e660e302ed5cdf99c4a4a33c31e35d59494d1ef81d16ed6515f5103ddc.webp",
+      "featured": false,
+      "signature": false,
+      "badge": "new",
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "43fa2239-6034-4a2b-b4aa-1082533f6f09",
+      "categoryId": "cab0e9a4-1c85-48dc-8159-845f42414a5d",
+      "name": "map vlcano cheesy fries",
+      "description": "بطاطا  مع صوصات مع جبنة مع قطع الهلبينيو",
+      "priceMinor": 4000,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/1f6ac2ae8373d8ee9480acbbcc85424048d9619af7ebb380f43663459cc03373.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "69631efa-d00e-4b6f-82a3-7a4b49a6806d",
+      "categoryId": "85899d6b-7b23-4722-ad61-812f9e7d8af4",
+      "name": "cup golden",
+      "description": "بطاطا مدورة مع صوصات مع جبنة",
+      "priceMinor": 2000,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/dc5877dbd0d5effac5686d83223eb388aae067e831feecc1760533062bc09c17.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "a3064d51-5096-4e8e-9d2e-4d486d9dea90",
+      "categoryId": "dd0ba105-889c-4cb5-84e8-34d9acd7f0db",
+      "name": "برجر عربي",
+      "description": "",
+      "priceMinor": 4700,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/1622d834aee67753750ae5d94015c007f19f50e9d70569af84559bbd8a870f4a.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": true,
+      "groupIds": [
+        "93ce4d5e-cebe-42eb-8908-761be2823062",
+        "93d794a9-2046-4777-8eee-cc22196d1668"
+      ],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "26c3e4b9-27db-415a-8dae-4633b3106f62",
+      "categoryId": "dd0ba105-889c-4cb5-84e8-34d9acd7f0db",
+      "name": "🌶️ مكسيكاني برجر",
+      "description": "",
+      "priceMinor": 4700,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/d47307e80f2af7ff5371245be2efdbb2d02a80eaa627a431048a2c81334924fd.webp",
+      "featured": true,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": true,
+      "groupIds": [
+        "f763370d-96d8-4fda-a8bc-a8b26660b224",
+        "a5fcd47c-5a9a-4925-9302-2a6a1b9ab91c"
+      ],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "e2339127-1541-4ea3-8089-a36364c6de66",
+      "categoryId": "dd0ba105-889c-4cb5-84e8-34d9acd7f0db",
+      "name": "سماش برجر",
+      "description": "",
+      "priceMinor": 4000,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/e65bc0764eb86438b84a6de9f8f0f43c9358c65a0da4e14a865faad39012dba7.webp",
+      "featured": true,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": true,
+      "groupIds": [
+        "8c3c74b3-fe3c-41b7-871b-d71a6b07ad4f",
+        "6b0d6674-6b74-48ce-ac6d-2fe967f10eae"
+      ],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "1047d262-2c4b-4f3b-9989-d74d881af724",
+      "categoryId": "dd0ba105-889c-4cb5-84e8-34d9acd7f0db",
+      "name": "برجر كرسبي",
+      "description": "",
+      "priceMinor": 3500,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/33218c740c1a86c6142bc23bf153014140c72f9ac5642e9dc868b58dec758e8a.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": true,
+      "groupIds": [
+        "e600244e-f028-4edf-a6fd-33ba10d880d0"
+      ],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "ecffd581-67d4-47d9-9669-489db9f81d12",
+      "categoryId": "86f2f5fe-6b3a-4db6-9ce0-16ef2e04a84b",
+      "name": "Cola",
+      "description": "",
+      "priceMinor": 800,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/30a7eaf7427448ad96994e0e69da4bf5a603812c1bf2d4db1f4ec6a0aedb891e.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "98b27b08-4f06-4a3c-8c51-33b9d598360e",
+      "categoryId": "86f2f5fe-6b3a-4db6-9ce0-16ef2e04a84b",
+      "name": "Cola zero",
+      "description": "",
+      "priceMinor": 800,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/5e9cbbda0271ad8e5c359ed674987d87c333d2e6c3e0c3953ce742e632b1cbbb.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "f199fe04-a3f3-44f6-b9e3-603a624effd3",
+      "categoryId": "86f2f5fe-6b3a-4db6-9ce0-16ef2e04a84b",
+      "name": "Fanta",
+      "description": "",
+      "priceMinor": 800,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/f94ebc1581528fccfd2f5a6f3672b6c9505ca0a33cacc50fc3e474182a12e886.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "7b98ae51-eed3-4e4d-b5cb-818327ed0d60",
+      "categoryId": "86f2f5fe-6b3a-4db6-9ce0-16ef2e04a84b",
+      "name": "Sprite",
+      "description": "",
+      "priceMinor": 800,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/4536556c0dbaf9f1436fb0e202e4142ffa1bbba65a37a8f0da44f61c55072f40.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "c25346fb-2d35-4910-b511-081f60b88583",
+      "categoryId": "86f2f5fe-6b3a-4db6-9ce0-16ef2e04a84b",
+      "name": "Sprite zero",
+      "description": "",
+      "priceMinor": 800,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/665164af08d73910903af7e9d667a12a22f0131879bdff8f05cec15dd66bf13a.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "1e4fd530-2c70-49a7-af17-1e355c6d40cf",
+      "categoryId": "86f2f5fe-6b3a-4db6-9ce0-16ef2e04a84b",
+      "name": "XL",
+      "description": "",
+      "priceMinor": 800,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/d3e25fa51bc2cbc30492ed8ae7fb23ab94d48376140dc05f86a2bea769a9d244.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    },
+    {
+      "id": "f8e87534-a26d-4f8e-a179-5d19ac07d723",
+      "categoryId": "86f2f5fe-6b3a-4db6-9ce0-16ef2e04a84b",
+      "name": "ماء",
+      "description": "",
+      "priceMinor": 0,
+      "image": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/f8c3aaa5365a11a786921af8b12ad3dee5250e3fab3374a914db4f1fbd043569.webp",
+      "featured": false,
+      "signature": false,
+      "badge": null,
+      "soldOut": false,
+      "hasOptions": false,
+      "groupIds": [],
+      "imageFit": "fill",
+      "cardLayout": "standard"
+    }
+  ],
+  "groups": [
+    {
+      "id": "8c3c74b3-fe3c-41b7-871b-d71a6b07ad4f",
+      "name": "الحجم",
+      "required": true,
+      "single": true,
+      "min": 1,
+      "allowQuantity": false,
+      "maxQuantity": 20,
+      "max": 1,
+      "options": [
+        {
+          "id": "49c058a0-ef02-4570-b360-72d4f9122629",
+          "name": "120 غرام",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "70cf9c39-30d0-4dec-9cbe-c6975319c077",
+          "name": "240 غرام",
+          "priceDeltaMinor": 1500
+        },
+        {
+          "id": "cf11a475-46e4-41ca-aefd-71d7f808efe9",
+          "name": "360 غرام",
+          "priceDeltaMinor": 2500
+        },
+        {
+          "id": "c942d361-d7a3-4b53-b66e-b9f43fee9d81",
+          "name": "480 غرام",
+          "priceDeltaMinor": 3500
+        }
+      ]
+    },
+    {
+      "id": "b7aefbc6-6b43-4b49-9d08-a5f5b099e5c1",
+      "name": "حجم",
+      "required": true,
+      "single": true,
+      "min": 1,
+      "allowQuantity": false,
+      "maxQuantity": 20,
+      "max": 1,
+      "options": [
+        {
+          "id": "ecfc69ce-2560-46e8-b990-c2db22a3e1bd",
+          "name": "120 غرام",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "bc3deb4f-0273-4cc6-8e32-5eb7cbd4cc59",
+          "name": "240 غرام",
+          "priceDeltaMinor": 1500
+        },
+        {
+          "id": "122b9351-f6c6-49b3-94f0-e786aaf04a20",
+          "name": "360 غرام",
+          "priceDeltaMinor": 2500
+        }
+      ]
+    },
+    {
+      "id": "5368acba-ba9b-4295-993c-031eb39e2d4c",
+      "name": "حجم",
+      "required": true,
+      "single": true,
+      "min": 1,
+      "allowQuantity": false,
+      "maxQuantity": 20,
+      "max": 1,
+      "options": [
+        {
+          "id": "2f6a1f69-5a95-4b5a-851a-a6290e7963d8",
+          "name": "120 غرام",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "3df7c3ee-a998-411b-ab14-87a2197b0165",
+          "name": "240 غرام",
+          "priceDeltaMinor": 1500
+        },
+        {
+          "id": "a6d1745b-cbe0-426a-89ed-4c97f9f198b4",
+          "name": "360 غرام",
+          "priceDeltaMinor": 2500
+        },
+        {
+          "id": "b8621e08-3553-4eda-8d93-03a64b202099",
+          "name": "480 غرام",
+          "priceDeltaMinor": 3500
+        }
+      ]
+    },
+    {
+      "id": "f763370d-96d8-4fda-a8bc-a8b26660b224",
+      "name": "حجم",
+      "required": true,
+      "single": true,
+      "min": 1,
+      "allowQuantity": false,
+      "maxQuantity": 20,
+      "max": 1,
+      "options": [
+        {
+          "id": "a3a3f52d-704a-4c59-8d9a-9f05be1dbcbf",
+          "name": "120 غرام",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "4abc2b4a-f4a2-4202-ba28-093f816a28f5",
+          "name": "240 غرام",
+          "priceDeltaMinor": 1500
+        },
+        {
+          "id": "1ba779c4-c9f0-410d-8373-a1352e276f0a",
+          "name": "360 غرام",
+          "priceDeltaMinor": 2500
+        },
+        {
+          "id": "f5041e60-3947-4dad-bbf7-7ded0d9b72a5",
+          "name": "480 غرام",
+          "priceDeltaMinor": 3500
+        }
+      ]
+    },
+    {
+      "id": "e600244e-f028-4edf-a6fd-33ba10d880d0",
+      "name": "إضافات البرغر",
+      "required": false,
+      "single": false,
+      "min": 0,
+      "allowQuantity": false,
+      "maxQuantity": 20,
+      "options": [
+        {
+          "id": "790d03b2-6838-4a34-8d14-dc6bb0808b66",
+          "name": "جبنة",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "c306d5b7-9760-415a-b2ef-ee8624a04f8d",
+          "name": "خس",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "b5dbb934-17e6-473d-9359-367b18e7cfdb",
+          "name": "بندورة",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "37116d90-811f-4f2d-b0da-8c7f5c8668e8",
+          "name": "بصل",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "2d6febb3-8d07-45fc-a44d-bceacad681a0",
+          "name": "مخلل",
+          "priceDeltaMinor": 0
+        }
+      ]
+    },
+    {
+      "id": "6b0d6674-6b74-48ce-ac6d-2fe967f10eae",
+      "name": "إضافات البرغر",
+      "required": false,
+      "single": false,
+      "min": 0,
+      "allowQuantity": false,
+      "maxQuantity": 20,
+      "options": [
+        {
+          "id": "48aa78c2-5cef-4700-be39-92e013373bc9",
+          "name": "جبنة",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "fc30eb9c-8bb1-4bbb-bce8-cf6ed48c83e4",
+          "name": "خس",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "e8e137eb-f61f-4c74-b0d8-b5265a89d381",
+          "name": "بندورة",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "a01393fe-ef9f-42e7-8a01-7344c4612fe9",
+          "name": "بصل",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "1d378c52-705a-48cb-9000-ac2bad46a181",
+          "name": "مخلل",
+          "priceDeltaMinor": 0
+        }
+      ]
+    },
+    {
+      "id": "a6671c77-1298-4d0b-9278-4aff448eeda1",
+      "name": "إضافات البرغر",
+      "required": false,
+      "single": false,
+      "min": 0,
+      "allowQuantity": false,
+      "maxQuantity": 20,
+      "options": [
+        {
+          "id": "e4e281df-fdb9-438b-b003-64d7c75f74ca",
+          "name": "جبنة",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "638fb502-564c-4c39-ae65-eb9977752f7a",
+          "name": "خس",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "95b37937-4fad-4e81-adad-eb1b8bbcbbef",
+          "name": "بندورة",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "312d91b4-5dc7-4e51-9787-383b494879f3",
+          "name": "بصل",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "155949b9-48a1-4da8-aa31-21ed796c86b1",
+          "name": "مخلل",
+          "priceDeltaMinor": 0
+        }
+      ]
+    },
+    {
+      "id": "458b73a8-7795-495a-8550-8adf04dac442",
+      "name": "إضافات البرغر",
+      "required": false,
+      "single": false,
+      "min": 0,
+      "allowQuantity": false,
+      "maxQuantity": 20,
+      "options": [
+        {
+          "id": "633dbe84-2d45-4492-a3b8-b2d029070764",
+          "name": "جبنة",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "067efc39-41e8-43eb-9e8a-6a6440f97666",
+          "name": "خس",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "2a4b16d6-be10-49ac-b116-0892136f0e71",
+          "name": "بندورة",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "1f8eb9f1-c5c5-484d-960e-34b74506198c",
+          "name": "بصل",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "4088c6c5-7e92-493c-9064-51f5249c4675",
+          "name": "مخلل",
+          "priceDeltaMinor": 0
+        }
+      ]
+    },
+    {
+      "id": "a5fcd47c-5a9a-4925-9302-2a6a1b9ab91c",
+      "name": "إضافات البرغر",
+      "required": false,
+      "single": false,
+      "min": 0,
+      "allowQuantity": false,
+      "maxQuantity": 20,
+      "options": [
+        {
+          "id": "10187bc1-ea54-4697-add4-514809685615",
+          "name": "جبنة",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "5ce8eca5-1fd5-434f-a3c1-5544f91375bb",
+          "name": "خس",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "fb17ceee-180c-4971-8ec8-b049587132a5",
+          "name": "بندورة",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "08f5035a-876f-4ddf-9429-7c10f9e8324c",
+          "name": "بصل",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "38fe157c-b2ad-41ab-9b4f-9fe5d1a41bad",
+          "name": "مخلل",
+          "priceDeltaMinor": 0
+        }
+      ]
+    },
+    {
+      "id": "93ce4d5e-cebe-42eb-8908-761be2823062",
+      "name": "الحجم",
+      "required": true,
+      "single": true,
+      "min": 1,
+      "allowQuantity": false,
+      "maxQuantity": 20,
+      "max": 1,
+      "options": [
+        {
+          "id": "5bf8a20f-03b6-4f5d-8179-d1bc6ace2d49",
+          "name": "120 غرام",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "18064245-82e1-4384-8170-d1ce65425acc",
+          "name": "240 غرام",
+          "priceDeltaMinor": 1500
+        },
+        {
+          "id": "25b9226a-268e-4976-b4d8-1970eef7e782",
+          "name": "360 غرام",
+          "priceDeltaMinor": 2500
+        },
+        {
+          "id": "84f71a52-db53-476a-b953-1ffc0076292c",
+          "name": "480 غرام",
+          "priceDeltaMinor": 3500
+        }
+      ]
+    },
+    {
+      "id": "93d794a9-2046-4777-8eee-cc22196d1668",
+      "name": "إضافات البرغر",
+      "required": false,
+      "single": false,
+      "min": 0,
+      "allowQuantity": false,
+      "maxQuantity": 20,
+      "options": [
+        {
+          "id": "f1d01da6-b949-4a7a-8a3e-0d58e5987961",
+          "name": "جبنة",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "d0730894-7e91-452b-a0ab-e490726e9b07",
+          "name": "بصل ( مشوي )",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "e2667d13-3974-4033-8ee9-d5e364c89275",
+          "name": "بندورة ( مشوي )",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "a006cd11-27d7-4d77-b1ca-7d664e80293b",
+          "name": "خس",
+          "priceDeltaMinor": 0
+        },
+        {
+          "id": "de828862-bf3e-416a-8a16-e1dbc6e71b5e",
+          "name": "مخلل",
+          "priceDeltaMinor": 0
+        }
+      ]
+    }
+  ],
+  "zones": [],
+  "taxRateBp": 0,
+  "motion": "lively"
+}
