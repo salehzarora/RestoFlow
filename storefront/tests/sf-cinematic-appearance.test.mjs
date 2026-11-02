@@ -54,14 +54,16 @@ test('appearance is a closed pair of nullable full HEX colours and rejects CSS o
 });
 
 test('cinematic defaults retain all valid brand colours and automatic control contrast', () => {
-  for (const primary of ['#ffffff', '#ffef00', '#3454ff', '#111111']) {
+  for (const primary of ['#ffffff', '#ffef00', '#3454ff', '#111111', '#151513', '#777777', '#747474']) {
     for (const accent of ['#000000', '#ffffff', '#e4ad83', '#ff00ff']) {
       const theme = buildCinematicTheme({ primary, accent });
       assert.equal(theme.hero, primary);
+      assert.equal(theme.bg, primary, 'dashboard background colour must control the page canvas');
       assert.equal(theme.acc, accent);
       assert.equal(theme.cta, accent);
       assert.equal(theme.onacc, inkOn(accent));
       assert.ok(contrast(theme.tx, theme.bg) >= AA);
+      for (const surface of [theme.bg, theme.sf, theme.sf2]) for (const key of ['tx', 'tx2', 'tx3']) assert.ok(contrast(theme[key], surface) >= AA);
       assert.ok(contrast(theme.acct, theme.sf) >= AA);
       assert.ok(contrast(theme.accOnSelection, theme.accs) >= AA);
       for (const surface of [theme.bg, theme.sf, theme.sf2, theme.accs]) assert.ok(contrast(theme.ring, surface) >= AA_LARGE);
@@ -69,6 +71,9 @@ test('cinematic defaults retain all valid brand colours and automatic control co
       for (const key of ['ok', 'okbg', 'warn', 'warnbg', 'bad', 'badbg', 'badText', 'onBad', 'info', 'infobg']) assert.equal(theme[key], baseline[key]);
     }
   }
+  const fallback = buildCinematicTheme({ primary: 'not-a-colour', accent: '#e4ad83' });
+  assert.equal(fallback.bg, '#151513');
+  assert.equal(fallback.tx, '#f7f2ea');
 });
 
 test('explicit appearance remains exact, including owner-chosen low-contrast colours; null restores defaults', () => {
