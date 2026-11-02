@@ -10,8 +10,11 @@ export interface WireCategoryPresentation {
   readonly image_url:string|null; readonly image_fit:ImageFit|null; readonly card_layout:CardLayout|null;
 }
 export interface WireItemPresentation { readonly item_id:string; readonly image_fit:ImageFit|null; readonly card_layout:CardLayout|null; }
+export interface WireAppearance { readonly text_color:string|null; readonly button_text_color:string|null; }
 export interface WireContentV1 {
   readonly schema:1;
+  /** Additive visual fields; the original v4 content shape remains valid. */
+  readonly appearance?:WireAppearance;
   readonly hero:{ readonly mode:'editorial'|'item';readonly item_id:string|null;readonly format:HeroFormat|null;readonly eyebrow:string|null;readonly stamp:string|null;readonly footnote:string|null; };
   readonly announcement_segments:readonly string[]|null;
   readonly promo:null|{readonly kind:'category';readonly category_id:string;readonly kicker:string;readonly title:string;readonly body:string;readonly image_url:string}|{readonly kind:'item';readonly item_id:string;readonly kicker:string;readonly title:string;readonly body:string};
@@ -38,6 +41,11 @@ function fit(v:unknown,field:string):ImageFit|null{return v===null?null:choice<I
 function layout(v:unknown,field:string):CardLayout|null{return v===null?null:choice<CardLayout>(v,['standard','cutout'],field);}
 function image(v:unknown,field:string,nullable=false):string|null{if(v===null&&nullable)return null;if(typeof v!=='string'||!MEDIA.test(v))return reject(field);return v;}
 function integer(v:unknown,field:string):number{if(typeof v!=='number'||!Number.isSafeInteger(v))return reject(field);return v;}
+function colour(v:unknown,field:string):string|null{
+  if(v===null)return null;
+  if(typeof v!=='string'||v.length!==7||!/^#[0-9a-fA-F]{6}$/.test(v))return reject(field);
+  return v.toLowerCase();
+}
 function array(v:unknown,max:number,field:string):unknown[]{if(!Array.isArray(v)||v.length>max)return reject(field);return v;}
 function format(v:unknown,headline:string|null):HeroFormat|null{
   if(v===null)return null;const o=record(v,['text','highlight','break_before'],'hero.format');
@@ -62,7 +70,14 @@ export function decodeStorefrontMenuV4(raw:unknown):StorefrontMenuV4Envelope{
   if(itemMap.size!==base.items.length||categoryMap.size!==base.categories.length)return reject('base identities');
   const servedItems=new Set(base.items.filter(i=>categoryMap.has(i.category_id)).map(i=>i.id));
   const populated=new Set(base.items.filter(i=>servedItems.has(i.id)).map(i=>i.category_id));
-  const o=record(content,['schema','hero','announcement_segments','promo','story','category_presentation','item_presentation'],'object');if(o.schema!==1)return reject('schema');
+  const contentKeys=['schema','hero','announcement_segments','promo','story','category_presentation','item_presentation'];
+  if(typeof content==='object'&&content!==null&&Object.hasOwn(content,'appearance'))contentKeys.push('appearance');
+  const o=record(content,contentKeys,'object');if(o.schema!==1)return reject('schema');
+  let appearance:WireAppearance|undefined;
+  if(Object.hasOwn(o,'appearance')){
+    const a=record(o.appearance,['text_color','button_text_color'],'appearance');
+    appearance={text_color:colour(a.text_color,'appearance.text_color'),button_text_color:colour(a.button_text_color,'appearance.button_text_color')};
+  }
   const h=record(o.hero,['mode','item_id','format','eyebrow','stamp','footnote'],'hero');
   const mode=choice(h.mode,['editorial','item'],'hero.mode');const itemId=h.item_id===null?null:id(h.item_id,'hero.item_id');
   if(mode==='editorial'?itemId!==null:itemId===null||!servedItems.has(itemId))return reject('hero.item_id');
@@ -91,5 +106,5 @@ export function decodeStorefrontMenuV4(raw:unknown):StorefrontMenuV4Envelope{
   }
   let story:WireContentV1['story']=null;
   if(o.story!==null){const s=record(o.story,['kicker','title','body','image_url','facts'],'story');story={kicker:text(s.kicker,60,'story.kicker')!,title:text(s.title,120,'story.title')!,body:text(s.body,600,'story.body')!,image_url:image(s.image_url,'story.image')!,facts:array(s.facts,3,'story.facts').map(f=>text(f,80,'story.facts')!)};}
-  return {...base,content_v1:{schema:1,hero,announcement_segments:segments,promo,story,category_presentation:cats,item_presentation:items}};
+  return {...base,content_v1:{schema:1,hero,announcement_segments:segments,promo,story,category_presentation:cats,item_presentation:items,...(appearance===undefined?{}:{appearance})}};
 }

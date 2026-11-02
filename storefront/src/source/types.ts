@@ -27,6 +27,9 @@ export interface TenantBrand {
   readonly accent: string;
   /** Logo asset URL, or null for the initial-tile fallback. */
   readonly logo: string | null;
+  /** Optional published appearance overrides; missing preserves theme defaults. */
+  readonly text?: string | null;
+  readonly buttonText?: string | null;
 }
 
 export interface TenantHours {
