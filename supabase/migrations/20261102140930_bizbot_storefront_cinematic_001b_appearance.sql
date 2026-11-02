@@ -1,4 +1,4 @@
--- BIZBOT-STOREFRONT-CINEMATIC-001B: optional presentation colors only.
+-- BIZBOT-STOREFRONT-CINEMATIC-001B: optional presentation colors and font choice.
 -- Reuses the existing versioned content RPCs and hero_media_id image slot.
 -- No endpoint, authorization, grants, RLS, media, order or payment changes.
 -- Deploy readers accepting optional appearance before enabling color saves.
@@ -8,11 +8,13 @@ begin;
 alter table app.storefront_content_profiles
  add column appearance jsonb,
  add constraint storefront_content_appearance_hex check (
-  appearance is null or coalesce(
-   app.storefront_content_keys_v1(appearance,array['text_color','button_text_color'])
+  appearance is null or case when jsonb_typeof(appearance)='object' then coalesce(
+   app.storefront_content_keys_v1(appearance-'font_family',array['text_color','button_text_color'])
    and (appearance->'text_color'='null'::jsonb or (jsonb_typeof(appearance->'text_color')='string' and length(appearance->>'text_color')=7 and appearance->>'text_color' ~ '^#[0-9a-f]{6}$'))
-   and (appearance->'button_text_color'='null'::jsonb or (jsonb_typeof(appearance->'button_text_color')='string' and length(appearance->>'button_text_color')=7 and appearance->>'button_text_color' ~ '^#[0-9a-f]{6}$')),
-   false)
+   and (appearance->'button_text_color'='null'::jsonb or (jsonb_typeof(appearance->'button_text_color')='string' and length(appearance->>'button_text_color')=7 and appearance->>'button_text_color' ~ '^#[0-9a-f]{6}$'))
+   and (not appearance ? 'font_family' or appearance->'font_family'='null'::jsonb or
+     (jsonb_typeof(appearance->'font_family')='string' and appearance->>'font_family' in ('rubik','alexandria','system'))),
+   false) else false end
  );
 
 create or replace function app.storefront_content_document_shape_v1(p_document jsonb)
@@ -32,7 +34,10 @@ begin
  -- Appearance is optional for older editors. Omission never clears saved colors.
  if d ? 'appearance' then
   a:=d->'appearance';
-  if not app.storefront_content_keys_v1(a,array['text_color','button_text_color']) then
+  if jsonb_typeof(a) is distinct from 'object' then
+   return jsonb_build_object('error','presentation_invalid','field','appearance');
+  end if;
+  if not app.storefront_content_keys_v1(a-'font_family',array['text_color','button_text_color']) then
    return jsonb_build_object('error','presentation_invalid','field','appearance');
   end if;
   foreach k in array array['text_color','button_text_color'] loop
@@ -43,6 +48,10 @@ begin
     a:=jsonb_set(a,array[k],to_jsonb(lower(a->>k)));
    end if;
   end loop;
+  if a ? 'font_family' and a->'font_family'<>'null'::jsonb and
+   (jsonb_typeof(a->'font_family') is distinct from 'string' or a->>'font_family' not in ('rubik','alexandria','system')) then
+   return jsonb_build_object('error','presentation_invalid','field','appearance.font_family');
+  end if;
   d:=jsonb_set(d,'{appearance}',a);
  end if;
  foreach k in array array['hero_headline','hero_subline','announcement_text'] loop
@@ -293,7 +302,10 @@ begin
   hero_eyebrow=excluded.hero_eyebrow,hero_stamp=excluded.hero_stamp,hero_footnote=excluded.hero_footnote,announcement_segments=excluded.announcement_segments,
   promo_kind=excluded.promo_kind,promo_category_id=excluded.promo_category_id,promo_item_id=excluded.promo_item_id,promo_media_id=excluded.promo_media_id,promo_kicker=excluded.promo_kicker,promo_title=excluded.promo_title,promo_body=excluded.promo_body,
   story_media_id=excluded.story_media_id,story_kicker=excluded.story_kicker,story_title=excluded.story_title,story_body=excluded.story_body,story_facts=excluded.story_facts,
-  appearance=case when d ? 'appearance' then excluded.appearance when app.storefront_content_profiles.deleted_at is null then app.storefront_content_profiles.appearance else null end,deleted_at=null;
+  appearance=case when d ? 'appearance' then
+    case when not excluded.appearance ? 'font_family' and app.storefront_content_profiles.deleted_at is null and app.storefront_content_profiles.appearance ? 'font_family'
+      then excluded.appearance||jsonb_build_object('font_family',app.storefront_content_profiles.appearance->'font_family') else excluded.appearance end
+    when app.storefront_content_profiles.deleted_at is null then app.storefront_content_profiles.appearance else null end,deleted_at=null;
  update app.storefront_category_presentation c set deleted_at=now() where c.organization_id=p_organization_id and c.restaurant_id=p_restaurant_id and c.storefront_branch_id=p.storefront_branch_id and c.deleted_at is null
   and not exists(select 1 from jsonb_array_elements(d->'category_presentation') x(v) where x.v->>'category_id'=c.category_id::text);
  for v in select value from jsonb_array_elements(d->'category_presentation') loop

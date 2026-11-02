@@ -9,6 +9,7 @@ const { adaptStorefront } = await import('../src/source/live/adapter.ts');
 const { buildCinematicTheme } = await import('../src/theme/buildCinematicTheme.ts');
 const { buildTheme, AA, AA_LARGE } = await import('../src/theme/buildTheme.ts');
 const { contrast, inkOn } = await import('../src/theme/contrast.ts');
+const { storefrontFont } = await import('../src/theme/fonts.ts');
 
 // Public identity for the existing origin guard. No network calls are made.
 const ORIGIN = 'https://oqmevrndtivqxgyvcmwy.supabase.co';
@@ -85,4 +86,31 @@ test('explicit appearance remains exact, including owner-chosen low-contrast col
   assert.equal(custom.onacc, '#112233');
   assert.equal(custom.onhero, '#112233');
   assert.deepEqual(buildCinematicTheme({ ...brand, text: 'var(--fake)', buttonText: '#fff\n' }), baseline);
+});
+
+test('font selection is optional, allowlisted and travels through the public adapter without changing menu authority', () => {
+  const colours = { text_color: '#fff4e6', button_text_color: null };
+  const baseline = adaptStorefront(decodeStorefrontMenuV4(withAppearance(colours)), ORIGIN);
+  assert.equal(Object.hasOwn(baseline.view.tenant.brand, 'fontFamily'), false);
+  for (const font of ['rubik', 'alexandria', 'system', null]) {
+    const decoded = decodeStorefrontMenuV4(withAppearance({ ...colours, font_family: font }));
+    assert.equal(decoded.content_v1.appearance.font_family, font);
+    const resolution = adaptStorefront(decoded, ORIGIN);
+    assert.equal(resolution.view.tenant.brand.fontFamily, font);
+    assert.deepEqual({ ...resolution, view: { ...resolution.view, tenant: baseline.view.tenant } }, baseline);
+    assert.equal(buildCinematicTheme(resolution.view.tenant.brand).font, storefrontFont(font));
+  }
+  for (const font of ['', 'Arial', 'Alexandria', 'rubik ', 'url(https://example.invalid/font)', 'var(--unsafe)', 1, true, [], {}, undefined]) {
+    assert.throws(() => decodeStorefrontMenuV4(withAppearance({ ...colours, font_family: font })), EnvelopeError);
+  }
+});
+
+test('all font tokens use fixed local stacks and missing or null choice restores Rubik', () => {
+  const brand = { primary: '#151513', accent: '#f2ad79' };
+  const original = buildCinematicTheme(brand);
+  assert.deepEqual(buildCinematicTheme({ ...brand, fontFamily: null }), original);
+  assert.deepEqual(buildCinematicTheme({ ...brand, fontFamily: 'rubik' }), original);
+  assert.match(buildCinematicTheme({ ...brand, fontFamily: 'alexandria' }).font, /^"SF Alexandria", var\(--sf-font-latin/);
+  assert.match(buildTheme('dark', { ...brand, fontFamily: 'system' }).font, /^system-ui,/);
+  assert.equal(storefrontFont('untrusted; background: url(https://example.invalid)'), original.font);
 });

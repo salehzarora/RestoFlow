@@ -95,7 +95,7 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
     'subline': ['Hero subline', 'النص الفرعي للواجهة', 'כותרת משנה'],
     'announcement': ['Announcement text', 'نص الإعلان', 'טקסט הודעה'],
     'hero': ['Hero', 'الواجهة الرئيسية', 'אזור ראשי'],
-    'appearance': ['Text colors', 'ألوان النصوص', 'צבעי טקסט'],
+    'appearance': ['Text appearance', 'مظهر النصوص', 'עיצוב טקסט'],
     'primaryColor': [
       'Background / primary color',
       'لون الخلفية / اللون الأساسي',
@@ -118,6 +118,11 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
     ],
     'appearanceTextColor': ['General text', 'لون النص العام', 'טקסט כללי'],
     'appearanceButtonTextColor': ['Button text', 'لون نص الأزرار', 'טקסט כפתורים'],
+    'appearanceFont': ['Font', 'الخط', 'גופן'],
+    'appearanceFontDefault': ['Design default', 'الخط الافتراضي للتصميم', 'ברירת המחדל של העיצוב'],
+    'font_rubik': ['Rubik', 'روبيك', 'Rubik'],
+    'font_alexandria': ['Alexandria', 'الإسكندرية', 'Alexandria'],
+    'font_system': ['Device font', 'خط الجهاز', 'גופן המכשיר'],
     'appearanceHexHelp': [
       '#RRGGBB, for example #FFF4E6. Leave blank to use the design default.',
       '#RRGGBB، مثل #FFF4E6. اتركه فارغًا لاستخدام لون التصميم الافتراضي.',

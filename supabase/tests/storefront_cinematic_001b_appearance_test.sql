@@ -24,6 +24,12 @@ select is(app.storefront_content_document_shape_v1(pg_temp.appearance_document()
   (7,'{"text_color":"#gggggg","button_text_color":null}'::jsonb),
   (8,jsonb_build_object('text_color',E'#ffffff\n','button_text_color',null)),
   (9,'{"text_color":123,"button_text_color":null}'::jsonb)) x(n,v);
+select is(app.storefront_content_document_shape_v1(pg_temp.appearance_document()||jsonb_build_object('appearance',
+ jsonb_build_object('text_color',null,'button_text_color',null,'font_family',v)))#>'{document,appearance,font_family}',v,'allowed font choice: '||v::text)
+ from (values ('"rubik"'::jsonb),('"alexandria"'::jsonb),('"system"'::jsonb),('null'::jsonb)) x(v);
+select is(app.storefront_content_document_shape_v1(pg_temp.appearance_document()||jsonb_build_object('appearance',
+ jsonb_build_object('text_color',null,'button_text_color',null,'font_family',v)))->>'error','presentation_invalid','invalid font rejected: '||v::text)
+ from (values ('"Arial"'::jsonb),('"Alexandria"'::jsonb),('"rubik "'::jsonb),('"url(https://example.invalid)"'::jsonb),('1'::jsonb),('true'::jsonb),('[]'::jsonb),('{}'::jsonb)) x(v);
 
 insert into organizations(id,name,slug,default_currency) values(pg_temp.aid('org'),'Appearance test','appearance-cinematic-001b','ILS');
 insert into restaurants(id,organization_id,name,timezone) values(pg_temp.aid('restaurant'),pg_temp.aid('org'),'Appearance test','UTC');
@@ -47,6 +53,16 @@ set local role authenticated;
 select is(pg_temp.appearance_save('clear',pg_temp.appearance_document()||'{"appearance":{"text_color":null,"button_text_color":null}}',12)->>'version','13','null color overrides explicitly restore defaults');
 select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance}',
  '{"text_color":null,"button_text_color":null}'::jsonb,'cleared overrides roundtrip');
+select is(pg_temp.appearance_save('font',pg_temp.appearance_document()||'{"appearance":{"text_color":null,"button_text_color":null,"font_family":"alexandria"}}',13)->>'version','14','font saves through the existing version step');
+select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,font_family}','alexandria','private read roundtrips the selected font');
+select is(pg_temp.appearance_save('old-color-editor',pg_temp.appearance_document()||'{"appearance":{"text_color":"#F0F0F0","button_text_color":null}}',14)->>'version','15','older color-only editor remains accepted');
+select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,font_family}','alexandria','omitted font preserves existing selection');
+reset role;
+select is(public.storefront_menu_v4('appearance-cinematic-001b')#>>'{content_v1,appearance,font_family}','alexandria','public projection carries selected font');
+select throws_ok($$update app.storefront_content_profiles set appearance='{"text_color":null,"button_text_color":null,"font_family":"Arial"}' where restaurant_id=pg_temp.aid('restaurant')$$,'23514',null,'table constraint rejects unlisted font');
+set local role authenticated;
+select is(pg_temp.appearance_save('clear-font',pg_temp.appearance_document()||'{"appearance":{"text_color":"#f0f0f0","button_text_color":null,"font_family":null}}',15)->>'version','16','explicit null restores the default font');
+select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance,font_family}','null'::jsonb,'cleared font roundtrips');
 reset role;
 select * from finish();
 rollback;

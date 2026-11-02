@@ -97,6 +97,7 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
     phone: r.phone ?? '',
     brand: { primary: r.primary_color, accent: r.accent_color, logo: mediaUrl(r.logo_url, origin),
       ...(content?.appearance === undefined ? {} : { text: content.appearance.text_color, buttonText: content.appearance.button_text_color }),
+      ...(content?.appearance?.font_family === undefined ? {} : { fontFamily: content.appearance.font_family }),
     },
     hours: {
       opens: envelope.hours.opens ?? '',

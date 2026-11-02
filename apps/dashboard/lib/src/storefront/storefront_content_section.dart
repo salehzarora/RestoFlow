@@ -440,6 +440,34 @@ class _ContentState extends State<StorefrontContentSection> {
     );
   }
 
+  Widget _appearanceFont() {
+    final appearance = _draft?['appearance'] as Map?;
+    final font = appearance?['font_family'] as String?;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: DropdownButtonFormField<String>(
+        key: ValueKey('content-appearance.font_family-$_generation'),
+        initialValue: font ?? '',
+        isExpanded: true,
+        decoration: InputDecoration(labelText: c('appearanceFont')),
+        items: [
+          DropdownMenuItem(value: '', child: Text(c('appearanceFontDefault'))),
+          for (final value in storefrontFontFamilies)
+            DropdownMenuItem(value: value, child: Text(c('font_$value'))),
+        ],
+        onChanged: _editable
+            ? (value) {
+                if (!_editable) return;
+                _draft!['appearance'] ??= <String, dynamic>{
+                  for (final key in storefrontAppearanceKeys) key: null,
+                };
+                _change('appearance.font_family', value == '' ? null : value);
+              }
+            : null,
+      ),
+    );
+  }
+
   Widget _select(
     String path,
     String label,
@@ -1216,6 +1244,7 @@ class _ContentState extends State<StorefrontContentSection> {
           Text(c('appearanceHelp')),
           _appearanceColor('text_color', 'appearanceTextColor'),
           _appearanceColor('button_text_color', 'appearanceButtonTextColor'),
+          _appearanceFont(),
           TextField(
             key: const Key('content-hero-headline'),
             controller: _headline,

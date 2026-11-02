@@ -12,12 +12,15 @@
  * golden vectors in tests/sf-theme.test.mjs.
  */
 import { contrast, inkOn, mix, rgba, tone, walk, type Hex } from './contrast';
+import type { FontFamily } from '../source/types';
+import { storefrontFont } from './fonts';
 
 export type Preset = 'dark' | 'light';
 
 export interface TenantColours {
   readonly primary: Hex;
   readonly accent: Hex;
+  readonly fontFamily?: FontFamily | null;
 }
 
 /** Every CSS custom property the storefront paints with, without the `--`. */
@@ -66,7 +69,7 @@ const SEMANTIC = {
 export const AA = 4.5;
 export const AA_LARGE = 3;
 
-export function buildTheme(preset: Preset, { primary, accent }: TenantColours): ThemeTokens {
+export function buildTheme(preset: Preset, { primary, accent, fontFamily }: TenantColours): ThemeTokens {
   const dark = preset === 'dark';
   const s = SEMANTIC[preset];
   const toWhite = dark ? '#FFFFFF' : '#000000';
@@ -179,6 +182,7 @@ export function buildTheme(preset: Preset, { primary, accent }: TenantColours): 
     glassDock: dark ? rgba(dockBase, 0.92) : 'rgba(255,255,255,.94)',
     onDock2,
     glassLine: heroInkIsWhite ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.14)',
+    font: storefrontFont(fontFamily),
   };
 }
 

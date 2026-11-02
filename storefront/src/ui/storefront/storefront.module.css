@@ -9,6 +9,15 @@
  * they are BIZBOT platform colours, never a tenant's.
  */
 
+/* Optional self-hosted Arabic display face; loaded only when selected. */
+@font-face {
+  font-family: 'SF Alexandria';
+  src: url('../../fonts/alexandria-arabic.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 500 900;
+  font-display: swap;
+}
+
 .root {
   /* --- neutral first-paint fallbacks (platform, not tenant) --- */
   --bg: #101816;

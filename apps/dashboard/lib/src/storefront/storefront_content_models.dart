@@ -18,6 +18,7 @@ const storefrontContentKeys = {
   'item_presentation',
 };
 const storefrontAppearanceKeys = {'text_color', 'button_text_color'};
+const storefrontFontFamilies = {'rubik', 'alexandria', 'system'};
 final storefrontAppearanceHex = RegExp(r'^#[0-9A-Fa-f]{6}$');
 const storefrontContentReasons = {
   'document_not_object',
@@ -77,6 +78,7 @@ bool contentFieldPath(Object? value) => const {
   'appearance',
   'appearance.text_color',
   'appearance.button_text_color',
+  'appearance.font_family',
 }.contains(value);
 
 Object? _freeze(Object? value) => switch (value) {
@@ -102,7 +104,12 @@ class StorefrontContentDocument {
     if (j.containsKey('appearance')) {
       final appearance = contentObject(
         j['appearance'],
-        storefrontAppearanceKeys,
+        {
+          ...storefrontAppearanceKeys,
+          if (j['appearance'] is Map &&
+              (j['appearance'] as Map).containsKey('font_family'))
+            'font_family',
+        },
         'appearance',
       );
       for (final key in storefrontAppearanceKeys) {
@@ -117,6 +124,14 @@ class StorefrontContentDocument {
           );
         }
         if (color is String) appearance[key] = color.toLowerCase();
+      }
+      final font = appearance['font_family'];
+      if (font != null &&
+          (font is! String || !storefrontFontFamilies.contains(font))) {
+        throw const StorefrontDecodeException(
+          'appearance.font_family',
+          'presentation_invalid',
+        );
       }
       j['appearance'] = appearance;
     }

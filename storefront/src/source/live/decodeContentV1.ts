@@ -1,6 +1,6 @@
 /** v4 is a separate strict wire boundary. Server drift normalization is NOT
  * decoder repair. No network, environment, v3 endpoint retry or fixture path. */
-import type { HeroFormat, ImageFit, CardLayout } from '../types';
+import type { HeroFormat, ImageFit, CardLayout, FontFamily } from '../types';
 import { contentTextValid, heroFormatValid } from '../../content/unicode';
 import { EnvelopeError, type StorefrontMenuFailure } from './decode';
 import { decodeStorefrontMenuV3, type StorefrontMenuV3Ok } from './decodeFeaturedItems';
@@ -10,7 +10,7 @@ export interface WireCategoryPresentation {
   readonly image_url:string|null; readonly image_fit:ImageFit|null; readonly card_layout:CardLayout|null;
 }
 export interface WireItemPresentation { readonly item_id:string; readonly image_fit:ImageFit|null; readonly card_layout:CardLayout|null; }
-export interface WireAppearance { readonly text_color:string|null; readonly button_text_color:string|null; }
+export interface WireAppearance { readonly text_color:string|null; readonly button_text_color:string|null; readonly font_family?:FontFamily|null; }
 export interface WireContentV1 {
   readonly schema:1;
   /** Additive visual fields; the original v4 content shape remains valid. */
@@ -75,8 +75,11 @@ export function decodeStorefrontMenuV4(raw:unknown):StorefrontMenuV4Envelope{
   const o=record(content,contentKeys,'object');if(o.schema!==1)return reject('schema');
   let appearance:WireAppearance|undefined;
   if(Object.hasOwn(o,'appearance')){
-    const a=record(o.appearance,['text_color','button_text_color'],'appearance');
-    appearance={text_color:colour(a.text_color,'appearance.text_color'),button_text_color:colour(a.button_text_color,'appearance.button_text_color')};
+    const keys=['text_color','button_text_color'];
+    if(typeof o.appearance==='object'&&o.appearance!==null&&Object.hasOwn(o.appearance,'font_family'))keys.push('font_family');
+    const a=record(o.appearance,keys,'appearance');
+    appearance={text_color:colour(a.text_color,'appearance.text_color'),button_text_color:colour(a.button_text_color,'appearance.button_text_color'),
+      ...(Object.hasOwn(a,'font_family')?{font_family:a.font_family===null?null:choice<FontFamily>(a.font_family,['rubik','alexandria','system'],'appearance.font_family')}:{})};
   }
   const h=record(o.hero,['mode','item_id','format','eyebrow','stamp','footnote'],'hero');
   const mode=choice(h.mode,['editorial','item'],'hero.mode');const itemId=h.item_id===null?null:id(h.item_id,'hero.item_id');

@@ -24,11 +24,11 @@ function appearanceColour(value: string | null | undefined): Hex | null {
  * The original buildTheme/sanitizePrimary contract remains unchanged.
  */
 export function buildCinematicTheme(
-  brand: Pick<TenantBrand, 'primary' | 'accent' | 'text' | 'buttonText'>,
+  brand: Pick<TenantBrand, 'primary' | 'accent' | 'text' | 'buttonText' | 'fontFamily'>,
 ): ThemeTokens {
   const primary = brandColour(brand.primary, BG);
   const accent = brandColour(brand.accent, ACCENT);
-  const base = buildTheme('dark', { primary, accent });
+  const base = buildTheme('dark', { primary, accent, fontFamily: brand.fontFamily });
   const automaticInk = contrast('#ffffff', primary) >= contrast('#000000', primary) ? '#ffffff' : '#000000';
   const dark = automaticInk === '#ffffff';
   const surface = (amount: number): Hex => {

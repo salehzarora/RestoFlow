@@ -135,6 +135,29 @@ void main() {
       );
     }
   });
+  test('font choice is optional and accepts only bundled or device fonts', () {
+    for (final font in <String?>['rubik', 'alexandria', 'system', null]) {
+      final raw = document()
+        ..['appearance'] = {
+          'text_color': null, 'button_text_color': null, 'font_family': font,
+        };
+      final decoded = StorefrontContentDocument.fromJson(raw);
+      expect((decoded.json['appearance'] as Map)['font_family'], font);
+      expect(StorefrontContentDocument.fromJson(decoded.editableCopy()).json,
+          decoded.json);
+    }
+    for (final font in <Object>[
+      '', 'Arial', 'Alexandria', 'rubik ', 'url(https://example.invalid)', 1, true, [], {},
+    ]) {
+      expect(
+        () => StorefrontContentDocument.fromJson(document()
+          ..['appearance'] = {
+            'text_color': null, 'button_text_color': null, 'font_family': font,
+          }),
+        throwsA(isA<StorefrontDecodeException>()),
+      );
+    }
+  });
   test('appearance uses the existing versioned content write', () async {
     final transport = ScriptTransport([success()]);
     final repo = repository(transport);
