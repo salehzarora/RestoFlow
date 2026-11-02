@@ -1,5 +1,14 @@
 # Rubik, self-hosted
 
+The optional dashboard font selector adds `Alexandria` and a device-font stack.
+Rubik remains the default when `appearance.font_family` is absent or null.
+The Alexandria Arabic variable subset is copied unchanged from the existing
+licensed marketing-site asset, with `OFL-Alexandria.txt` beside it. It is declared
+in the shared Storefront CSS and fetched only when selected, without another
+font preload or a third-party font service. Latin/Hebrew glyphs keep the bundled
+Rubik fallbacks. The dropdown accepts only `rubik`, `alexandria`, and `system`;
+raw CSS/font URLs never cross the content boundary.
+
 Three variable woff2 subsets (Latin, Arabic, Hebrew), each covering the whole
 400-900 weight range, vendored because `font-src 'self'` forbids gstatic.
 

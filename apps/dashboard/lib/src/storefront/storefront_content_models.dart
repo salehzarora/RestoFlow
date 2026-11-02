@@ -17,6 +17,9 @@ const storefrontContentKeys = {
   'category_presentation',
   'item_presentation',
 };
+const storefrontAppearanceKeys = {'text_color', 'button_text_color'};
+const storefrontFontFamilies = {'rubik', 'alexandria', 'system'};
+final storefrontAppearanceHex = RegExp(r'^#[0-9A-Fa-f]{6}$');
 const storefrontContentReasons = {
   'document_not_object',
   'document_too_large',
@@ -72,6 +75,10 @@ bool contentFieldPath(Object? value) => const {
   'story.editorial_media_id',
   'category_presentation',
   'item_presentation',
+  'appearance',
+  'appearance.text_color',
+  'appearance.button_text_color',
+  'appearance.font_family',
 }.contains(value);
 
 Object? _freeze(Object? value) => switch (value) {
@@ -87,9 +94,46 @@ class StorefrontContentDocument {
   final Map<String, Object?> json;
 
   factory StorefrontContentDocument.fromJson(Object? raw) {
-    final j = contentObject(raw, storefrontContentKeys, 'document');
+    final j = contentObject(raw, {
+      ...storefrontContentKeys,
+      if (raw is Map && raw.containsKey('appearance')) 'appearance',
+    }, 'document');
     if (utf8.encode(jsonEncode(j)).length > 256 * 1024) {
       throw const StorefrontDecodeException('document', 'document_too_large');
+    }
+    if (j.containsKey('appearance')) {
+      final appearance = contentObject(
+        j['appearance'],
+        {
+          ...storefrontAppearanceKeys,
+          if (j['appearance'] is Map &&
+              (j['appearance'] as Map).containsKey('font_family'))
+            'font_family',
+        },
+        'appearance',
+      );
+      for (final key in storefrontAppearanceKeys) {
+        final color = appearance[key];
+        if (color != null &&
+            (color is! String ||
+                color.length != 7 ||
+                !storefrontAppearanceHex.hasMatch(color))) {
+          throw StorefrontDecodeException(
+            'appearance.$key',
+            'presentation_invalid',
+          );
+        }
+        if (color is String) appearance[key] = color.toLowerCase();
+      }
+      final font = appearance['font_family'];
+      if (font != null &&
+          (font is! String || !storefrontFontFamilies.contains(font))) {
+        throw const StorefrontDecodeException(
+          'appearance.font_family',
+          'presentation_invalid',
+        );
+      }
+      j['appearance'] = appearance;
     }
     void text(
       Object? value,

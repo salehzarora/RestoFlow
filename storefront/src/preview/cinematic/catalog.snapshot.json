@@ -1,0 +1,76 @@
+{
+  "tenant": {
+    "slug": "mapsburger",
+    "displayName": "** خرائط البرجر **",
+    "tagline": "برجر الخرائط",
+    "city": "كفرمندا",
+    "address": "النبعة",
+    "phone": "0549355685",
+    "brand": {
+      "primary": "#13322a",
+      "accent": "#e07b2c",
+      "logo": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/cd1cb3e0414625cb3df02cc7f113f71ab6a957aafbfc2ca57df14be8e882e0a6.webp"
+    },
+    "hours": {
+      "opens": "13:00",
+      "closes": "02:00",
+      "nextOpen": "2026-11-03T11:00:00+00:00",
+      "nextOpenAt": {
+        "weekday": 2,
+        "time": "13:00"
+      },
+      "timezone": "Asia/Jerusalem"
+    },
+    "service": {
+      "state": "closed",
+      "pickupEnabled": true,
+      "deliveryEnabled": false,
+      "deliveryFromMinor": 0,
+      "orderingEnabled": false
+    },
+    "heroImage": "https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-media/38253a07b0cf3d8c2dad18bf91a72deb/70ae4bef40f856af0b3c846ae1d9e0646e1f5920386401796a34d523499e430f.webp",
+    "currency": "ILS"
+  },
+  "categories": [
+    {
+      "id": "dd0ba105-889c-4cb5-84e8-34d9acd7f0db",
+      "name": "وجبات",
+      "image": null,
+      "iconPath": "M4 10h16a8 8 0 00-16 0zM3 14h18M4 17h16v1a2 2 0 01-2 2H6a2 2 0 01-2-2z",
+      "blurb": null,
+      "heading": null,
+      "imageFit": null,
+      "cardLayout": null
+    },
+    {
+      "id": "cab0e9a4-1c85-48dc-8159-845f42414a5d",
+      "name": "مقبلات",
+      "image": null,
+      "iconPath": "M4 8h6v6H4zM14 8h6v6h-6zM9 16h6v4H9z",
+      "blurb": null,
+      "heading": null,
+      "imageFit": null,
+      "cardLayout": null
+    },
+    {
+      "id": "85899d6b-7b23-4722-ad61-812f9e7d8af4",
+      "name": "كاسة مقبلات",
+      "image": null,
+      "iconPath": "M5 8h14l-1 12H6zM9 8V6a3 3 0 016 0v2",
+      "blurb": null,
+      "heading": null,
+      "imageFit": null,
+      "cardLayout": null
+    },
+    {
+      "id": "86f2f5fe-6b3a-4db6-9ce0-16ef2e04a84b",
+      "name": "مشروب",
+      "image": null,
+      "iconPath": "M4 4h16l-8 9zM12 13v7M8 20h8",
+      "blurb": null,
+      "heading": null,
+      "imageFit": null,
+      "cardLayout": null
+    }
+  ]
+}

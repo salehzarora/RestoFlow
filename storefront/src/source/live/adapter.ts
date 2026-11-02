@@ -95,7 +95,10 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
     city: r.city ?? '',
     address: r.address ?? '',
     phone: r.phone ?? '',
-    brand: { primary: r.primary_color, accent: r.accent_color, logo: mediaUrl(r.logo_url, origin) },
+    brand: { primary: r.primary_color, accent: r.accent_color, logo: mediaUrl(r.logo_url, origin),
+      ...(content?.appearance === undefined ? {} : { text: content.appearance.text_color, buttonText: content.appearance.button_text_color }),
+      ...(content?.appearance?.font_family === undefined ? {} : { fontFamily: content.appearance.font_family }),
+    },
     hours: {
       opens: envelope.hours.opens ?? '',
       closes: envelope.hours.closes ?? '',

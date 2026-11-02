@@ -96,6 +96,84 @@ StorefrontContentAttempt attempt(SupabaseStorefrontContentRepository r) =>
     );
 
 void main() {
+  test('optional appearance keeps legacy documents and roundtrips HEX colors', () {
+    final legacy = document();
+    expect(StorefrontContentDocument.fromJson(legacy).json, legacy);
+    final raw = document()
+      ..['appearance'] = {
+        'text_color': '#FFF4E6',
+        'button_text_color': '#14120F',
+      };
+    final decoded = StorefrontContentDocument.fromJson(raw);
+    expect(decoded.json['appearance'], {
+      'text_color': '#fff4e6',
+      'button_text_color': '#14120f',
+    });
+    expect(StorefrontContentDocument.fromJson(decoded.editableCopy()).json,
+        decoded.json);
+    final copy = decoded.editableCopy();
+    (copy['appearance'] as Map)['text_color'] = null;
+    expect((decoded.json['appearance'] as Map)['text_color'], '#fff4e6');
+    expect(StorefrontContentDocument.fromJson(copy).json['appearance'], {
+      'text_color': null,
+      'button_text_color': '#14120f',
+    });
+  });
+  test('appearance rejects malformed HEX and unknown keys before saving', () {
+    for (final value in <Object?>[
+      null,
+      {},
+      {'text_color': '#ffffff'},
+      {'text_color': null, 'button_text_color': null, 'css': 'anything'},
+      for (final invalid in <Object>[
+        '#fff', 'white', '#fffffff', '#gggggg', '#ffffff\n', ' #ffffff', 1,
+      ]) {'text_color': invalid, 'button_text_color': null},
+    ]) {
+      expect(
+        () => StorefrontContentDocument.fromJson(document()..['appearance'] = value),
+        throwsA(isA<StorefrontDecodeException>()),
+      );
+    }
+  });
+  test('font choice is optional and accepts only bundled or device fonts', () {
+    for (final font in <String?>['rubik', 'alexandria', 'system', null]) {
+      final raw = document()
+        ..['appearance'] = {
+          'text_color': null, 'button_text_color': null, 'font_family': font,
+        };
+      final decoded = StorefrontContentDocument.fromJson(raw);
+      expect((decoded.json['appearance'] as Map)['font_family'], font);
+      expect(StorefrontContentDocument.fromJson(decoded.editableCopy()).json,
+          decoded.json);
+    }
+    for (final font in <Object>[
+      '', 'Arial', 'Alexandria', 'rubik ', 'url(https://example.invalid)', 1, true, [], {},
+    ]) {
+      expect(
+        () => StorefrontContentDocument.fromJson(document()
+          ..['appearance'] = {
+            'text_color': null, 'button_text_color': null, 'font_family': font,
+          }),
+        throwsA(isA<StorefrontDecodeException>()),
+      );
+    }
+  });
+  test('appearance uses the existing versioned content write', () async {
+    final transport = ScriptTransport([success()]);
+    final repo = repository(transport);
+    final prepared = repo.prepareContent(
+      expectedVersion: 3,
+      expectedBranchId: branch,
+      document: StorefrontContentDocument.fromJson(document()
+        ..['appearance'] = {'text_color': '#Aa00Ff', 'button_text_color': null}),
+    );
+    await repo.saveContent(prepared);
+    expect(transport.calls.single.function, 'set_restaurant_storefront_content_v1');
+    expect(transport.calls.single.params['p_expected_version'], 3);
+    expect((transport.calls.single.params['p_document'] as Map)['appearance'], {
+      'text_color': '#aa00ff', 'button_text_color': null,
+    });
+  });
   test(
     'versioned editorial usage preserves legacy slot enums and refuses unknown usage',
     () {

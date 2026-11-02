@@ -195,6 +195,65 @@ Future<void> edit(WidgetTester tester, String key, String text) async {
 }
 
 void main() {
+  testWidgets('HEX controls reject invalid input and save blank as inherited', (
+    tester,
+  ) async {
+    final repo = ContentRepo();
+    await mount(tester, repo);
+    final textColor = find.byWidgetPredicate((widget) =>
+        widget is TextFormField &&
+        widget.key is ValueKey<String> &&
+        (widget.key! as ValueKey<String>).value
+            .startsWith('content-appearance.text_color-'));
+    await tester.ensureVisible(textColor);
+    await tester.enterText(textColor, 'red');
+    await tester.pumpAndSettle();
+    tester.widget<FilledButton>(find.byKey(const Key('content-save'))).onPressed!();
+    await tester.pumpAndSettle();
+    expect(repo.calls, isEmpty);
+    expect(find.text('Enter # followed by six hexadecimal digits.'), findsOneWidget);
+    await tester.enterText(textColor, '#Aa00Ff');
+    await tester.pumpAndSettle();
+    tester.widget<FilledButton>(find.byKey(const Key('content-save'))).onPressed!();
+    await tester.pumpAndSettle();
+    expect(repo.calls.single.document.json['appearance'], {
+      'text_color': '#aa00ff', 'button_text_color': null,
+    });
+    await tester.ensureVisible(textColor);
+    await tester.enterText(textColor, '');
+    await tester.pumpAndSettle();
+    tester.widget<FilledButton>(find.byKey(const Key('content-save'))).onPressed!();
+    await tester.pumpAndSettle();
+    expect(repo.calls.last.document.json['appearance'], {
+      'text_color': null, 'button_text_color': null,
+    });
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('font choice saves through existing content and explicitly resets', (
+    tester,
+  ) async {
+    final repo = ContentRepo();
+    await mount(tester, repo);
+    final font = find.byWidgetPredicate((widget) =>
+        widget is DropdownButtonFormField<String> &&
+        widget.key is ValueKey<String> &&
+        (widget.key! as ValueKey<String>).value
+            .startsWith('content-appearance.font_family-'));
+    await tester.ensureVisible(font);
+    tester.widget<DropdownButtonFormField<String>>(font).onChanged!('alexandria');
+    await tester.pumpAndSettle();
+    tester.widget<FilledButton>(find.byKey(const Key('content-save'))).onPressed!();
+    await tester.pumpAndSettle();
+    expect(repo.calls.single.document.json['appearance'], {
+      'text_color': null, 'button_text_color': null, 'font_family': 'alexandria',
+    });
+    tester.widget<DropdownButtonFormField<String>>(font).onChanged!('');
+    await tester.pumpAndSettle();
+    tester.widget<FilledButton>(find.byKey(const Key('content-save'))).onPressed!();
+    await tester.pumpAndSettle();
+    expect((repo.calls.last.document.json['appearance'] as Map)['font_family'], isNull);
+    expect(tester.takeException(), isNull);
+  });
   for (final status in [
     StorefrontContentReadStatus.unavailable,
     StorefrontContentReadStatus.denied,

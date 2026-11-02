@@ -1839,7 +1839,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
             _textField(
               key: const Key('storefront-primary-color'),
               controller: _primary,
-              label: l10n.storefrontPrimaryColorLabel,
+              label: storefrontContentCopy(l10n, 'primaryColor'),
               helper: l10n.storefrontColorHelp,
               error: _colorError(l10n, _primary),
               ltr: true,
@@ -1849,7 +1849,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               Padding(
                 padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
                 child: Text(
-                  l10n.storefrontPrimaryContrastWarning,
+                  storefrontContentCopy(l10n, 'colorContrastHelp'),
                   key: const Key('storefront-primary-contrast-warning'),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: RestoflowTone.warning.styleOf(theme).accent,
@@ -1861,7 +1861,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         _textField(
           key: const Key('storefront-accent-color'),
           controller: _accent,
-          label: l10n.storefrontAccentColorLabel,
+          label: storefrontContentCopy(l10n, 'accentColor'),
           helper: l10n.storefrontColorHelp,
           error: _colorError(l10n, _accent),
           ltr: true,

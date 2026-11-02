@@ -106,9 +106,13 @@ test('application source imports nothing outside the allowlist', () => {
 
 test('public/ fits the engine type allowlist and size cap', () => {
   const dir = path.join(ROOT, 'public');
-  for (const name of readdirSync(dir)) {
-    assert.ok(PUBLIC_TYPES.includes(path.extname(name).toLowerCase()), `public/${name}: type not allowed`);
-    assert.ok(statSync(path.join(dir, name)).size <= 256 * 1024, `public/${name}: over 256 KB`);
+  // The deployment engine checks files recursively, including preview media.
+  const files = (root) => readdirSync(root, { withFileTypes: true }).flatMap(entry =>
+    entry.isDirectory() ? files(path.join(root, entry.name)) : [path.join(root, entry.name)]);
+  for (const file of files(dir)) {
+    const name = path.relative(ROOT, file);
+    assert.ok(PUBLIC_TYPES.includes(path.extname(file).toLowerCase()), `${name}: type not allowed`);
+    assert.ok(statSync(file).size <= 256 * 1024, `${name}: over 256 KB`);
   }
 });
 

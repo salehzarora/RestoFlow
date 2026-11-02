@@ -1,16 +1,18 @@
 /** Menu presentation. Delegated product opening belongs to StorefrontRuntime. */
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import type { Locale } from '@/i18n/locales';
 import type { CardMode, Category, MenuItem } from '@/source/types';
 import { PlusIcon, ChevronIcon } from '../icons';
 import { TenantText } from '../TenantText';
 import { Price } from './HomeParts';
+import { ProductCarousel } from './ProductCarousel';
 import { productCardClass, productFrameClass, productImageClass, sectionGridClass, sectionLayout } from '../contentPresentation';
 import contentStyles from '../storefront.module.css';
 import styles from './home.module.css';
 
 function Media({ item, m, rankLabel }: { item: MenuItem; m: StorefrontMessages; rankLabel?: string }) {
   const badge = item.soldOut ? m.soldOut : item.featured ? m.chefPick : item.badge === 'new' ? m.badgeNew : item.badge === 'deal' ? m.badgeDeal : null;
-  return <div className={`${styles.cardMediaGrid} ${productFrameClass(item, contentStyles.wholeFrame)}`}>
+  return <div className={`${styles.cardMediaGrid} ${productFrameClass(item, contentStyles.wholeFrame)}`} data-sf-image-fit={item.imageFit ?? 'fill'}>
     {item.image === null ? <span className={styles.cardNoImage} aria-hidden="true">{item.name.slice(0, 1)}</span> : (
       /* eslint-disable-next-line @next/next/no-img-element */
       <img className={`${styles.cardImg} ${productImageClass(item, contentStyles.wholeImage)}`} src={item.image} alt="" width={600} height={600} loading="lazy" decoding="async" />
@@ -35,11 +37,10 @@ export function PopularSection({ items, m }: { items: readonly MenuItem[]; m: St
   const shown = items.filter((i) => i.featured && !i.soldOut);
   return shown.length ? <section className={styles.section} data-sf-module="popular"><h2>{m.chefPicks}</h2><div className={`${styles.popularGrid} ${sectionGridClass(sectionLayout('grid', shown), contentStyles.cutoutGrid)}`}>{shown.map(item => <GridCard key={item.id} item={item} m={m} />)}</div></section> : null;
 }
-export function MenuSection({ category, items, cardMode, m }: { category: Category; items: readonly MenuItem[]; cardMode: CardMode; m: StorefrontMessages }) {
-  if (items.length === 0) return null;
+export function MenuSection({ category, items, m, locale }: { category: Category; items: readonly MenuItem[]; cardMode: CardMode; m: StorefrontMessages; locale: Locale }) {
   return <section className={styles.section} id={`sf-cat-${category.id}`} aria-labelledby={`sf-cat-title-${category.id}`} data-sf-module="sections">
-    <div className={styles.sectionHead}><h3 id={`sf-cat-title-${category.id}`} tabIndex={-1}><TenantText>{category.heading ?? category.name}</TenantText></h3>{category.blurb ? <p className={styles.sectionBlurb}><TenantText>{category.blurb}</TenantText></p> : null}<span>{items.length === 1 ? m.item : fill(m.items, {n:String(items.length)})}</span></div>
-    <div className={`${cardMode === 'grid' ? styles.gridWrap : styles.listWrap} ${sectionGridClass(sectionLayout(cardMode, items, category), contentStyles.cutoutGrid)}`} data-sf-layout={sectionLayout(cardMode, items, category)}>{items.map(item => cardMode === 'grid' ? <GridCard key={item.id} item={item} m={m} /> : <ListRow key={item.id} item={item} m={m} />)}</div>
+    <div className={styles.sectionHead}><h3 id={`sf-cat-title-${category.id}`} tabIndex={-1}><TenantText>{category.heading ?? category.name}</TenantText></h3>{category.blurb ? <p className={styles.sectionBlurb}><TenantText>{category.blurb}</TenantText></p> : null}</div>
+    {items.length ? <ProductCarousel items={items} m={m} locale={locale} label={category.name} /> : <p className={styles.sectionBlurb}>{m.emptyMenu}</p>}
   </section>;
 }
 export function rankLabel(m: StorefrontMessages, n: number): string { return fill(m.rankN, {n:String(n)}); }

@@ -1752,7 +1752,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byKey(warning), findsOneWidget, reason: hex);
         expect(
-          find.text(l10n.storefrontPrimaryContrastWarning),
+          find.text(storefrontContentCopy(l10n, 'colorContrastHelp')),
           findsOneWidget,
         );
       }

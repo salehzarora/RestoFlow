@@ -403,6 +403,71 @@ class _ContentState extends State<StorefrontContentSection> {
       onChanged: (text) => _change(path, text),
     ),
   );
+
+  Widget _appearanceColor(String field, String label) {
+    final appearance = _draft?['appearance'] as Map?;
+    final value = appearance?[field] as String? ?? '';
+    final valid =
+        value.isEmpty ||
+        (value.length == 7 && storefrontAppearanceHex.hasMatch(value));
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: TextFormField(
+        key: ValueKey('content-appearance.$field-$_generation'),
+        initialValue: value,
+        enabled: _editable,
+        textDirection: TextDirection.ltr,
+        autocorrect: false,
+        decoration: InputDecoration(
+          labelText: c(label),
+          helperText: c('appearanceHexHelp'),
+          errorText: valid ? null : c('appearanceHexInvalid'),
+          prefixIcon: value.isNotEmpty && valid
+              ? Icon(
+                  Icons.circle,
+                  color: Color(int.parse('ff${value.substring(1)}', radix: 16)),
+                )
+              : const Icon(Icons.palette_outlined),
+        ),
+        onChanged: (text) {
+          if (!_editable) return;
+          _draft!['appearance'] ??= <String, dynamic>{
+            for (final key in storefrontAppearanceKeys) key: null,
+          };
+          _change('appearance.$field', text.isEmpty ? null : text);
+        },
+      ),
+    );
+  }
+
+  Widget _appearanceFont() {
+    final appearance = _draft?['appearance'] as Map?;
+    final font = appearance?['font_family'] as String?;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: DropdownButtonFormField<String>(
+        key: ValueKey('content-appearance.font_family-$_generation'),
+        initialValue: font ?? '',
+        isExpanded: true,
+        decoration: InputDecoration(labelText: c('appearanceFont')),
+        items: [
+          DropdownMenuItem(value: '', child: Text(c('appearanceFontDefault'))),
+          for (final value in storefrontFontFamilies)
+            DropdownMenuItem(value: value, child: Text(c('font_$value'))),
+        ],
+        onChanged: _editable
+            ? (value) {
+                if (!_editable) return;
+                _draft!['appearance'] ??= <String, dynamic>{
+                  for (final key in storefrontAppearanceKeys) key: null,
+                };
+                _change('appearance.font_family', value == '' ? null : value);
+              }
+            : null,
+      ),
+    );
+  }
+
   Widget _select(
     String path,
     String label,
@@ -971,6 +1036,7 @@ class _ContentState extends State<StorefrontContentSection> {
     'story' => 'story',
     'category_presentation' => 'categoryPresentation',
     'item_presentation' => 'itemPresentation',
+    'appearance' => 'appearance',
     _ => null,
   };
 
@@ -1174,6 +1240,11 @@ class _ContentState extends State<StorefrontContentSection> {
           for (final warning in _read!.snapshot!.warnings)
             Text(_warningText(warning)),
           if (!widget.enabled) Text(c('otherEdits')),
+          _title('appearance'),
+          Text(c('appearanceHelp')),
+          _appearanceColor('text_color', 'appearanceTextColor'),
+          _appearanceColor('button_text_color', 'appearanceButtonTextColor'),
+          _appearanceFont(),
           TextField(
             key: const Key('content-hero-headline'),
             controller: _headline,
