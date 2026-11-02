@@ -42,7 +42,7 @@
 .eyebrow{composes:flexRow;gap:11px;font-size:11px;font-weight:500;margin:0}
 .littlePin{composes:gridCenter;height:26px;width:26px;border:1px solid var(--acc);border-radius:50%;color:var(--acct)}
 .heroTitle{font-size:clamp(70px,7.2vw,100px);line-height:1.1;letter-spacing:-4px;font-weight:850;margin:22px 0 26px;overflow-wrap:anywhere}
-.heroTitle span{unicode-bidi:plaintext}
+.heroTitle>span{unicode-bidi:plaintext;white-space:pre-wrap}.heroTitle>span>span{unicode-bidi:normal}
 .heroWord{position:relative;display:inline-block;max-width:100%;color:var(--accLargeText)}.heroWord>svg{position:absolute;inset-inline:0;inset-block-end:-13px;width:100%;height:19px;stroke-width:2.5}
 
 .heroSub{font-size:14px;line-height:1.95;color:var(--tx2);margin:0;overflow-wrap:anywhere}
@@ -290,8 +290,8 @@
 .cartTrigger svg{width:24px;height:24px}
 .hero{position:relative;min-height:520px;padding-block:60px;grid-template-columns:1fr 1fr;gap:48px}
 .heroCopy{align-self:center;display:flex;flex-direction:column;align-items:flex-start;padding:0}
-.heroTitle{font-size:clamp(56px,7vw,96px);line-height:1.28;letter-spacing:normal;font-weight:600;margin:22px 0;max-width:10ch;text-wrap:balance}
-.heroWord{color:inherit}.heroWord>svg{display:none}
+.heroTitle{font-size:clamp(56px,7vw,96px);line-height:1.28;letter-spacing:normal;font-weight:900;margin:22px 0;max-width:10ch;text-wrap:balance}
+.heroWord{display:inline;color:var(--accLargeText)}.heroWord>svg{display:none}
 .eyebrow{font-size:12px;letter-spacing:normal;font-weight:500;color:var(--acct)}
 .littlePin{border:0;color:var(--acc);width:auto;height:auto}.littlePin svg{width:16px;height:16px}
 .heroSub{font-size:19px;line-height:1.8;color:var(--tx2);max-width:36ch}
@@ -306,7 +306,7 @@
 .page[data-sf-screen="intro"] .heroCopy{min-height:540px;align-self:stretch;justify-content:center}
 .announce{background:color-mix(in srgb,var(--acc) 10%,transparent);color:var(--tx);border:0;font-size:12px}
 .menu{padding-block:40px 36px;scroll-margin-block-start:96px}
-.menuHeading{margin-block-end:24px;align-items:center}.menuHeading h2{font-size:40px;font-weight:550;letter-spacing:normal}
+.menuHeading{margin-block-end:24px;align-items:center}.menuHeading h2{font-size:40px;font-weight:800;letter-spacing:normal}
 .menuHeading .eyebrow{font-size:12px;margin-block-end:10px}.menuHeading .eyebrow::before,.menuHeading .eyebrow>span{display:none}
 .searchBox{min-width:280px;min-height:48px;padding-inline:16px;border:1px solid var(--hair);border-radius:17px;background:color-mix(in srgb,var(--sf2) 80%,transparent)}
 .searchBox input{font-size:14px}.searchBox kbd{display:none}.searchBox>svg{color:var(--tx)}
@@ -410,5 +410,39 @@
 
 /* The selected tab already names an uncustomized category. Keep its heading
    accessible, and reveal it when programmatic category navigation focuses it. */
-.sectionHead[data-sf-default-heading]{height:0;min-height:0;padding:0;overflow:hidden}
-.sectionHead[data-sf-default-heading]:focus-within{height:auto;padding-block:8px}
+
+
+/* Final orbital menu: source-ordered categories stay mounted and browsable. */
+.menuSections[hidden]{display:none}
+.menuSections>.section{margin-block:30px 68px;scroll-margin-block-start:168px}
+.menuSections>.section:last-child{margin-block-end:38px}
+.menuSections .sectionHead{display:flex;flex-wrap:wrap;justify-content:center;padding:0;margin-block:0 18px;text-align:center;gap:8px}
+.menuSections .sectionHead h3{display:flex;align-items:center;justify-content:center;gap:24px;width:100%;font-size:38px;font-weight:850;line-height:1.5;color:var(--tx);letter-spacing:normal}
+.menuSections .sectionHead h3::before,.menuSections .sectionHead h3::after{content:'';height:1px;flex:1;max-width:100px;background:linear-gradient(90deg,transparent,var(--acc))}
+.menuSections .sectionHead h3::after{transform:rotate(180deg)}
+.menuSections .sectionBlurb{display:block;width:100%;font-size:14px;line-height:1.8;margin:0;color:var(--tx2)}
+.searchControls{display:flex;align-items:center;gap:10px;min-width:0}.searchControls .searchBox{flex:1;min-width:0}
+.suggestionSlot .suggest{font-size:0;display:grid;place-items:center;min-width:44px;min-height:48px;padding:10px;border:1px solid var(--hair);border-radius:16px;background:color-mix(in srgb,var(--sf2) 80%,transparent);color:var(--acc)}
+.suggestionSlot .suggest svg{width:22px;height:22px}
+.brandName{font-weight:750;letter-spacing:normal}
+.promoCta{font-weight:750}.heroSub{font-weight:600}
+.footerInner{align-items:center;text-align:center}.footerInner .brandName{font-weight:800}
+.contactLine{justify-content:center;border:1px solid color-mix(in srgb,var(--acc) 28%,var(--hair));border-radius:26px;background:linear-gradient(125deg,color-mix(in srgb,var(--acc) 13%,var(--sf)),color-mix(in srgb,var(--sf2) 92%,transparent));padding:9px 18px;font-weight:650}
+.servicePanel{border-color:color-mix(in srgb,var(--acc) 28%,var(--hair));background:linear-gradient(125deg,color-mix(in srgb,var(--acc) 11%,var(--sf)),color-mix(in srgb,var(--sf2) 92%,transparent))}
+.page[data-sf-screen="intro"] .header{background:color-mix(in srgb,var(--bg) 65%,transparent)}
+.page[data-sf-screen="intro"] .heroTitle{font-weight:900;line-height:1.35}
+@media(min-width:651px){.menuHeading{max-width:1060px;margin-inline:auto}.menuSections{max-width:1000px;margin-inline:auto}.searchControls{min-width:330px}.menuSections>.section{margin-block-end:90px}}
+@media(max-width:650px){
+ .menuHeading h2{font-size:30px;font-weight:850}.searchControls{width:100%;gap:8px}.menuHeading{gap:19px}
+ .menuSections>.section{margin-block:22px 52px;scroll-margin-block-start:158px}.menuSections .sectionHead{margin-block-end:8px}
+ .menuSections .sectionHead h3{font-size:32px;gap:15px}.menuSections .sectionHead h3::before,.menuSections .sectionHead h3::after{max-width:72px}
+ .chip{font-weight:650;border-radius:24px}.chipActive{font-weight:750}.menu{padding-block-start:24px}
+ .page[data-sf-screen="intro"] .heroTitle{font-size:clamp(46px,12.7vw,62px)}
+ .page[data-sf-screen="intro"] .heroActions .promoCta{font-size:21px;min-height:64px;border-radius:22px}
+ .page[data-sf-screen="intro"] .serviceWrap{border-radius:24px;border-color:color-mix(in srgb,var(--acc) 28%,var(--hair));background:color-mix(in srgb,var(--sf2) 78%,transparent)}
+ .page[data-sf-screen="intro"] .serviceCell{font-size:12px}.page[data-sf-screen="intro"] .serviceOff{font-size:12px;padding-block-start:4px;opacity:.85}
+ .footerInner .brandName{font-size:27px}.footerTagline{font-weight:600}
+}
+
+.menuAccent{color:var(--accLargeText)}
+.noticeClosed{background:color-mix(in srgb,var(--acc) 8%,var(--bg));color:var(--tx);border-color:color-mix(in srgb,var(--acc) 24%,var(--hair))}

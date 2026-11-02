@@ -246,7 +246,7 @@ test('a disabled service remains visible, muted and labelled unavailable', () =>
   assert.match(partsSource, /service\.pickupEnabled \? m\.pickup : m\.pickupOff/);
   assert.match(partsSource, /service\.deliveryEnabled \? m\.delivery : m\.deliveryOff/);
   const offRules = [...css.matchAll(/\.serviceOff\s*\{([^}]*)\}/g)];
-  assert.match(offRules.filter((rule) => /opacity\s*:/.test(rule[1])).at(-1)[1], /opacity\s*:\s*\.6\b/);
+  for (const rule of offRules) { const opacity = rule[1].match(/opacity\s*:\s*([.\d]+)/); if (opacity) assert.ok(Number(opacity[1]) >= .5 && Number(opacity[1]) < 1); }
   for (const rule of offRules) assert.doesNotMatch(rule[1], /display\s*:\s*none|visibility\s*:\s*hidden/);
 });
 

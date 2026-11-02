@@ -30,6 +30,7 @@ export function cinematicPreviewResolution(env: NodeJS.ProcessEnv = process.env)
           ...catalog.tenant.brand,
           primary: '#151513', accent: '#f2ad79', text: '#f7f2ea',
           buttonText: '#161410', fontFamily: 'alexandria',
+          logo: '/cinematic-preview/logo.webp',
         },
         service: { ...catalog.tenant.service, orderingEnabled: false },
       },

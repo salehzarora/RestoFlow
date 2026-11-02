@@ -1,39 +1,50 @@
-# BIZBOT-STOREFRONT-CINEMATIC-001 — mobile design implementation
+# BIZBOT-STOREFRONT-CINEMATIC-001 — final cinematic menu
 
-Owner scope: implement the approved cinematic welcome and mobile menu; reuse the dashboard's background image pipeline and add arbitrary HEX appearance controls. Preserve order/payment behavior and isolate from Claude's ZCredit work.
+Owner scope: the final mobile reference replaces food cards with independent product carousels. Preserve existing intro navigation, public catalog, cart/options/order/payment authority, dashboard content and isolated development. Preview publication is authorized; merge, hosted migration/configuration changes and Production publication require separate approval.
 
-## Local implementation
+## Implementation
 
-- Shared tenant hero photograph behind the welcome, navigation and footer, with a stronger soft overlay behind menu content.
-- Refined mobile typography, rounded charcoal meal cards with larger original photography and a dark blend into the product copy, peach filled addition controls, category pills and a soft search field. Existing whole-image presentation stays uncropped.
-- One restaurant information panel at the end of the menu, after optional promo/story content, displays the existing service state, pickup/delivery availability, location and hours. The shared public-contact action follows it; brand/tagline and a faint extension of the hero photo complete the footer. No duplicate service panel or header location/status strip.
-- Welcome headline/format now reads the existing campaign content in all four locale routes.
-- Existing primary/accent controls now drive the background/button palette without replacing a valid owner-selected HEX. Optional text and button-text overrides use the existing content save/version path.
-- No new endpoint, cart/payment/order logic, dependency, CSP relaxation, authorization/RLS change or shared localization edit.
+- Every category appears in source order, with a heading and independent carousel. Category buttons scroll smoothly to their section, retaining the other sections and their selections. Additional/empty categories use the same component.
+- A large central product with smaller neighbours, transparent image surfaces, a subtle elliptical path and curved navigation arrows. Native horizontal touch gestures, RTL/LTR keyboard directions, circular navigation, one/two-item cases and reduced-motion handling stay in a presentation-only component.
+- The existing delegated product opener receives the selected real product ID. Required options, cart calculations and order/payment code are unchanged. Existing search, kitchen picks and suggestion actions remain available; ordinary menu entry no longer repeats the editorial welcome hero.
+- Warm dark surfaces, bold Arabic typography, accent highlights, owner-managed hero photograph extending beneath the navigation/footer, and a single restaurant information/contact panel. The hero highlight now preserves Arabic word order across highlighted spans.
+- All colors use existing validated theme tokens. Primary/accent and optional text/button-text HEX fields remain configurable. The appearance extension now includes the allowlisted Rubik/Alexandria/system font selector, documented in `BIZBOT_STOREFRONT_CINEMATIC_001B.md`.
+- No new dependency, RPC, CSP exception, payment behavior or authorization/RLS change. The appearance migration is still unapplied; font-aware readers must precede hosted migration/writer rollout.
 
-The SQL/dashboard extension and deployment sequencing are documented in `BIZBOT_STOREFRONT_CINEMATIC_001B.md`. The prepared migration has NOT been applied.
+## Complete interactive Preview
 
-## Visual evidence
+Dedicated `/s/sf-design-preview` route family, also under `/ar`, `/he` and `/en`. Intro, menu, search and cart reuse existing components with isolated fixture providers/cart namespace. Checkout/payment/review and arbitrary leaves return404. The authoritative live source switch and regular tenant routes are untouched.
 
-Real browser renders at 390 × 844 of the implemented components, using a temporary local visual fixture with the six observed Maps meal names/prices and original catalog photos. Decorative emoji were omitted only from the local sample. No preview fixture or generated media is shipped in this commit.
+Server access requires exactly `VERCEL_ENV=preview`, or an explicitly opted-in local fixture environment (`STOREFRONT_SOURCE=fixture SF_DESIGN_PREVIEW=1`, outside a provider). Routes are dynamic/noindex and return404 in Production. No order gateway origin is supplied; ordering remains disabled.
+
+The public snapshot captured on2026-11-03 contains all20 real products, four categories, 11 option groups, actual prices, availability, contact, hours and service flags. Snapshot state is closed, pickup enabled, delivery disabled, ordering disabled. Presentation overrides only are selected in the Preview profile: `#151513`, `#f2ad79`, `#f7f2ea`, `#161410`, Alexandria, the approved welcome copy/format and prepared media. Current restaurant name/tagline remain as published in the snapshot. Hosted restaurant settings have not been changed.
+
+## Images and evidence
+
+Four drink originals already had transparency. Sixteen opaque images were processed into transparent preview derivatives using the built-in image generator; originals remain untouched. Their low-resolution sources caused reconstructed texture/logo details, so these are design-preview candidates rather than pixel-identical production photographs. Water/small cup labels and burger wrapper details especially warrant precise originals/manual matting before final asset approval; Mexican/Smash wrapper paper was removed to avoid wrong branding. See `BIZBOT_STOREFRONT_CINEMATIC_001_ASSETS.md`.
+
+Preview media is optimized WebP, each below the existing256KB deployment cap. The hero is the previously prepared proposed background. Product imagery/configuration is confined to the preview dataset, never hardcoded in reusable UI components.
+
+Real browser evidence at390×844:
 
 - `01-mobile-welcome.png`
 - `02-mobile-menu.png`
 - `03-mobile-footer.png`
-- `04-desktop-welcome.png`
+- `05-mobile-full-menu.png`
+- `06-mobile-cups-drinks.png`
+- `04-desktop-menu.png` at1440×1000.
 
-Sample settings: primary `#151513`, accent `#f2ad79`; automatic warm text; existing headline formatting with a line break. The proposed welcome photograph is an AI-edited presentation asset based on the original classic burger; it is not the catalog photo and has not been uploaded/published. Restaurant content, media and colors are unchanged on the hosted service. Matching this sample requires selecting that image/palette through the existing dashboard after rollout. Original catalog images retain their photographic backgrounds; truly transparent cutouts require owner-selected prepared images, not CSS removal.
+## Focused verification
 
-## Bounded validation
-
-- Storefront production build and TypeScript passed.
-- Storefront Node suite passed after the second design refinement: 437 tests, zero failures. Existing source-order guards now pin the service panel inside the footer, retain deletion/duplication negative controls, and verify that disabled services remain visible and labelled unavailable. The public-contact guard follows the consolidated action and its 48px touch target.
-- Isolated local mobile browser: no page errors or horizontal overflow; existing fixture product options open successfully. No order was submitted.
-- One read-only review of the SQL/decoder integration found no actionable regression and no file overlap with published payment PRs #370/#371. Unpublished Claude state is unknown; this work uses a separate branch/worktree.
-- Flutter/Dart and local PostgreSQL runtimes are unavailable here: dashboard tests and migration pgTAP tests are supplied but remain unexecuted. They must pass in the normal validation environment before hosted rollout.
-
-The second refinement changes presentation and its existing layout guards only. It adds no schema, data-source, payment, order, dependency or dashboard change beyond the previous checkpoint. Screenshots were refreshed from the local implementation; these are not hosted-production captures. Historical browser suites that assert earlier design geometry were not run as a broad review cycle.
+- Next production build and TypeScript passed.
+- All448 Node tests passed, including carousel boundaries/direction, Preview environment guards, exact catalog preservation and font/color configuration.
+- Real Chromium touch: independent selection, circular navigation, RTL horizontal swipe, natural vertical scrolling and no accidental product opening.
+- All four categories/20products present, no mobile or desktop horizontal overflow; English and Hebrew layouts checked.
+- Existing enabled local fixture: required options -> add -> cart count. No order submitted. No page errors or non-GET requests in the public-snapshot Preview smoke.
+- Production-context HTTP check: preview menu returns404.
+- GitHub preflight found no path overlap with open payment PRs#370/#371; main was still be57918. Work stays on the separate cinematic branch/worktree. Unpublished Claude changes remain unknown.
+- Flutter/Dart and local PostgreSQL unavailable: supplied dashboard/pgTAP tests remain unrun. Historical browser suites pinning superseded design geometry were not run as a broad review cycle.
 
 ## Release boundary
 
-This is a local implementation checkpoint. No push, PR, hosted migration, tenant configuration mutation, merge or deployment has been performed. Follow the existing owner-approved branch/PR/automatic Preview workflow, then obtain separate authorization for hosted apply and final merge. Do not deploy the new appearance writer before the updated strict readers.
+Only the feature-branch Preview is requested for delivery. No merge, Production deployment, hosted migration or restaurant configuration mutation is authorized by this phase. The new snapshot routes are inaccessible in Production builds; their public food-image files are ordinary static assets, not private data.

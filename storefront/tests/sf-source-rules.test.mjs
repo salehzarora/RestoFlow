@@ -208,7 +208,8 @@ const SERVER_ONLY_SPECIFIER = /(?:^|\/)source\/(?:storefront|live(?:\/|$))|^\.{1
 export function serverOnlyImports(src) {
   return [...src.matchAll(IMPORT_SPECIFIER)].map((m) => m[1]).filter((s) => SERVER_ONLY_SPECIFIER.test(s));
 }
-const ENV_READERS = ['src/source/storefront.ts', 'src/source/mode.ts', 'src/source/live/client.ts', 'src/source/home.ts'];
+const ENV_READERS = ['src/source/storefront.ts', 'src/source/mode.ts', 'src/source/live/client.ts', 'src/source/home.ts',
+  'src/preview/cinematic/access.ts', 'src/preview/cinematic/resolution.ts'];
 
 test('the live read stays server-only: no client module and no UI module imports it, however the path is spelled', () => {
   let matched = 0;
