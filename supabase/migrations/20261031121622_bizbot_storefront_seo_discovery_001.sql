@@ -1,6 +1,6 @@
 -- BIZBOT-STOREFRONT-SEO-DISCOVERY-001: additive, read-only backend surface.
 -- No indexing activation, merchant consent seed, legacy replacement or worker.
-begin;
+
 
 create table app.storefront_seo_release_gate_v1 (
   singleton boolean primary key default true check (singleton),
@@ -252,4 +252,4 @@ comment on function public.storefront_seo_page_v1(text) is
 comment on function public.storefront_seo_discovery_v1(text, integer, integer) is
   'Current consent+gate+live-v4 canonical paths only. Limit 1..25, candidate evaluation <=64, result <=16KiB. No partial results on budget/outage. Deadline must be enforced before statement invocation.';
 notify pgrst, 'reload schema';
-commit;
+

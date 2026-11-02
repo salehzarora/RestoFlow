@@ -118,7 +118,11 @@ end-to-end withdrawal target remains UNVERIFIED by this backend-only slice.**
 ## Local evidence and integration gate (2026-10-31)
 
 Migration: `20261031121622_bizbot_storefront_seo_discovery_001.sql`.
-SHA-256: `0b90d0aed87209bb25ff211397d4e701bb75f996538949f30fb6add61f07b651`.
+SHA-256: `a308222220318470c889651b5746aa307cfdbd2d7d1828c8ae245b537f4b108a`.
+The migration runner owns the transaction boundary. Only the original outer
+`begin;` and final `commit;` were removed; all 23 substantive statements and
+every other byte remain unchanged. Original wrapper-bearing SHA-256 (historical
+provenance): `0b90d0aed87209bb25ff211397d4e701bb75f996538949f30fb6add61f07b651`.
 Only this migration, two feature-owned SQL tests and this contract are changed.
 The local working HEAD is the base; no commit/publication is authorized.
 
