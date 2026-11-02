@@ -56,7 +56,7 @@ test('both surfaces share the same user-activated action outside order state and
   const contact = read('ui/storefront/RestaurantContact.tsx');
   const helper = read('source/publicPhone.ts');
   const status = read('ui/storefront/request/LiveRequestRuntime.tsx');
-  assert.ok(read('ui/storefront/home/HomeParts.tsx').includes('<RestaurantContact publicPhone={tenant.phone} label={m.callRestaurant} className={styles.promoCta} />'));
+  assert.ok(read('ui/storefront/home/HomeParts.tsx').includes('<RestaurantContact publicPhone={tenant.phone} label={m.callRestaurant} className={styles.contactLine} />'));
   assert.ok(read('ui/storefront/checkout/FlowScreen.tsx').includes('publicPhone: tenant.phone'));
   assert.ok(read('ui/storefront/checkout/LiveFlowBody.tsx').includes('publicPhone={tenant.publicPhone}'));
   assert.ok(status.includes('<RestaurantContact publicPhone={publicPhone} label={m.callRestaurant} className={s.chatOutline} />'));
@@ -67,7 +67,7 @@ test('both surfaces share the same user-activated action outside order state and
     // The helper comment explicitly distinguishes customer input; inspect code only.
     assert.ok(!source.replace(/\/\*[\s\S]*?\*\//g, '').includes(denied), denied);
   }
-  assert.match(read('ui/storefront/home/home.module.css'), /\.promoCta\s*\{[^}]*min-height:\s*44px/s);
+  assert.match(read('ui/storefront/home/home.module.css'), /\.contactLine\s*\{[^}]*min-height:\s*48px/s);
   assert.match(read('ui/storefront/request/liveRequest.module.css'), /\.chatOutline\s*\{[^}]*height:\s*48px/s);
   for (const locale of ['ar', 'he', 'en']) {
     assert.ok(storefrontMessages(locale).callRestaurant.length > 0);

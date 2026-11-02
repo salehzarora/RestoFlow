@@ -90,83 +90,34 @@ const STATE_CLASS: Readonly<Record<ServiceState, string>> = {
   paused: styles.statePaused,
 };
 
+/** Restaurant information composed from the existing public service state. */
 export function ServiceStatusStrip({ tenant, m }: { tenant: Tenant; m: StorefrontMessages }) {
   const { service } = tenant;
   const hoursText = hoursLabel(tenant, m);
-  const stateWord =
-    service.state === 'open' ? m.openNow : service.state === 'closed' ? m.closed : m.paused;
-
-  // Cell order is delivery -> pickup -> hours, which puts the hours cell at the
-  // END of the strip: the left in RTL, exactly as the handoff specifies, and
-  // the right in LTR. The strip mirrors with the reading direction like the
-  // rest of the row content.
-  return (
-    <div className={styles.serviceWrap} data-sf-module="service">
-      <div className={styles.service}>
-        <div className={`${styles.serviceCell} ${service.deliveryEnabled ? '' : styles.serviceOff}`}>
-          <span className={styles.serviceIcon} aria-hidden="true">
-            <DeliveryIcon />
-          </span>
-          <span className={styles.serviceText}>
-            <span className={styles.serviceLabel}>{m.delivery}</span>
-            <span className={styles.serviceMeta}>
-              {service.deliveryEnabled ? (
-                <span className={styles.ltr} dir="ltr">
-                  {fill(m.fromFee, { f: formatMoney(service.deliveryFromMinor) })}
-                </span>
-              ) : (
-                m.unavailableNow
-              )}
-            </span>
-          </span>
-        </div>
-
-        <div className={`${styles.serviceCell} ${service.pickupEnabled ? '' : styles.serviceOff}`}>
-          <span className={styles.serviceIcon} aria-hidden="true">
-            <StoreIcon />
-          </span>
-          <span className={styles.serviceText}>
-            <span className={styles.serviceLabel}>{m.pickupShort}</span>
-            <span className={styles.serviceMeta}>
-              <TenantText>{service.pickupEnabled ? tenant.city : m.unavailableNow}</TenantText>
-            </span>
-          </span>
-        </div>
-
-        {/* Icon first, like the delivery and pickup cells: the clock belongs on
-            the START side (prototype Storefront.dc.html:156-157). Flex follows
-            the writing direction, so this mirrors for RTL with no physical CSS. */}
-        <div className={styles.serviceCell}>
-          <span className={`${styles.serviceIcon} ${styles.serviceClock}`} aria-hidden="true">
-            <ClockIcon />
-          </span>
-          <span className={styles.serviceText}>
-            {/* Closed shows "opens {t}" per the approved strip view-model
-                (Storefront.dc.html:798, CONTENT_AND_LOCALIZATION.md:44); open and
-                paused keep the range. The range is a numeric LTR island, but the
-                closed copy is localized PROSE and must follow the page direction -
-                a time renders correctly inside RTL text on its own. Every branch
-                (incl. closed with no window today) is a complete sentence:
-                hoursCopy.ts owns the rule. */}
-            {hoursText.numeric ? (
-              <span className={`${styles.serviceLabel} ${styles.ltr}`} dir="ltr">
-                {hoursText.text}
-              </span>
-            ) : (
-              <span className={styles.serviceLabel}>{hoursText.text}</span>
-            )}
-            <span className={`${styles.serviceMeta} ${STATE_CLASS[service.state]}`}>
-              <span className={styles.stateRow}>
-                <span className={styles.stateDot} aria-hidden="true" />
-                {stateWord}
-              </span>
-            </span>
-          </span>
-        </div>
+  const stateWord = service.state === 'open' ? m.openNow : service.state === 'closed' ? m.closed : m.paused;
+  const location = tenant.address || tenant.city;
+  return <div className={styles.serviceWrap} data-sf-module="service">
+    <div className={styles.servicePanel}>
+      <div className={`${styles.serviceCell} ${service.deliveryEnabled ? '' : styles.serviceOff}`}>
+        <span className={styles.serviceIcon} aria-hidden="true"><DeliveryIcon /></span>
+        <span className={styles.serviceLabel}>{service.deliveryEnabled ? m.delivery : m.deliveryOff}</span>
+        {service.deliveryEnabled ? <span className={styles.serviceMeta} dir="ltr">{fill(m.fromFee, { f: formatMoney(service.deliveryFromMinor) })}</span> : null}
       </div>
-      <RestaurantContact publicPhone={tenant.phone} label={m.callRestaurant} className={styles.promoCta} />
+      <div className={styles.servicePair}>
+        <span className={`${styles.stateRow} ${STATE_CLASS[service.state]}`}><span className={styles.stateDot} aria-hidden="true" />{stateWord}</span>
+        <span className={`${styles.serviceCell} ${service.pickupEnabled ? '' : styles.serviceOff}`}>
+          <span className={styles.serviceIcon} aria-hidden="true"><StoreIcon /></span>
+          <span className={styles.serviceLabel}>{service.pickupEnabled ? m.pickup : m.pickupOff}</span>
+        </span>
+      </div>
+      {location ? <div className={styles.serviceCell}><span className={styles.serviceIcon} aria-hidden="true"><PinIcon /></span><TenantText>{location}</TenantText></div> : null}
+      <div className={styles.serviceCell}>
+        <span className={styles.serviceIcon} aria-hidden="true"><ClockIcon /></span>
+        <span className={styles.srOnly}>{m.hours}: </span><bdi dir={hoursText.numeric ? 'ltr' : 'auto'}>{hoursText.text}</bdi>
+      </div>
     </div>
-  );
+    <RestaurantContact publicPhone={tenant.phone} label={m.callRestaurant} className={styles.contactLine} />
+  </div>;
 }
 
 /** Closed / paused notice, shown under the hero. The menu stays browsable. */
@@ -306,18 +257,22 @@ export function StoryCard({ story }: { story: StoryModule }) {
 }
 
 export function SiteFooter({ tenant, m }: { tenant: Tenant; m: StorefrontMessages }) {
-  const hoursText = hoursLabel(tenant, m);
   return <footer className={styles.footer} data-sf-module="footer">
+    {tenant.heroImage ? <div className={styles.footerPhoto} aria-hidden="true">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={tenant.heroImage} alt="" loading="lazy" decoding="async" />
+    </div> : null}
     <section className={`${styles.inner} ${styles.findUs}`} id="sf-find" aria-label={m.callRestaurant}>
-      <div className={styles.findCopy}><p className={styles.eyebrow}>{m.callRestaurant}</p><h2><TenantText>{tenant.displayName}</TenantText></h2><p><TenantText>{tenant.address}</TenantText></p>
-        <RestaurantContact publicPhone={tenant.phone} label={m.callRestaurant} className={styles.phoneLink} />
-        <p className={styles.footerRow}><span>{m.hours}</span><bdi dir={hoursText.numeric ? 'ltr' : 'auto'}>{hoursText.text}</bdi></p>
-      </div>
-
+      <ServiceStatusStrip tenant={tenant} m={m} />
     </section>
-    <div className={styles.footerBand}><div className={`${styles.inner} ${styles.footerInner}`}><BrandLockup tenant={tenant} small /><TenantText>{tenant.tagline}</TenantText><p className={styles.footerCredit}>{m.poweredBy} <span className={styles.footerBrand}>BIZBOT</span></p></div></div>
+    <div className={styles.footerBand}><div className={`${styles.inner} ${styles.footerInner}`}>
+      <BrandLockup tenant={tenant} small />
+      {tenant.tagline ? <p className={styles.footerTagline}><TenantText>{tenant.tagline}</TenantText></p> : null}
+      <p className={styles.footerCredit}>{m.poweredBy} <span className={styles.footerBrand}>BIZBOT</span></p>
+    </div></div>
   </footer>;
 }
+
 export function EmptyMenu({ tenant, m }: { tenant: Tenant; m: StorefrontMessages }) {
   return (
     <div className={styles.empty} role="status">

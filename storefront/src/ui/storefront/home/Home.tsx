@@ -7,7 +7,7 @@ import { cartPath, checkoutPath } from '@/routes/routes';
 import type { StorefrontResolution } from '@/source/types';
 import { ThemeScope } from '../ThemeScope';
 import { LanguageMenu } from '../LanguageMenu';
-import { EmptyMenu, OrderingOffNotice, PromoBanner, ServiceStatusStrip, SiteFooter, StateNotice, StoryCard } from './HomeParts';
+import { EmptyMenu, OrderingOffNotice, PromoBanner, SiteFooter, StateNotice, StoryCard } from './HomeParts';
 import { AsideSlot, DockSlot } from '../cart/CartRuntime';
 import { HomeChrome } from './HomeChrome';
 import { StorefrontRuntime } from '../StorefrontRuntime';
@@ -32,7 +32,6 @@ export function Home({ resolution, locale, slug, hrefFor }: {
             announcement={modules.announcement === null || tenant.service.state !== 'open' ? null : modules.announcement.text}
             announcementSegments={modules.announcement?.segments}
             heroTitle={modules.campaign.title} heroSubline={modules.campaign.subline} heroContent={modules.campaign.hero}
-            service={<ServiceStatusStrip tenant={tenant} m={m} />}
             notice={<>{tenant.service.orderingEnabled ? null : <OrderingOffNotice m={m} />}{tenant.service.state === 'open' ? null : <StateNotice state={tenant.service.state} tenant={tenant} m={m} />}</>}
             empty={items.length === 0 ? <EmptyMenu tenant={tenant} m={m} /> : null}
             cart={<AsideSlot locale={locale} state={tenant.service.state} opensAt={tenant.hours.opens} checkoutHref={checkoutPath(locale, slug)} />}

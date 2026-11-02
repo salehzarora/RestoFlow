@@ -30,10 +30,10 @@ function CategoryIcon({ path, image }: { path: string; image: string | null }) {
 import styles from './home.module.css';
 
 /** Presentation state only. Product/cart/order authority stays in StorefrontRuntime. */
-export function HomeChrome({ tenant, locale, slug, language, categories, items, cardMode, announcement, announcementSegments, heroTitle, heroSubline, heroContent, service, notice, empty, cart }: {
+export function HomeChrome({ tenant, locale, slug, language, categories, items, cardMode, announcement, announcementSegments, heroTitle, heroSubline, heroContent, notice, empty, cart }: {
   tenant: Tenant; locale: Locale; slug: string; language: ReactNode;
   categories: readonly Category[]; items: readonly MenuItem[]; cardMode: CardMode;
-  announcement: string | null; announcementSegments?: readonly string[]; heroTitle: string; heroSubline: string; heroContent?: CampaignModule['hero']; service: ReactNode; notice: ReactNode; empty: ReactNode; cart: ReactNode;
+  announcement: string | null; announcementSegments?: readonly string[]; heroTitle: string; heroSubline: string; heroContent?: CampaignModule['hero']; notice: ReactNode; empty: ReactNode; cart: ReactNode;
 }) {
   const m = storefrontMessages(locale);
   const cartHref = cartNavigationHref(cartPath(locale, slug), usePathname());
@@ -125,7 +125,6 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
     setCartOpen(false);
   };
   return <>
-    <div className={styles.topline}><div className={styles.inner}><TenantText>{tenant.city}</TenantText><TenantText>{tenant.tagline}</TenantText><span>{tenant.service.state === 'open' ? m.openNow : tenant.service.state === 'closed' ? m.closed : m.paused}</span></div></div>
     <header className={styles.header} data-sf-module="compact">
       <div className={`${styles.inner} ${styles.headerInner}`}>
         <a className={styles.brandLink} href="#" aria-label={tenant.displayName}><BrandLockup tenant={tenant} /></a>
@@ -141,7 +140,6 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
       <div className={styles.categoryWrap}><nav className={styles.rail} aria-label={m.menuLabel} data-sf-module="categories">{categories.map(category => <button className={`${styles.chip} ${category.id === activeCategory && !query && !picks ? styles.chipActive : ''}`} type="button" key={category.id} aria-current={category.id === activeCategory && !query && !picks ? 'true' : undefined} onClick={() => switchCategory(category.id)}><CategoryIcon path={category.iconPath} image={category.image} /><span dir="auto">{category.name}</span><small dir="ltr">{String(items.filter(i => i.categoryId === category.id).length).padStart(2, '0')}</small></button>)}{items.some(item => item.featured && !item.soldOut) ? <button type="button" className={`${styles.chip} ${styles.picksChip} ${picks && !query ? styles.chipActive : ''}`} aria-current={picks && !query ? 'true' : undefined} onClick={() => { setPicks(true); setQuery(''); }}>{m.chefPicks}</button> : null}</nav></div>
       {query.trim() || picks ? <section className={styles.section} data-sf-module="sections" aria-label={query.trim() ? m.search : m.chefPicks}><div className={styles.sectionHead}><h3>{picks ? m.chefPicks : m.search}</h3><span role="status">{shown.length === 1 ? m.item : fill(m.items, {n:String(shown.length)})}</span></div>{shown.length ? <div className={`${cardMode === 'grid' ? styles.gridWrap : styles.listWrap} ${sectionGridClass(resultLayout, contentStyles.cutoutGrid)}`} data-sf-layout={resultLayout}>{shown.map(item => cardMode === 'grid' ? <GridCard item={item} m={m} key={item.id} /> : <ListRow item={item} m={m} key={item.id} />)}</div> : <div className={styles.empty} role="status"><SearchIcon /><h3>{query.trim() ? <NoResultsTitle template={m.noResults} query={query.trim()} /> : m.emptyMenu}</h3><p>{m.tryOther}</p><button className={styles.promoCta} type="button" onClick={() => { setQuery(''); setPicks(false); }}>{m.browseMenu}</button></div>}</section> : selected ? <MenuSection category={selected} items={shown} cardMode={cardMode} m={m} /> : null}
     </section>}
-    {service}
     {cartOpen ? <dialog className={styles.cartDialog} ref={dialog} aria-label={m.cart} onCancel={() => setCartOpen(false)} onClickCapture={e => transferToProduct(e.target)} onKeyDownCapture={e => { if (e.key === 'Enter' || e.key === ' ') transferToProduct(e.target); }} onClick={e => { if (e.target === e.currentTarget) setCartOpen(false); }}><button className={styles.cartClose} type="button" aria-label={m.close} onClick={() => setCartOpen(false)}><CloseIcon /></button>{cart}<Link className={styles.cartEdit} href={cartHref} prefetch={false}>{m.edit}</Link></dialog> : null}
   </>;
 }
