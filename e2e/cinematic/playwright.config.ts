@@ -17,6 +17,7 @@ export default defineConfig({
   use: {
     browserName: 'chromium',
     headless: true,
+    actionTimeout: 30_000,
     viewport: { width: 1440, height: 1000 },
     locale: 'ar',
     trace: 'off',

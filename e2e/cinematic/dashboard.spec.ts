@@ -129,28 +129,143 @@ async function invariants(f: Fixture, token: string): Promise<void> {
   expect(logo.receipt_logo_enabled, 'Receipt logo enabled state unchanged').toBe(f.initialInvariants.receiptLogoEnabled);
   expect(logo.receipt_logo_version, 'Receipt logo version unchanged').toBe(f.initialInvariants.receiptLogoVersion);
 }
-async function upload(page: Page, filename: string, expectedStatus = 200): Promise<Obj> {
+type UploadBoundary = 'click' | 'filechooser' | 'file-set' | 'private-upload-response' | 'publisher-response' | 'upload-assertion';
+type RouteClass = 'private-upload' | 'publisher' | 'auth' | 'private-read' | 'public-media' | 'application' | 'other-local' | 'external';
+type Observed<T> = { ok: true; value: T } | { ok: false; error: unknown };
+class UploadDiagnostics {
+  private readonly started = Date.now();
+  private readonly events: { ms: number; boundary: string; event: string; status?: number }[] = [];
+  private first: { ms: number; boundary: UploadBoundary; errorType: string; error: unknown } | null = null;
+  private firstObservedWaitFailure: { ms: number; boundary: UploadBoundary; errorType: string } | null = null;
+  private errorType(error: unknown): string {
+    const name = error instanceof Error ? error.name : '';
+    return ['TimeoutError', 'AssertionError', 'Error'].includes(name) ? name : 'OtherError';
+  }
+  mark(boundary: string, event: string, status?: number): void {
+    // Names are controlled enums at call sites. Never retain URLs, request
+    // bodies, headers, object keys, file names or browser exception messages.
+    if (this.events.length < 64) this.events.push({ ms: Date.now() - this.started, boundary, event, ...(status === undefined ? {} : { status }) });
+  }
+  fail(boundary: UploadBoundary, error: unknown): void {
+    if (this.first) return;
+    this.first = { ms: Date.now() - this.started, boundary, errorType: this.errorType(error), error };
+    this.mark(boundary, 'await-failed');
+  }
+  observe<T>(boundary: UploadBoundary, promise: Promise<T>): Promise<Observed<T>> {
+    // Install BOTH handlers immediately, before any other await. A later
+    // publisher timeout must not become an unhandled rejection that masks a
+    // pending click, chooser or upload. Each result is deliberately settled.
+    return promise.then(value => { this.mark(boundary, 'complete'); return { ok: true, value }; },
+      error => {
+        this.firstObservedWaitFailure ??= { ms: Date.now() - this.started, boundary, errorType: this.errorType(error) };
+        this.mark(boundary, 'wait-failed');
+        return { ok: false, error };
+      });
+  }
+  async value<T>(boundary: UploadBoundary, promise: Promise<Observed<T>>): Promise<T> {
+    const result = await promise;
+    if (!result.ok) {
+      // A future response waiter may expire while the UI click is still
+      // pending. Preserve that observation, but never make it the active
+      // operation's error. The first failed awaited boundary remains primary.
+      this.fail(boundary, result.error);
+      throw this.first?.error ?? result.error;
+    }
+    return result.value;
+  }
+  snapshot(): Obj {
+    return { events: this.events, firstObservedWaitFailure: this.firstObservedWaitFailure, firstFailure: this.first === null ? null : {
+      ms: this.first.ms, boundary: this.first.boundary, errorType: this.first.errorType,
+    } };
+  }
+  original(error: unknown): unknown { return this.first?.error ?? error; }
+}
+function routeClass(url: string): RouteClass {
+  const u = new URL(url);
+  if (!origins.has(u.origin)) return 'external';
+  if (u.origin !== API) return 'application';
+  if (u.pathname.startsWith('/storage/v1/object/restaurant-logos/')) return 'private-upload';
+  if (u.pathname === '/functions/v1/storefront-media-publish') return 'publisher';
+  if (u.pathname.startsWith('/auth/')) return 'auth';
+  if (u.pathname.startsWith('/rest/')) return 'private-read';
+  if (u.pathname.startsWith('/storage/v1/object/public/')) return 'public-media';
+  return 'other-local';
+}
+async function upload(page: Page, filename: string, diagnostics: UploadDiagnostics, expectedStatus = 200): Promise<Obj> {
   const fixturePath = resolve(__dirname, '../../supabase/functions/storefront-media-publish/test/fixtures', filename);
-  const uploaded = page.waitForResponse(r => {
+  const onRequest = (request: import('@playwright/test').Request) => {
+    const kind = routeClass(request.url());
+    if (request.method() === 'POST' && (kind === 'private-upload' || kind === 'publisher')) diagnostics.mark(kind, 'request');
+  };
+  const onResponse = (response: Response) => {
+    const kind = routeClass(response.url());
+    if (response.request().method() === 'POST' && (kind === 'private-upload' || kind === 'publisher')) diagnostics.mark(kind, 'http', response.status());
+  };
+  const onFailed = (request: import('@playwright/test').Request) => diagnostics.mark(routeClass(request.url()), 'request-failed');
+  page.on('request', onRequest);
+  page.on('response', onResponse);
+  page.on('requestfailed', onFailed);
+  const uploaded = diagnostics.observe('private-upload-response', page.waitForResponse(r => {
     const u = new URL(r.url());
     return u.origin === API && u.pathname.startsWith('/storage/v1/object/restaurant-logos/') && r.request().method() === 'POST';
-  });
-  const published = page.waitForResponse(r => requestIs(r, '/functions/v1/storefront-media-publish') && r.status() !== 202, { timeout: 120_000 });
-  const chosen = page.waitForEvent('filechooser');
-  await clickButton(page, L.upload);
-  await (await chosen).setFiles(fixturePath);
-  expect((await uploaded).ok(), 'Actual private bytes upload').toBe(true);
-  const response = await published;
-  expect(response.status(), 'Actual Edge publication response').toBe(expectedStatus);
-  const body = await response.json() as Obj;
-  if (expectedStatus === 200) {
-    expect(body.ok, 'Actual Edge publisher accepted bytes').toBe(true);
-    await textContains(page, L.selected);
-  } else {
-    expect(body.status, 'Cross-source duplicate is rejected').toBe('object_conflict');
-    await textContains(page, L.unavailable);
+  }));
+  const published = diagnostics.observe('publisher-response', page.waitForResponse(r => requestIs(r, '/functions/v1/storefront-media-publish') && r.status() !== 202, { timeout: 120_000 }));
+  const chosen = diagnostics.observe('filechooser', page.waitForEvent('filechooser'));
+  try {
+    diagnostics.mark('click', 'started');
+    await diagnostics.value('click', diagnostics.observe('click', clickButton(page, L.upload)));
+    const chooser = await diagnostics.value('filechooser', chosen);
+    diagnostics.mark('file-set', 'started');
+    await diagnostics.value('file-set', diagnostics.observe('file-set', chooser.setFiles(fixturePath)));
+    expect((await diagnostics.value('private-upload-response', uploaded)).ok(), 'Actual private bytes upload').toBe(true);
+    const response = await diagnostics.value('publisher-response', published);
+    expect(response.status(), 'Actual Edge publication response').toBe(expectedStatus);
+    const body = await response.json() as Obj;
+    if (expectedStatus === 200) {
+      expect(body.ok, 'Actual Edge publisher accepted bytes').toBe(true);
+      await textContains(page, L.selected);
+    } else {
+      expect(body.status, 'Cross-source duplicate is rejected').toBe('object_conflict');
+      await textContains(page, L.unavailable);
+    }
+    return body;
+  } catch (error) {
+    diagnostics.fail('upload-assertion', error);
+    throw diagnostics.original(error);
+  } finally {
+    page.off('request', onRequest);
+    page.off('response', onResponse);
+    page.off('requestfailed', onFailed);
   }
-  return body;
+}
+async function editorStatus(page: Page): Promise<string[]> {
+  // Only an allowlisted status enum escapes; accessible text stays private.
+  const text = await readAccessibleText(page);
+  const statuses = [
+    ['background-selected', L.selected], ['content-saved', L.saved],
+    ['service-unavailable', L.unavailable],
+    ['upload-failed', 'تعذّر رفع الصورة.'],
+    ['read-unavailable', 'تعذر التحقق من المحتوى.'],
+    ['binding-changed', 'تغيّر الاتصال الموثّق'],
+    ['publish-uncertain', 'نتيجة النشر غير مؤكدة.'],
+  ];
+  return statuses.filter(([, value]) => text.includes(value)).map(([key]) => key);
+}
+async function failureScreenshot(page: Page, path: string): Promise<string> {
+  try {
+    if (new URL(page.url()).origin !== DASHBOARD || await page.locator('input[type="password"]').count() ||
+        !(await page.getByRole('button', { name: L.upload, exact: true }).count())) return 'withheld';
+    await page.evaluate(() => {
+      const label = document.createElement('div');
+      label.textContent = 'ISOLATED CI — SYNTHETIC TEST DATA — FAILED ACCEPTANCE';
+      label.setAttribute('data-cinematic-test-label', '');
+      Object.assign(label.style, { position: 'fixed', bottom: '0', left: '0', zIndex: '2147483647', background: '#fff', color: '#111', padding: '8px', font: '12px sans-serif' });
+      document.body.appendChild(label);
+    });
+    await page.screenshot({ path, timeout: 5000 });
+    return 'captured';
+  } catch { return 'unavailable'; }
+  finally { await page.locator('[data-cinematic-test-label]').evaluateAll(nodes => nodes.forEach(n => n.remove())).catch(() => {}); }
 }
 async function readDim(page: Page): Promise<number> {
   const match = (await readAccessibleText(page)).match(/تعتيم الصورة:\s*(\d+)%/);
@@ -250,6 +365,8 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
   mkdirSync(out, { recursive: true });
   const stages: string[] = [];
   let stage = 'login';
+  const uploadDiagnostics: UploadDiagnostics[] = [];
+  const nextUpload = () => { const diagnostics = new UploadDiagnostics(); uploadDiagnostics.push(diagnostics); return diagnostics; };
   try {
     await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' });
     await semantics(page);
@@ -269,7 +386,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     stages.push(stage);
 
     stage = 'upload-publish-select-save-reload';
-    await upload(page, 'base_420_900x450.jpg');
+    await upload(page, 'base_420_900x450.jpg', nextUpload());
     await saveContent(page);
     const first = (await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id as string;
     expect(first).not.toBe(f.heroMediaId);
@@ -318,7 +435,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     }
 
     stage = 'replace-background';
-    await upload(page, 'base_444_1200x900.jpg');
+    await upload(page, 'base_444_1200x900.jpg', nextUpload());
     await saveContent(page);
     const second = (await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id as string;
     expect(second).not.toBe(first);
@@ -329,7 +446,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     stages.push(stage);
 
     stage = 'duplicate-source-rejected';
-    await upload(page, 'base_420_900x450.jpg', 409);
+    await upload(page, 'base_420_900x450.jpg', nextUpload(), 409);
     expect((await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id).toBe(second);
     await invariants(f, token);
     await openEditor(page, true);
@@ -380,9 +497,13 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await renderMenu(menu, f, f.heroUrl, null);
     stages.push(stage);
     checkNetwork();
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages }, null, 2));
+    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
   } catch (error) {
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages }, null, 2));
+    const statuses = stages.includes('login') ? await editorStatus(page).catch(() => ['unreadable']) : [];
+    const failureCapture = stages.includes('login')
+      ? await failureScreenshot(page, resolve(out, 'dashboard-failure-test-data.png')) : 'withheld';
+    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
+      uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
   }
 });
