@@ -26,6 +26,8 @@ export function cinematicPreviewResolution(env: NodeJS.ProcessEnv = process.env)
         ...catalog.tenant,
         slug: CINEMATIC_PREVIEW_SLUG,
         heroImage: '/cinematic-preview/cover.webp',
+        menuBackgroundImage: '/cinematic-preview/menu-background.webp',
+        menuBackgroundDim: 15,
         brand: {
           ...catalog.tenant.brand,
           primary: '#151513', accent: '#f2ad79', text: '#f7f2ea',

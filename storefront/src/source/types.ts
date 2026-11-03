@@ -95,6 +95,10 @@ export interface Tenant {
    * out of UI-001 by approved decision 8.
    */
   readonly heroImage: string | null;
+  /** Optional menu-only media; missing/null retains the existing hero backdrop. */
+  readonly menuBackgroundImage?: string | null;
+  /** Darkening percentage for the independent menu image, 0–80; null uses 15. */
+  readonly menuBackgroundDim?: number | null;
   readonly currency: 'ILS';
 }
 

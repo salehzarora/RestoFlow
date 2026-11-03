@@ -80,6 +80,13 @@ test('headline formatting highlights the approved word and retains its exact Uni
   assert.equal(campaign.hero.format.break_before, 6);
 });
 
+test('the supplied menu texture is a separate preview choice and leaves the welcome hero intact', () => {
+  const { tenant } = cinematicPreviewResolution(previewEnv).view;
+  assert.equal(tenant.heroImage, '/cinematic-preview/cover.webp');
+  assert.equal(tenant.menuBackgroundImage, '/cinematic-preview/menu-background.webp');
+  assert.equal(tenant.menuBackgroundDim, 15);
+});
+
 test('all four preview roots remain dynamic, noindex and behind the shared server guard', () => {
   const source = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
   for (const root of ['(root)', 'ar', 'he', 'en']) {

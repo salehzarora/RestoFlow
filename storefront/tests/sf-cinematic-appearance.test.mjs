@@ -10,6 +10,7 @@ const { buildCinematicTheme } = await import('../src/theme/buildCinematicTheme.t
 const { buildTheme, AA, AA_LARGE } = await import('../src/theme/buildTheme.ts');
 const { contrast, inkOn } = await import('../src/theme/contrast.ts');
 const { storefrontFont } = await import('../src/theme/fonts.ts');
+const { menuBackground } = await import('../src/ui/storefront/home/menuBackground.ts');
 
 // Public identity for the existing origin guard. No network calls are made.
 const ORIGIN = 'https://oqmevrndtivqxgyvcmwy.supabase.co';
@@ -113,4 +114,40 @@ test('all font tokens use fixed local stacks and missing or null choice restores
   assert.match(buildCinematicTheme({ ...brand, fontFamily: 'alexandria' }).font, /^"SF Alexandria", var\(--sf-font-latin/);
   assert.match(buildTheme('dark', { ...brand, fontFamily: 'system' }).font, /^system-ui,/);
   assert.equal(storefrontFont('untrusted; background: url(https://example.invalid)'), original.font);
+});
+
+test('independent menu background selects, replaces and clears without changing hero or catalog', () => {
+  const path = hash => '/storage/v1/object/public/storefront-media/' + 'a'.repeat(32) + '/' + hash.repeat(64) + '.webp';
+  const envelope = syntheticV4Envelope();
+  envelope.restaurant.hero_url = path('b');
+  const original = adaptStorefront(decodeStorefrontMenuV4(envelope), ORIGIN);
+  assert.deepEqual(menuBackground(original.view.tenant), { kind: 'legacy', image: ORIGIN + path('b'), dim: null });
+  for (const [image, dim, expectedDim] of [[path('c'), 0, 0], [path('d'), 80, 80], [path('c'), null, 15], [null, 55, null]]) {
+    const next = structuredClone(envelope);
+    next.content_v1.appearance = { text_color: '#fff4e6', button_text_color: '#131313', font_family: 'alexandria', menu_background_url: image, menu_background_dim: dim };
+    const resolved = adaptStorefront(decodeStorefrontMenuV4(next), ORIGIN);
+    assert.equal(resolved.view.tenant.heroImage, original.view.tenant.heroImage);
+    assert.deepEqual(resolved.view.items, original.view.items);
+    assert.deepEqual(resolved.groups, original.groups);
+    assert.deepEqual(resolved.view.tenant.service, original.view.tenant.service);
+    assert.deepEqual(menuBackground(resolved.view.tenant), { kind: image ? 'custom' : 'legacy', image: image ? ORIGIN + image : original.view.tenant.heroImage, dim: expectedDim });
+    assert.equal(buildCinematicTheme(resolved.view.tenant.brand).tx, '#fff4e6');
+    assert.equal(buildCinematicTheme(resolved.view.tenant.brand).onacc, '#131313');
+  }
+  assert.equal(Object.hasOwn(original.view.tenant, 'menuBackgroundImage'), false);
+  assert.equal(Object.hasOwn(original.view.tenant, 'menuBackgroundDim'), false);
+});
+
+test('menu background wire fields reject arbitrary URLs, private IDs and invalid dim values', () => {
+  const colours = { text_color: null, button_text_color: null };
+  for (const image of ['', 'https://example.com/a.webp', 'javascript:alert(1)', '/cinematic-preview/menu-background.webp', 1, false, {}]) {
+    assert.throws(() => decodeStorefrontMenuV4(withAppearance({ ...colours, menu_background_url: image })), EnvelopeError);
+  }
+  assert.throws(() => decodeStorefrontMenuV4(withAppearance({ ...colours, menu_background_media_id: null })), EnvelopeError);
+  for (const dim of [-1, 81, 15.5, '15', false, [], {}, undefined, Infinity]) {
+    assert.throws(() => decodeStorefrontMenuV4(withAppearance({ ...colours, menu_background_dim: dim })), EnvelopeError);
+  }
+  for (const dim of [0, 15, 80, null]) {
+    assert.equal(decodeStorefrontMenuV4(withAppearance({ ...colours, menu_background_dim: dim })).content_v1.appearance.menu_background_dim, dim);
+  }
 });
