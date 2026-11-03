@@ -3,6 +3,7 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { enableFlutterSemantics, waitForFlutterBoot, readAccessibleText } from '../lib/flutter';
 import { controlGeometry } from './control-geometry.mjs';
+import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } from './auth-diagnostics.mjs';
 import { fillField, fillPassword, tapButton, tapNav, tapText, selectDropdown } from '../lib/dashboard';
 
 // This suite drives the shipped Flutter app. It never installs a mocked
@@ -425,6 +426,11 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
   mkdirSync(out, { recursive: true });
   const stages: string[] = [];
   let stage = 'login';
+  const loginEvidence: {
+    fieldsBeforeSubmit: { emailMatchesFixture: boolean; passwordMatchesFixture: boolean } | null;
+    request: ReturnType<typeof authRequestEvidence> | null;
+    response: ReturnType<typeof authResponseEvidence> | null;
+  } = { fieldsBeforeSubmit: null, request: null, response: null };
   const uploadDiagnostics: UploadDiagnostics[] = [];
   const nextUpload = () => { const diagnostics = new UploadDiagnostics(); uploadDiagnostics.push(diagnostics); return diagnostics; };
   try {
@@ -433,9 +439,25 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await network.fontsReady();
     await fillField(page, L.email, f.ownerA.email);
     await fillPassword(page, f.ownerA.password);
-    const signedIn = page.waitForResponse(r => requestIs(r, '/auth/v1/token'));
+    // Observe current field equality without copying values into assertions or
+    // artifacts. This does not refill, retry or change the intended submission.
+    loginEvidence.fieldsBeforeSubmit = {
+      emailMatchesFixture: await page.getByRole('textbox', { name: L.email }).evaluateAll((nodes, expected) =>
+        nodes[0] instanceof HTMLInputElement && nodes[0].value === expected, f.ownerA.email),
+      passwordMatchesFixture: await page.locator('input[type="password"]').evaluateAll((nodes, expected) =>
+        nodes[0] instanceof HTMLInputElement && nodes[0].value === expected, f.ownerA.password),
+    };
+    const loginStarted = performance.now();
+    const signedIn = page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API));
     await tapButton(page, L.login, { which: 'last' });
     const auth = await signedIn;
+    const loginDuration = performance.now() - loginStarted;
+    loginEvidence.request = authRequestEvidence(auth.url(), auth.request().postData(), f.ownerA);
+    // Parse only for fixed classifications before the status assertion. The
+    // full body remains transient/private; the existing session path follows.
+    const authData: unknown = await auth.json().catch(() => null);
+    loginEvidence.response = authResponseEvidence({ status: auth.status(),
+      contentType: auth.headers()['content-type'], data: authData }, loginDuration);
     expect(auth.status(), 'Actual Dashboard password sign-in succeeds').toBe(200);
     const session = await auth.json();
     expect(session.user.email, 'Signed in as the synthetic owner A').toBe(f.ownerA.email);
@@ -565,13 +587,13 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await renderMenu(menu, f, f.heroUrl, null);
     stages.push(stage);
     network.check();
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, fonts: network.fonts(), uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
+    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
   } catch (error) {
     const statuses = stages.includes('login') ? await editorStatus(page).catch(() => ['unreadable']) : [];
     const failureCapture = stages.includes('login')
       ? await failureScreenshot(page, resolve(out, 'dashboard-failure-test-data.png')) : 'withheld';
     writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
-      fonts: network.fonts(), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
+      login: loginEvidence, fonts: network.fonts(), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
       controlReveal: error instanceof ControlRevealError ? error.samples : null,
       uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
