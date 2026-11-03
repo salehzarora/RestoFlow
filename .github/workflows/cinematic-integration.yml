@@ -22,9 +22,6 @@ jobs:
       BOT: 'true'
       FLUTTER_SUPPRESS_ANALYTICS: 'true'
       CINEMATIC_EPHEMERAL: BIZBOT-STOREFRONT-CINEMATIC-001B
-      CINEMATIC_STATUS_FILE: ${{ runner.temp }}/cinematic-private/status.json
-      CINEMATIC_FIXTURE_FILE: ${{ runner.temp }}/cinematic-private/fixtures.json
-      CINEMATIC_ARTIFACT_DIR: ${{ runner.temp }}/cinematic-public
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,7 +47,14 @@ jobs:
           version: 2.107.0
 
       - name: Record the actual PR merge checkout and enforce isolation
-        run: node e2e/cinematic/ci-runtime.mjs prepare
+        run: |
+          export CINEMATIC_STATUS_FILE="$RUNNER_TEMP/cinematic-private/status.json"
+          export CINEMATIC_FIXTURE_FILE="$RUNNER_TEMP/cinematic-private/fixtures.json"
+          export CINEMATIC_ARTIFACT_DIR="$RUNNER_TEMP/cinematic-public"
+          echo "CINEMATIC_STATUS_FILE=$CINEMATIC_STATUS_FILE" >> "$GITHUB_ENV"
+          echo "CINEMATIC_FIXTURE_FILE=$CINEMATIC_FIXTURE_FILE" >> "$GITHUB_ENV"
+          echo "CINEMATIC_ARTIFACT_DIR=$CINEMATIC_ARTIFACT_DIR" >> "$GITHUB_ENV"
+          node e2e/cinematic/ci-runtime.mjs prepare
         env:
           CINEMATIC_PR_HEAD: ${{ github.event.pull_request.head.sha }}
           CINEMATIC_PR_BASE: ${{ github.event.pull_request.base.sha }}
