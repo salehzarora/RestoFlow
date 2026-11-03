@@ -31,6 +31,7 @@ import 'staff/staff_screen.dart';
 import 'state/dashboard_providers.dart';
 import 'state/setup_device_providers.dart';
 import 'storefront/storefront_dark_gate.dart';
+import 'storefront/storefront_background_upload.dart';
 import 'storefront/storefront_media_publisher.dart';
 import 'storefront/storefront_media_repository.dart';
 import 'storefront/storefront_profile_repository.dart';
@@ -563,6 +564,13 @@ class _DashboardShellState extends State<DashboardShell> {
           ? null
           : StorefrontMediaPublisher(
               invoker: invoker,
+              organizationId: organizationId,
+              restaurantId: restaurantId,
+            ),
+      backgroundUpload: widget.brandingLogoStorage == null
+          ? null
+          : StorefrontBackgroundUpload(
+              storage: widget.brandingLogoStorage!,
               organizationId: organizationId,
               restaurantId: restaurantId,
             ),

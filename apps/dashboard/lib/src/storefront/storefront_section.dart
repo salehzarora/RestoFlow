@@ -8,6 +8,7 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'opening_hours_editor.dart';
+import 'storefront_background_upload.dart';
 import 'storefront_contrast.dart';
 import 'storefront_content_models.dart';
 import 'storefront_content_repository.dart';
@@ -36,6 +37,7 @@ class StorefrontEditorSeams {
     StorefrontContentRepository? contentRepository,
     StorefrontContentCatalog? contentCatalog,
     this.publisher,
+    this.backgroundUpload,
     this.publicUrlFor,
   }) : _contentRepository = contentRepository,
        _contentCatalog = contentCatalog;
@@ -70,6 +72,7 @@ class StorefrontEditorSeams {
   /// The Edge Function client (null = image publishing is not available
   /// here; the media slots then show an honest note).
   final StorefrontMediaPublisher? publisher;
+  final StorefrontBackgroundUpload? backgroundUpload;
 
   /// The public URL of a published derivative (preview only; null = none).
   final Uri Function(String objectKey)? publicUrlFor;
@@ -387,7 +390,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         !identical(old?.mediaRepository, current?.mediaRepository) ||
         !identical(old?.contentRepository, current?.contentRepository) ||
         !identical(old?.contentCatalog, current?.contentCatalog) ||
-        !identical(old?.publisher, current?.publisher)) {
+        !identical(old?.publisher, current?.publisher) ||
+        !identical(old?.backgroundUpload, current?.backgroundUpload)) {
       final keepDraft =
           _patch().isNotEmpty ||
           _homeDirty ||
@@ -1813,6 +1817,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               _homePending == null &&
               _featuredPending == null,
           publisher: widget.seams!.publisher,
+          backgroundUpload: widget.seams!.backgroundUpload,
           sources: _sources,
           reloadSources: _reloadSources,
           publicUrlFor: widget.seams!.publicUrlFor,
