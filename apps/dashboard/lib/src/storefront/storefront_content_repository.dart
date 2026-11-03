@@ -97,7 +97,9 @@ class SupabaseStorefrontContentRepository
   final SyncRpcTransport _transport;
   final String organizationId, restaurantId;
   final int Function() _nonce;
-  static const readFunction = 'get_restaurant_storefront_content_v1';
+  // Installed with the appearance migration. Do not fall back to v1: an older
+  // backend can return a valid legacy document without supporting these writes.
+  static const readFunction = 'get_restaurant_storefront_content_v2';
   static const writeFunction = 'set_restaurant_storefront_content_v1';
   static const mediaFunction = 'list_storefront_content_media_v1';
   Map<String, dynamic> get _scope => {

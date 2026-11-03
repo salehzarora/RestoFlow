@@ -1,6 +1,7 @@
 -- BIZBOT-STOREFRONT-CINEMATIC-001B: optional colors, font and menu background.
 -- Reuses versioned content RPCs and the existing published editorial media.
--- Hero remains independent. No endpoint, grants, RLS, order or payment changes.
+-- Hero remains independent. A readiness reader reuses existing authorization;
+-- no RLS, order, payment or existing writer/media permission changes.
 -- Deploy readers accepting optional appearance before enabling color saves.
 -- Existing documents omit appearance; legacy saves preserve stored overrides.
 begin;
@@ -437,5 +438,19 @@ begin
   order by m.created_at desc,m.id limit 200) rows;
  return jsonb_build_object('ok',true,'entity','storefront_content_media','restaurant_id',p_restaurant_id,'version',p.version,'media_prefix',app.storefront_media_prefix(p_restaurant_id),'media',media);
 end; $$;
+
+-- The new editor must not mistake a valid legacy-shaped document on an old
+-- backend for proof that appearance writes are installed. This read-only name
+-- is deployed atomically with this migration and preserves the v1 envelope and
+-- its existing principal/membership checks. Existing readers remain available.
+create function public.get_restaurant_storefront_content_v2(
+ p_organization_id uuid,p_restaurant_id uuid)
+returns jsonb language sql stable security invoker set search_path='' as $$
+ select app.get_restaurant_storefront_content_v1(p_organization_id,p_restaurant_id);
+$$;
+revoke all on function public.get_restaurant_storefront_content_v2(uuid,uuid)
+ from public,anon,authenticated,service_role;
+grant execute on function public.get_restaurant_storefront_content_v2(uuid,uuid)
+ to authenticated;
 
 commit;
