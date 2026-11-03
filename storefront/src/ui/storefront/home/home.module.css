@@ -82,12 +82,13 @@
 .stateRow{composes:flexRow;gap:5px}
 .stateDot{width:5px;height:5px;background:currentColor;border-radius:50%}
 .serviceWrap>.promoCta{background:none;color:var(--tx);min-height:32px;padding:0;font-size:10px}
-.notice{width:min(1240px,calc(100% - 36px));margin:12px auto;display:flex;gap:12px;padding:16px;border:1px solid var(--hair);border-radius:7px;background:var(--warnbg);color:var(--tx)}
-.noticePaused{background:var(--sf2)}
-.noticeIcon svg{width:24px;height:24px}
-.noticeTitle,.noticeBody{display:block}
+.notices{width:min(1240px,calc(100% - 36px));margin:12px auto 0;padding:10px 14px;display:grid;gap:8px;border:1px solid color-mix(in srgb,var(--acc) 14%,var(--hair));border-radius:16px;background:color-mix(in srgb,var(--bg) 92%,var(--acc));color:var(--tx)}
+.notice{display:flex;align-items:baseline;gap:9px;min-width:0;font:400 12px/1.65 var(--font)}
+.noticeIcon{align-self:center;display:flex;flex:none;color:var(--acc)}
+.noticeIcon svg{width:16px;height:16px}
+.noticeCopy{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 8px;min-width:0}
 .noticeTitle{font-weight:700}
-.noticeBody{font-size:12px;margin-block-start:5px}
+.noticeBody{color:var(--tx2);overflow-wrap:anywhere}
 .menu{padding-block:67px 70px;scroll-margin-block-start:108px}
 .menuHeading{display:flex;align-items:flex-end;justify-content:space-between;gap:28px;margin-block-end:31px}
 .menuHeading .eyebrow{font-size:10px;margin-block-end:9px}.menuHeading .eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--acc)}.menuHeading .eyebrow>span{font-size:9px;color:var(--tx2);letter-spacing:1px}
@@ -445,4 +446,3 @@
 }
 
 .menuAccent{color:var(--accLargeText)}
-.noticeClosed{background:color-mix(in srgb,var(--acc) 8%,var(--bg));color:var(--tx);border-color:color-mix(in srgb,var(--acc) 24%,var(--hair))}

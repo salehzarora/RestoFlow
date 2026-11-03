@@ -43,7 +43,14 @@ Real browser evidence at390×844:
 - Existing enabled local fixture: required options -> add -> cart count. No order submitted. No page errors or non-GET requests in the public-snapshot Preview smoke.
 - Production-context HTTP check: preview menu returns404.
 - GitHub preflight found no path overlap with open payment PRs#370/#371; main was still be57918. Work stays on the separate cinematic branch/worktree. Unpublished Claude changes remain unknown.
-- Flutter/Dart and local PostgreSQL unavailable: supplied dashboard/pgTAP tests remain unrun. Historical browser suites pinning superseded design geometry were not run as a broad review cycle.
+- At the first Preview delivery, Flutter/Dart and local PostgreSQL were unavailable. The followup executed the appearance SQL in disposable PostgreSQL/PGlite; full dashboard/pgTAP tests remain unrun. See the bounded evidence and limits in `BIZBOT_STOREFRONT_CINEMATIC_001_CLOSEOUT.md`. Historical browser suites pinning superseded design geometry were not run as a broad review cycle.
+
+## Preview followup
+
+`BIZBOT_STOREFRONT_CINEMATIC_001_CLOSEOUT.md` records the compact source-accurate
+status copy, canonical-name investigation, actual appearance save/read/browser
+roundtrip and complete-image desktop recapture. Order/payment/permission and
+image-loading behavior are unchanged.
 
 ## Release boundary
 

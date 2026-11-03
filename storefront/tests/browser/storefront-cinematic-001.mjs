@@ -105,6 +105,20 @@ try {
   evidence.checks.push('English LTR and Hebrew RTL keep all four sections without overflow');
   const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await desktop.goto(`${origin}${menu}`, { waitUntil: 'networkidle' });
+  await desktop.evaluate(() => document.fonts.ready);
+  // A full-page capture does not visit lazy images below the viewport.
+  // Visit each section and decode its three visible products before capturing.
+  for (const carousel of await desktop.locator('[data-sf-carousel]').all()) {
+    await carousel.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+    for (const img of await carousel.locator('[data-position]:not([data-position="away"]) img').all()) {
+      await img.evaluate(image => image.decode());
+      assert.ok(await img.evaluate(image => image.complete && image.naturalWidth > 0));
+    }
+  }
+  await desktop.locator('[data-sf-module="footer"]').evaluate(node => node.scrollIntoView({ block: 'end', behavior: 'instant' }));
+  for (const img of await desktop.locator('[data-sf-module="footer"] img').all()) await img.evaluate(image => image.decode());
+  await desktop.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
+  await desktop.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await desktop.screenshot({ path: path.join(output, '04-desktop-menu.png'), fullPage: true });
   assert.equal(await desktop.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   // Existing enabled synthetic tenant exercises the unchanged cart/options flow.

@@ -125,3 +125,14 @@ preservation, table-constraint rejection and explicit reset. Flutter/Dart and
 local PostgreSQL remain unavailable, so those tests are prepared but unexecuted.
 The existing unapplied migration was extended locally; no hosted schema or
 tenant setting was changed. Deploy font-aware readers before font-enabled writes.
+
+## 2026-11-03 safe local roundtrip
+
+The followup executed the unchanged migration, existing save/read SQL and
+constraints in disposable PostgreSQL 17.5/PGlite, with 18 passing checks and two
+consecutive appearance profiles exported into the real Storefront reader and
+browser. No application dependency or hosted data changed. This supersedes only
+the earlier lack of local SQL execution; Flutter widgets, full Auth/RLS/storage
+integration and the complete Supabase pgTAP suite remain untested. Read
+`BIZBOT_STOREFRONT_CINEMATIC_001_CLOSEOUT.md` for exact seams, settings readiness,
+secondary-screen color limits and remaining reader/migration/writer rollout.
