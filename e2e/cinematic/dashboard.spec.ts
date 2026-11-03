@@ -4,7 +4,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { enableFlutterSemantics, waitForFlutterBoot, readAccessibleText } from '../lib/flutter';
 import { controlGeometry } from './control-geometry.mjs';
 import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } from './auth-diagnostics.mjs';
-import { fillField, fillPassword, tapButton, tapNav, tapText, selectDropdown } from '../lib/dashboard';
+import { fillField, tapButton, tapNav, tapText, selectDropdown } from '../lib/dashboard';
 
 // This suite drives the shipped Flutter app. It never installs a mocked
 // repository, injects a session, calls a privileged client, or writes SQL.
@@ -89,6 +89,35 @@ async function rpc(f: Fixture, token: string, name: string): Promise<Obj> {
 function requestIs(response: Response, suffix: string): boolean {
   const u = new URL(response.url());
   return u.origin === API && u.pathname === suffix && response.request().method() === 'POST';
+}
+async function enterLoginPassword(page: Page, password: string): Promise<void> {
+  const input = page.locator('input[type="password"]').first();
+  await input.click();
+  await expect.poll(() => input.evaluate(el => el.matches(':focus')), {
+    message: 'Actual Dashboard password control receives focus',
+  }).toBe(true);
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.press('Delete');
+  const matches = (expected: string) => input.evaluate((el, value) =>
+    el instanceof HTMLInputElement && el.value === value, expected);
+  await expect.poll(() => matches(''), {
+    message: 'Actual Dashboard password control is cleared by keyboard input',
+  }).toBe(true);
+  // The preceding real run submitted a value different from the fixture.
+  // Confirm each ordinary key's rendered prefix before entering the next one.
+  // No refilling, sign-in retry, DOM value assignment or secret-valued assertion.
+  let prefix = '';
+  for (const character of password) {
+    await page.keyboard.type(character);
+    prefix += character;
+    await expect.poll(() => matches(prefix), {
+      message: 'Actual Dashboard password control reflects the entered prefix',
+    }).toBe(true);
+  }
+  await page.keyboard.press('Tab');
+  await expect.poll(() => matches(password), {
+    message: 'Complete Dashboard password remains correct after blur',
+  }).toBe(true);
 }
 async function targetGeometry(page: Page, target: Locator) {
   if (!(await target.count())) return null;
@@ -438,15 +467,22 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await semantics(page);
     await network.fontsReady();
     await fillField(page, L.email, f.ownerA.email);
-    await fillPassword(page, f.ownerA.password);
-    // Observe current field equality without copying values into assertions or
-    // artifacts. This does not refill, retry or change the intended submission.
+    stage = 'login-password-entry';
+    await enterLoginPassword(page, f.ownerA.password);
+    stage = 'login-pre-submit';
+    // Check only equality booleans before sending the one Auth request.
+    // An incomplete entry fails here without attempting a bad sign-in.
     loginEvidence.fieldsBeforeSubmit = {
       emailMatchesFixture: await page.getByRole('textbox', { name: L.email }).evaluateAll((nodes, expected) =>
         nodes[0] instanceof HTMLInputElement && nodes[0].value === expected, f.ownerA.email),
       passwordMatchesFixture: await page.locator('input[type="password"]').evaluateAll((nodes, expected) =>
         nodes[0] instanceof HTMLInputElement && nodes[0].value === expected, f.ownerA.password),
     };
+    expect(loginEvidence.fieldsBeforeSubmit.emailMatchesFixture,
+      'Actual Dashboard email matches the intended fixture before submission').toBe(true);
+    expect(loginEvidence.fieldsBeforeSubmit.passwordMatchesFixture,
+      'Actual Dashboard password matches the intended fixture before submission').toBe(true);
+    stage = 'login';
     const loginStarted = performance.now();
     const signedIn = page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API));
     await tapButton(page, L.login, { which: 'last' });
