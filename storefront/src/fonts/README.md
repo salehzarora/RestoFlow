@@ -3,7 +3,10 @@
 The optional dashboard font selector adds `Alexandria` and a device-font stack.
 Rubik remains the default when `appearance.font_family` is absent or null.
 The Alexandria Arabic variable subset is copied unchanged from the existing
-licensed marketing-site asset, with `OFL-Alexandria.txt` beside it. It is declared
+licensed marketing-site asset. Its unchanged bytes and `OFL-Alexandria.txt`
+live in `src/ui/storefront/fonts/`, adjacent to their CSS consumer. The local
+CSS URL avoids upward traversal and Next emits its usual fingerprinted asset;
+no public-asset type allowlist or loading policy changes. It is declared
 in the shared Storefront CSS and fetched only when selected, without another
 font preload or a third-party font service. Latin/Hebrew glyphs keep the bundled
 Rubik fallbacks. The dropdown accepts only `rubik`, `alexandria`, and `system`;
