@@ -7,6 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync, openSync, closeSync, readdirSyn
 import { resolve, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { requireEphemeralCi } from '../../supabase/tests/support/cinematic_001b_migration_contract.mjs';
+import { capturePublisherRuntime } from './publisher-diagnostics.mjs';
 
 const marker = 'BIZBOT-STOREFRONT-CINEMATIC-001B';
 const api = 'http://127.0.0.1:54321';
@@ -98,11 +99,16 @@ async function main(action) {
     }
     return;
   }
+  if (action === 'publisher-diagnostics') {
+    try { capturePublisherRuntime(privateDir, publicDir); }
+    catch { throw new Error('Publisher diagnostic collection failed; no raw diagnostic exported'); }
+    return;
+  }
   const status = localStatus(JSON.parse(readFileSync(process.env.CINEMATIC_STATUS_FILE, 'utf8')));
   if (action === 'status') return;
   if (action === 'edge-ready') {
-    // Gateway rejection proves the verified-JWT function route is alive; fixture
-    // setup and acceptance then exercise real successful signed-in requests.
+    // Negative JWT control only: this does NOT prove the handler is ready.
+    // bootstrap performs a real-session, non-mutating handler readiness probe.
     await waitUntil(`${api}/functions/v1/storefront-media-publish`, r => r.status === 401);
     return;
   }

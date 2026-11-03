@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { API_URL, assertAnonKey, assertEphemeralEnvironment, fixturePath, request, rpc, scope, storagePath, readInvariants } from './service.mjs';
+import { createPublisherDiagnostics, waitForAuthenticatedPublisher } from './publisher-diagnostics.mjs';
 
 assertEphemeralEnvironment();
 const target = fixturePath();
@@ -14,6 +15,7 @@ assert.ok(process.env.CINEMATIC_STATUS_FILE, 'Private local CLI status file is r
 const status = JSON.parse(readFileSync(process.env.CINEMATIC_STATUS_FILE, 'utf8'));
 assert.equal(status.API_URL, API_URL, 'CLI must identify the ephemeral loopback gateway');
 const fixture = { apiUrl: API_URL, anonKey: assertAnonKey(status.ANON_KEY) };
+const diagnostics = createPublisherDiagnostics(process.env.CINEMATIC_ARTIFACT_DIR);
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const stamp = randomUUID().slice(0, 8);
 
@@ -51,6 +53,9 @@ assert.notEqual(a.person.restaurantId, b.person.restaurantId);
 fixture.ownerA = a.person;
 fixture.ownerB = b.person;
 fixture.outsider = outsider.person;
+// A gateway401 is only the negative JWT control. This real-user POST is
+// deliberately invalid before media/engine work and proves handler readiness.
+await waitForAuthenticatedPublisher(fixture, a.token, diagnostics);
 
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const hours = { weekly: Array.from({ length: 7 }, (_, dow) => [
@@ -87,10 +92,10 @@ const receipt = await rpc(fixture, a.token, 'set_restaurant_receipt_logo', {
 });
 assert.equal(receipt.status, 200);
 assert.equal(receipt.data?.ok, true);
-const published = await request(fixture, a.token, '/functions/v1/storefront-media-publish', {
+const published = await diagnostics.observe('fixture_hero_publish', () => request(fixture, a.token, '/functions/v1/storefront-media-publish', {
   method: 'POST', body: { request_id: randomUUID(), organization_id: a.person.orgId, restaurant_id: a.person.restaurantId,
     slot: 'hero', variant: 'w960', source_bucket: 'restaurant-logos', source_key: sourceKey, rung: 0 },
-});
+}));
 assert.equal(published.status, 200, 'Actual Edge publisher must publish the synthetic Hero');
 assert.equal(published.data?.status, 'published');
 assert.equal(published.data?.source_mismatch, false);

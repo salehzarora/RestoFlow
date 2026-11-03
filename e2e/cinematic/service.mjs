@@ -55,11 +55,12 @@ export function readFixture() {
 
 // Redirects are rejected before another endpoint can receive a token. Callers
 // receive status/data, not a Response whose diagnostic may expose headers.
-export async function request(fixture, token, path, { method = 'GET', body, bytes, contentType } = {}) {
+export async function request(fixture, token, path, { method = 'GET', body, bytes, contentType, timeoutMs = 60_000 } = {}) {
   assert.equal(fixture.apiUrl, API_URL);
   assertAnonKey(fixture.anonKey);
   assert.ok(path.startsWith('/') && !path.startsWith('//'));
   const url = assertLocalUrl(new URL(path, API_URL).href);
+  assert.ok(Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 60_000, 'Bounded local request timeout required');
   const headers = { apikey: fixture.anonKey };
   if (token) headers.authorization = `Bearer ${token}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
@@ -68,7 +69,7 @@ export async function request(fixture, token, path, { method = 'GET', body, byte
   try {
     response = await fetch(url, {
       method, headers, body: bytes ?? (body === undefined ? undefined : JSON.stringify(body)),
-      redirect: 'error', signal: AbortSignal.timeout(60_000),
+      redirect: 'error', signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
     throw new Error(`Local ${method} request failed without a response`);
@@ -78,7 +79,8 @@ export async function request(fixture, token, path, { method = 'GET', body, byte
   if ((response.headers.get('content-type') || '').includes('json')) {
     try { data = JSON.parse(dataBytes.toString('utf8')); } catch { /* invalid envelope fails caller assertions */ }
   }
-  return { status: response.status, ok: response.ok, data, bytes: dataBytes };
+  return { status: response.status, ok: response.ok, data, bytes: dataBytes,
+    contentType: response.headers.get('content-type'), runtimeCode: response.headers.get('sb-error-code') };
 }
 
 export async function ownerSession(fixture, principal) {

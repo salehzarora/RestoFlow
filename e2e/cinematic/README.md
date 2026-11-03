@@ -34,6 +34,16 @@ fallback. Run `node --test e2e/cinematic/*.test.mjs` and
 for local harness checks. Those checks do **not** establish Auth/Storage success.
 The real service result is the new workflow's receipt for its exact checkout.
 
+The gateway401 remains a negative JWT check, not handler readiness. After real
+owner signup, a bounded authenticated POST with an empty object must return the
+handler's exact400 missing-request-id refusal, before any media or engine work.
+Only this non-mutating startup probe polls; publication mutations do not retry.
+`publisher-requests.json` retains fixed stage names, timing, HTTP/content-type
+and allowlisted error classifications. Before teardown, `publisher-runtime.json`
+correlates bounded gateway/runtime log classifications with those stage windows.
+Raw logs, bodies, headers, storage paths and credentials are never exported;
+classification counts alone are not a causal diagnosis.
+
 ## Release and recovery boundary
 
 Deployment is not authorized by this workflow. Before later activation:

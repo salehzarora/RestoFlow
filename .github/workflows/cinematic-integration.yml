@@ -97,7 +97,9 @@ jobs:
 
       - name: Create synthetic owners and restaurant fixtures
         id: fixtures
-        run: node e2e/cinematic/bootstrap.mjs
+        run: |
+          umask 077
+          node e2e/cinematic/bootstrap.mjs > "$RUNNER_TEMP/cinematic-private/bootstrap.log" 2>&1
 
       - name: Build the real Dashboard and live-mode Storefront
         run: node e2e/cinematic/ci-runtime.mjs build
@@ -112,6 +114,10 @@ jobs:
         run: |
           test -s "$CINEMATIC_FIXTURE_FILE"
           node e2e/cinematic/tenant-security.mjs
+
+      - name: Retain sanitized publisher runtime and gateway diagnostics
+        if: ${{ !cancelled() }}
+        run: node e2e/cinematic/ci-runtime.mjs publisher-diagnostics
 
       - name: Verify the evidence allowlist and absence of credentials
         id: evidence
