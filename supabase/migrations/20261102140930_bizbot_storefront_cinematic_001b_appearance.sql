@@ -1,6 +1,6 @@
--- BIZBOT-STOREFRONT-CINEMATIC-001B: optional presentation colors and font choice.
--- Reuses the existing versioned content RPCs and hero_media_id image slot.
--- No endpoint, authorization, grants, RLS, media, order or payment changes.
+-- BIZBOT-STOREFRONT-CINEMATIC-001B: optional colors, font and menu background.
+-- Reuses versioned content RPCs and the existing published editorial media.
+-- Hero remains independent. No endpoint, grants, RLS, order or payment changes.
 -- Deploy readers accepting optional appearance before enabling color saves.
 -- Existing documents omit appearance; legacy saves preserve stored overrides.
 begin;
@@ -9,11 +9,18 @@ alter table app.storefront_content_profiles
  add column appearance jsonb,
  add constraint storefront_content_appearance_hex check (
   appearance is null or case when jsonb_typeof(appearance)='object' then coalesce(
-   app.storefront_content_keys_v1(appearance-'font_family',array['text_color','button_text_color'])
+   app.storefront_content_keys_v1(appearance-array['font_family','menu_background_media_id','menu_background_dim'],array['text_color','button_text_color'])
    and (appearance->'text_color'='null'::jsonb or (jsonb_typeof(appearance->'text_color')='string' and length(appearance->>'text_color')=7 and appearance->>'text_color' ~ '^#[0-9a-f]{6}$'))
    and (appearance->'button_text_color'='null'::jsonb or (jsonb_typeof(appearance->'button_text_color')='string' and length(appearance->>'button_text_color')=7 and appearance->>'button_text_color' ~ '^#[0-9a-f]{6}$'))
    and (not appearance ? 'font_family' or appearance->'font_family'='null'::jsonb or
-     (jsonb_typeof(appearance->'font_family')='string' and appearance->>'font_family' in ('rubik','alexandria','system'))),
+     (jsonb_typeof(appearance->'font_family')='string' and appearance->>'font_family' in ('rubik','alexandria','system')))
+   and (not appearance ? 'menu_background_media_id' or appearance->'menu_background_media_id'='null'::jsonb
+     or app.storefront_content_uuid_v1(appearance->'menu_background_media_id'))
+   and (not appearance ? 'menu_background_dim' or appearance->'menu_background_dim'='null'::jsonb or
+     case when jsonb_typeof(appearance->'menu_background_dim')='number' then
+       (appearance->>'menu_background_dim')::numeric between 0 and 80
+       and (appearance->>'menu_background_dim')::numeric=trunc((appearance->>'menu_background_dim')::numeric)
+     else false end),
    false) else false end
  );
 
@@ -37,7 +44,7 @@ begin
   if jsonb_typeof(a) is distinct from 'object' then
    return jsonb_build_object('error','presentation_invalid','field','appearance');
   end if;
-  if not app.storefront_content_keys_v1(a-'font_family',array['text_color','button_text_color']) then
+  if not app.storefront_content_keys_v1(a-array['font_family','menu_background_media_id','menu_background_dim'],array['text_color','button_text_color']) then
    return jsonb_build_object('error','presentation_invalid','field','appearance');
   end if;
   foreach k in array array['text_color','button_text_color'] loop
@@ -51,6 +58,20 @@ begin
   if a ? 'font_family' and a->'font_family'<>'null'::jsonb and
    (jsonb_typeof(a->'font_family') is distinct from 'string' or a->>'font_family' not in ('rubik','alexandria','system')) then
    return jsonb_build_object('error','presentation_invalid','field','appearance.font_family');
+  end if;
+  if a ? 'menu_background_media_id' and a->'menu_background_media_id'<>'null'::jsonb
+   and not app.storefront_content_uuid_v1(a->'menu_background_media_id') then
+   return jsonb_build_object('error','media_invalid','field','appearance.menu_background_media_id');
+  end if;
+  if a ? 'menu_background_dim' and a->'menu_background_dim'<>'null'::jsonb then
+   if jsonb_typeof(a->'menu_background_dim') is distinct from 'number' then
+    return jsonb_build_object('error','presentation_invalid','field','appearance.menu_background_dim');
+   end if;
+   if (a->>'menu_background_dim')::numeric not between 0 and 80
+    or (a->>'menu_background_dim')::numeric<>trunc((a->>'menu_background_dim')::numeric) then
+    return jsonb_build_object('error','presentation_invalid','field','appearance.menu_background_dim');
+   end if;
+   a:=jsonb_set(a,'{menu_background_dim}',to_jsonb((a->>'menu_background_dim')::numeric::integer));
   end if;
   d:=jsonb_set(d,'{appearance}',a);
  end if;
@@ -160,9 +181,15 @@ create or replace function app.storefront_content_read_v1(p_org uuid,p_restauran
 returns jsonb language plpgsql stable set search_path='' as $$
 declare r app.storefront_content_profiles%rowtype; cr app.storefront_category_presentation%rowtype;
  ir app.storefront_item_presentation%rowtype; h jsonb; f jsonb:='null';promo jsonb:='null';story jsonb:='null';cats jsonb:='[]';items jsonb:='[]';warnings jsonb:='[]';
- hero_id uuid;hero_mode text;url text;heading text;blurb text;fit text;layout text;media_id uuid;entry jsonb;v_doc jsonb;
+ hero_id uuid;hero_mode text;url text;heading text;blurb text;fit text;layout text;media_id uuid;entry jsonb;v_doc jsonb;appearance jsonb;
 begin
  select * into r from app.storefront_content_profiles c where c.organization_id=p_org and c.restaurant_id=p_restaurant and c.storefront_branch_id=p_branch and c.deleted_at is null;
+ appearance:=r.appearance;
+ if appearance->>'menu_background_media_id' is not null and
+  app.storefront_content_media_url_v1(p_org,p_restaurant,p_branch,(appearance->>'menu_background_media_id')::uuid) is null then
+  appearance:=jsonb_set(appearance,'{menu_background_media_id}','null'::jsonb);
+  warnings:=warnings||jsonb_build_array(jsonb_build_object('field','appearance.menu_background_media_id','reason','media_unavailable'));
+ end if;
  hero_mode:=case when r.hero_mode in ('editorial','item') then r.hero_mode else 'editorial' end;
  hero_id:=r.hero_item_id;
  if (hero_mode='item' and hero_id is null) or (hero_id is not null and not app.storefront_content_item_member_v1(p_catalog,hero_id)) then
@@ -226,7 +253,7 @@ begin
  v_doc:=jsonb_build_object('hero_headline',p_headline,'hero_subline',p_subline,'announcement_text',p_announcement,'hero',h,
   'announcement_segments',case when app.storefront_content_text_array_v1(r.announcement_segments,1,6,40,240) then to_jsonb(r.announcement_segments) else 'null'::jsonb end,
   'promo',promo,'story',story,'category_presentation',cats,'item_presentation',items);
- if r.appearance is not null then v_doc:=v_doc||jsonb_build_object('appearance',r.appearance);end if;
+ if appearance is not null then v_doc:=v_doc||jsonb_build_object('appearance',appearance);end if;
  return jsonb_build_object('document',v_doc,'warnings',warnings);
 end; $$;
 
@@ -267,6 +294,10 @@ begin
  if parsed ? 'error' then return jsonb_build_object('ok',false,'error','invalid','entity',c_entity,'reason',parsed->>'error','field',parsed->>'field');end if;
  d:=parsed->'document';h:=d->'hero';f:=h->'format';
  if not exists(select 1 from public.branches b where b.id=p.storefront_branch_id and b.organization_id=p_organization_id and b.restaurant_id=p_restaurant_id and b.status='active' and b.deleted_at is null) then return jsonb_build_object('ok',false,'error','invalid','entity',c_entity,'reason','target_invalid','field','document');end if;
+ if d#>>'{appearance,menu_background_media_id}' is not null and
+  app.storefront_content_media_url_v1(p_organization_id,p_restaurant_id,p.storefront_branch_id,(d#>>'{appearance,menu_background_media_id}')::uuid) is null then
+  return jsonb_build_object('ok',false,'error','invalid','entity',c_entity,'reason','media_invalid','field','appearance.menu_background_media_id');
+ end if;
  catalog:=app.storefront_content_catalog_v1(p_organization_id,p_restaurant_id,p.storefront_branch_id);
  if h->>'item_id' is not null and not app.storefront_content_item_member_v1(catalog,(h->>'item_id')::uuid) then return jsonb_build_object('ok',false,'error','invalid','entity',c_entity,'reason','target_invalid','field','hero.item_id');end if;
  if d->'promo'<>'null'::jsonb then
@@ -302,9 +333,10 @@ begin
   hero_eyebrow=excluded.hero_eyebrow,hero_stamp=excluded.hero_stamp,hero_footnote=excluded.hero_footnote,announcement_segments=excluded.announcement_segments,
   promo_kind=excluded.promo_kind,promo_category_id=excluded.promo_category_id,promo_item_id=excluded.promo_item_id,promo_media_id=excluded.promo_media_id,promo_kicker=excluded.promo_kicker,promo_title=excluded.promo_title,promo_body=excluded.promo_body,
   story_media_id=excluded.story_media_id,story_kicker=excluded.story_kicker,story_title=excluded.story_title,story_body=excluded.story_body,story_facts=excluded.story_facts,
+  -- Merge only validated keys: older writers omit optional fields, explicit
+  -- JSON null overrides clear them. Tombstoned branch content is not revived.
   appearance=case when d ? 'appearance' then
-    case when not excluded.appearance ? 'font_family' and app.storefront_content_profiles.deleted_at is null and app.storefront_content_profiles.appearance ? 'font_family'
-      then excluded.appearance||jsonb_build_object('font_family',app.storefront_content_profiles.appearance->'font_family') else excluded.appearance end
+    (case when app.storefront_content_profiles.deleted_at is null then coalesce(app.storefront_content_profiles.appearance,'{}'::jsonb) else '{}'::jsonb end)||excluded.appearance
     when app.storefront_content_profiles.deleted_at is null then app.storefront_content_profiles.appearance else null end,deleted_at=null;
  update app.storefront_category_presentation c set deleted_at=now() where c.organization_id=p_organization_id and c.restaurant_id=p_restaurant_id and c.storefront_branch_id=p.storefront_branch_id and c.deleted_at is null
   and not exists(select 1 from jsonb_array_elements(d->'category_presentation') x(v) where x.v->>'category_id'=c.category_id::text);
@@ -327,7 +359,7 @@ end; $$;
 
 create or replace function public.storefront_menu_v4(p_slug text)
 returns jsonb language plpgsql stable security definer set search_path='' as $$
-declare m jsonb;p public.restaurant_storefront_profiles%rowtype;v jsonb;d jsonb;content jsonb;promo jsonb;story jsonb;cats jsonb;h jsonb;
+declare m jsonb;p public.restaurant_storefront_profiles%rowtype;v jsonb;d jsonb;content jsonb;promo jsonb;story jsonb;cats jsonb;h jsonb;appearance jsonb;
 begin
  m:=public.storefront_menu_v3(p_slug);if m->>'ok' is distinct from 'true' then return m;end if;
  if m#>>'{restaurant,slug}' is distinct from p_slug then return jsonb_build_object('ok',false,'error','not_found','entity','storefront_menu');end if;
@@ -346,8 +378,64 @@ begin
  story:=d->'story';if story<>'null'::jsonb then story:=(story-'editorial_media_id')||jsonb_build_object('image_url',app.storefront_content_media_url_v1(p.organization_id,p.restaurant_id,p.storefront_branch_id,(story->>'editorial_media_id')::uuid));end if;
  select coalesce(jsonb_agg((x.v-'editorial_media_id')||jsonb_build_object('image_url',app.storefront_content_media_url_v1(p.organization_id,p.restaurant_id,p.storefront_branch_id,(x.v->>'editorial_media_id')::uuid)) order by x.n),'[]') into cats from jsonb_array_elements(d->'category_presentation') with ordinality x(v,n);
  content:=jsonb_build_object('schema',1,'hero',h,'announcement_segments',d->'announcement_segments','promo',promo,'story',story,'category_presentation',cats,'item_presentation',d->'item_presentation');
- if d ? 'appearance' then content:=content||jsonb_build_object('appearance',d->'appearance');end if;
+ if d ? 'appearance' then
+  appearance:=d->'appearance';
+  if appearance ? 'menu_background_media_id' then
+   appearance:=(appearance-'menu_background_media_id')||jsonb_build_object('menu_background_url',
+    app.storefront_content_media_url_v1(p.organization_id,p.restaurant_id,p.storefront_branch_id,(appearance->>'menu_background_media_id')::uuid));
+  end if;
+  content:=content||jsonb_build_object('appearance',appearance);
+ end if;
  return m||jsonb_build_object('content_v1',content);
+end; $$;
+
+-- Extend existing media lifecycle so references stay owned and in-use.
+create or replace function app.storefront_content_media_in_use_v1(p_org uuid,p_restaurant uuid,p_branch uuid,p_media uuid)
+returns boolean language sql stable set search_path='' as $$
+ select coalesce(exists(select 1 from app.storefront_content_profiles c where c.organization_id=p_org and c.restaurant_id=p_restaurant and c.storefront_branch_id=p_branch and c.deleted_at is null
+   and (c.promo_media_id=p_media or c.story_media_id=p_media or c.appearance->>'menu_background_media_id'=p_media::text))
+  or exists(select 1 from app.storefront_category_presentation c join app.storefront_content_profiles p using(organization_id,restaurant_id,storefront_branch_id)
+   where c.organization_id=p_org and c.restaurant_id=p_restaurant and c.storefront_branch_id=p_branch and c.deleted_at is null and p.deleted_at is null and c.editorial_media_id=p_media),false);
+$$;
+
+create or replace function app.storefront_content_repoint_media_v1(p_org uuid,p_restaurant uuid,p_branch uuid,p_old uuid,p_new uuid)
+returns void language plpgsql volatile set search_path='' as $$
+begin
+ if not exists(select 1 from public.storefront_media a join public.storefront_media b on b.organization_id=a.organization_id and b.restaurant_id=a.restaurant_id and b.source_bucket=a.source_bucket and b.source_key=a.source_key and b.variant=a.variant
+   where a.organization_id=p_org and a.restaurant_id=p_restaurant and a.id=p_old and b.id=p_new and b.published_at is not null and b.unpublished_at is null) then raise exception 'storefront content media replacement mismatch' using errcode='23514';end if;
+ update app.storefront_content_profiles set promo_media_id=case when promo_media_id=p_old then p_new else promo_media_id end,story_media_id=case when story_media_id=p_old then p_new else story_media_id end,
+  appearance=case when appearance->>'menu_background_media_id'=p_old::text then jsonb_set(appearance,'{menu_background_media_id}',to_jsonb(p_new::text)) else appearance end
+  where organization_id=p_org and restaurant_id=p_restaurant and storefront_branch_id=p_branch and deleted_at is null and (promo_media_id=p_old or story_media_id=p_old or appearance->>'menu_background_media_id'=p_old::text);
+ update app.storefront_category_presentation c set editorial_media_id=p_new where c.organization_id=p_org and c.restaurant_id=p_restaurant and c.storefront_branch_id=p_branch and c.deleted_at is null and c.editorial_media_id=p_old
+  and exists(select 1 from app.storefront_content_profiles p where p.organization_id=c.organization_id and p.restaurant_id=c.restaurant_id and p.storefront_branch_id=c.storefront_branch_id and p.deleted_at is null);
+ perform app.management_audit(p_org,p_restaurant,p_branch,'settings.storefront.content.media_replaced',jsonb_build_object('media_id',p_old),jsonb_build_object('media_id',p_new));
+end; $$;
+
+create or replace function app.list_storefront_content_media_v1(p_organization_id uuid,p_restaurant_id uuid)
+returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare p public.restaurant_storefront_profiles%rowtype;media jsonb;
+begin
+ if app.current_app_user_id() is null then raise exception 'storefront media authentication required' using errcode='42501';end if;
+ if p_organization_id is null or p_restaurant_id is null or not exists(select 1 from public.restaurants r where r.organization_id=p_organization_id and r.id=p_restaurant_id and r.deleted_at is null)
+  or app.actor_rank_in_scope(p_organization_id,p_restaurant_id,null)<2 then return jsonb_build_object('ok',false,'error','not_found','entity','storefront_content_media');end if;
+ select * into p from public.restaurant_storefront_profiles where organization_id=p_organization_id and restaurant_id=p_restaurant_id and deleted_at is null;
+ if not found then return jsonb_build_object('ok',false,'error','not_found','entity','storefront_content_media');end if;
+ select coalesce(jsonb_agg(j order by created_at desc,id),'[]') into media from (
+  select m.id,m.created_at,jsonb_build_object('id',m.id,'source_bucket',m.source_bucket,'source_key',m.source_key,'variant',m.variant,'object_key',m.object_key,'content_hash',m.content_hash,
+   'width',m.width,'height',m.height,'bytes',m.bytes,'state',case when m.published_at is null then 'staged' when m.unpublished_at is null then 'published' else 'retracted' end,
+   'published_at',m.published_at,'unpublished_at',m.unpublished_at,'created_at',m.created_at,
+   'in_use',to_jsonb(array_remove(array[case when m.id=p.logo_media_id then 'logo' end,case when m.id=p.hero_media_id then 'hero' end],null)),
+   'content_in_use',coalesce((select jsonb_agg(usage order by usage->>'kind',usage->>'category_id') from (
+    select jsonb_build_object('kind','promo') usage from app.storefront_content_profiles c where c.organization_id=p_organization_id and c.restaurant_id=p_restaurant_id and c.storefront_branch_id=p.storefront_branch_id and c.deleted_at is null and c.promo_media_id=m.id
+    union all select jsonb_build_object('kind','menu_background') from app.storefront_content_profiles c where c.organization_id=p_organization_id and c.restaurant_id=p_restaurant_id and c.storefront_branch_id=p.storefront_branch_id and c.deleted_at is null and c.appearance->>'menu_background_media_id'=m.id::text
+    union all select jsonb_build_object('kind','story') from app.storefront_content_profiles c where c.organization_id=p_organization_id and c.restaurant_id=p_restaurant_id and c.storefront_branch_id=p.storefront_branch_id and c.deleted_at is null and c.story_media_id=m.id
+    union all select jsonb_build_object('kind','category','category_id',c.category_id) from app.storefront_category_presentation c join app.storefront_content_profiles cp using(organization_id,restaurant_id,storefront_branch_id)
+     where c.organization_id=p_organization_id and c.restaurant_id=p_restaurant_id and c.storefront_branch_id=p.storefront_branch_id and c.deleted_at is null and cp.deleted_at is null and c.editorial_media_id=m.id) usages),'[]'::jsonb)) j
+  from public.storefront_media m where m.organization_id=p_organization_id and m.restaurant_id=p_restaurant_id and m.variant='w960'
+   and ((m.source_bucket='restaurant-logos' and exists(select 1 from app.restaurant_logo_scope(m.source_key) s where s.organization_id=p_organization_id and s.restaurant_id=p_restaurant_id))
+     or (m.source_bucket='menu-images' and exists(select 1 from app.menu_image_scope(m.source_key) s where s.organization_id=p_organization_id and s.restaurant_id=p_restaurant_id and (s.branch_id is null or s.branch_id=p.storefront_branch_id))))
+  order by m.created_at desc,m.id limit 200) rows;
+ return jsonb_build_object('ok',true,'entity','storefront_content_media','restaurant_id',p_restaurant_id,'version',p.version,'media_prefix',app.storefront_media_prefix(p_restaurant_id),'media',media);
 end; $$;
 
 commit;

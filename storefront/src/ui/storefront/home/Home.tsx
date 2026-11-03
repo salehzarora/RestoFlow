@@ -2,7 +2,8 @@
 import { dirOf, type Locale } from '@/i18n/locales';
 import { storefrontMessages } from '@/i18n/storefront';
 import { buildCinematicTheme } from '@/theme/buildCinematicTheme';
-import { SceneBackdrop } from './SceneBackdrop';
+import { MenuBackdrop } from './MenuBackdrop';
+import { menuBackground } from './menuBackground';
 import { cartPath, checkoutPath } from '@/routes/routes';
 import type { StorefrontResolution } from '@/source/types';
 import { ThemeScope } from '../ThemeScope';
@@ -23,11 +24,12 @@ export function Home({ resolution, locale, slug, hrefFor }: {
   const { tenant, modules, categories, items, cardMode } = view;
   const m = storefrontMessages(locale);
   const tokens = buildCinematicTheme(tenant.brand);
+  const background = menuBackground(tenant);
   return (
-    <ThemeScope tokens={tokens} className={`${shell.root} ${MOTION_CLASS[view.motion]}`} dir={dirOf(locale)}>
+    <ThemeScope tokens={tokens} menuImageDim={background.dim} className={`${shell.root} ${MOTION_CLASS[view.motion]}`} dir={dirOf(locale)}>
       <StorefrontRuntime source={resolution.source} slug={slug} menuVersion={menuVersion} items={items} groups={groups} zones={zones} taxRateBp={taxRateBp} orderingEnabled={tenant.service.orderingEnabled} locale={locale} motion={view.motion} state={tenant.service.state} opensAt={tenant.hours.opens}>
         <main className={styles.page} data-sf-screen="home">
-          <SceneBackdrop image={tenant.heroImage} />
+          <MenuBackdrop background={background} />
           <HomeChrome key={slug} tenant={tenant} locale={locale} slug={slug} language={<LanguageMenu locale={locale} hrefFor={hrefFor} />} categories={categories} items={items} cardMode={cardMode}
             announcement={modules.announcement === null || tenant.service.state !== 'open' ? null : modules.announcement.text}
             announcementSegments={modules.announcement?.segments}

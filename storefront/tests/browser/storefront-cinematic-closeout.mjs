@@ -33,7 +33,7 @@ for (const state of ['open', 'closed', 'paused']) for (const enabled of [true, f
   envelopes.set(slug, envelope);
 }
 profiles.forEach((envelope, index) => {
-  const slug = `sf-closeout-appearance-${index}`;
+  const slug = `sf-closeout-appearance-v5-${index}`;
   envelopes.set(slug, { ...envelope, restaurant: { ...envelope.restaurant, slug } });
 });
 const api = createServer((req, res) => {
@@ -103,22 +103,48 @@ try {
     }
     const css = await page.locator('[data-sf-root]').first().evaluate(node => {
       const style = getComputedStyle(node);
-      return Object.fromEntries(['--bg', '--acc', '--tx', '--onacc', '--font'].map(key => [key, style.getPropertyValue(key).trim()]));
+      return Object.fromEntries(['--bg', '--acc', '--tx', '--onacc', '--font', '--menu-image-dim'].map(key => [key, style.getPropertyValue(key).trim()]));
     });
     assert.equal(css['--bg'], envelope.restaurant.primary_color.toLowerCase());
     assert.equal(css['--acc'], envelope.restaurant.accent_color.toLowerCase());
-    const settings = envelope.content_v1.appearance;
+    const settings = envelope.content_v1.appearance ?? {};
     if (settings.text_color) assert.equal(css['--tx'], settings.text_color.toLowerCase());
     if (settings.button_text_color) assert.equal(css['--onacc'], settings.button_text_color.toLowerCase());
     if (settings.font_family === 'alexandria') assert.match(css['--font'], /SF Alexandria/);
     if (settings.font_family === 'system') assert.match(css['--font'], /^system-ui/);
     const hero = envelope.restaurant.hero_url;
-    if (hero) {
+    const background = settings.menu_background_url || hero;
+    if (background) {
       const image = page.locator('[data-sf-screen="home"] > div[aria-hidden="true"] img').first();
       await image.evaluate(node => node.decode());
-      assert.ok((await image.getAttribute('src')).endsWith(new URL(hero, apiOrigin).pathname));
+      assert.ok((await image.getAttribute('src')).endsWith(new URL(background, apiOrigin).pathname));
     }
-    evidence.appearance.push({ slug, css, hero });
+    const custom = page.locator('[data-sf-menu-background="custom"]');
+    assert.equal(await custom.count(), settings.menu_background_url ? 1 : 0);
+    if (settings.menu_background_url) {
+      assert.equal(css['--menu-image-dim'], String((settings.menu_background_dim ?? 15) / 100));
+      const sizes = await page.locator('[data-sf-screen="home"]').evaluate(main => ({
+        main: main.getBoundingClientRect().height,
+        layer: main.querySelector('[data-sf-menu-background]').getBoundingClientRect().height,
+      }));
+      assert.equal(sizes.layer, sizes.main, 'independent backdrop covers the entire menu document');
+    }
+    if (hero) {
+      const footerImage = page.locator('[data-sf-module="footer"] img').first();
+      assert.ok((await footerImage.getAttribute('src')).endsWith(new URL(hero, apiOrigin).pathname), 'footer hero identity stays unchanged');
+      const welcome = await browser.newPage({ viewport: { width: 390, height: 844 } });
+      await welcome.route(`${publicOrigin}/**`, route => route.fulfill({ status: 200, contentType: 'image/webp', body: readFileSync(path.join(root, 'public/cinematic-preview/cover.webp')) }));
+      await welcome.goto(`${origin}/s/${slug}`, { waitUntil: 'networkidle' });
+      assert.equal(await welcome.locator('[data-sf-screen="intro"]').count(), 1);
+      assert.equal(await welcome.locator('[data-sf-menu-background]').count(), 0);
+      const welcomeImage = welcome.locator('[data-sf-screen="intro"] > div[aria-hidden="true"] img').first();
+      assert.ok((await welcomeImage.getAttribute('src')).endsWith(new URL(hero, apiOrigin).pathname), 'welcome uses the original hero after every menu-background save');
+      await welcome.close();
+    }
+    await page.reload({ waitUntil: 'networkidle' });
+    const reloaded = page.locator('[data-sf-screen="home"] > div[aria-hidden="true"] img').first();
+    if (background) assert.ok((await reloaded.getAttribute('src')).endsWith(new URL(background, apiOrigin).pathname));
+    evidence.appearance.push({ slug, css, hero, background, reloaded: true });
   }
   assert.deepEqual(evidence.pageErrors, []);
   assert.deepEqual(evidence.browserWrites, []);

@@ -10,7 +10,12 @@ export interface WireCategoryPresentation {
   readonly image_url:string|null; readonly image_fit:ImageFit|null; readonly card_layout:CardLayout|null;
 }
 export interface WireItemPresentation { readonly item_id:string; readonly image_fit:ImageFit|null; readonly card_layout:CardLayout|null; }
-export interface WireAppearance { readonly text_color:string|null; readonly button_text_color:string|null; readonly font_family?:FontFamily|null; }
+export interface WireAppearance {
+  readonly text_color:string|null; readonly button_text_color:string|null;
+  readonly font_family?:FontFamily|null;
+  readonly menu_background_url?:string|null;
+  readonly menu_background_dim?:number|null;
+}
 export interface WireContentV1 {
   readonly schema:1;
   /** Additive visual fields; the original v4 content shape remains valid. */
@@ -46,6 +51,12 @@ function colour(v:unknown,field:string):string|null{
   if(typeof v!=='string'||v.length!==7||!/^#[0-9a-fA-F]{6}$/.test(v))return reject(field);
   return v.toLowerCase();
 }
+function dim(v:unknown,field:string):number|null{
+  if(v===null)return null;
+  const value=integer(v,field);
+  if(value<0||value>80)return reject(field);
+  return value;
+}
 function array(v:unknown,max:number,field:string):unknown[]{if(!Array.isArray(v)||v.length>max)return reject(field);return v;}
 function format(v:unknown,headline:string|null):HeroFormat|null{
   if(v===null)return null;const o=record(v,['text','highlight','break_before'],'hero.format');
@@ -76,10 +87,14 @@ export function decodeStorefrontMenuV4(raw:unknown):StorefrontMenuV4Envelope{
   let appearance:WireAppearance|undefined;
   if(Object.hasOwn(o,'appearance')){
     const keys=['text_color','button_text_color'];
-    if(typeof o.appearance==='object'&&o.appearance!==null&&Object.hasOwn(o.appearance,'font_family'))keys.push('font_family');
+    for(const key of ['font_family','menu_background_url','menu_background_dim']){
+      if(typeof o.appearance==='object'&&o.appearance!==null&&Object.hasOwn(o.appearance,key))keys.push(key);
+    }
     const a=record(o.appearance,keys,'appearance');
     appearance={text_color:colour(a.text_color,'appearance.text_color'),button_text_color:colour(a.button_text_color,'appearance.button_text_color'),
-      ...(Object.hasOwn(a,'font_family')?{font_family:a.font_family===null?null:choice<FontFamily>(a.font_family,['rubik','alexandria','system'],'appearance.font_family')}:{})};
+      ...(Object.hasOwn(a,'font_family')?{font_family:a.font_family===null?null:choice<FontFamily>(a.font_family,['rubik','alexandria','system'],'appearance.font_family')}:{}),
+      ...(Object.hasOwn(a,'menu_background_url')?{menu_background_url:image(a.menu_background_url,'appearance.menu_background_url',true)}:{}),
+      ...(Object.hasOwn(a,'menu_background_dim')?{menu_background_dim:dim(a.menu_background_dim,'appearance.menu_background_dim')}:{})};
   }
   const h=record(o.hero,['mode','item_id','format','eyebrow','stamp','footnote'],'hero');
   const mode=choice(h.mode,['editorial','item'],'hero.mode');const itemId=h.item_id===null?null:id(h.item_id,'hero.item_id');

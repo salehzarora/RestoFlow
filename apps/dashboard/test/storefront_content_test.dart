@@ -174,6 +174,59 @@ void main() {
       'text_color': '#aa00ff', 'button_text_color': null,
     });
   });
+  test('menu background is optional and preserves explicit reset values', () {
+    final legacy = StorefrontContentDocument.fromJson(document()
+      ..['appearance'] = {
+        'text_color': null,
+        'button_text_color': null,
+        'font_family': 'alexandria',
+      });
+    expect(
+      (legacy.json['appearance'] as Map).containsKey('menu_background_media_id'),
+      false,
+    );
+    expect(
+      (legacy.json['appearance'] as Map).containsKey('menu_background_dim'),
+      false,
+    );
+    for (final id in <String?>[media, null]) {
+      for (final dim in <int?>[0, 15, 80, null]) {
+        final raw = legacy.editableCopy();
+        (raw['appearance'] as Map).addAll({
+          'menu_background_media_id': id,
+          'menu_background_dim': dim,
+        });
+        final decoded = StorefrontContentDocument.fromJson(raw);
+        expect((decoded.json['appearance'] as Map)['menu_background_media_id'], id);
+        expect((decoded.json['appearance'] as Map)['menu_background_dim'], dim);
+        expect(
+          StorefrontContentDocument.fromJson(decoded.editableCopy()).json,
+          decoded.json,
+        );
+        expect(decoded.json['hero'], legacy.json['hero']);
+      }
+    }
+  });
+  test('menu background rejects invalid ids and dim values before saving', () {
+    for (final field in ['menu_background_media_id', 'menu_background_dim']) {
+      final invalid = field == 'menu_background_media_id'
+          ? <Object>['', 'not-an-id', 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA', 1, true]
+          : <Object>[-1, 81, 15.0, 0.5, '15', true, [], {}];
+      for (final value in invalid) {
+        expect(
+          () => StorefrontContentDocument.fromJson(document()
+            ..['appearance'] = {
+              'text_color': null,
+              'button_text_color': null,
+              field: value,
+            }),
+          throwsA(isA<StorefrontDecodeException>()),
+        );
+      }
+    }
+    expect(contentFieldPath('appearance.menu_background_media_id'), true);
+    expect(contentFieldPath('appearance.menu_background_dim'), true);
+  });
   test(
     'versioned editorial usage preserves legacy slot enums and refuses unknown usage',
     () {
@@ -196,14 +249,18 @@ void main() {
           {'kind': 'promo'},
           {'kind': 'story'},
           {'kind': 'category', 'category_id': category},
+          {'kind': 'menu_background'},
         ],
       };
       final decoded = StorefrontContentMediaRow.fromJson(row());
       expect(decoded.media.inUse, [StorefrontSlot.hero]);
-      expect(decoded.contentInUse.length, 3);
+      expect(decoded.contentInUse.length, 4);
       for (final invalid in <List<Object?>>[
         [
           {'kind': 'hero'},
+        ],
+        [
+          {'kind': 'menu_background', 'category_id': category},
         ],
         [
           {'kind': 'category', 'category_id': restaurant, 'extra': true},

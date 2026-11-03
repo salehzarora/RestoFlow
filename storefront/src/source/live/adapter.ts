@@ -114,6 +114,8 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
       orderingEnabled: liveOrderingEnabled(envelope.service),
     },
     heroImage: mediaUrl(r.hero_url, origin),
+    ...(content?.appearance?.menu_background_url === undefined ? {} : { menuBackgroundImage: mediaUrl(content.appearance.menu_background_url, origin) }),
+    ...(content?.appearance?.menu_background_dim === undefined ? {} : { menuBackgroundDim: content.appearance.menu_background_dim }),
     currency: 'ILS',
   };
 

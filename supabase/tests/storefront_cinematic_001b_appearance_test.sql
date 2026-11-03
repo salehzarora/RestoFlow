@@ -64,5 +64,65 @@ set local role authenticated;
 select is(pg_temp.appearance_save('clear-font',pg_temp.appearance_document()||'{"appearance":{"text_color":"#f0f0f0","button_text_color":null,"font_family":null}}',15)->>'version','16','explicit null restores the default font');
 select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance,font_family}','null'::jsonb,'cleared font roundtrips');
 reset role;
+-- v5: independent menu backdrop uses only existing published w960 media.
+create function pg_temp.background_source(label text) returns text language sql immutable as $$
+ select pg_temp.aid('org')::text||'/'||pg_temp.aid('restaurant')::text||'/logo/'||pg_temp.aid('original-'||label)::text||'.png';$$;
+insert into storage.objects(bucket_id,name) select 'restaurant-logos',pg_temp.background_source(label) from unnest(array['hero','menu-a','menu-b','staged']) label;
+insert into public.storefront_media(id,organization_id,restaurant_id,source_bucket,source_key,variant,object_key,content_hash,width,height,bytes,published_at)
+ select pg_temp.aid('media-'||label),pg_temp.aid('org'),pg_temp.aid('restaurant'),'restaurant-logos',pg_temp.background_source(source),'w960',app.storefront_media_prefix(pg_temp.aid('restaurant'))||'/'||repeat(ch,64)||'.webp',repeat(ch,64),960,640,1000,
+ case when label in ('staged','menu-b-replacement') then null else now() end
+ from (values ('hero','hero','1'),('menu-a','menu-a','2'),('menu-b','menu-b','3'),('menu-b-replacement','menu-b','4'),('staged','staged','5')) x(label,source,ch);
+insert into storage.objects(bucket_id,name,metadata) select 'storefront-media',object_key,'{"mimetype":"image/webp","size":1000}'::jsonb
+ from public.storefront_media where restaurant_id=pg_temp.aid('restaurant');
+insert into organizations(id,name,slug,default_currency) values(pg_temp.aid('foreign-org'),'Foreign appearance','appearance-cinematic-foreign','ILS');
+insert into restaurants(id,organization_id,name,timezone) values(pg_temp.aid('foreign-restaurant'),pg_temp.aid('foreign-org'),'Foreign appearance','UTC');
+insert into public.storefront_media(id,organization_id,restaurant_id,source_bucket,source_key,variant,object_key,content_hash,width,height,bytes,published_at)
+ values(pg_temp.aid('foreign-media'),pg_temp.aid('foreign-org'),pg_temp.aid('foreign-restaurant'),'restaurant-logos',
+ pg_temp.aid('foreign-org')::text||'/'||pg_temp.aid('foreign-restaurant')::text||'/logo/'||pg_temp.aid('foreign-original')::text||'.png',
+ 'w960',app.storefront_media_prefix(pg_temp.aid('foreign-restaurant'))||'/'||repeat('6',64)||'.webp',repeat('6',64),960,640,1000,now());
+create function pg_temp.appearance_version() returns integer language sql stable as $$
+ select (public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))->>'version')::integer;$$;
+create function pg_temp.background_document(media uuid,dim jsonb) returns jsonb language sql immutable as $$
+ select pg_temp.appearance_document()||jsonb_build_object('appearance',jsonb_build_object('text_color','#f0f0f0','button_text_color',null,
+  'menu_background_media_id',media,'menu_background_dim',dim));$$;
+select is(app.storefront_content_document_shape_v1(pg_temp.background_document(null,'15.0'))#>>'{document,appearance,menu_background_dim}','15','integral numeric dim canonicalizes');
+select is(app.storefront_content_document_shape_v1(pg_temp.background_document(null,d))->>'error','presentation_invalid','invalid dim rejected: '||d::text)
+ from (values ('-1'::jsonb),('81'::jsonb),('1.5'::jsonb),('"15"'::jsonb),('true'::jsonb),('[]'::jsonb),('{}'::jsonb)) x(d);
+select is(app.storefront_content_document_shape_v1(jsonb_set(pg_temp.background_document(null,'15'),'{appearance,menu_background_media_id}',to_jsonb('not-uuid'::text)))->>'error','media_invalid','malformed media ID rejected');
+set local role authenticated;
+select is(public.set_restaurant_storefront_profile(pg_temp.aid('set-original-hero'),pg_temp.aid('org'),pg_temp.aid('restaurant'),pg_temp.appearance_version(),jsonb_build_object('hero_media_id',pg_temp.aid('media-hero')))->>'ok','true','independent Hero seed uses existing profile writer');
+select is(pg_temp.appearance_save('menu-select',pg_temp.background_document(pg_temp.aid('media-menu-a'),'15'),pg_temp.appearance_version())->>'ok','true','select menu background through existing writer');
+select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_media_id}',pg_temp.aid('media-menu-a')::text,'private read keeps selected ID');
+select is(pg_temp.appearance_save('menu-foreign',pg_temp.background_document(pg_temp.aid('foreign-media'),'15'),pg_temp.appearance_version())->>'reason','media_invalid','foreign media refused');
+select is(pg_temp.appearance_save('menu-staged',pg_temp.background_document(pg_temp.aid('media-staged'),'15'),pg_temp.appearance_version())->>'reason','media_invalid','unpublished media refused');
+select is(public.retract_storefront_media(pg_temp.aid('retract-menu-active'),pg_temp.aid('org'),pg_temp.aid('restaurant'),pg_temp.aid('media-menu-a'))->>'error','media_in_use','existing retract protects menu background reference');
+select is((select m->'content_in_use' from jsonb_array_elements(public.list_storefront_content_media_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))->'media') x(m) where m->>'id'=pg_temp.aid('media-menu-a')::text),'[{"kind":"menu_background"}]'::jsonb,'existing editor media list reports usage');
+select is(pg_temp.appearance_save('menu-old-editor',pg_temp.appearance_document()||'{"appearance":{"text_color":"#FFFFFF","button_text_color":null}}',pg_temp.appearance_version())->>'ok','true','older color writer remains accepted');
+select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_media_id}',pg_temp.aid('media-menu-a')::text,'older writer preserves background');
+select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_dim}','15','older writer preserves dim');
+reset role;
+select is(public.storefront_menu_v4('appearance-cinematic-001b')#>>'{content_v1,appearance,menu_background_url}',
+ '/storage/v1/object/public/storefront-media/'||app.storefront_media_prefix(pg_temp.aid('restaurant'))||'/'||repeat('2',64)||'.webp','public projects eligible URL');
+select ok(not (public.storefront_menu_v4('appearance-cinematic-001b')#>'{content_v1,appearance}') ? 'menu_background_media_id','public never exposes private media ID field');
+select is((select hero_media_id from public.restaurant_storefront_profiles where restaurant_id=pg_temp.aid('restaurant')),pg_temp.aid('media-hero'),'menu selection never changes Hero');
+select throws_ok($$update app.storefront_content_profiles set appearance=jsonb_set(appearance,'{menu_background_dim}','81') where restaurant_id=pg_temp.aid('restaurant')$$,'23514',null,'table constraint rejects invalid dim');
+set local role authenticated;
+select is(pg_temp.appearance_save('menu-replace',pg_temp.background_document(pg_temp.aid('media-menu-b'),'60'),pg_temp.appearance_version())->>'ok','true','replace menu background and dim');
+select is(public.retract_storefront_media(pg_temp.aid('retract-menu-previous'),pg_temp.aid('org'),pg_temp.aid('restaurant'),pg_temp.aid('media-menu-a'))->>'ok','true','old unselected background may be retracted');
+select is(public.finalize_storefront_media(pg_temp.aid('finalize-menu-replacement'),pg_temp.aid('org'),pg_temp.aid('restaurant'),pg_temp.aid('media-menu-b-replacement'))->>'ok','true','existing same-source finalize repoints background');
+select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_media_id}',pg_temp.aid('media-menu-b-replacement')::text,'republished derivative pointer roundtrips');
+reset role;
+select is((select hero_media_id from public.restaurant_storefront_profiles where restaurant_id=pg_temp.aid('restaurant')),pg_temp.aid('media-hero'),'replacement and republication preserve Hero');
+-- Synthetic object disappearance: read fails closed without mutating the saved ID.
+delete from storage.objects where bucket_id='storefront-media' and name=app.storefront_media_prefix(pg_temp.aid('restaurant'))||'/'||repeat('4',64)||'.webp';
+select is(public.storefront_menu_v4('appearance-cinematic-001b')#>'{content_v1,appearance,menu_background_url}','null'::jsonb,'unavailable public object projects null');
+select ok((public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))->'warnings') @> '[{"field":"appearance.menu_background_media_id","reason":"media_unavailable"}]'::jsonb,'private read warns on unavailable object');
+set local role authenticated;
+select is(pg_temp.appearance_save('menu-clear',pg_temp.background_document(null,'null'),pg_temp.appearance_version())->>'ok','true','explicit null clears background and dim');
+select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance,menu_background_media_id}','null'::jsonb,'clear readback is explicit null');
+reset role;
+select is(public.storefront_menu_v4('appearance-cinematic-001b')#>'{content_v1,appearance,menu_background_dim}','null'::jsonb,'dim clear roundtrips');
+select is((select hero_media_id from public.restaurant_storefront_profiles where restaurant_id=pg_temp.aid('restaurant')),pg_temp.aid('media-hero'),'clearing menu background preserves Hero fallback');
+
 select * from finish();
 rollback;

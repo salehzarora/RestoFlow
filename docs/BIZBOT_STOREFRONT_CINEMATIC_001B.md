@@ -5,8 +5,9 @@
 Approved companion to BIZBOT-STOREFRONT-CINEMATIC-001. Branch:
 `feat/BIZBOT-STOREFRONT-CINEMATIC-001B-controls`.
 
-The existing hero image becomes the page background, including behind the
-transparent navigation and footer. The dashboard retains its existing media
+The welcome retains its existing hero image. The menu can now select an
+independent image and dimming value; clearing that selection restores the
+legacy hero-derived menu background. The dashboard retains its existing media
 publisher, source selection, slot assignment and profile version checks.
 There is no additional upload endpoint or storage bucket. Images are selected
 from the existing eligible menu/restaurant image sources.
@@ -30,13 +31,18 @@ The private content document and public `content_v1` may contain:
   "appearance": {
     "text_color": "#fff4e6",
     "button_text_color": "#14120f",
-    "font_family": "alexandria"
+    "font_family": "alexandria",
+    "menu_background_media_id": null,
+    "menu_background_dim": 15
   }
 }
 ```
 
-- `appearance` is optional. Its two color keys remain required, with optional
-  `font_family`. Unknown keys, a null object, and missing color keys fail.
+- `appearance` is optional. Its two color keys remain required; `font_family`,
+  `menu_background_media_id` and `menu_background_dim` are optional. Unknown
+  keys, a null object, and missing color keys fail. The example above is the
+  private document: the public projection replaces a present
+  `menu_background_media_id` with `menu_background_url`, never exposing the ID.
 - Each color value is either null or exactly `#` plus six hexadecimal digits.
   Uppercase input is accepted and normalized to lowercase. Named colors,
   shorthand, alpha channels, whitespace and CSS expressions fail.
@@ -44,12 +50,22 @@ The private content document and public `content_v1` may contain:
 - `font_family` is null or exactly `rubik`, `alexandria`, or `system`. Null
   restores the existing Rubik default. Omission keeps the legacy document
   shape; an older color-only save preserves any active stored font choice.
+- `menu_background_media_id` is null or an eligible published media UUID from
+  the existing restaurant/branch source scope. Null clears the separate image;
+  the renderer then uses the legacy Hero fallback. Selection does not change
+  `hero_media_id` or its public URL.
+- `menu_background_dim` is null or an integer percentage from 0 through 80.
+  A selected image uses 15 when this value is null or absent. Without a separate
+  image the legacy background treatment remains unchanged.
+- Older writers preserve each absent optional field independently; explicit
+  null clears it. Omission is not an instruction to reset a saved selection.
 - Documents without `appearance` keep their previous shape. Existing content
   saves that omit it preserve the active stored overrides; they do not restore
   old values from a tombstoned content row.
-- Invalid appearance input uses the existing `presentation_invalid` reason
-  with `appearance`, `appearance.text_color`, or
-  `appearance.button_text_color` as the field.
+- Invalid appearance/HEX/font/dim input uses the existing
+  `presentation_invalid` reason and field path. Malformed or ineligible media
+  uses `media_invalid` at `appearance.menu_background_media_id`. Missing media
+  at read time yields null in the public projection and a private warning.
 - RPC signatures, profile version increments, branch binding, idempotent retry,
   existing audit action and authorization checks remain unchanged.
 
@@ -59,6 +75,11 @@ values to the exact normalized shape. The existing content shape/read/save
 functions and public v4 content projection include the optional field.
 No new endpoint, grants, RLS policy, authentication, order or payment behavior
 is introduced. Shared localization packages are untouched.
+
+The existing media usage/list/retract/republication helpers now include the
+`menu_background` reference. Referenced media cannot be retracted; a valid
+same-source republication repoints this field independently of the Hero.
+Dashboard selection and its 0–80 slider reuse the versioned content draft/save.
 
 The font refinement also maps the safe enum to a fixed CSS font stack in both
 cinematic and existing secondary surfaces. Alexandria is loaded from the
@@ -84,17 +105,18 @@ external font host, inline style/CSP exception, or font upload API is added.
   and the transaction rolls back.
 - `git diff --check`: passed. Function-body comparison confirms the SQL changes
   are limited to optional appearance handling.
-- Flutter/Dart tests, formatting and pgTAP were not executed: this workspace
+- At the initial checkpoint, Flutter/Dart tests, formatting and pgTAP were not executed: the workspace
   has no Flutter/Dart SDK or local Docker/Postgres runtime. No hosted test or
   migration was run. These focused checks remain required before merge.
 
 ## Integration order
 
-The storefront companion must first accept optional `content_v1.appearance`
-and map it to theme text/button text tokens, while keeping omitted fields at
-the design defaults. Apply the migration through the normal approved deployment
-path before enabling the new dashboard color saves. Until then, existing image,
-primary and accent controls continue to use the existing contract.
+Deploy the compatible Storefront readers first, including the optional public
+background URL and dim fields. Then apply the appearance migration only through
+the separately approved deployment path, publish the dashboard writer and enable
+its existing editor gate, and use the existing media publication/selection flow.
+Until that rollout, existing Hero, primary and accent controls retain their
+existing contract. The isolated menu Preview does not enable the hosted editor.
 
 Suggested bounded verification on a prepared local environment:
 
@@ -105,7 +127,8 @@ supabase test db supabase/tests/storefront_cinematic_001b_appearance_test.sql
 
 Run the Flutter command from `apps/dashboard`, and the Supabase command from the
 repository root after local migrations. The standard owner review and merge
-gate remains external to this implementation task. No push or merge performed.
+gate remains external to this implementation task. Only the isolated feature
+branch Preview is authorized; no hosted migration or merge has been performed.
 
 ## Final font-selection refinement
 
@@ -122,7 +145,7 @@ Dashboard unit/widget cases cover each allowed font, invalid choices, draft
 roundtrip, selection and explicit reset. The rollback-only SQL cases cover
 validation, existing versioned save/read/public projection, older color-writer
 preservation, table-constraint rejection and explicit reset. Flutter/Dart and
-local PostgreSQL remain unavailable, so those tests are prepared but unexecuted.
+local PostgreSQL were unavailable at that checkpoint, so those tests were then unexecuted.
 The existing unapplied migration was extended locally; no hosted schema or
 tenant setting was changed. Deploy font-aware readers before font-enabled writes.
 
@@ -136,3 +159,15 @@ the earlier lack of local SQL execution; Flutter widgets, full Auth/RLS/storage
 integration and the complete Supabase pgTAP suite remain untested. Read
 `BIZBOT_STOREFRONT_CINEMATIC_001_CLOSEOUT.md` for exact seams, settings readiness,
 secondary-screen color limits and remaining reader/migration/writer rollout.
+
+## Current independent-background evidence
+
+The v5 followup extends the same unapplied migration and executes it in disposable
+PostgreSQL/PGlite: 31 checks pass, including media eligibility, usage/retract,
+same-source republish, private-ID/public-URL separation and old-writer behavior.
+Nine SQL-exported profiles pass through the real local reader and browser;
+101 focused Node checks and the live-mode Next build pass. These supersede the
+earlier local-SQL limitation only. Flutter execution, complete Supabase Auth/RLS,
+real storage upload/download and hosted end-to-end testing remain unverified.
+See [independent menu background](BIZBOT_STOREFRONT_CINEMATIC_001_BACKGROUND.md)
+for the exact visual treatment, evidence boundaries and rollout order.
