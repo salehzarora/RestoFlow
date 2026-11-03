@@ -9,6 +9,7 @@ Owner scope: the final mobile reference replaces food cards with independent pro
 - The existing delegated product opener receives the selected real product ID. Required options, cart calculations and order/payment code are unchanged. Existing search, kitchen picks and suggestion actions remain available; ordinary menu entry no longer repeats the editorial welcome hero.
 - Warm dark surfaces, bold Arabic typography, accent highlights, owner-managed hero photograph extending beneath the navigation/footer, and a single restaurant information/contact panel. The hero highlight now preserves Arabic word order across highlighted spans.
 - All colors use existing validated theme tokens. Primary/accent and optional text/button-text HEX fields remain configurable. The appearance extension now includes the allowlisted Rubik/Alexandria/system font selector, documented in `BIZBOT_STOREFRONT_CINEMATIC_001B.md`.
+- The menu can select an independent background image and 0–80% dimming through the same appearance/media flow. One connected layer spans all categories through the footer; no selection retains the legacy Hero fallback. The welcome Hero remains independent.
 - No new dependency, RPC, CSP exception, payment behavior or authorization/RLS change. The appearance migration is still unapplied; font-aware readers must precede hosted migration/writer rollout.
 
 ## Complete interactive Preview
@@ -51,6 +52,15 @@ Real browser evidence at390×844:
 status copy, canonical-name investigation, actual appearance save/read/browser
 roundtrip and complete-image desktop recapture. Order/payment/permission and
 image-loading behavior are unchanged.
+
+The v5 [independent-background followup](BIZBOT_STOREFRONT_CINEMATIC_001_BACKGROUND.md)
+records the supplied texture, dashboard selection/dimming contract and current
+evidence: 31 disposable PostgreSQL checks, nine SQL-exported reader/browser
+profiles, six status combinations and 101 focused Node checks. Full mobile and
+desktop captures verify the continuous image through the footer. This extends
+the historical local-SQL evidence above; it does not claim hosted dashboard,
+Auth/RLS or real storage end-to-end verification. Canonical names, status copy
+and payment behavior remain unchanged.
 
 ## Release boundary
 
