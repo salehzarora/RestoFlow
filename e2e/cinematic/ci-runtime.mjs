@@ -6,6 +6,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, openSync, closeSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { installDashboardFontMirror } from './font-mirror.mjs';
 import { requireEphemeralCi } from '../../supabase/tests/support/cinematic_001b_migration_contract.mjs';
 import { capturePublisherRuntime } from './publisher-diagnostics.mjs';
 
@@ -120,6 +121,8 @@ async function main(action) {
       RESTOFLOW_SUPABASE_URL: status.url, RESTOFLOW_SUPABASE_ANON_KEY: status.anonKey }), { mode: 0o600 });
     checked('flutter', ['build', 'web', '--release', '--no-pub', '--no-web-resources-cdn', `--dart-define-from-file=${defines}`],
       { cwd: resolve(root, 'apps/dashboard'), stdio: 'inherit' });
+    const fontMirror = installDashboardFontMirror(root);
+    writeFileSync(resolve(publicDir, 'dashboard-font-mirror.json'), JSON.stringify(fontMirror, null, 2));
     checked('npm', ['run', 'build'], { cwd: resolve(root, 'storefront'), env: liveEnv, stdio: 'inherit' });
     return;
   }

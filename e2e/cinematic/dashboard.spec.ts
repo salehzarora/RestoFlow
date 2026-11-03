@@ -2,6 +2,7 @@ import { test, expect, type BrowserContext, type Page, type Response, type Locat
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { enableFlutterSemantics, waitForFlutterBoot, readAccessibleText } from '../lib/flutter';
+import { controlGeometry } from './control-geometry.mjs';
 import { fillField, fillPassword, tapButton, tapNav, tapText, selectDropdown } from '../lib/dashboard';
 
 // This suite drives the shipped Flutter app. It never installs a mocked
@@ -48,8 +49,16 @@ function localUrl(value: string): URL {
   if (!origins.has(u.origin) || u.username || u.password) throw new Error('Non-ephemeral endpoint rejected.');
   return u;
 }
-async function guardBrowser(context: BrowserContext): Promise<() => void> {
+async function guardBrowser(context: BrowserContext): Promise<{ check: () => void; fontsReady: () => Promise<void>; fonts: () => string[] }> {
   let violation = false;
+  const fonts = new Set<string>();
+  context.on('response', response => {
+    const u = new URL(response.url());
+    if (u.origin === DASHBOARD && response.status() === 200) {
+      if (u.pathname.startsWith('/cinematic-fonts/roboto/')) fonts.add('Roboto');
+      if (u.pathname.startsWith('/cinematic-fonts/notosansarabic/')) fonts.add('Noto Sans Arabic');
+    }
+  });
   await context.route('**/*', async route => {
     const u = new URL(route.request().url());
     if (u.protocol !== 'http:' || !origins.has(u.origin) || u.username || u.password) {
@@ -59,7 +68,11 @@ async function guardBrowser(context: BrowserContext): Promise<() => void> {
     }
     await route.continue();
   });
-  return () => { if (violation) throw new Error('Browser attempted a non-ephemeral request.'); };
+  return {
+    check: () => { if (violation) throw new Error('Browser attempted a non-ephemeral request.'); },
+    fontsReady: async () => { await expect.poll(() => fonts.has('Roboto') && fonts.has('Noto Sans Arabic'), { message: 'Exact Flutter text fallback fonts load from loopback' }).toBe(true); },
+    fonts: () => [...fonts].sort(),
+  };
 }
 async function rpc(f: Fixture, token: string, name: string): Promise<Obj> {
   const response = await fetch(`${API}/rest/v1/rpc/${name}`, {
@@ -76,19 +89,30 @@ function requestIs(response: Response, suffix: string): boolean {
   const u = new URL(response.url());
   return u.origin === API && u.pathname === suffix && response.request().method() === 'POST';
 }
+async function targetGeometry(page: Page, target: Locator) {
+  if (!(await target.count())) return null;
+  return target.first().evaluate(el => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height),
+      viewportWidth: innerWidth, viewportHeight: innerHeight, centerHit: hit === el || (hit !== null && el.contains(hit)) };
+  });
+}
 async function reveal(page: Page, target: Locator): Promise<void> {
-  if (await target.count()) return;
-  // Settings uses Flutter's lazy ListView. A DOM scroll alone cannot build a
-  // not-yet-visible card; wheel events go through the real Flutter scrollable.
   const viewport = page.viewportSize()!;
   await page.mouse.move(viewport.width / 2, viewport.height / 2);
-  await page.mouse.wheel(0, -30_000);
+  if (!(await target.count())) await page.mouse.wheel(0, -30_000);
   for (let i = 0; i < 80; i++) {
-    if (await target.count()) return;
-    await page.mouse.wheel(0, 600);
+    const box = await targetGeometry(page, target);
+    const state = controlGeometry(box, viewport, box?.centerHit ?? false);
+    if (state.ready) return;
+    // Flutter Settings is a lazy native scrollable. Drive it with genuine
+    // wheel input until this control is inside the content viewport and hit
+    // testing reaches it. DOM attachment/scrollIntoView alone is insufficient.
+    await page.mouse.wheel(0, state.deltaY);
     await page.waitForTimeout(100);
   }
-  throw new Error('Expected Dashboard control was not exposed by the actual UI.');
+  throw new Error('Dashboard control did not become visible and pointer-reachable.');
 }
 async function clickButton(page: Page, name: string): Promise<void> {
   await reveal(page, page.getByRole('button', { name, exact: true }));
@@ -129,11 +153,12 @@ async function invariants(f: Fixture, token: string): Promise<void> {
   expect(logo.receipt_logo_enabled, 'Receipt logo enabled state unchanged').toBe(f.initialInvariants.receiptLogoEnabled);
   expect(logo.receipt_logo_version, 'Receipt logo version unchanged').toBe(f.initialInvariants.receiptLogoVersion);
 }
-type UploadBoundary = 'click' | 'filechooser' | 'file-set' | 'private-upload-response' | 'publisher-response' | 'upload-assertion';
+type UploadBoundary = 'reveal' | 'click' | 'filechooser' | 'file-set' | 'private-upload-response' | 'publisher-response' | 'upload-assertion';
 type RouteClass = 'private-upload' | 'publisher' | 'auth' | 'private-read' | 'public-media' | 'application' | 'other-local' | 'external';
 type Observed<T> = { ok: true; value: T } | { ok: false; error: unknown };
 class UploadDiagnostics {
   private readonly started = Date.now();
+  control: Awaited<ReturnType<typeof targetGeometry>> = null;
   private readonly events: { ms: number; boundary: string; event: string; status?: number }[] = [];
   private first: { ms: number; boundary: UploadBoundary; errorType: string; error: unknown } | null = null;
   private firstObservedWaitFailure: { ms: number; boundary: UploadBoundary; errorType: string } | null = null;
@@ -174,7 +199,7 @@ class UploadDiagnostics {
     return result.value;
   }
   snapshot(): Obj {
-    return { events: this.events, firstObservedWaitFailure: this.firstObservedWaitFailure, firstFailure: this.first === null ? null : {
+    return { events: this.events, controlGeometry: this.control, firstObservedWaitFailure: this.firstObservedWaitFailure, firstFailure: this.first === null ? null : {
       ms: this.first.ms, boundary: this.first.boundary, errorType: this.first.errorType,
     } };
   }
@@ -205,15 +230,19 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
   page.on('request', onRequest);
   page.on('response', onResponse);
   page.on('requestfailed', onFailed);
-  const uploaded = diagnostics.observe('private-upload-response', page.waitForResponse(r => {
-    const u = new URL(r.url());
-    return u.origin === API && u.pathname.startsWith('/storage/v1/object/restaurant-logos/') && r.request().method() === 'POST';
-  }));
-  const published = diagnostics.observe('publisher-response', page.waitForResponse(r => requestIs(r, '/functions/v1/storefront-media-publish') && r.status() !== 202, { timeout: 120_000 }));
-  const chosen = diagnostics.observe('filechooser', page.waitForEvent('filechooser'));
   try {
+    diagnostics.mark('reveal', 'started');
+    const target = page.getByRole('button', { name: L.upload, exact: true });
+    await diagnostics.value('reveal', diagnostics.observe('reveal', reveal(page, target)));
+    diagnostics.control = await targetGeometry(page, target);
+    const uploaded = diagnostics.observe('private-upload-response', page.waitForResponse(r => {
+      const u = new URL(r.url());
+      return u.origin === API && u.pathname.startsWith('/storage/v1/object/restaurant-logos/') && r.request().method() === 'POST';
+    }));
+    const published = diagnostics.observe('publisher-response', page.waitForResponse(r => requestIs(r, '/functions/v1/storefront-media-publish') && r.status() !== 202, { timeout: 120_000 }));
+    const chosen = diagnostics.observe('filechooser', page.waitForEvent('filechooser'));
     diagnostics.mark('click', 'started');
-    await diagnostics.value('click', diagnostics.observe('click', clickButton(page, L.upload)));
+    await diagnostics.value('click', diagnostics.observe('click', tapButton(page, L.upload)));
     const chooser = await diagnostics.value('filechooser', chosen);
     diagnostics.mark('file-set', 'started');
     await diagnostics.value('file-set', diagnostics.observe('file-set', chooser.setFiles(fixturePath)));
@@ -230,6 +259,7 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     }
     return body;
   } catch (error) {
+    diagnostics.control = await targetGeometry(page, page.getByRole('button', { name: L.upload, exact: true })).catch(() => null);
     diagnostics.fail('upload-assertion', error);
     throw diagnostics.original(error);
   } finally {
@@ -360,7 +390,7 @@ async function screenshot(page: Page, path: string): Promise<void> {
 
 test('real owner Dashboard → Storage → publisher → save → live menu; replacement, clear and appearance', async ({ page, context }) => {
   const f = fixture();
-  const checkNetwork = await guardBrowser(context);
+  const network = await guardBrowser(context);
   const out = resolve(process.env.CINEMATIC_ARTIFACT_DIR ?? 'cinematic-artifacts');
   mkdirSync(out, { recursive: true });
   const stages: string[] = [];
@@ -370,6 +400,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
   try {
     await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' });
     await semantics(page);
+    await network.fontsReady();
     await fillField(page, L.email, f.ownerA.email);
     await fillPassword(page, f.ownerA.password);
     const signedIn = page.waitForResponse(r => requestIs(r, '/auth/v1/token'));
@@ -496,14 +527,14 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await backgroundUrl(f, token, f.heroMediaId);
     await renderMenu(menu, f, f.heroUrl, null);
     stages.push(stage);
-    checkNetwork();
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
+    network.check();
+    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, fonts: network.fonts(), uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
   } catch (error) {
     const statuses = stages.includes('login') ? await editorStatus(page).catch(() => ['unreadable']) : [];
     const failureCapture = stages.includes('login')
       ? await failureScreenshot(page, resolve(out, 'dashboard-failure-test-data.png')) : 'withheld';
     writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
-      uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
+      fonts: network.fonts(), uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
   }
 });
