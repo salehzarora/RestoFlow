@@ -235,7 +235,7 @@ void main() {
     for (final id in <String?>[media, null]) {
       for (final dim in <int?>[0, 15, 80, null]) {
         final raw = legacy.editableCopy();
-        (raw['appearance'] as Map).addAll({
+        (raw['appearance'] as Map).addAll(<String, dynamic>{
           'menu_background_media_id': id,
           'menu_background_dim': dim,
         });
