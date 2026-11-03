@@ -1,0 +1,128 @@
+name: Cinematic real-service integration
+
+# BIZBOT-STOREFRONT-CINEMATIC-001B. A separate disposable stack; the existing
+# validate/db-tests jobs and their full suites remain unchanged.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cinematic-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cinematic-integration:
+    name: Cinematic · real Auth / Storage / Dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      BOT: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      CINEMATIC_EPHEMERAL: BIZBOT-STOREFRONT-CINEMATIC-001B
+      CINEMATIC_STATUS_FILE: ${{ runner.temp }}/cinematic-private/status.json
+      CINEMATIC_FIXTURE_FILE: ${{ runner.temp }}/cinematic-private/fixtures.json
+      CINEMATIC_ARTIFACT_DIR: ${{ runner.temp }}/cinematic-public
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: storefront/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            e2e/package-lock.json
+            storefront/package-lock.json
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.2
+          channel: stable
+          cache: true
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.107.0
+
+      - name: Record the actual PR merge checkout and enforce isolation
+        run: node e2e/cinematic/ci-runtime.mjs prepare
+        env:
+          CINEMATIC_PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          CINEMATIC_PR_BASE: ${{ github.event.pull_request.base.sha }}
+
+      - name: Install only locked dependencies
+        run: |
+          flutter pub get --enforce-lockfile
+          npm ci --prefix e2e
+          npm ci --prefix storefront
+          cd e2e
+          npx --no-install playwright install --with-deps chromium
+
+      - name: Integration harness checks (not real-service evidence)
+        run: |
+          node --test e2e/cinematic/*.test.mjs
+          node --test supabase/tests/support/cinematic_001b_migration_wrapper.test.mjs
+          cd e2e
+          npm run typecheck
+
+      # Retain Auth, REST, Kong, Storage and the Edge runtime. No hosted project
+      # link, environment, access token or provider configuration is introduced.
+      # Startup/status can contain generated LOCAL credentials: keep raw output
+      # private and never upload it or print it on failure.
+      - name: Start the ephemeral full local service stack
+        run: |
+          umask 077
+          supabase start -x analytics,imgproxy,meta,realtime,studio,vector > "$RUNNER_TEMP/cinematic-private/start.log" 2>&1
+          supabase status -o json > "$CINEMATIC_STATUS_FILE"
+          node e2e/cinematic/ci-runtime.mjs status
+
+      - name: Supported runner — late failure rolls back schema and history
+        run: node supabase/tests/support/run_cinematic_001b_migration_atomicity.mjs
+
+      - name: Serve the actual media function with JWT verification enabled
+        run: |
+          umask 077
+          supabase functions serve storefront-media-publish > "$RUNNER_TEMP/cinematic-private/edge.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/cinematic-private/edge.pid"
+          node e2e/cinematic/ci-runtime.mjs edge-ready
+
+      - name: Create synthetic owners and restaurant fixtures
+        id: fixtures
+        run: node e2e/cinematic/bootstrap.mjs
+
+      - name: Build the real Dashboard and live-mode Storefront
+        run: node e2e/cinematic/ci-runtime.mjs build
+
+      - name: Real authenticated Dashboard and Storefront acceptance
+        run: node e2e/cinematic/ci-runtime.mjs acceptance
+
+      - name: Real authenticated cross-restaurant rejection
+        # Keep this independent of a UI assertion failure, but never run without
+        # fixtures or after cancellation. It must not use an administrative token.
+        if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
+        run: |
+          test -s "$CINEMATIC_FIXTURE_FILE"
+          node e2e/cinematic/tenant-security.mjs
+
+      - name: Verify the evidence allowlist and absence of credentials
+        id: evidence
+        if: ${{ !cancelled() }}
+        run: node e2e/cinematic/ci-runtime.mjs sanitize
+
+      - name: Upload allowlisted sanitized evidence only
+        if: ${{ !cancelled() && steps.evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cinematic-integration-${{ github.sha }}
+          path: ${{ runner.temp }}/cinematic-public/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Stop only this job's ephemeral stack
+        if: ${{ always() }}
+        run: supabase stop --no-backup > /dev/null 2>&1

@@ -4,7 +4,6 @@
 -- no RLS, order, payment or existing writer/media permission changes.
 -- Deploy readers accepting optional appearance before enabling color saves.
 -- Existing documents omit appearance; legacy saves preserve stored overrides.
-begin;
 
 alter table app.storefront_content_profiles
  add column appearance jsonb,
@@ -453,4 +452,3 @@ revoke all on function public.get_restaurant_storefront_content_v2(uuid,uuid)
 grant execute on function public.get_restaurant_storefront_content_v2(uuid,uuid)
  to authenticated;
 
-commit;
