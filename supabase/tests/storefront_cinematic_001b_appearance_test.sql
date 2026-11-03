@@ -34,8 +34,17 @@ select is(app.storefront_content_document_shape_v1(pg_temp.appearance_document()
 insert into organizations(id,name,slug,default_currency) values(pg_temp.aid('org'),'Appearance test','appearance-cinematic-001b','ILS');
 insert into restaurants(id,organization_id,name,timezone) values(pg_temp.aid('restaurant'),pg_temp.aid('org'),'Appearance test','UTC');
 insert into branches(id,organization_id,restaurant_id,name,timezone,tax_enabled,tax_mode) values(pg_temp.aid('branch'),pg_temp.aid('org'),pg_temp.aid('restaurant'),'Appearance test','UTC',false,'exclusive');
-insert into restaurant_storefront_profiles(restaurant_id,organization_id,storefront_branch_id,slug,display_name,public_phone,is_published,version)
- values(pg_temp.aid('restaurant'),pg_temp.aid('org'),pg_temp.aid('branch'),'appearance-cinematic-001b','Appearance test','0521234567',true,10);
+-- The existing profile writer rechecks publish preconditions even for a Hero-only patch.
+insert into menu_categories(id,organization_id,restaurant_id,name,is_active)
+ values(pg_temp.aid('category'),pg_temp.aid('org'),pg_temp.aid('restaurant'),'Appearance category',true);
+insert into menu_items(id,organization_id,restaurant_id,menu_category_id,name,base_price_minor,currency_code,is_active)
+ values(pg_temp.aid('item'),pg_temp.aid('org'),pg_temp.aid('restaurant'),pg_temp.aid('category'),'Appearance item',1000,'ILS',true);
+insert into restaurant_storefront_profiles(restaurant_id,organization_id,storefront_branch_id,slug,display_name,public_phone,opening_hours,is_published,version)
+ values(pg_temp.aid('restaurant'),pg_temp.aid('org'),pg_temp.aid('branch'),'appearance-cinematic-001b','Appearance test','0521234567',
+ '{"weekly":[{"dow":1,"open":"09:00","close":"17:00"}],"exceptions":[]}'::jsonb,true,10);
+select is(app.storefront_publish_blockers(pg_temp.aid('org'),pg_temp.aid('restaurant'),pg_temp.aid('branch'),p.slug,p.opening_hours),
+ array[]::text[],'published fixture satisfies existing profile writer preconditions')
+ from restaurant_storefront_profiles p where p.restaurant_id=pg_temp.aid('restaurant');
 insert into app_users(id,email) values(pg_temp.aid('user'),'appearance@example.test');
 insert into memberships(id,app_user_id,organization_id,restaurant_id,role) values(pg_temp.aid('membership'),pg_temp.aid('user'),pg_temp.aid('org'),pg_temp.aid('restaurant'),'manager');
 select set_config('app.current_app_user_id',pg_temp.aid('user')::text,true);
@@ -113,10 +122,18 @@ select is(public.finalize_storefront_media(pg_temp.aid('finalize-menu-replacemen
 select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_media_id}',pg_temp.aid('media-menu-b-replacement')::text,'republished derivative pointer roundtrips');
 reset role;
 select is((select hero_media_id from public.restaurant_storefront_profiles where restaurant_id=pg_temp.aid('restaurant')),pg_temp.aid('media-hero'),'replacement and republication preserve Hero');
--- Synthetic object disappearance: read fails closed without mutating the saved ID.
-delete from storage.objects where bucket_id='storefront-media' and name=app.storefront_media_prefix(pg_temp.aid('restaurant'))||'/'||repeat('4',64)||'.webp';
+-- Move only this rollback-only fixture's metadata so the registered key is absent.
+-- Do not disable Storage's delete guard or delete object metadata directly.
+with moved as (
+ update storage.objects set name=app.storefront_media_prefix(pg_temp.aid('restaurant'))||'/'||repeat('7',64)||'.webp'
+ where bucket_id='storefront-media' and name=app.storefront_media_prefix(pg_temp.aid('restaurant'))||'/'||repeat('4',64)||'.webp'
+ returning 1
+) select is((select count(*)::integer from moved),1,'missing-object fixture moves exactly its synthetic replacement object');
 select is(public.storefront_menu_v4('appearance-cinematic-001b')#>'{content_v1,appearance,menu_background_url}','null'::jsonb,'unavailable public object projects null');
 select ok((public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))->'warnings') @> '[{"field":"appearance.menu_background_media_id","reason":"media_unavailable"}]'::jsonb,'private read warns on unavailable object');
+select is((select appearance->>'menu_background_media_id' from app.storefront_content_profiles
+ where restaurant_id=pg_temp.aid('restaurant') and storefront_branch_id=pg_temp.aid('branch') and deleted_at is null),
+ pg_temp.aid('media-menu-b-replacement')::text,'unavailable public object does not mutate the saved background ID');
 set local role authenticated;
 select is(pg_temp.appearance_save('menu-clear',pg_temp.background_document(null,'null'),pg_temp.appearance_version())->>'ok','true','explicit null clears background and dim');
 select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance,menu_background_media_id}','null'::jsonb,'clear readback is explicit null');

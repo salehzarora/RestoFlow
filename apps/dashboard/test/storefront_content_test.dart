@@ -96,29 +96,34 @@ StorefrontContentAttempt attempt(SupabaseStorefrontContentRepository r) =>
     );
 
 void main() {
-  test('optional appearance keeps legacy documents and roundtrips HEX colors', () {
-    final legacy = document();
-    expect(StorefrontContentDocument.fromJson(legacy).json, legacy);
-    final raw = document()
-      ..['appearance'] = {
-        'text_color': '#FFF4E6',
-        'button_text_color': '#14120F',
-      };
-    final decoded = StorefrontContentDocument.fromJson(raw);
-    expect(decoded.json['appearance'], {
-      'text_color': '#fff4e6',
-      'button_text_color': '#14120f',
-    });
-    expect(StorefrontContentDocument.fromJson(decoded.editableCopy()).json,
-        decoded.json);
-    final copy = decoded.editableCopy();
-    (copy['appearance'] as Map)['text_color'] = null;
-    expect((decoded.json['appearance'] as Map)['text_color'], '#fff4e6');
-    expect(StorefrontContentDocument.fromJson(copy).json['appearance'], {
-      'text_color': null,
-      'button_text_color': '#14120f',
-    });
-  });
+  test(
+    'optional appearance keeps legacy documents and roundtrips HEX colors',
+    () {
+      final legacy = document();
+      expect(StorefrontContentDocument.fromJson(legacy).json, legacy);
+      final raw = document()
+        ..['appearance'] = {
+          'text_color': '#FFF4E6',
+          'button_text_color': '#14120F',
+        };
+      final decoded = StorefrontContentDocument.fromJson(raw);
+      expect(decoded.json['appearance'], {
+        'text_color': '#fff4e6',
+        'button_text_color': '#14120f',
+      });
+      expect(
+        StorefrontContentDocument.fromJson(decoded.editableCopy()).json,
+        decoded.json,
+      );
+      final copy = decoded.editableCopy();
+      (copy['appearance'] as Map)['text_color'] = null;
+      expect((decoded.json['appearance'] as Map)['text_color'], '#fff4e6');
+      expect(StorefrontContentDocument.fromJson(copy).json['appearance'], {
+        'text_color': null,
+        'button_text_color': '#14120f',
+      });
+    },
+  );
   test('appearance rejects malformed HEX and unknown keys before saving', () {
     for (final value in <Object?>[
       null,
@@ -126,11 +131,20 @@ void main() {
       {'text_color': '#ffffff'},
       {'text_color': null, 'button_text_color': null, 'css': 'anything'},
       for (final invalid in <Object>[
-        '#fff', 'white', '#fffffff', '#gggggg', '#ffffff\n', ' #ffffff', 1,
-      ]) {'text_color': invalid, 'button_text_color': null},
+        '#fff',
+        'white',
+        '#fffffff',
+        '#gggggg',
+        '#ffffff\n',
+        ' #ffffff',
+        1,
+      ])
+        {'text_color': invalid, 'button_text_color': null},
     ]) {
       expect(
-        () => StorefrontContentDocument.fromJson(document()..['appearance'] = value),
+        () => StorefrontContentDocument.fromJson(
+          document()..['appearance'] = value,
+        ),
         throwsA(isA<StorefrontDecodeException>()),
       );
     }
@@ -139,21 +153,37 @@ void main() {
     for (final font in <String?>['rubik', 'alexandria', 'system', null]) {
       final raw = document()
         ..['appearance'] = {
-          'text_color': null, 'button_text_color': null, 'font_family': font,
+          'text_color': null,
+          'button_text_color': null,
+          'font_family': font,
         };
       final decoded = StorefrontContentDocument.fromJson(raw);
       expect((decoded.json['appearance'] as Map)['font_family'], font);
-      expect(StorefrontContentDocument.fromJson(decoded.editableCopy()).json,
-          decoded.json);
+      expect(
+        StorefrontContentDocument.fromJson(decoded.editableCopy()).json,
+        decoded.json,
+      );
     }
     for (final font in <Object>[
-      '', 'Arial', 'Alexandria', 'rubik ', 'url(https://example.invalid)', 1, true, [], {},
+      '',
+      'Arial',
+      'Alexandria',
+      'rubik ',
+      'url(https://example.invalid)',
+      1,
+      true,
+      [],
+      {},
     ]) {
       expect(
-        () => StorefrontContentDocument.fromJson(document()
-          ..['appearance'] = {
-            'text_color': null, 'button_text_color': null, 'font_family': font,
-          }),
+        () => StorefrontContentDocument.fromJson(
+          document()
+            ..['appearance'] = {
+              'text_color': null,
+              'button_text_color': null,
+              'font_family': font,
+            },
+        ),
         throwsA(isA<StorefrontDecodeException>()),
       );
     }
@@ -164,25 +194,38 @@ void main() {
     final prepared = repo.prepareContent(
       expectedVersion: 3,
       expectedBranchId: branch,
-      document: StorefrontContentDocument.fromJson(document()
-        ..['appearance'] = {'text_color': '#Aa00Ff', 'button_text_color': null}),
+      document: StorefrontContentDocument.fromJson(
+        document()
+          ..['appearance'] = {
+            'text_color': '#Aa00Ff',
+            'button_text_color': null,
+          },
+      ),
     );
     await repo.saveContent(prepared);
-    expect(transport.calls.single.function, 'set_restaurant_storefront_content_v1');
+    expect(
+      transport.calls.single.function,
+      'set_restaurant_storefront_content_v1',
+    );
     expect(transport.calls.single.params['p_expected_version'], 3);
     expect((transport.calls.single.params['p_document'] as Map)['appearance'], {
-      'text_color': '#aa00ff', 'button_text_color': null,
+      'text_color': '#aa00ff',
+      'button_text_color': null,
     });
   });
   test('menu background is optional and preserves explicit reset values', () {
-    final legacy = StorefrontContentDocument.fromJson(document()
-      ..['appearance'] = {
-        'text_color': null,
-        'button_text_color': null,
-        'font_family': 'alexandria',
-      });
+    final legacy = StorefrontContentDocument.fromJson(
+      document()
+        ..['appearance'] = {
+          'text_color': null,
+          'button_text_color': null,
+          'font_family': 'alexandria',
+        },
+    );
     expect(
-      (legacy.json['appearance'] as Map).containsKey('menu_background_media_id'),
+      (legacy.json['appearance'] as Map).containsKey(
+        'menu_background_media_id',
+      ),
       false,
     );
     expect(
@@ -197,7 +240,10 @@ void main() {
           'menu_background_dim': dim,
         });
         final decoded = StorefrontContentDocument.fromJson(raw);
-        expect((decoded.json['appearance'] as Map)['menu_background_media_id'], id);
+        expect(
+          (decoded.json['appearance'] as Map)['menu_background_media_id'],
+          id,
+        );
         expect((decoded.json['appearance'] as Map)['menu_background_dim'], dim);
         expect(
           StorefrontContentDocument.fromJson(decoded.editableCopy()).json,
@@ -210,16 +256,24 @@ void main() {
   test('menu background rejects invalid ids and dim values before saving', () {
     for (final field in ['menu_background_media_id', 'menu_background_dim']) {
       final invalid = field == 'menu_background_media_id'
-          ? <Object>['', 'not-an-id', 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA', 1, true]
+          ? <Object>[
+              '',
+              'not-an-id',
+              'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+              1,
+              true,
+            ]
           : <Object>[-1, 81, 15.0, 0.5, '15', true, [], {}];
       for (final value in invalid) {
         expect(
-          () => StorefrontContentDocument.fromJson(document()
-            ..['appearance'] = {
-              'text_color': null,
-              'button_text_color': null,
-              field: value,
-            }),
+          () => StorefrontContentDocument.fromJson(
+            document()
+              ..['appearance'] = {
+                'text_color': null,
+                'button_text_color': null,
+                field: value,
+              },
+          ),
           throwsA(isA<StorefrontDecodeException>()),
         );
       }

@@ -110,17 +110,13 @@ class StorefrontContentDocument {
       throw const StorefrontDecodeException('document', 'document_too_large');
     }
     if (j.containsKey('appearance')) {
-      final appearance = contentObject(
-        j['appearance'],
-        {
-          ...storefrontAppearanceKeys,
-          for (final key in storefrontAppearanceOptionalKeys)
-            if (j['appearance'] is Map &&
-                (j['appearance'] as Map).containsKey(key))
-              key,
-        },
-        'appearance',
-      );
+      final appearance = contentObject(j['appearance'], {
+        ...storefrontAppearanceKeys,
+        for (final key in storefrontAppearanceOptionalKeys)
+          if (j['appearance'] is Map &&
+              (j['appearance'] as Map).containsKey(key))
+            key,
+      }, 'appearance');
       for (final key in storefrontAppearanceKeys) {
         final color = appearance[key];
         if (color != null &&
@@ -514,7 +510,12 @@ class StorefrontContentMediaRow {
         'kind',
         if (category) 'category_id',
       }, 'media');
-      if (!{'category', 'promo', 'story', 'menu_background'}.contains(u['kind']) ||
+      if (!{
+            'category',
+            'promo',
+            'story',
+            'menu_background',
+          }.contains(u['kind']) ||
           (category && !contentId(u['category_id'])) ||
           !seen.add(jsonEncode(u))) {
         throw const StorefrontDecodeException('media', 'invalid usage');
