@@ -123,6 +123,29 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
     'font_rubik': ['Rubik', 'روبيك', 'Rubik'],
     'font_alexandria': ['Alexandria', 'الإسكندرية', 'Alexandria'],
     'font_system': ['Device font', 'خط الجهاز', 'גופן המכשיר'],
+    'menu_background': ['Menu background', 'خلفية المنيو', 'רקע התפריט'],
+    'menuBackgroundImage': ['Menu image', 'صورة خلفية المنيو', 'תמונת התפריט'],
+    'menuBackgroundHelp': [
+      'Choose a published image for the menu sections. Publish an existing restaurant image in the images section below, then select it here. The opening image stays separate.',
+      'اختر صورة منشورة لأقسام المنيو. انشر صورة موجودة للمطعم من قسم الصور أدناه، ثم اخترها هنا. تبقى صورة البداية مستقلة.',
+      'בחרו תמונה שפורסמה לאזורי התפריט. פרסמו תמונת מסעדה קיימת באזור התמונות למטה ואז בחרו אותה כאן. תמונת הפתיחה נשארת נפרדת.',
+    ],
+    'menuBackgroundInherit': [
+      'Use the opening background',
+      'استخدام خلفية البداية',
+      'שימוש ברקע הפתיחה',
+    ],
+    'menuBackgroundDim': ['Image dimming', 'تعتيم الصورة', 'הכהיית התמונה'],
+    'menuBackgroundDimHelp': [
+      '0% keeps the image bright; 80% darkens it most. Applies to the separate menu image.',
+      '0% يبقي الصورة ساطعة؛ 80% أعلى تعتيم. يُطبّق على صورة المنيو المستقلة.',
+      '0% משאיר את התמונה בהירה; 80% הוא הכהיה מרבית. חל על תמונת התפריט הנפרדת.',
+    ],
+    'menuBackgroundDimDefault': [
+      'Reset dimming to default (15%)',
+      'إعادة التعتيم الافتراضي (15%)',
+      'איפוס ההכהיה לברירת המחדל (15%)',
+    ],
     'appearanceHexHelp': [
       '#RRGGBB, for example #FFF4E6. Leave blank to use the design default.',
       '#RRGGBB، مثل #FFF4E6. اتركه فارغًا لاستخدام لون التصميم الافتراضي.',

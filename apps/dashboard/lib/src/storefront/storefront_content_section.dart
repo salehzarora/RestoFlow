@@ -429,13 +429,7 @@ class _ContentState extends State<StorefrontContentSection> {
                 )
               : const Icon(Icons.palette_outlined),
         ),
-        onChanged: (text) {
-          if (!_editable) return;
-          _draft!['appearance'] ??= <String, dynamic>{
-            for (final key in storefrontAppearanceKeys) key: null,
-          };
-          _change('appearance.$field', text.isEmpty ? null : text);
-        },
+        onChanged: (text) => _changeAppearance(field, text.isEmpty ? null : text),
       ),
     );
   }
@@ -456,15 +450,88 @@ class _ContentState extends State<StorefrontContentSection> {
             DropdownMenuItem(value: value, child: Text(c('font_$value'))),
         ],
         onChanged: _editable
-            ? (value) {
-                if (!_editable) return;
-                _draft!['appearance'] ??= <String, dynamic>{
-                  for (final key in storefrontAppearanceKeys) key: null,
-                };
-                _change('appearance.font_family', value == '' ? null : value);
-              }
+            ? (value) =>
+                  _changeAppearance('font_family', value == '' ? null : value)
             : null,
       ),
+    );
+  }
+
+  void _changeAppearance(String field, Object? value) {
+    if (!mounted || !_editable) return;
+    _draft!['appearance'] ??= <String, dynamic>{
+      for (final key in storefrontAppearanceKeys) key: null,
+    };
+    _change('appearance.$field', value);
+  }
+
+  Widget _menuBackground() {
+    final appearance = _draft?['appearance'] as Map?;
+    final mediaId = appearance?['menu_background_media_id'] as String?;
+    final dim = appearance?['menu_background_dim'] as int?;
+    final media = (_media?.rows ?? <StorefrontContentMediaRow>[])
+        .where((row) => row.media.id == mediaId && row.media.isLive)
+        .firstOrNull;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _title('menu_background'),
+        Text(c('menuBackgroundHelp')),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: DropdownButtonFormField<String>(
+            key: ValueKey(
+              'content-appearance.menu_background_media_id-$_generation',
+            ),
+            initialValue: mediaId == null ? '' : (media != null ? mediaId : null),
+            isExpanded: true,
+            decoration: InputDecoration(labelText: c('menuBackgroundImage')),
+            items: [
+              DropdownMenuItem(
+                value: '',
+                child: Text(c('menuBackgroundInherit')),
+              ),
+              ..._mediaOptions(),
+            ],
+            onChanged: _editable
+                ? (value) => _changeAppearance(
+                    'menu_background_media_id',
+                    value == '' ? null : value,
+                  )
+                : null,
+          ),
+        ),
+        if (media != null && widget.publicUrlFor != null)
+          Image.network(
+            widget.publicUrlFor!(media.media.objectKey).toString(),
+            height: 100,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
+        Text('${c('menuBackgroundDim')}: ${dim ?? 15}%'),
+        Slider(
+          key: const Key('content-appearance.menu_background_dim'),
+          value: (dim ?? 15).toDouble(),
+          min: 0,
+          max: 80,
+          divisions: 80,
+          label: '${dim ?? 15}%',
+          onChanged: _editable && media != null
+              ? (value) => _changeAppearance('menu_background_dim', value.round())
+              : null,
+        ),
+        Text(c('menuBackgroundDimHelp')),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton(
+            key: const Key('content-menu-background-dim-reset'),
+            onPressed: _editable && dim != null
+                ? () => _changeAppearance('menu_background_dim', null)
+                : null,
+            child: Text(c('menuBackgroundDimDefault')),
+          ),
+        ),
+      ],
     );
   }
 
@@ -682,7 +749,7 @@ class _ContentState extends State<StorefrontContentSection> {
       ),
     ],
   );
-  Widget _mediaPicker(String path) => _select(path, 'media', [
+  List<DropdownMenuItem<String>> _mediaOptions() => [
     for (final row in _media?.rows ?? <StorefrontContentMediaRow>[])
       if (row.media.isLive)
         DropdownMenuItem(
@@ -691,7 +758,8 @@ class _ContentState extends State<StorefrontContentSection> {
             '${row.media.width}×${row.media.height} · ${row.media.id.substring(0, 8)}',
           ),
         ),
-  ]);
+  ];
+  Widget _mediaPicker(String path) => _select(path, 'media', _mediaOptions());
   Widget _module(String kind) {
     final value = _get(kind) as Map?;
     final promo = kind == 'promo';
@@ -1245,6 +1313,7 @@ class _ContentState extends State<StorefrontContentSection> {
           _appearanceColor('text_color', 'appearanceTextColor'),
           _appearanceColor('button_text_color', 'appearanceButtonTextColor'),
           _appearanceFont(),
+          _menuBackground(),
           TextField(
             key: const Key('content-hero-headline'),
             controller: _headline,

@@ -18,6 +18,12 @@ const storefrontContentKeys = {
   'item_presentation',
 };
 const storefrontAppearanceKeys = {'text_color', 'button_text_color'};
+// Keep optional keys absent until edited; the writer preserves omitted values.
+const storefrontAppearanceOptionalKeys = {
+  'font_family',
+  'menu_background_media_id',
+  'menu_background_dim',
+};
 const storefrontFontFamilies = {'rubik', 'alexandria', 'system'};
 final storefrontAppearanceHex = RegExp(r'^#[0-9A-Fa-f]{6}$');
 const storefrontContentReasons = {
@@ -79,6 +85,8 @@ bool contentFieldPath(Object? value) => const {
   'appearance.text_color',
   'appearance.button_text_color',
   'appearance.font_family',
+  'appearance.menu_background_media_id',
+  'appearance.menu_background_dim',
 }.contains(value);
 
 Object? _freeze(Object? value) => switch (value) {
@@ -106,9 +114,10 @@ class StorefrontContentDocument {
         j['appearance'],
         {
           ...storefrontAppearanceKeys,
-          if (j['appearance'] is Map &&
-              (j['appearance'] as Map).containsKey('font_family'))
-            'font_family',
+          for (final key in storefrontAppearanceOptionalKeys)
+            if (j['appearance'] is Map &&
+                (j['appearance'] as Map).containsKey(key))
+              key,
         },
         'appearance',
       );
@@ -130,6 +139,20 @@ class StorefrontContentDocument {
           (font is! String || !storefrontFontFamilies.contains(font))) {
         throw const StorefrontDecodeException(
           'appearance.font_family',
+          'presentation_invalid',
+        );
+      }
+      final background = appearance['menu_background_media_id'];
+      if (background != null && !contentId(background)) {
+        throw const StorefrontDecodeException(
+          'appearance.menu_background_media_id',
+          'media_invalid',
+        );
+      }
+      final dim = appearance['menu_background_dim'];
+      if (dim != null && (dim is! int || dim < 0 || dim > 80)) {
+        throw const StorefrontDecodeException(
+          'appearance.menu_background_dim',
           'presentation_invalid',
         );
       }
@@ -491,7 +514,7 @@ class StorefrontContentMediaRow {
         'kind',
         if (category) 'category_id',
       }, 'media');
-      if (!{'category', 'promo', 'story'}.contains(u['kind']) ||
+      if (!{'category', 'promo', 'story', 'menu_background'}.contains(u['kind']) ||
           (category && !contentId(u['category_id'])) ||
           !seen.add(jsonEncode(u))) {
         throw const StorefrontDecodeException('media', 'invalid usage');
