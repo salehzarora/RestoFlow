@@ -146,6 +146,42 @@ const SHIPPED_SLUGS = ['maps-burger'];
 // walk() yields { path, symlink, size } records, not strings.
 const outFiles = () => walk(OUT).map((e) => e.path.replace(/\\/g, '/'));
 const menuDocuments = () => outFiles().filter((f) => f.endsWith('/menu.html'));
+const introDocuments = () => outFiles().filter((f) => /\/s\/[^/]+\.html$/.test(f));
+
+// The approved welcome route owns the editorial Hero. Keep checking its real
+// emitted markup, rather than requiring an extra Hero above the menu carousel.
+function welcomeHeroProblems(html) {
+  const problems = [];
+  const hero = [...html.matchAll(/\sdata-sf-module="hero"/g)];
+  const service = html.indexOf('data-sf-intro-service');
+  if (!html.includes('data-sf-screen="intro"')) problems.push('welcome screen missing');
+  if (hero.length !== 1) problems.push('welcome requires exactly one Hero');
+  if (service < 0 || (hero.length === 1 && hero[0].index >= service)) problems.push('welcome service must follow Hero');
+  return problems;
+}
+
+test('every emitted welcome document retains exactly one Hero before service and links to its menu', () => {
+  const docs = introDocuments();
+  assert.equal(docs.length, 4, 'all four locale welcome documents must be checked');
+  for (const f of docs) {
+    const html = readFileSync(f, 'utf8');
+    assert.deepEqual(welcomeHeroProblems(html), [], f);
+    // Arabic is the canonical unprefixed locale; /ar is a supported alias.
+    const route = path.relative(OUT, f).replace(/\\/g, '/').replace(/\.html$/, '').replace(/^ar\//, '');
+    assert.ok(html.includes(`href="/${route}/menu"`), `${f}: welcome CTA must reach its menu`);
+  }
+});
+
+test('NEGATIVE CONTROL: missing, duplicated or misplaced welcome Hero cannot pass', () => {
+  const docs = introDocuments();
+  assert.equal(docs.length, 4);
+  const html = readFileSync(docs[0], 'utf8');
+  assert.deepEqual(welcomeHeroProblems(html), []);
+  assert.ok(welcomeHeroProblems(html.replace('data-sf-module="hero"', 'data-missing-hero=""')).length > 0);
+  assert.ok(welcomeHeroProblems(`${html}<section data-sf-module="hero"></section>`).length > 0);
+  assert.ok(welcomeHeroProblems(`<div data-sf-intro-service></div>${html.replace('data-sf-intro-service', 'data-moved-service')}`).length > 0);
+  assert.ok(welcomeHeroProblems(html.replace('data-sf-screen="intro"', 'data-sf-screen="home"')).length > 0);
+});
 
 test('the shipped export emits exactly the allowlisted storefront slugs', () => {
   const slugs = new Set();
@@ -167,9 +203,10 @@ test('every emitted menu document renders the locked module order', () => {
   for (const f of docs) {
     const observed = renderedModuleOrder(readFileSync(f, 'utf8'));
     const problems = checkModuleOrder(observed, {
-      mandatory: ['compact', 'hero', 'service', 'categories', 'sections', 'footer'],
+      mandatory: ['compact', 'service', 'categories', 'sections', 'footer'],
     });
     assert.deepEqual(problems, [], `${f}: ${problems.join('; ')}`);
+    assert.ok(!observed.includes('hero'), `${f}: the canonical editorial Hero belongs to the welcome route`);
   }
 });
 
@@ -199,7 +236,11 @@ test('every module named in the locked order actually renders somewhere', () => 
   // Guards against an anchor being deleted from markup: the source-order test
   // would still pass with a module gone if nothing checked the export.
   const seen = new Set();
-  for (const f of menuDocuments()) {
+  const menus = menuDocuments();
+  const intros = introDocuments();
+  assert.equal(menus.length, 4);
+  assert.equal(intros.length, 4);
+  for (const f of [...intros, ...menus]) {
     for (const name of renderedModuleOrder(readFileSync(f, 'utf8'))) seen.add(name);
   }
   // announce/promo/popular/story are module toggles and notice is state-driven;

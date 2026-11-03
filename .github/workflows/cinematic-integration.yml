@@ -136,3 +136,108 @@ jobs:
       - name: Stop only this job's ephemeral stack
         if: ${{ always() }}
         run: supabase stop --no-backup > /dev/null 2>&1
+
+  # Execute the existing downstream checks even when the unchanged output gate
+  # is red. This job never turns that failure into success and does not alter
+  # the payment-owned validate workflow, its thresholds or its build filters.
+  cinematic-downstream-guards:
+    name: Cinematic · unchanged output and downstream guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: storefront/.nvmrc
+          cache: npm
+          cache-dependency-path: storefront/package-lock.json
+
+      - name: Record the tested source
+        run: git rev-parse HEAD HEAD^{tree}
+
+      - name: Install locked Storefront dependencies
+        id: dependencies
+        run: npm ci --prefix storefront
+
+      - name: Storefront — server build
+        id: build
+        working-directory: storefront
+        run: npm run build
+
+      - name: Storefront — complete server-render snapshot
+        id: snapshot
+        working-directory: storefront
+        run: node scripts/snapshot-server.mjs
+
+      - name: Storefront — unchanged output budget audit
+        if: ${{ !cancelled() && steps.snapshot.outcome == 'success' }}
+        working-directory: storefront
+        run: node scripts/audit-output.mjs
+
+      - name: Storefront — unchanged output regression tests
+        if: ${{ !cancelled() && steps.snapshot.outcome == 'success' }}
+        working-directory: storefront
+        run: node --test tests/output/output.test.mjs
+
+      - name: Storefront — first-load JS budget
+        if: ${{ !cancelled() && steps.snapshot.outcome == 'success' }}
+        working-directory: storefront
+        run: node scripts/measure-firstload.mjs
+
+      - name: Storefront — three-project filter proof
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        working-directory: storefront
+        run: node scripts/filter-proof.mjs
+
+      - name: Storefront — live build prerenders no tenant or request route
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        working-directory: storefront
+        env:
+          STOREFRONT_SOURCE: live
+          VERCEL: '1'
+          VERCEL_ENV: preview
+        run: |
+          npm run build
+          node -e "const m=require('./.next/prerender-manifest.json');const bad=Object.keys(m.routes||{}).filter((r)=>r.includes('/s/')||r.includes('/r/'));if(bad.length){console.error('prerendered tenant/request routes in a LIVE build:',bad);process.exit(1)}console.log('live build: no tenant or request route prerendered; routes:',Object.keys(m.routes||{}).join(' '))"
+
+      - name: Storefront — provider configuration fails closed
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        working-directory: storefront
+        env:
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set +e
+          npm run build > "$RUNNER_TEMP/provider-missing-source.log" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'a provider-shaped build without STOREFRONT_SOURCE succeeded: it must fail closed'
+            exit 1
+          fi
+          if ! grep -q 'STOREFRONT_SOURCE must be exactly' "$RUNNER_TEMP/provider-missing-source.log"; then
+            echo 'the build failed for another reason:'
+            tail -40 "$RUNNER_TEMP/provider-missing-source.log"
+            exit 1
+          fi
+          echo 'provider-shaped build without STOREFRONT_SOURCE failed closed with the misconfiguration error'
+
+      - name: Storefront — generated files did not mutate tracked sources
+        if: ${{ !cancelled() }}
+        run: git diff --exit-code -- storefront
+
+      - name: Guardrail — no floating-point money
+        if: ${{ !cancelled() }}
+        run: bash tools/check_no_float_money.sh
+
+      - name: Guardrail — secret-leak scan
+        if: ${{ !cancelled() }}
+        run: bash tools/check_secrets.sh
+
+      - name: Guardrail — no hardcoded user-facing app-shell strings
+        if: ${{ !cancelled() }}
+        run: bash tools/check_no_hardcoded_strings.sh

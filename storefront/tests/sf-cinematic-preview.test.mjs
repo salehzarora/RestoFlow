@@ -95,10 +95,38 @@ test('all four preview roots remain dynamic, noindex and behind the shared serve
     assert.match(layout, /dynamic = 'force-dynamic'/);
     assert.match(layout, /robots: \{ index: false, follow: false \}/);
     assert.match(layout, /<CinematicPreviewLayout\b/);
-    assert.match(source(`${route}/[[...screen]]/page.tsx`), /dynamic = 'force-dynamic'/);
+    for (const screen of ['', 'menu/', 'search/', 'cart/']) {
+      const page = source(`${route}/${screen}page.tsx`);
+      assert.match(page, /dynamic = 'force-dynamic'/);
+      assert.match(page, new RegExp(`locale="${root === '(root)' ? 'ar' : root}"`));
+    }
+    const fallback = source(`${route}/[...screen]/page.tsx`);
+    assert.match(fallback, /dynamic = 'force-dynamic'/);
+    assert.match(fallback, /export default function Page\(\) \{\s*notFound\(\);\s*\}/);
+    assert.doesNotMatch(fallback, /@\/ui\//);
   }
   const layout = source('src/preview/cinematic/PreviewLayout.tsx');
   assert.match(layout, /if \(!cinematicPreviewAllowed\(\)\) notFound\(\)/);
   assert.match(layout, /<CheckoutEntry source="fixture" slug=\{CINEMATIC_PREVIEW_SLUG\}/);
-  assert.match(source('src/preview/cinematic/PreviewPage.tsx'), /if \(screen === null \|\| resolution === null\) notFound\(\)/);
+  assert.match(source('src/preview/cinematic/pageResolution.ts'), /if \(resolution === null\) notFound\(\)/);
+});
+
+test('preview route entries keep renderer imports separate without new dynamic loaders', () => {
+  const source = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+  const renderers = {
+    Intro: 'StorefrontScreen', Menu: 'home/Home', Search: 'search/Search', Cart: 'checkout/FlowScreen',
+  };
+  for (const [screen, renderer] of Object.entries(renderers)) {
+    const wrapper = source(`src/preview/cinematic/Preview${screen}.tsx`);
+    assert.deepEqual([...wrapper.matchAll(/from '(@\/ui\/[^']+)'/g)].map(match => match[1]),
+      [`@/ui/storefront/${renderer}`]);
+    assert.match(wrapper, /const resolution = requireCinematicPreviewResolution\(\)/);
+    assert.doesNotMatch(wrapper, /\bimport\s*\(/);
+    for (const root of ['(root)', 'ar', 'he', 'en']) {
+      const segment = screen === 'Intro' ? '' : `${screen.toLowerCase()}/`;
+      const page = source(`app/${root}/s/sf-design-preview/${segment}page.tsx`);
+      assert.match(page, new RegExp(`from '@/preview/cinematic/Preview${screen}'`));
+      assert.match(page, new RegExp(`<CinematicPreview${screen}\\b`));
+    }
+  }
 });

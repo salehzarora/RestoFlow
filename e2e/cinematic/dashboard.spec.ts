@@ -106,15 +106,18 @@ async function targetGeometry(page: Page, target: Locator) {
       hitRelation: hit === null ? 'none' : hit === el ? 'self' : el.contains(hit) ? 'descendant' : hit.contains(el) ? 'ancestor' : 'other' };
   });
 }
+type RevealPurpose = 'upload' | 'content-save' | 'profile-save' | 'field' | 'dimming' | 'other';
 class ControlRevealError extends Error {
-  constructor(readonly samples: { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>> }[]) {
+  constructor(readonly purpose: RevealPurpose, readonly samples: { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>> }[]) {
     super('Dashboard control did not become visible and pointer-reachable.');
   }
 }
-async function reveal(page: Page, target: Locator): Promise<void> {
+async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'other'): Promise<void> {
   const viewport = page.viewportSize()!;
   const samples: { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>> }[] = [];
-  await page.mouse.move(viewport.width / 2, viewport.height / 2);
+  // The tested RTL Settings scroll gutter sits left of its padded form fields.
+  // Wheel there so a multiline input beneath the viewport centre cannot consume it.
+  await page.mouse.move(24, viewport.height / 2);
   if (!(await target.count())) await page.mouse.wheel(0, -30_000);
   for (let i = 0; i < 80; i++) {
     const box = await targetGeometry(page, target);
@@ -127,7 +130,7 @@ async function reveal(page: Page, target: Locator): Promise<void> {
     await page.mouse.wheel(0, state.deltaY);
     await page.waitForTimeout(100);
   }
-  throw new ControlRevealError(samples);
+  throw new ControlRevealError(purpose, samples);
 }
 async function tapRevealedButton(page: Page, name: string): Promise<void> {
   const target = page.getByRole('button', { name, exact: true });
@@ -142,11 +145,11 @@ async function tapRevealedButton(page: Page, name: string): Promise<void> {
   await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
 }
 async function clickButton(page: Page, name: string): Promise<void> {
-  await reveal(page, page.getByRole('button', { name, exact: true }));
+  await reveal(page, page.getByRole('button', { name, exact: true }), name === L.save ? 'content-save' : name === L.saveProfile ? 'profile-save' : 'other');
   await tapRevealedButton(page, name);
 }
 async function fill(page: Page, name: string, value: string): Promise<void> {
-  await reveal(page, page.getByRole('textbox', { name }));
+  await reveal(page, page.getByRole('textbox', { name }), 'field');
   await fillField(page, name, value);
 }
 async function semantics(page: Page): Promise<void> {
@@ -160,7 +163,7 @@ async function openEditor(page: Page, reload = false): Promise<void> {
   if (reload) await page.reload({ waitUntil: 'domcontentloaded' });
   await semantics(page);
   await tapNav(page, L.nav);
-  await reveal(page, page.getByRole('button', { name: L.upload, exact: true }));
+  await reveal(page, page.getByRole('button', { name: L.upload, exact: true }), 'upload');
   await expect(page.getByRole('button', { name: L.upload, exact: true })).toBeEnabled();
 }
 async function saveContent(page: Page): Promise<void> {
@@ -260,7 +263,7 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
   try {
     diagnostics.mark('reveal', 'started');
     const target = page.getByRole('button', { name: L.upload, exact: true });
-    await diagnostics.value('reveal', diagnostics.observe('reveal', reveal(page, target)));
+    await diagnostics.value('reveal', diagnostics.observe('reveal', reveal(page, target, 'upload')));
     diagnostics.control = await targetGeometry(page, target);
     const uploaded = diagnostics.observe('private-upload-response', page.waitForResponse(r => {
       const u = new URL(r.url());
@@ -311,7 +314,7 @@ async function editorStatus(page: Page): Promise<string[]> {
 async function failureScreenshot(page: Page, path: string): Promise<string> {
   try {
     if (new URL(page.url()).origin !== DASHBOARD || await page.locator('input[type="password"]').count() ||
-        !(await page.getByRole('button', { name: L.upload, exact: true }).count())) return 'withheld';
+        !(await readAccessibleText(page)).includes('CINEMATIC TEST A')) return 'withheld';
     await page.evaluate(() => {
       const label = document.createElement('div');
       label.textContent = 'ISOLATED CI — SYNTHETIC TEST DATA — FAILED ACCEPTANCE';
@@ -331,7 +334,7 @@ async function readDim(page: Page): Promise<number> {
 }
 async function setDim(page: Page, target: number): Promise<void> {
   const slider = page.getByRole('slider');
-  await reveal(page, slider);
+  await reveal(page, slider, 'dimming');
   await expect(slider, 'Exactly one menu dimming slider').toHaveCount(1);
   await slider.focus();
   let current = await readDim(page);
@@ -447,10 +450,15 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
 
     stage = 'upload-publish-select-save-reload';
     await upload(page, 'base_420_900x450.jpg', nextUpload());
+    stages.push('first-upload-published-selected');
+    stage = 'save-first-background';
     await saveContent(page);
+    stages.push(stage);
+    stage = 'read-first-background';
     const first = (await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id as string;
     expect(first).not.toBe(f.heroMediaId);
     const firstUrl = await backgroundUrl(f, token, first);
+    stage = 'reload-first-background';
     await openEditor(page, true);
     await invariants(f, token);
     const menu = await context.newPage();
@@ -563,7 +571,8 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     const failureCapture = stages.includes('login')
       ? await failureScreenshot(page, resolve(out, 'dashboard-failure-test-data.png')) : 'withheld';
     writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
-      fonts: network.fonts(), controlReveal: error instanceof ControlRevealError ? error.samples : null,
+      fonts: network.fonts(), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
+      controlReveal: error instanceof ControlRevealError ? error.samples : null,
       uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
   }

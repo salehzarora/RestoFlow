@@ -571,7 +571,7 @@ class _ContentState extends State<StorefrontContentSection> {
             fit: BoxFit.contain,
             errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
-        Text('${c('menuBackgroundDim')}: ${dim ?? 15}%'),
+        Text(c('menuBackgroundDim').replaceAll('{percent}', '${dim ?? 15}')),
         Slider(
           key: const Key('content-appearance.menu_background_dim'),
           value: (dim ?? 15).toDouble(),

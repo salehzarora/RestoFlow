@@ -158,7 +158,11 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
       'استخدام خلفية البداية',
       'שימוש ברקע הפתיחה',
     ],
-    'menuBackgroundDim': ['Image dimming', 'تعتيم الصورة', 'הכהיית התמונה'],
+    'menuBackgroundDim': [
+      'Image dimming: {percent}%',
+      'تعتيم الصورة: {percent}%',
+      'הכהיית התמונה: {percent}%',
+    ],
     'menuBackgroundDimHelp': [
       '0% keeps the image bright; 80% darkens it most. Applies to the separate menu image.',
       '0% يبقي الصورة ساطعة؛ 80% أعلى تعتيم. يُطبّق على صورة المنيو المستقلة.',
