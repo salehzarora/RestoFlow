@@ -23,6 +23,17 @@ test('only the default loader call gains a local font fallback URL', () => {
   assert.match(withWorker, /serviceWorkerVersion: "1234"/);
   assert.throws(() => localFontBootstrap('_flutter.loader.load({config:{unexpected:1}});'));
 });
+test('the pinned SDK generated service-worker deprecation comment is preserved', () => {
+  const footer = `_flutter.loader.load({
+  serviceWorkerSettings: {
+    serviceWorkerVersion: "1997262592" /* Flutter's service worker is deprecated and will be removed in a future Flutter release. */
+  }
+});`;
+  const result = localFontBootstrap(footer);
+  assert.match(result, /fontFallbackBaseUrl: "\/cinematic-fonts\/"/);
+  assert.ok(result.includes(footer.slice(footer.indexOf('serviceWorkerSettings:'), footer.lastIndexOf('}'))));
+  assert.throws(() => localFontBootstrap(footer.replace('Flutter\'s service worker is deprecated', 'unreviewed comment')));
+});
 test('mirror serves byte-identical SDK fallback faces and their licenses', () => {
   const root = tree();
   try {

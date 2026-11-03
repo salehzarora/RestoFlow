@@ -16,8 +16,9 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
 export function localFontBootstrap(source) {
   // Accept only the pinned SDK's default terminal loader call. Preserve the
-  // generated loader/build config and any standard service-worker setting.
-  const call = /_flutter\.loader\.load\(\s*(\{\s*serviceWorkerSettings:\s*\{\s*serviceWorkerVersion:\s*(?:null|"[a-zA-Z0-9_-]+"|[0-9]+)\s*\}\s*\})?\s*\);\s*$/;
+  // generated loader/build config and standard service-worker setting, including
+  // the exact deprecation comment emitted by this pinned SDK's WebTemplate.
+  const call = /_flutter\.loader\.load\(\s*(\{\s*serviceWorkerSettings:\s*\{\s*serviceWorkerVersion:\s*(?:null|"[a-zA-Z0-9_-]+"|[0-9]+)(?:\s*\/\* Flutter's service worker is deprecated and will be removed in a future Flutter release\. \*\/)?\s*\}\s*\})?\s*\);\s*$/;
   const match = source.match(call);
   assert.ok(match, 'Unexpected Flutter bootstrap; refusing an unreviewed transform');
   const body = match[1] ? match[1].trim().slice(1, -1) : '';
