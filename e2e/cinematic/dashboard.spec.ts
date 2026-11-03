@@ -94,16 +94,27 @@ async function targetGeometry(page: Page, target: Locator) {
   return target.first().evaluate(el => {
     const r = el.getBoundingClientRect();
     const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    const pointerEvents = getComputedStyle(el).pointerEvents;
     return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height),
-      viewportWidth: innerWidth, viewportHeight: innerHeight, centerHit: hit === el || (hit !== null && el.contains(hit)) };
+      viewportWidth: innerWidth, viewportHeight: innerHeight, centerHit: hit === el || (hit !== null && el.contains(hit)),
+      disabled: el.getAttribute('aria-disabled') === 'true',
+      pointerEvents: ['auto', 'all', 'none'].includes(pointerEvents) ? pointerEvents : 'other',
+      hitRelation: hit === null ? 'none' : hit === el ? 'self' : el.contains(hit) ? 'descendant' : hit.contains(el) ? 'ancestor' : 'other' };
   });
+}
+class ControlRevealError extends Error {
+  constructor(readonly samples: { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>> }[]) {
+    super('Dashboard control did not become visible and pointer-reachable.');
+  }
 }
 async function reveal(page: Page, target: Locator): Promise<void> {
   const viewport = page.viewportSize()!;
+  const samples: { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>> }[] = [];
   await page.mouse.move(viewport.width / 2, viewport.height / 2);
   if (!(await target.count())) await page.mouse.wheel(0, -30_000);
   for (let i = 0; i < 80; i++) {
     const box = await targetGeometry(page, target);
+    if (i % 8 === 0 || i === 79) samples.push({ iteration: i, geometry: box });
     const state = controlGeometry(box, viewport, box?.centerHit ?? false);
     if (state.ready) return;
     // Flutter Settings is a lazy native scrollable. Drive it with genuine
@@ -112,7 +123,7 @@ async function reveal(page: Page, target: Locator): Promise<void> {
     await page.mouse.wheel(0, state.deltaY);
     await page.waitForTimeout(100);
   }
-  throw new Error('Dashboard control did not become visible and pointer-reachable.');
+  throw new ControlRevealError(samples);
 }
 async function clickButton(page: Page, name: string): Promise<void> {
   await reveal(page, page.getByRole('button', { name, exact: true }));
@@ -412,6 +423,8 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     const token: string = session.access_token;
     expect(typeof token, 'Auth issued a user token').toBe('string');
     // Token stays in memory, never in snapshots, report fields, traces or logs.
+    stages.push(stage);
+    stage = 'open-editor';
     await openEditor(page);
     await invariants(f, token);
     stages.push(stage);
@@ -534,7 +547,8 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     const failureCapture = stages.includes('login')
       ? await failureScreenshot(page, resolve(out, 'dashboard-failure-test-data.png')) : 'withheld';
     writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
-      fonts: network.fonts(), uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
+      fonts: network.fonts(), controlReveal: error instanceof ControlRevealError ? error.samples : null,
+      uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
   }
 });
