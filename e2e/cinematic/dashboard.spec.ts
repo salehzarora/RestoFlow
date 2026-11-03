@@ -95,8 +95,12 @@ async function targetGeometry(page: Page, target: Locator) {
     const r = el.getBoundingClientRect();
     const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
     const pointerEvents = getComputedStyle(el).pointerEvents;
+    const view = el.closest('flutter-view');
+    const engineTags = ['FLT-SEMANTICS', 'FLT-SEMANTICS-CONTAINER', 'FLT-GLASS-PANE', 'FLT-SCENE-HOST', 'FLUTTER-VIEW'];
+    const flutterSurfaceHit = hit !== null && view !== null && hit.closest('flutter-view') === view && engineTags.includes(hit.tagName);
     return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height),
       viewportWidth: innerWidth, viewportHeight: innerHeight, centerHit: hit === el || (hit !== null && el.contains(hit)),
+      flutterSurfaceHit, hitSurface: hit !== null && engineTags.includes(hit.tagName) ? hit.tagName : 'other',
       disabled: el.getAttribute('aria-disabled') === 'true',
       pointerEvents: ['auto', 'all', 'none'].includes(pointerEvents) ? pointerEvents : 'other',
       hitRelation: hit === null ? 'none' : hit === el ? 'self' : el.contains(hit) ? 'descendant' : hit.contains(el) ? 'ancestor' : 'other' };
@@ -115,19 +119,31 @@ async function reveal(page: Page, target: Locator): Promise<void> {
   for (let i = 0; i < 80; i++) {
     const box = await targetGeometry(page, target);
     if (i % 8 === 0 || i === 79) samples.push({ iteration: i, geometry: box });
-    const state = controlGeometry(box, viewport, box?.centerHit ?? false);
+    const state = controlGeometry(box, viewport, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false);
     if (state.ready) return;
     // Flutter Settings is a lazy native scrollable. Drive it with genuine
-    // wheel input until this control is inside the content viewport and hit
-    // testing reaches it. DOM attachment/scrollIntoView alone is insufficient.
+    // wheel input until this control is inside the content viewport and its
+    // semantic node or the same Flutter view's input surface is hit-tested.
     await page.mouse.wheel(0, state.deltaY);
     await page.waitForTimeout(100);
   }
   throw new ControlRevealError(samples);
 }
+async function tapRevealedButton(page: Page, name: string): Promise<void> {
+  const target = page.getByRole('button', { name, exact: true });
+  await expect(target, 'The actual Flutter control is enabled').toBeEnabled();
+  const box = await targetGeometry(page, target);
+  expect(controlGeometry(box, page.viewportSize()!, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false).ready,
+    'The control is in the viewport with an unobstructed same-view Flutter input surface').toBe(true);
+  if (box!.centerHit) return tapButton(page, name);
+  // Send an ordinary physical pointer click through the actual Flutter input
+  // surface. No force click, DOM event dispatch, or application callback.
+  // The chooser/Storage/publisher/save assertions still prove the action.
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+}
 async function clickButton(page: Page, name: string): Promise<void> {
   await reveal(page, page.getByRole('button', { name, exact: true }));
-  await tapButton(page, name);
+  await tapRevealedButton(page, name);
 }
 async function fill(page: Page, name: string, value: string): Promise<void> {
   await reveal(page, page.getByRole('textbox', { name }));
@@ -253,7 +269,7 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     const published = diagnostics.observe('publisher-response', page.waitForResponse(r => requestIs(r, '/functions/v1/storefront-media-publish') && r.status() !== 202, { timeout: 120_000 }));
     const chosen = diagnostics.observe('filechooser', page.waitForEvent('filechooser'));
     diagnostics.mark('click', 'started');
-    await diagnostics.value('click', diagnostics.observe('click', tapButton(page, L.upload)));
+    await diagnostics.value('click', diagnostics.observe('click', tapRevealedButton(page, L.upload)));
     const chooser = await diagnostics.value('filechooser', chosen);
     diagnostics.mark('file-set', 'started');
     await diagnostics.value('file-set', diagnostics.observe('file-set', chooser.setFiles(fixturePath)));

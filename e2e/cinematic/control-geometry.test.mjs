@@ -13,6 +13,10 @@ test('a fully visible, pointer-hit control is ready without force click', () => 
 test('a control hidden behind another hit target is not ready', () => {
   assert.equal(controlGeometry({ x: 900, y: 450, width: 170, height: 40 }, viewport, false).ready, false);
 });
+test('a visible enabled control can be reached through its own Flutter input surface', () => {
+  assert.equal(controlGeometry({ x: 991, y: 500, width: 173, height: 32 }, viewport, false, true).ready, true);
+  assert.equal(controlGeometry({ x: 991, y: 983, width: 173, height: 32 }, viewport, false, true).ready, false);
+});
 test('missing or above-viewport controls need bounded scrolling', () => {
   assert.equal(controlGeometry(null, viewport, false).deltaY, 600);
   const above = controlGeometry({ x: 900, y: -500, width: 170, height: 40 }, viewport, false);
