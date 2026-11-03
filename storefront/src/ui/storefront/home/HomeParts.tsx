@@ -120,7 +120,7 @@ export function ServiceStatusStrip({ tenant, m }: { tenant: Tenant; m: Storefron
   </div>;
 }
 
-/** Closed / paused notice, shown under the hero. The menu stays browsable. */
+/** Hours/operational state is independent of the online-ordering setting. */
 export function StateNotice({
   state,
   tenant,
@@ -133,7 +133,7 @@ export function StateNotice({
   const closed = state === 'closed';
   return (
     <div
-      className={closed ? styles.notice : `${styles.notice} ${styles.noticePaused}`}
+      className={styles.notice}
       data-sf-notice={state}
       data-sf-module="notice"
       role="status"
@@ -141,7 +141,7 @@ export function StateNotice({
       <span className={styles.noticeIcon} aria-hidden="true">
         <ClockIcon />
       </span>
-      <span>
+      <span className={styles.noticeCopy}>
         <span className={styles.noticeTitle}>{closed ? m.closedTitle : m.pausedTitle}</span>
         <span className={styles.noticeBody}>
           <TenantText>
@@ -157,13 +157,15 @@ export function StateNotice({
 
 /**
  * The browse-only notice (STOREFRONT-READ-001, owner decision D5): the menu is
- * real, requests are not yet accepted here. Informational, no action. It is a
- * `notice` module like the closed / paused one and precedes it.
+ * real, requests are not accepted here. Informational, no action.
+ * The public ordering flag includes hours and pickup admission; it is not the
+ * dashboard switch. Show this neutral message only while the restaurant is
+ * open. A closed/paused flag alone must never claim configuration is disabled.
  */
 export function OrderingOffNotice({ m }: { m: StorefrontMessages }) {
   return (
     <div
-      className={`${styles.notice} ${styles.noticePaused}`}
+      className={styles.notice}
       data-sf-notice="ordering-off"
       data-sf-module="notice"
       role="status"
@@ -171,7 +173,7 @@ export function OrderingOffNotice({ m }: { m: StorefrontMessages }) {
       <span className={styles.noticeIcon} aria-hidden="true">
         <ClockIcon />
       </span>
-      <span>
+      <span className={styles.noticeCopy}>
         <span className={styles.noticeTitle}>{m.orderingOfflineTitle}</span>
         <span className={styles.noticeBody}>{m.orderingOfflineBody}</span>
       </span>

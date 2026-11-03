@@ -32,7 +32,7 @@ export function Home({ resolution, locale, slug, hrefFor }: {
             announcement={modules.announcement === null || tenant.service.state !== 'open' ? null : modules.announcement.text}
             announcementSegments={modules.announcement?.segments}
             heroTitle={modules.campaign.title} heroSubline={modules.campaign.subline} heroContent={modules.campaign.hero}
-            notice={<>{tenant.service.orderingEnabled ? null : <OrderingOffNotice m={m} />}{tenant.service.state === 'open' ? null : <StateNotice state={tenant.service.state} tenant={tenant} m={m} />}</>}
+            notice={tenant.service.orderingEnabled && tenant.service.state === 'open' ? null : <div className={styles.notices}>{tenant.service.state === 'open' ? null : <StateNotice state={tenant.service.state} tenant={tenant} m={m} />}{tenant.service.state === 'open' && !tenant.service.orderingEnabled ? <OrderingOffNotice m={m} /> : null}</div>}
             empty={items.length === 0 ? <EmptyMenu tenant={tenant} m={m} /> : null}
             cart={<AsideSlot locale={locale} state={tenant.service.state} opensAt={tenant.hours.opens} checkoutHref={checkoutPath(locale, slug)} />}
           />
