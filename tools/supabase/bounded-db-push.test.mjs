@@ -13,7 +13,7 @@ import {
   APPLICATION_NAME, CLI_BINARIES, ENV_CLI, ENV_PASSFILE, ENV_URL, MIGRATION, MIGRATION_SHA256, STARTUP_OPTIONS,
   aclPrincipals, aclProblem, buildChildEnv, buildDbUrl, checkMigrations, dryRunArgs, main, parseArgs, parsePassfile,
   parsePending, parseTargetUrl, passfileLocationProblem, posixModeProblem, pushArgs, redact, refuseDebug,
-  selectPassfileEntry, summarize, urlShape, verifyCli,
+  selectPassfileEntry, summarize, urlShape, verifyCli, verifyPassfile,
 } from './bounded-db-push.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
@@ -70,18 +70,24 @@ test('arguments: only --mode, --project-ref, --workdir and --apply; debug flags 
   assert.throws(() => parseArgs(['--mode', 'local', '--workdir', wd, CANARY]), (e) => e.code === 'bad_arguments' && !e.message.includes(CANARY));
 });
 
-test('any DEBUG variable, NODE_OPTIONS or inspector / preload flag refuses', () => {
+test('any DEBUG variable, NODE_OPTIONS, inspector or preload flag refuses; configuration-only flags do not', () => {
+  const off = () => false;
   for (const key of ['SUPABASE_DEBUG', 'SUPABASE_INTERNAL_DEBUG', 'SUPABASE_SSL_DEBUG', 'SUPABASE_TELEMETRY_DEBUG', 'DEBUG', 'debug']) {
-    assert.throws(() => refuseDebug({ PATH: 'x', [key]: '' }, []), refusal('debug_refused'), key);
+    assert.throws(() => refuseDebug({ PATH: 'x', [key]: '' }, [], off), refusal('debug_refused'), key);
   }
   for (const value of ['--inspect', '--require ./x.cjs', ' --max-old-space-size=4096']) {
-    assert.throws(() => refuseDebug({ PATH: 'x', NODE_OPTIONS: value }, []), refusal('debug_refused'), value);
+    assert.throws(() => refuseDebug({ PATH: 'x', NODE_OPTIONS: value }, [], off), refusal('debug_refused'), value);
   }
-  assert.throws(() => refuseDebug({ PATH: 'x', node_options: '--inspect' }, []), refusal('debug_refused'));
-  for (const flag of ['--inspect', '--inspect-brk=9229', '--inspect-port=0', '--debug-port=1', '-r', '--require=x', '--import=x', '--loader=x', '--experimental-loader=x']) {
-    assert.throws(() => refuseDebug({ PATH: 'x' }, ['--no-warnings', flag]), refusal('debug_refused'), flag);
+  assert.throws(() => refuseDebug({ PATH: 'x', node_options: '--inspect' }, [], off), refusal('debug_refused'));
+  for (const flag of ['--inspect', '--inspect=0', '--inspect-brk', '--inspect-brk=9229', '--inspect-wait', '--debug', '-r',
+    '--require', '--require=x', '--import=x', '--loader=x', '--experimental-loader=x']) {
+    assert.throws(() => refuseDebug({ PATH: 'x' }, ['--no-warnings', flag], off), refusal('debug_refused'), flag);
   }
-  assert.doesNotThrow(() => refuseDebug({ PATH: 'x', PGSSLMODE: 'require', NODE_OPTIONS: '' }, ['--no-warnings']));
+  // Node 24's test runner passes these defaults to every test process; they start no inspector and load no code.
+  assert.doesNotThrow(() => refuseDebug({ PATH: 'x' },
+    ['--inspect-port=127.0.0.1:9229', '--inspect-publish-uid=stderr,http', '--test-isolation=process'], off));
+  assert.throws(() => refuseDebug({ PATH: 'x' }, [], () => true), refusal('debug_refused'), 'an active inspector');
+  assert.doesNotThrow(() => refuseDebug({ PATH: 'x', PGSSLMODE: 'require', NODE_OPTIONS: '' }, ['--no-warnings'], off));
 });
 
 test('URL: passwordless, explicit port, no query, no pooler; local loopback; hosted exact direct host', () => {
@@ -203,6 +209,20 @@ test('passfile location: outside the repository, the store, worktrees, evidence 
   assert.equal(passfileLocationProblem(path.resolve(path.sep, '..private', 'gr37', 'pgpass'), { repoRoot: repo, workdir }), null);
 });
 
+test('passfile location: a device-path spelling of a file inside the repository is still inside (Windows)',
+  { skip: process.platform !== 'win32' && 'Windows path spellings' }, () => {
+    const repo = mkdtempSync(path.join(scratch, 'repo-'));
+    const work = mkdtempSync(path.join(scratch, 'work-'));
+    const file = path.join(repo, 'pgpass');
+    writeFileSync(file, `127.0.0.1:56622:postgres:postgres:${CANARY}\n`);
+    const target = { host: '127.0.0.1', port: '56622', database: 'postgres', user: 'postgres' };
+    // The location gate runs before the ACL gate, so a spelling that escaped it would fail later, on permissions.
+    for (const raw of [file, `\\\\?\\${file}`]) {
+      assert.throws(() => verifyPassfile(raw, target, work, { repoRoot: repo }),
+        (e) => e.code === 'passfile_location' && !e.message.includes(CANARY), raw);
+    }
+  });
+
 test('passfile permissions: Windows ACL with the current user only; POSIX 0600 owned by the user', () => {
   const file = 'C:\\private\\gr37\\pgpass';
   const only = `${file} DESKTOP-ABC\\owner:(R,W)\r\n\r\nSuccessfully processed 1 files; Failed processing 0 files\r\n`;
@@ -294,6 +314,10 @@ test('CLI output summary: the error lines on failure (not the echoed SQL), the a
   assert.match(ok, /Applying migration/);
   assert.match(ok, /Finished supabase db push/);
   assert.equal(summarize('only noise\nmore noise\n', true), '    only noise\n    more noise');
+  // A line the CLI flags as an error is kept even when it happens to contain an advice phrase.
+  const advicePhrase = summarize('Applying migration x...\nERROR: relation "app.db reset_marker" does not exist (SQLSTATE 42P01)\nAt statement: 7\n', true);
+  assert.match(advicePhrase, /db reset_marker/);
+  assert.match(advicePhrase, /At statement: 7/);
 });
 
 test('CLI output summary: a ledger mismatch keeps the error and never relays the CLI\'s repair or include-all advice', () => {

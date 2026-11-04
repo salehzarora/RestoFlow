@@ -5,7 +5,7 @@
 // parameter of a PASSWORDLESS --db-url; the password comes only from an owner-private PGPASSFILE; PGSSLMODE=require
 // makes the CLI refuse a session without TLS. Nothing edits the SQL, writes the migration ledger by hand, passes
 // --include-all, calls `migration repair` or retries the push, and the CLI's own advice to do any of that is never
-// relayed: every failure ends in a STOP verdict.
+// relayed: a refusal prints REFUSED <code> and pushes nothing, and every CLI failure ends in a STOP verdict.
 // Inputs, from the environment only and never printed: BIZBOT_GR37_DB_URL (passwordless), BIZBOT_GR37_PASSFILE and
 // BIZBOT_GR37_SUPABASE_CLI (the absolute path of the pinned supabase.exe).
 // Usage: node tools/supabase/bounded-db-push.mjs --mode local|hosted [--project-ref <ref>] --workdir <dir> [--apply]
@@ -14,6 +14,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { closeSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { url as inspectorUrl } from 'node:inspector';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -83,14 +84,17 @@ export function parseArgs(argv) {
   return out;
 }
 
-// The wrapper holds the password in memory: no debug variable, no NODE_OPTIONS, and no inspector or preloaded module
-// on this Node process.
-export function refuseDebug(env, execArgv = process.execArgv) {
+// The flags that start an inspector or load code before the wrapper runs. Configuration-only flags such as
+// --inspect-port and --inspect-publish-uid start nothing (Node 24's test runner passes them with their defaults).
+const DEBUG_FLAG = /^(?:-r|--require|--import|--loader|--experimental-loader|--inspect|--inspect-brk|--inspect-wait|--debug|--debug-brk)(?:=|$)/;
+
+// The wrapper holds the password in memory: no debug variable, no NODE_OPTIONS, no inspector and no preloaded module.
+export function refuseDebug(env, execArgv = process.execArgv, inspectorActive = () => Boolean(inspectorUrl())) {
   if (Object.keys(env).some((key) => /debug/i.test(key))) refuse('debug_refused', 'a debug environment variable is set');
   if (Object.keys(env).some((key) => key.toUpperCase() === 'NODE_OPTIONS' && String(env[key]).trim() !== '')) {
     refuse('debug_refused', 'NODE_OPTIONS is set');
   }
-  if (execArgv.some((a) => a === '-r' || /^--(inspect|debug|require|import|loader|experimental-loader)\b/.test(a))) {
+  if (execArgv.some((a) => DEBUG_FLAG.test(a)) || inspectorActive()) {
     refuse('debug_refused', 'an inspector or preload flag is set on this Node process');
   }
 }
@@ -196,16 +200,20 @@ function systemTool(name) {
   return path.join(process.env.SystemRoot || process.env.SYSTEMROOT || 'C:\\Windows', 'System32', name);
 }
 
+// Paths are compared in their canonical long form: the native realpath resolves 8.3 short names and device-path
+// spellings that the JavaScript realpath keeps.
+const canonical = (p) => realpathSync.native(p);
+
 export function verifyPassfile(raw, target, workdir, { repoRoot = path.resolve(path.dirname(SELF), '..', '..') } = {}) {
   if (typeof raw !== 'string' || raw === '') refuse('passfile_missing', `${ENV_PASSFILE} is not set`);
   if (!path.isAbsolute(raw)) refuse('passfile_missing', 'the passfile path must be absolute');
   let real;
   let st;
-  try { real = realpathSync(raw); st = statSync(real); } catch { refuse('passfile_missing', 'the passfile does not exist'); }
+  try { real = canonical(raw); st = statSync(real); } catch { refuse('passfile_missing', 'the passfile does not exist'); }
   if (!st.isFile()) refuse('passfile_missing', 'the passfile is not a regular file');
   let workReal;
-  try { workReal = realpathSync(workdir); } catch { refuse('bad_arguments', 'the workdir does not exist'); }
-  const where = passfileLocationProblem(real, { repoRoot: realpathSync(repoRoot), workdir: workReal });
+  try { workReal = canonical(workdir); } catch { refuse('bad_arguments', 'the workdir does not exist'); }
+  const where = passfileLocationProblem(real, { repoRoot: canonical(repoRoot), workdir: workReal });
   if (where) refuse('passfile_location', `the passfile is ${where}`);
   if (process.platform === 'win32') {
     const who = spawnSync(systemTool('whoami.exe'), [], { encoding: 'utf8', shell: false, windowsHide: true });
@@ -298,13 +306,14 @@ const CLI_ADVICE = /migration repair|db pull|db reset|--include-all|--debug|try 
 // The CLI's verdict lines, not the SQL it echoes: on failure the error lines (a statement text can run to dozens of
 // lines and push the error out of a plain tail), on success the apply lines.
 export function summarize(text, failed, n = 8) {
-  const all = text.replace(/\r/g, '').split('\n')
-    .filter((l) => l.trim() && !/new version of supabase cli|recommend updating/i.test(l) && !CLI_ADVICE.test(l));
   const signal = failed
     ? (l) => /^\s*(ERROR|FATAL)\b/.test(l)
       || /SQLSTATE|^\s*At statement|canceling statement|failed to connect|authentication failed|refused TLS|connection refused/i.test(l)
       || /migration versions not found|inserted before the last migration/i.test(l)
     : (l) => /Applying migration|Finished|up to date/i.test(l);
+  // A line the CLI flags as an error is always kept; the other lines that carry its advice are dropped.
+  const all = text.replace(/\r/g, '').split('\n')
+    .filter((l) => l.trim() && !/new version of supabase cli|recommend updating/i.test(l) && (signal(l) || !CLI_ADVICE.test(l)));
   const picked = all.filter(signal).slice(0, n);
   return (picked.length ? picked : all.slice(-n)).map((l) => `    ${l.trim().slice(0, 220)}`).join('\n');
 }
@@ -358,7 +367,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, prin
       return 3;
     }
     if (!after || after.length !== 0) {
-      say('RESULT: POSTCHECK_MISMATCH');
+      say('RESULT: POSTCHECK_MISMATCH (STOP: preserve the evidence; read the ledger read-only; no retry, no repair, no --include-all)');
       return 4;
     }
     say('RESULT: APPLIED');
