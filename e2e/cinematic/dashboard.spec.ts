@@ -402,17 +402,22 @@ async function revealColorAdvanced(page: Page, name: string): Promise<void> {
   if (await page.getByRole('textbox', { name, exact: true, includeHidden: true }).count()) return;
   await tapRevealedControl(page, advanced);
 }
-async function readColorDraft(page: Page, name: string): Promise<string> {
+async function readColorDraft(page: Page, name: string, expected: string): Promise<string> {
   await revealColorAdvanced(page, name);
   const field = page.getByRole('textbox', { name, exact: true });
   await reveal(page, field, 'field', page.getByRole('textbox', { name, exact: true, includeHidden: true }));
   await tapRevealedControl(page, field);
   await expect(field).toBeFocused();
+  // Focus can precede Flutter installing the DOM editing value. The caller
+  // supplies the authoritative original or the actual visible picker draft;
+  // an empty inherited content color is valid only when explicitly expected.
+  await expect(field, 'Focused Flutter control installs the expected draft value')
+    .toHaveValue(expected);
   const value = await field.inputValue();
   await page.keyboard.press('Tab');
   return value.toLowerCase();
 }
-async function useVisualColorPicker(page: Page, name: string, apply: boolean, capture?: string): Promise<void> {
+async function useVisualColorPicker(page: Page, name: string, apply: boolean, capture?: string): Promise<string> {
   await revealButton(page, name);
   await tapRevealedButton(page, name);
   // Flutter's incrementable semantics puts the name on the parent surface,
@@ -443,10 +448,12 @@ async function useVisualColorPicker(page: Page, name: string, apply: boolean, ca
   await expect(hue, 'Tab reaches the hue rail').toBeFocused();
   // Flutter initializes aria-valuetext on the first change, not first focus.
   // Exercise both directions so initialization cannot masquerade as a change.
-  await page.keyboard.press('ArrowDown');
+  // RGB-derived initial hue is below 360. Start upward so an inherited white
+  // color at hue zero changes instead of clamping and leaving it uninitialized.
+  await page.keyboard.press('ArrowUp');
   await expect(hue, 'Hue input reports an angle').toHaveAttribute('aria-valuetext', /^\d+°$/);
   const beforeHueKey = await hue.getAttribute('aria-valuetext');
-  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowDown');
   await expect(hue, 'Hue arrow input reports the changed angle').toHaveAttribute('aria-valuetext', /^\d+°$/);
   await expect(hue, 'The opposite hue key changes its actual angle').not.toHaveAttribute('aria-valuetext', beforeHueKey!);
   // Physical pointer input targets each labeled Flutter surface, never the
@@ -458,6 +465,8 @@ async function useVisualColorPicker(page: Page, name: string, apply: boolean, ca
   await tapRevealedControl(page, hueSurface);
   await expect(swatches.nth(1), 'Hue pointer selection changes the visible draft').not.toHaveText(beforeHuePointer);
   await expect(swatches.nth(0), 'Visual gestures preserve the current swatch').toHaveText(current);
+  const previewed = (await swatches.nth(1).innerText()).toLowerCase();
+  expect(previewed, 'The visible picker draft is a complete HEX color').toMatch(/^#[0-9a-f]{6}$/);
   if (capture) await screenshot(page, capture);
   await tapRevealedButton(page, apply ? L.apply : L.cancel, true);
   await expect(sv, 'Apply or Cancel closes the visual picker').toHaveCount(0);
@@ -466,10 +475,8 @@ async function useVisualColorPicker(page: Page, name: string, apply: boolean, ca
   const returnedField = page.getByRole('textbox', { name, exact: true });
   await expect(returnedField,
     'Returning from the picker restores the still-expanded draft field').toHaveCount(1);
-  // Apply inserts dirty notices above this field while the route dismisses.
-  // Presence can precede the final geometry: settle before the single readback
-  // click, and fail explicitly if the bounded observation never stabilizes.
   await settleScroll(page, await scrollScope(page, returnedField), true);
+  return previewed;
 }
 async function saveProfile(page: Page): Promise<void> {
   await revealButton(page, L.saveProfile);
@@ -965,15 +972,19 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       const before = await rpc(f, token, scope === 'profile' ? 'get_restaurant_storefront_profile' : 'get_restaurant_storefront_content_v3');
       for (const [name, key] of roles) {
         stage = `visual-picker-${scope}-${key}-original`;
-        const original = await readColorDraft(page, name);
+        const authoritativeOriginal = scope === 'profile'
+          ? before.profile[key] : (before.document.appearance?.[key] ?? '');
+        expect(authoritativeOriginal, 'The initial draft has a valid authoritative color or explicit inheritance')
+          .toMatch(scope === 'profile' ? /^#[0-9a-f]{6}$/ : /^(?:#[0-9a-f]{6})?$/);
+        const original = await readColorDraft(page, name, authoritativeOriginal);
         stage = `visual-picker-${scope}-${key}-cancel`;
         await useVisualColorPicker(page, name, false);
         stage = `visual-picker-${scope}-${key}-cancel-readback`;
-        expect(await readColorDraft(page, name), 'Cancel preserves the actual draft field').toBe(original);
+        expect(await readColorDraft(page, name, original), 'Cancel preserves the actual draft field').toBe(original);
         stage = `visual-picker-${scope}-${key}-apply`;
-        await useVisualColorPicker(page, name, true, resolve(out, `picker-${key}-test-data.png`));
+        const previewed = await useVisualColorPicker(page, name, true, resolve(out, `picker-${key}-test-data.png`));
         stage = `visual-picker-${scope}-${key}-apply-readback`;
-        const selected = await readColorDraft(page, name);
+        const selected = await readColorDraft(page, name, previewed);
         expect(selected, 'Visual selection produces a complete color without HEX entry').toMatch(/^#[0-9a-f]{6}$/);
         expect(selected, 'Apply changes the actual draft').not.toBe(original);
         chosen.set(key, selected);
@@ -988,7 +999,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       await openEditor(page, true);
       for (const [name, key] of roles) {
         expect((scope === 'profile' ? persisted.profile : persisted.document.appearance)[key]).toBe(chosen.get(key));
-        expect(await readColorDraft(page, name), 'Authoritative save survives Dashboard reload').toBe(chosen.get(key));
+        expect(await readColorDraft(page, name, chosen.get(key)!), 'Authoritative save survives Dashboard reload').toBe(chosen.get(key));
       }
       stages.push(stage);
     }

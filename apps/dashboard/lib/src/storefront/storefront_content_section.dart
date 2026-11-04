@@ -1538,7 +1538,15 @@ class _ContentState extends State<StorefrontContentSection> {
         ] else ...[
           for (final warning in _read!.snapshot!.warnings)
             Text(_warningText(warning)),
-          if (!widget.enabled) Text(c('otherEdits')),
+          // Reserve the notice's natural wrapped height so a profile edit
+          // does not shift that editor while its picker is closing.
+          Visibility(
+            visible: !widget.enabled,
+            maintainSize: true,
+            maintainAnimation: true,
+            maintainState: true,
+            child: Text(c('otherEdits')),
+          ),
           _title('appearance'),
           Text(c('appearanceHelp')),
           _appearanceColor('text_color', 'appearanceTextColor'),

@@ -2266,11 +2266,18 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               ),
           ],
         ),
-        if (_dirty || _homeDirty)
-          Text(
+        // Keep the appearance fields stationary when their first edit reveals
+        // this notice; Flutter web can briefly retain their old hit geometry.
+        Visibility(
+          visible: _dirty || _homeDirty,
+          maintainSize: true,
+          maintainAnimation: true,
+          maintainState: true,
+          child: Text(
             l10n.storefrontFeaturedItemsSeparateEdits,
             key: const Key('storefront-featured-separate-edits'),
           ),
+        ),
       ],
     ];
   }
