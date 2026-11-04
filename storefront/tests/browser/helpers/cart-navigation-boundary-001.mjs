@@ -138,7 +138,7 @@ globalThis.fetch = async (input, init) => {
   const headers = new Headers(init?.headers ?? input?.headers);
   const text = typeof init?.body === 'string' ? init.body : input instanceof Request ? await input.clone().text() : '';
   let body; try { body = text.length <= 1024 ? JSON.parse(text) : null; } catch { body = null; }
-  const mapped = url.origin === LOGICAL_ORIGIN && url.pathname === '/rest/v1/rpc/storefront_menu_v4' && !url.search && !url.hash && !url.username && !url.password && method === 'POST'
+  const mapped = url.origin === LOGICAL_ORIGIN && url.pathname === '/rest/v1/rpc/storefront_menu_v5' && !url.search && !url.hash && !url.username && !url.password && method === 'POST'
     && JSON.stringify([...headers.keys()].sort()) === JSON.stringify(['accept', 'apikey', 'authorization', 'content-type'])
     && headers.get('accept') === 'application/json' && headers.get('content-type') === 'application/json'
     && headers.get('apikey') === SYNTHETIC_KEY && headers.get('authorization') === `Bearer ${SYNTHETIC_KEY}`
@@ -147,7 +147,7 @@ globalThis.fetch = async (input, init) => {
   transportEvidence.mappedSyntheticReads++;
   // No call to originalFetch has seen the logical production URL. Only this
   // fixed loopback target is passed to the actual network implementation.
-  return originalFetch(`http://127.0.0.1:${settings.rpcPort}/rest/v1/rpc/storefront_menu_v4`, { ...init, method: 'POST', headers, body: text, signal: init?.signal ?? input?.signal, redirect: 'error' });
+  return originalFetch(`http://127.0.0.1:${settings.rpcPort}/rest/v1/rpc/storefront_menu_v5`, { ...init, method: 'POST', headers, body: text, signal: init?.signal ?? input?.signal, redirect: 'error' });
 };
 const spawn = childProcess.spawn;
 const owned = new Map();
@@ -272,7 +272,7 @@ export async function boundaryCanaries() {
   for (const [name, url] of [
     ['external_fetch', 'https://example.invalid/'],
     ['production_edge_fetch', `${LOGICAL_ORIGIN}/functions/v1/web-order-submit`],
-    ['production_v4_wrong_method', `${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v4`],
+    ['production_v4_wrong_method', `${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v5`],
   ]) {
     let rejected = false;
     try { await globalThis.fetch(url, { method: 'GET' }); } catch (error) { rejected = error.message.startsWith(DENIAL_PREFIX + ':'); }

@@ -27,7 +27,7 @@ export default async function Page({ params }: { params: Promise<{ ref: string }
       requestRef={resolved.ref}
       slug={resolved.slug}
       contentLocale={resolved.contentLocale}
-      fontClass={rubikPreloadArabic.className}
+      fontClass={rubikPreloadArabic()}
     />
   );
 }

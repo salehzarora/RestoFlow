@@ -19,7 +19,7 @@ export function Unknown({ locale }: { locale: Locale }) {
     // also rendered by app/not-found.tsx, which Next emits WITHOUT a root
     // layout, so there is no <html> tag of ours to carry them. Declaring them
     // here is what makes the Arabic copy render right-to-left in 404.html.
-    <main className={`${styles.screen} ${rubikUnknown.className}`} lang={locale} dir={dirOf(locale)}>
+    <main className={`${styles.screen} ${rubikUnknown()}`} lang={locale} dir={dirOf(locale)}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         className={styles.mark}

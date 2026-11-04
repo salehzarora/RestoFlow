@@ -39,7 +39,7 @@ import { fetchStorefrontMenu, liveConfig, type LiveConfig } from './client';
 import type { StorefrontMenuOk } from './decode';
 import type { StorefrontMenuV2Ok } from './decodeHomeContent';
 import type { StorefrontMenuV3Ok } from './decodeFeaturedItems';
-import { decodeStorefrontMenuV4, type StorefrontMenuV4Ok } from './decodeContentV1';
+import { decodeStorefrontMenuV5, type StorefrontMenuV4Ok } from './decodeContentV1';
 import { iconPathFor } from './icons';
 import { liveOrderingEnabled, orderEndpointOrigin } from './ordering';
 
@@ -95,7 +95,10 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
     city: r.city ?? '',
     address: r.address ?? '',
     phone: r.phone ?? '',
-    brand: { primary: r.primary_color, accent: r.accent_color, logo: mediaUrl(r.logo_url, origin) },
+    brand: { primary: r.primary_color, accent: r.accent_color, logo: mediaUrl(r.logo_url, origin),
+      ...(content?.appearance === undefined ? {} : { text: content.appearance.text_color, buttonText: content.appearance.button_text_color }),
+      ...(content?.appearance?.font_family === undefined ? {} : { fontFamily: content.appearance.font_family }),
+    },
     hours: {
       opens: envelope.hours.opens ?? '',
       closes: envelope.hours.closes ?? '',
@@ -111,6 +114,8 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
       orderingEnabled: liveOrderingEnabled(envelope.service),
     },
     heroImage: mediaUrl(r.hero_url, origin),
+    ...(content?.appearance?.menu_background_url === undefined ? {} : { menuBackgroundImage: mediaUrl(content.appearance.menu_background_url, origin) }),
+    ...(content?.appearance?.menu_background_dim === undefined ? {} : { menuBackgroundDim: content.appearance.menu_background_dim }),
     currency: 'ILS',
   };
 
@@ -236,7 +241,7 @@ export function liveStorefrontSource(config?: LiveConfig): StorefrontSource {
     async getStorefront(slug: string): Promise<StorefrontResolution | null> {
       if (!isValidSlug(slug)) return null;
       const cfg = config ?? liveConfig();
-      const envelope = decodeStorefrontMenuV4(await fetchStorefrontMenu(slug, cfg));
+      const envelope = decodeStorefrontMenuV5(await fetchStorefrontMenu(slug, cfg));
       if (!envelope.ok) {
         if (envelope.error === 'not_found') return null;
         throw new Error(`storefront_menu answered ${envelope.error}`);

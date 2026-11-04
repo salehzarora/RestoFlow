@@ -28,6 +28,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
   return (
     <StorefrontScreen
       tenant={resolved.view.tenant}
+      campaign={resolved.view.modules.campaign}
       locale="he"
       slug={slug}
       preset={resolved.preset}

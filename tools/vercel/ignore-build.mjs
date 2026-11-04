@@ -15,7 +15,7 @@ const SITE_BUILDER_HASH = 'fb6cb2b72d9f889f29787fa64b84a931786324e79c8497c707d6c
 // Exported so storefront/tests/config-hash.test.mjs can pin the file it
 // describes without exposing hash(). A changed next.config always BUILDs
 // until this pin is reviewed: that file decides what the build reads.
-export const STOREFRONT_CONFIG_HASH = '59bff99cca265f1246073aec3da7dbbff69a3699bdadaf9587e9baf1d7b01705';
+export const STOREFRONT_CONFIG_HASH = 'f84d4ecc42ea2d0eb7c7ec244f3963c7b63d62d387fd0e62b796bd92b1b72bbe';
 const STOREFRONT_RUNTIME_ROOTS = ['storefront/app', 'storefront/src', 'storefront/public', 'storefront/messages', 'storefront/components', 'storefront/lib', 'storefront/styles'];
 const STOREFRONT_PUBLIC_TYPES = ['.svg', '.ico', '.txt', '.json', '.webmanifest', '.png', '.webp'];
 // STAGE 7 R3 module contract: the ONLY bare specifiers storefront source may

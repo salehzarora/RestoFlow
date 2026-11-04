@@ -5,9 +5,10 @@ import { type Locale } from '@/i18n/locales';
 import { fill, storefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
 import { searchPath, storefrontPath } from '@/routes/routes';
-import type { MotionMode, Tenant } from '@/source/types';
+import type { CampaignModule, MotionMode, Tenant } from '@/source/types';
 import { LanguageMenu } from './LanguageMenu';
 import { BrandLockup, CampaignHero } from './home/HomeParts';
+import { SceneBackdrop } from './home/SceneBackdrop';
 import { hoursLabel } from './home/hoursCopy';
 import { DeliveryIcon, SearchIcon, StoreIcon } from './icons';
 import styles from './home/home.module.css';
@@ -17,8 +18,8 @@ const MOTION_CLASS = {
   lively: `${styles.motionFull} ${styles.motionLively}`,
 } as const;
 
-export function Intro({ tenant, locale, motion = 'full' }: {
-  tenant: Tenant; locale: Locale; motion?: MotionMode;
+export function Intro({ tenant, locale, campaign, motion = 'full' }: {
+  tenant: Tenant; locale: Locale; campaign?: CampaignModule; motion?: MotionMode;
 }) {
   const m = storefrontMessages(locale);
   const { service } = tenant;
@@ -26,6 +27,7 @@ export function Intro({ tenant, locale, motion = 'full' }: {
   const stateLabel = service.state === 'open' ? m.openNow : service.state === 'closed' ? m.closed : m.paused;
   const stateTone = service.state === 'open' ? styles.stateOpen : service.state === 'closed' ? styles.stateClosed : styles.statePaused;
   return <main className={`${styles.page} ${MOTION_CLASS[motion]}`} data-sf-screen="intro">
+    <SceneBackdrop image={tenant.heroImage} />
     <header className={styles.header}>
       <div className={`${styles.inner} ${styles.headerInner}`}>
         <BrandLockup tenant={tenant} />
@@ -35,7 +37,7 @@ export function Intro({ tenant, locale, motion = 'full' }: {
         </div>
       </div>
     </header>
-    <CampaignHero tenant={tenant} m={m} eyebrow={m.welcome} title={tenant.displayName} subline={tenant.tagline} ctaHref={menuHref} ctaLabel={m.explore} />
+    <CampaignHero tenant={tenant} m={m} eyebrow={m.welcome} title={campaign?.title ?? tenant.displayName} subline={campaign?.subline ?? tenant.tagline} content={campaign?.hero ? { ...campaign.hero, mode: 'editorial' } : undefined} ctaHref={menuHref} ctaLabel={m.explore} />
     <div className={styles.serviceWrap} data-sf-intro-service="">
       <div className={styles.service}>
         <div className={`${styles.serviceCell} ${stateTone}`}><span className={styles.stateDot} aria-hidden="true" /><span>{stateLabel}</span></div>

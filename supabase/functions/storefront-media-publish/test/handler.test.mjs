@@ -652,18 +652,89 @@ test('F35. TNV-8: a stage answer whose object_key is not exactly <32 hex>/<this 
   }
 });
 
-test('F36. TNV-8: identical bytes already registered for ANOTHER source pass through as source_mismatch with the existing row', async () => {
-  const LOGO_KEY_2 = `${ORG}/${RESTO}/logo/0b5e0000-0000-4000-8000-0000000000a2.png`;
-  const { handle, fake } = await setup();
-  fake.privateObjects.set(`restaurant-logos/${LOGO_KEY_2}`, await fixture('logo_opaque_rgb_1200x600'));
-  assert.equal((await call(handle, post(body()))).status, 200);
-  const r = await call(handle, post(body({ request_id: '0b5e0000-0000-4000-8000-0000000000f7', source_key: LOGO_KEY_2 })));
-  assert.equal(r.status, 200, r.text);
-  assert.equal(r.json.source_mismatch, true);
-  assert.equal(r.json.media.source_key, LOGO_KEY, 'media describes the EXISTING row (identical bytes), not the requested source');
-  assert.equal(r.json.already_published, true);
-  assert.equal(fake.media.size, 1);
-  assert.equal(fake.uploads.created, 1);
+test('F36. identical editorial bytes at another source are refused before public work; exact-source reuse still succeeds', async () => {
+  for (const [slot, variant] of [['logo', 'w480'], ['hero', 'w960']]) {
+    const secondKey = LOGO_KEY.replace('0000000000a1', '0000000000a2');
+    const { handle, fake } = await setup();
+    fake.privateObjects.set(`restaurant-logos/${secondKey}`, await fixture('logo_opaque_rgb_1200x600'));
+    const original = body({ slot, variant });
+    const first = await call(handle, post(original));
+    assert.equal(first.status, 200, first.text);
+    const before = structuredClone([...fake.media.values()]);
+    fake.calls.length = 0;
+    const duplicate = body({ slot, variant, request_id: '0b5e0000-0000-4000-8000-0000000000f7', source_key: secondKey });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const r = await call(handle, post(duplicate));
+      assert.deepEqual([r.status, r.json], [409, { ok: false, status: 'object_conflict' }], slot);
+      assert.equal(storageCallsToPublic(fake), 0, `${slot}: no public read or upload`);
+      assert.equal(finalizeCalls(fake), 0, `${slot}: no finalization or Hero repoint`);
+      assert.deepEqual([...fake.media.values()], before);
+    }
+    const reuse = await call(handle, post({ ...original, request_id: '0b5e0000-0000-4000-8000-0000000000f8' }));
+    assert.equal(reuse.status, 200, reuse.text);
+    assert.equal(reuse.json.media.id, first.json.media.id);
+    assert.equal(reuse.json.source_mismatch, false);
+    assert.equal(reuse.json.already_published, true);
+    assert.equal(fake.media.size, 1);
+    assert.equal(fake.uploads.created, 1);
+  }
+});
+
+test('F36b. cross-source staged, retracted and published-then-retracted associations never reach public Storage or finalize', async () => {
+  for (const state of ['staged', 'retracted', 'published-then-retracted']) {
+    const { handle, fake } = await setup();
+    const original = body({ slot: 'hero', variant: 'w960' });
+    const first = await call(handle, post(original));
+    assert.equal(first.status, 200, first.text);
+    const row = fake.media.get(first.json.media.id);
+    const secondKey = LOGO_KEY.replace('0000000000a1', '0000000000a2');
+    fake.privateObjects.set(`restaurant-logos/${secondKey}`, await fixture('logo_opaque_rgb_1200x600'));
+    if (state === 'staged') row.published_at = null;
+    if (state === 'retracted') row.unpublished_at = 'retracted-before-stage';
+    if (state === 'published-then-retracted') {
+      fake.faults.set('stage_storefront_media', () => {
+        // The stage answer saw a live row, then a concurrent request retracted it.
+        // A guard based only on state === 'published' would finalize this row.
+        row.unpublished_at = 'concurrent-retraction';
+        return jsonResponse(200, {
+          ok: true, media_id: row.id, object_key: row.object_key, state: 'published',
+          source_bucket: row.source_bucket, source_key: row.source_key,
+          variant: row.variant, source_mismatch: true,
+        });
+      });
+    }
+    fake.calls.length = 0;
+    const r = await call(handle, post({ ...original, request_id: '0b5e0000-0000-4000-8000-0000000000f7', source_key: secondKey }));
+    assert.deepEqual([r.status, r.json], [409, { ok: false, status: 'object_conflict' }], state);
+    assert.equal(storageCallsToPublic(fake), 0, state);
+    assert.equal(finalizeCalls(fake), 0, state);
+    assert.equal(row.published_at, state === 'staged' ? null : 't');
+    assert.equal(row.unpublished_at, state === 'staged' ? null : state === 'retracted' ? 'retracted-before-stage' : 'concurrent-retraction');
+    assert.equal(fake.media.size, 1);
+    assert.equal(fake.uploads.created, 1);
+    // Control: this exact source can recover using a fresh logical request.
+    const reuse = await call(handle, post({ ...original, request_id: '0b5e0000-0000-4000-8000-0000000000f8' }));
+    assert.equal(reuse.status, 200, reuse.text);
+    assert.equal(reuse.json.media.id, row.id);
+    assert.equal(reuse.json.source_mismatch, false);
+    assert.equal(row.unpublished_at, null);
+    assert.equal(fake.uploads.created, 1, 'exact-source recovery does not upload twice');
+  }
+});
+
+test('F36c. editorial association requires matching bucket, key, variant and an explicit false mismatch flag', async () => {
+  for (const wrong of [{ source_bucket: 'menu-images' }, { source_key: MENU_KEY }, { variant: 'w960' },
+    { source_mismatch: true }, { source_mismatch: null }, { source_mismatch: undefined }, { source_mismatch: 'false' }]) {
+    const { handle, fake } = await setup();
+    fake.faults.set('stage_storefront_media', { status: 200, body: {
+      ok: true, media_id: 'm-other', object_key: `${'a'.repeat(32)}/${LOGO_W480.hash}.webp`, state: 'published',
+      source_bucket: 'restaurant-logos', source_key: LOGO_KEY, variant: 'w480', source_mismatch: false, ...wrong,
+    } });
+    const r = await call(handle, post(body()));
+    assert.deepEqual([r.status, r.json], [409, { ok: false, status: 'object_conflict' }]);
+    assert.equal(storageCallsToPublic(fake), 0);
+    assert.equal(finalizeCalls(fake), 0);
+  }
 });
 
 test('F37. TNV-8: the download cap is measured in bytes PULLED — a 64 MiB original without a length stops within two chunks past the 2 MiB cap', async () => {

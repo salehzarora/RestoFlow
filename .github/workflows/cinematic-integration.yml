@@ -1,0 +1,243 @@
+name: Cinematic real-service integration
+
+# BIZBOT-STOREFRONT-CINEMATIC-001B. A separate disposable stack; the existing
+# validate/db-tests jobs and their full suites remain unchanged.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cinematic-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cinematic-integration:
+    name: Cinematic · real Auth / Storage / Dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      BOT: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      CINEMATIC_EPHEMERAL: BIZBOT-STOREFRONT-CINEMATIC-001B
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: storefront/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            e2e/package-lock.json
+            storefront/package-lock.json
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.2
+          channel: stable
+          cache: true
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.107.0
+
+      - name: Record the actual PR merge checkout and enforce isolation
+        run: |
+          export CINEMATIC_STATUS_FILE="$RUNNER_TEMP/cinematic-private/status.json"
+          export CINEMATIC_FIXTURE_FILE="$RUNNER_TEMP/cinematic-private/fixtures.json"
+          export CINEMATIC_ARTIFACT_DIR="$RUNNER_TEMP/cinematic-public"
+          echo "CINEMATIC_STATUS_FILE=$CINEMATIC_STATUS_FILE" >> "$GITHUB_ENV"
+          echo "CINEMATIC_FIXTURE_FILE=$CINEMATIC_FIXTURE_FILE" >> "$GITHUB_ENV"
+          echo "CINEMATIC_ARTIFACT_DIR=$CINEMATIC_ARTIFACT_DIR" >> "$GITHUB_ENV"
+          node e2e/cinematic/ci-runtime.mjs prepare
+        env:
+          CINEMATIC_PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          CINEMATIC_PR_BASE: ${{ github.event.pull_request.base.sha }}
+
+      - name: Install only locked dependencies
+        run: |
+          flutter pub get --enforce-lockfile
+          npm ci --prefix e2e
+          npm ci --prefix storefront
+          cd e2e
+          npx --no-install playwright install --with-deps chromium
+
+      - name: Integration harness checks (not real-service evidence)
+        run: |
+          node --test e2e/cinematic/*.test.mjs
+          node --test supabase/tests/support/cinematic_001b_migration_wrapper.test.mjs
+          cd e2e
+          npm run typecheck
+
+      # Retain Auth, REST, Kong, Storage and the Edge runtime. No hosted project
+      # link, environment, access token or provider configuration is introduced.
+      # Startup/status can contain generated LOCAL credentials: keep raw output
+      # private and never upload it or print it on failure.
+      - name: Start the ephemeral full local service stack
+        run: |
+          umask 077
+          supabase start -x analytics,imgproxy,meta,realtime,studio,vector > "$RUNNER_TEMP/cinematic-private/start.log" 2>&1
+          supabase status -o json > "$CINEMATIC_STATUS_FILE"
+          node e2e/cinematic/ci-runtime.mjs status
+
+      - name: Supported runner — late failure rolls back schema and history
+        run: node supabase/tests/support/run_cinematic_001b_migration_atomicity.mjs
+
+      - name: Serve the actual media function with JWT verification enabled
+        run: |
+          umask 077
+          supabase functions serve storefront-media-publish > "$RUNNER_TEMP/cinematic-private/edge.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/cinematic-private/edge.pid"
+          node e2e/cinematic/ci-runtime.mjs edge-ready
+
+      - name: Create synthetic owners and restaurant fixtures
+        id: fixtures
+        run: |
+          umask 077
+          node e2e/cinematic/bootstrap.mjs > "$RUNNER_TEMP/cinematic-private/bootstrap.log" 2>&1
+
+      - name: Build the real Dashboard and live-mode Storefront
+        run: node e2e/cinematic/ci-runtime.mjs build
+
+      - name: Real authenticated Dashboard and Storefront acceptance
+        run: node e2e/cinematic/ci-runtime.mjs acceptance
+
+      - name: Real authenticated cross-restaurant rejection
+        # Keep this independent of a UI assertion failure, but never run without
+        # fixtures or after cancellation. It must not use an administrative token.
+        if: ${{ !cancelled() && steps.fixtures.outcome == 'success' }}
+        run: |
+          test -s "$CINEMATIC_FIXTURE_FILE"
+          node e2e/cinematic/tenant-security.mjs
+
+      - name: Retain sanitized publisher runtime and gateway diagnostics
+        if: ${{ !cancelled() }}
+        run: node e2e/cinematic/ci-runtime.mjs publisher-diagnostics
+
+      - name: Verify the evidence allowlist and absence of credentials
+        id: evidence
+        if: ${{ !cancelled() }}
+        run: node e2e/cinematic/ci-runtime.mjs sanitize
+
+      - name: Upload allowlisted sanitized evidence only
+        if: ${{ !cancelled() && steps.evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cinematic-integration-${{ github.sha }}
+          path: ${{ runner.temp }}/cinematic-public/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Stop only this job's ephemeral stack
+        if: ${{ always() }}
+        run: supabase stop --no-backup > /dev/null 2>&1
+
+  # Execute the existing downstream checks even when the unchanged output gate
+  # is red. This job never turns that failure into success and does not alter
+  # the payment-owned validate workflow, its thresholds or its build filters.
+  cinematic-downstream-guards:
+    name: Cinematic · unchanged output and downstream guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: storefront/.nvmrc
+          cache: npm
+          cache-dependency-path: storefront/package-lock.json
+
+      - name: Record the tested source
+        run: git rev-parse HEAD HEAD^{tree}
+
+      - name: Install locked Storefront dependencies
+        id: dependencies
+        run: npm ci --prefix storefront
+
+      - name: Storefront — server build
+        id: build
+        working-directory: storefront
+        run: npm run build
+
+      - name: Storefront — complete server-render snapshot
+        id: snapshot
+        working-directory: storefront
+        run: node scripts/snapshot-server.mjs
+
+      - name: Storefront — unchanged output budget audit
+        if: ${{ !cancelled() && steps.snapshot.outcome == 'success' }}
+        working-directory: storefront
+        run: node scripts/audit-output.mjs
+
+      - name: Storefront — unchanged output regression tests
+        if: ${{ !cancelled() && steps.snapshot.outcome == 'success' }}
+        working-directory: storefront
+        run: node --test tests/output/output.test.mjs
+
+      - name: Storefront — first-load JS budget
+        if: ${{ !cancelled() && steps.snapshot.outcome == 'success' }}
+        working-directory: storefront
+        run: node scripts/measure-firstload.mjs
+
+      - name: Storefront — three-project filter proof
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        working-directory: storefront
+        run: node scripts/filter-proof.mjs
+
+      - name: Storefront — live build prerenders no tenant or request route
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        working-directory: storefront
+        env:
+          STOREFRONT_SOURCE: live
+          VERCEL: '1'
+          VERCEL_ENV: preview
+        run: |
+          npm run build
+          node -e "const m=require('./.next/prerender-manifest.json');const bad=Object.keys(m.routes||{}).filter((r)=>r.includes('/s/')||r.includes('/r/'));if(bad.length){console.error('prerendered tenant/request routes in a LIVE build:',bad);process.exit(1)}console.log('live build: no tenant or request route prerendered; routes:',Object.keys(m.routes||{}).join(' '))"
+
+      - name: Storefront — provider configuration fails closed
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        working-directory: storefront
+        env:
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set +e
+          npm run build > "$RUNNER_TEMP/provider-missing-source.log" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'a provider-shaped build without STOREFRONT_SOURCE succeeded: it must fail closed'
+            exit 1
+          fi
+          if ! grep -q 'STOREFRONT_SOURCE must be exactly' "$RUNNER_TEMP/provider-missing-source.log"; then
+            echo 'the build failed for another reason:'
+            tail -40 "$RUNNER_TEMP/provider-missing-source.log"
+            exit 1
+          fi
+          echo 'provider-shaped build without STOREFRONT_SOURCE failed closed with the misconfiguration error'
+
+      - name: Storefront — generated files did not mutate tracked sources
+        if: ${{ !cancelled() }}
+        run: git diff --exit-code -- storefront
+
+      - name: Guardrail — no floating-point money
+        if: ${{ !cancelled() }}
+        run: bash tools/check_no_float_money.sh
+
+      - name: Guardrail — secret-leak scan
+        if: ${{ !cancelled() }}
+        run: bash tools/check_secrets.sh
+
+      - name: Guardrail — no hardcoded user-facing app-shell strings
+        if: ${{ !cancelled() }}
+        run: bash tools/check_no_hardcoded_strings.sh

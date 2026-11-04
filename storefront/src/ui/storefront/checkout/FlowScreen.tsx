@@ -38,6 +38,7 @@ export function FlowScreen({
   const tokens = buildTheme(preset, {
     primary: sanitizePrimary(tenant.brand.primary),
     accent: sanitizeAccent(tenant.brand.accent, preset),
+    fontFamily: tenant.brand.fontFamily,
   });
   const state: ServiceState = tenant.service.state;
 

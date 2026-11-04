@@ -4,6 +4,7 @@
 // payload per document, .next/static, public/, 404.html, SNAPSHOT.json).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -146,6 +147,42 @@ const SHIPPED_SLUGS = ['maps-burger'];
 // walk() yields { path, symlink, size } records, not strings.
 const outFiles = () => walk(OUT).map((e) => e.path.replace(/\\/g, '/'));
 const menuDocuments = () => outFiles().filter((f) => f.endsWith('/menu.html'));
+const introDocuments = () => outFiles().filter((f) => /\/s\/[^/]+\.html$/.test(f));
+
+// The approved welcome route owns the editorial Hero. Keep checking its real
+// emitted markup, rather than requiring an extra Hero above the menu carousel.
+function welcomeHeroProblems(html) {
+  const problems = [];
+  const hero = [...html.matchAll(/\sdata-sf-module="hero"/g)];
+  const service = html.indexOf('data-sf-intro-service');
+  if (!html.includes('data-sf-screen="intro"')) problems.push('welcome screen missing');
+  if (hero.length !== 1) problems.push('welcome requires exactly one Hero');
+  if (service < 0 || (hero.length === 1 && hero[0].index >= service)) problems.push('welcome service must follow Hero');
+  return problems;
+}
+
+test('every emitted welcome document retains exactly one Hero before service and links to its menu', () => {
+  const docs = introDocuments();
+  assert.equal(docs.length, 4, 'all four locale welcome documents must be checked');
+  for (const f of docs) {
+    const html = readFileSync(f, 'utf8');
+    assert.deepEqual(welcomeHeroProblems(html), [], f);
+    // Arabic is the canonical unprefixed locale; /ar is a supported alias.
+    const route = path.relative(OUT, f).replace(/\\/g, '/').replace(/\.html$/, '').replace(/^ar\//, '');
+    assert.ok(html.includes(`href="/${route}/menu"`), `${f}: welcome CTA must reach its menu`);
+  }
+});
+
+test('NEGATIVE CONTROL: missing, duplicated or misplaced welcome Hero cannot pass', () => {
+  const docs = introDocuments();
+  assert.equal(docs.length, 4);
+  const html = readFileSync(docs[0], 'utf8');
+  assert.deepEqual(welcomeHeroProblems(html), []);
+  assert.ok(welcomeHeroProblems(html.replace('data-sf-module="hero"', 'data-missing-hero=""')).length > 0);
+  assert.ok(welcomeHeroProblems(`${html}<section data-sf-module="hero"></section>`).length > 0);
+  assert.ok(welcomeHeroProblems(`<div data-sf-intro-service></div>${html.replace('data-sf-intro-service', 'data-moved-service')}`).length > 0);
+  assert.ok(welcomeHeroProblems(html.replace('data-sf-screen="intro"', 'data-sf-screen="home"')).length > 0);
+});
 
 test('the shipped export emits exactly the allowlisted storefront slugs', () => {
   const slugs = new Set();
@@ -167,9 +204,10 @@ test('every emitted menu document renders the locked module order', () => {
   for (const f of docs) {
     const observed = renderedModuleOrder(readFileSync(f, 'utf8'));
     const problems = checkModuleOrder(observed, {
-      mandatory: ['compact', 'hero', 'service', 'categories', 'sections', 'footer'],
+      mandatory: ['compact', 'service', 'categories', 'sections', 'footer'],
     });
     assert.deepEqual(problems, [], `${f}: ${problems.join('; ')}`);
+    assert.ok(!observed.includes('hero'), `${f}: the canonical editorial Hero belongs to the welcome route`);
   }
 });
 
@@ -199,7 +237,11 @@ test('every module named in the locked order actually renders somewhere', () => 
   // Guards against an anchor being deleted from markup: the source-order test
   // would still pass with a module gone if nothing checked the export.
   const seen = new Set();
-  for (const f of menuDocuments()) {
+  const menus = menuDocuments();
+  const intros = introDocuments();
+  assert.equal(menus.length, 4);
+  assert.equal(intros.length, 4);
+  for (const f of [...intros, ...menus]) {
     for (const name of renderedModuleOrder(readFileSync(f, 'utf8'))) seen.add(name);
   }
   // announce/promo/popular/story are module toggles and notice is state-driven;
@@ -449,9 +491,37 @@ test('font preloads per route: at most 2 files and at most 120,000 B (the writte
 
 test('the preloaded subsets are the right ones per root: Latin everywhere, Arabic on ar / en / root, Hebrew on he (src/fonts/README.md)', () => {
   for (const r of measured().filter((x) => /\/s\/|\/r\//.test(x.route))) {
-    const names = r.fontPreloads.files.map((f) => f.url.replace(/.*rubik_/, '').replace(/_var.*/, '')).sort();
+    const names = r.fontPreloads.files.map((f) => f.url.replace(/.*rubik[-_]/, '').replace(/[-_]var.*/, '')).sort();
     const expected = r.route.startsWith('/he/') ? ['hebrew', 'latin'] : ['arabic', 'latin'];
     assert.deepEqual(names, expected, r.route);
+  }
+});
+
+test('each complete Rubik subset is emitted once and CSS uses the same fingerprinted file as preloads', () => {
+  const expected = {
+    latin: '691cd1d9b4c0cdf31a1dcf04259c86f92c85e69f6622abab7964d81e36890691',
+    arabic: 'f5052e4870bf211fc22df5b85e791a292a77b9baef8cef1dc5a8e62a783ea1e0',
+    hebrew: '197b6dbe5c6bec7276c59b02d70a16ee6acd44322fc2f8d0226c07f8d57976c2',
+  };
+  const files = walk(path.join(OUT, '_next/static'));
+  const css = files.filter((f) => f.path.endsWith('.css')).map((f) => readFileSync(f.path, 'utf8')).join('\n');
+  const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+  for (const [script, digest] of Object.entries(expected)) {
+    assert.equal(sha(readFileSync(path.join(ROOT, 'src/fonts', `rubik-${script}-var.woff2`))), digest, `${script}: preserve the approved glyph bytes`);
+    const emitted = files.filter((f) => f.path.endsWith('.woff2') && sha(readFileSync(f.path)) === digest);
+    assert.equal(emitted.length, 1, `${script}: do not emit separate eager/on-demand copies`);
+    const filename = path.basename(emitted[0].path);
+    assert.match(filename, new RegExp(`^rubik-${script}-var\\.[A-Za-z0-9_-]+\\.woff2$`));
+    assert.ok(css.includes(filename), `${script}: font face must use the shared emitted file`);
+    for (const row of measured()) {
+      for (const font of row.fontPreloads.files.filter((f) => f.url.includes(`rubik-${script}-var.`))) {
+        assert.ok(font.url.endsWith(`/${filename}`), `${row.route}: preload must match the face URL`);
+      }
+    }
+  }
+  const notFound = readFileSync(path.join(OUT, '404.html'), 'utf8');
+  for (const tag of notFound.matchAll(/<link\b[^>]*as="font"[^>]*>/g)) {
+    assert.match(tag[0], /rubik-latin-var\./, '404 must not preload the on-demand Arabic/Hebrew faces');
   }
 });
 
@@ -460,7 +530,7 @@ test('CSS per route: at most 14,000 B Brotli (the written limit)', () => {
   assert.deepEqual(problems, []);
 });
 
-test('CSS per route raw (CSS-UI001-01): the original 70,000 B limit is recorded with its compliance; the approved 100,000 B ceiling applies to exactly the listed routes; Brotli 14,000 B unchanged; the aggregate is marked WITH_APPROVED_EXCEPTIONS', () => {
+test('CSS per route raw: every current route passes the original 70,000 B limit without the historical CSS-UI001-01 exception; Brotli 14,000 B unchanged', () => {
   const rows = measured();
   const problems = checkBudgets(rows).filter((p) => /CSS .* uncompressed/.test(p));
   assert.deepEqual(problems, [], 'no route is over the raw ceiling in force for it');
@@ -490,16 +560,12 @@ test('CSS per route raw (CSS-UI001-01): the original 70,000 B limit is recorded 
       assert.ok(row.measured_raw_bytes <= BUDGETS.cssPerRouteBytes, `${row.route}: unlisted route within 70,000 B`);
     }
   }
-  // The exception list is bound to the measurement, not inferred from a
-  // failure count: it names exactly the canonical routes measured over the
-  // original limit - neither a route that does not need it (narrow the list
-  // when a route drops under 70,000 B; the exception is temporary) nor one
-  // that is not a measured canonical route. The locale-root placeholders are
-  // not listed.
-  assert.deepEqual([...CSS_RAW_EXCEPTION.routes].sort(), over.sort(),
-    'CSS-UI001-01 lists exactly the routes measured over the original limit');
+  // CSS-UI001-01 remains the unchanged record of the previous build's
+  // exceptions. The route-scoped build must now satisfy the original limit
+  // on every route, without relying on that historical exception.
+  assert.deepEqual(over, [], 'every current route is within the original 70,000 B limit');
   for (const r of ['/', '/ar', '/en', '/he']) assert.ok(!CSS_RAW_EXCEPTION.routes.includes(r), `${r} is not excepted`);
-  const expectedStatus = over.length ? 'PASS_WITH_APPROVED_EXCEPTIONS' : 'PASS';
+  const expectedStatus = 'PASS';
   assert.equal(acc.status, expectedStatus);
   assert.deepEqual(acc.originalFailuresRetained.sort(), over.sort());
   // The audit carries the same aggregate, visibly.

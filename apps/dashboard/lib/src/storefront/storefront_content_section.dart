@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'storefront_background_upload.dart';
 import 'storefront_content_models.dart';
 import 'storefront_content_repository.dart';
 import 'storefront_content_unicode.dart' as unicode;
@@ -45,6 +46,7 @@ class StorefrontContentSection extends StatefulWidget {
     required this.onBusyChanged,
     this.enabled = true,
     this.publisher,
+    this.backgroundUpload,
     this.sources,
     this.reloadSources,
     this.publicUrlFor,
@@ -58,6 +60,7 @@ class StorefrontContentSection extends StatefulWidget {
   final ValueChanged<bool> onDraftChanged, onBusyChanged;
   final bool enabled;
   final StorefrontMediaPublisher? publisher;
+  final StorefrontBackgroundUpload? backgroundUpload;
   final StorefrontSourceOptions? sources;
   final Future<StorefrontSourceOptions> Function()? reloadSources;
   final Uri Function(String)? publicUrlFor;
@@ -75,13 +78,24 @@ class _ContentState extends State<StorefrontContentSection> {
   final _headline = TextEditingController(),
       _selection = TextEditingController();
   bool _busy = false, _dirty = false, _stale = false;
+  bool _uploadingBackground = false;
   int _generation = 0;
   int _bindingGeneration = 0;
   bool _ownsRefresh = false, _bindingHold = false, _branchHold = false;
   String? _message, _sourceId, _invalidField;
-  ({StorefrontMediaSource source, String requestId, String branchId})?
+  ({
+    StorefrontMediaSource source,
+    String requestId,
+    String branchId,
+    bool background,
+  })?
   _pendingPublish;
-  ({StorefrontMediaSource source, String requestId, String branchId})?
+  ({
+    StorefrontMediaSource source,
+    String requestId,
+    String branchId,
+    String? backgroundMediaId,
+  })?
   _confirmedPublish;
   String c(String key) =>
       storefrontContentCopy(AppLocalizations.of(context), key);
@@ -118,7 +132,10 @@ class _ContentState extends State<StorefrontContentSection> {
     if (!identical(old.repository, widget.repository) ||
         !identical(old.catalog, widget.catalog) ||
         !identical(old.publisher, widget.publisher) ||
+        !identical(old.backgroundUpload, widget.backgroundUpload) ||
         old.savedBranchId != widget.savedBranchId) {
+      final abandonedUpload = _uploadingBackground;
+      _uploadingBackground = false;
       _bindingGeneration++;
       _generation++;
       _ownsRefresh = false;
@@ -144,6 +161,12 @@ class _ContentState extends State<StorefrontContentSection> {
         });
       } else {
         _load();
+        if (abandonedUpload) {
+          final binding = _bindingGeneration;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_current(binding)) widget.onBusyChanged(false);
+          });
+        }
       }
       return;
     }
@@ -273,6 +296,8 @@ class _ContentState extends State<StorefrontContentSection> {
   Future<void> _refreshConfirmed(int binding) async {
     final refresh = widget.onRefresh;
     final published = _confirmedPublish != null;
+    final backgroundMediaId = _confirmedPublish?.backgroundMediaId;
+    final publishedSource = _confirmedPublish?.source;
     _ownsRefresh = true;
     StorefrontContentRefresh parent;
     try {
@@ -297,14 +322,38 @@ class _ContentState extends State<StorefrontContentSection> {
         owned: true,
       );
     if (!_current(binding)) return;
+    if (verified && backgroundMediaId != null) {
+      verified = _media!.rows.any(
+        (row) =>
+            row.media.id == backgroundMediaId &&
+            row.media.isLive &&
+            row.media.variant == StorefrontVariant.w960 &&
+            row.media.sourceBucket == publishedSource!.bucket &&
+            row.media.sourceKey == publishedSource.key,
+      );
+    }
     _ownsRefresh = false;
     setState(() {
       _busy = false;
       _stale = !verified;
       if (verified) {
+        if (backgroundMediaId != null) {
+          _draft!['appearance'] ??= <String, dynamic>{
+            for (final key in storefrontAppearanceKeys) key: null,
+          };
+          _put('appearance.menu_background_media_id', backgroundMediaId);
+          _notifyDraft(true);
+          // Refresh happened before this unsaved selection. Rebuild the picker
+          // with its new initial value without changing any saved profile slot.
+          _generation++;
+        }
         _confirmedSave = null;
         _confirmedPublish = null;
-        _message = published ? 'published' : 'saved';
+        _message = backgroundMediaId != null
+            ? 'menuBackgroundSelected'
+            : published
+            ? 'published'
+            : 'saved';
       } else {
         _message = published ? 'publishedReadFailed' : 'savedReadFailed';
       }
@@ -403,6 +452,153 @@ class _ContentState extends State<StorefrontContentSection> {
       onChanged: (text) => _change(path, text),
     ),
   );
+
+  Widget _appearanceColor(String field, String label) {
+    final appearance = _draft?['appearance'] as Map?;
+    final value = appearance?[field] as String? ?? '';
+    final valid =
+        value.isEmpty ||
+        (value.length == 7 && storefrontAppearanceHex.hasMatch(value));
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: TextFormField(
+        key: ValueKey('content-appearance.$field-$_generation'),
+        initialValue: value,
+        enabled: _editable,
+        textDirection: TextDirection.ltr,
+        autocorrect: false,
+        decoration: InputDecoration(
+          labelText: c(label),
+          helperText: c('appearanceHexHelp'),
+          errorText: valid ? null : c('appearanceHexInvalid'),
+          prefixIcon: value.isNotEmpty && valid
+              ? Icon(
+                  Icons.circle,
+                  color: Color(int.parse('ff${value.substring(1)}', radix: 16)),
+                )
+              : const Icon(Icons.palette_outlined),
+        ),
+        onChanged: (text) =>
+            _changeAppearance(field, text.isEmpty ? null : text),
+      ),
+    );
+  }
+
+  Widget _appearanceFont() {
+    final appearance = _draft?['appearance'] as Map?;
+    final font = appearance?['font_family'] as String?;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: DropdownButtonFormField<String>(
+        key: ValueKey('content-appearance.font_family-$_generation'),
+        initialValue: font ?? '',
+        isExpanded: true,
+        decoration: InputDecoration(labelText: c('appearanceFont')),
+        items: [
+          DropdownMenuItem(value: '', child: Text(c('appearanceFontDefault'))),
+          for (final value in storefrontFontFamilies)
+            DropdownMenuItem(value: value, child: Text(c('font_$value'))),
+        ],
+        onChanged: _editable
+            ? (value) =>
+                  _changeAppearance('font_family', value == '' ? null : value)
+            : null,
+      ),
+    );
+  }
+
+  void _changeAppearance(String field, Object? value) {
+    if (!mounted || !_editable) return;
+    _draft!['appearance'] ??= <String, dynamic>{
+      for (final key in storefrontAppearanceKeys) key: null,
+    };
+    _change('appearance.$field', value);
+  }
+
+  Widget _menuBackground() {
+    final appearance = _draft?['appearance'] as Map?;
+    final mediaId = appearance?['menu_background_media_id'] as String?;
+    final dim = appearance?['menu_background_dim'] as int?;
+    final media = (_media?.rows ?? <StorefrontContentMediaRow>[])
+        .where((row) => row.media.id == mediaId && row.media.isLive)
+        .firstOrNull;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _title('menu_background'),
+        Text(c('menuBackgroundHelp')),
+        if (widget.backgroundUpload?.supported == true &&
+            widget.publisher != null)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              key: const Key('content-menu-background-upload'),
+              onPressed: _editable && !_dirty ? _uploadMenuBackground : null,
+              icon: const Icon(Icons.upload_outlined),
+              label: Text(c('menuBackgroundUpload')),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: DropdownButtonFormField<String>(
+            key: ValueKey(
+              'content-appearance.menu_background_media_id-$_generation',
+            ),
+            initialValue: mediaId == null
+                ? ''
+                : (media != null ? mediaId : null),
+            isExpanded: true,
+            decoration: InputDecoration(labelText: c('menuBackgroundImage')),
+            items: [
+              DropdownMenuItem(
+                value: '',
+                child: Text(c('menuBackgroundInherit')),
+              ),
+              ..._mediaOptions(),
+            ],
+            onChanged: _editable
+                ? (value) => _changeAppearance(
+                    'menu_background_media_id',
+                    value == '' ? null : value,
+                  )
+                : null,
+          ),
+        ),
+        if (media != null && widget.publicUrlFor != null)
+          Image.network(
+            widget.publicUrlFor!(media.media.objectKey).toString(),
+            height: 100,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
+        Text(c('menuBackgroundDim').replaceAll('{percent}', '${dim ?? 15}')),
+        Slider(
+          key: const Key('content-appearance.menu_background_dim'),
+          value: (dim ?? 15).toDouble(),
+          min: 0,
+          max: 80,
+          divisions: 80,
+          label: '${dim ?? 15}%',
+          onChanged: _editable && media != null
+              ? (value) =>
+                    _changeAppearance('menu_background_dim', value.round())
+              : null,
+        ),
+        Text(c('menuBackgroundDimHelp')),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton(
+            key: const Key('content-menu-background-dim-reset'),
+            onPressed: _editable && dim != null
+                ? () => _changeAppearance('menu_background_dim', null)
+                : null,
+            child: Text(c('menuBackgroundDimDefault')),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _select(
     String path,
     String label,
@@ -617,7 +813,7 @@ class _ContentState extends State<StorefrontContentSection> {
       ),
     ],
   );
-  Widget _mediaPicker(String path) => _select(path, 'media', [
+  List<DropdownMenuItem<String>> _mediaOptions() => [
     for (final row in _media?.rows ?? <StorefrontContentMediaRow>[])
       if (row.media.isLive)
         DropdownMenuItem(
@@ -626,7 +822,8 @@ class _ContentState extends State<StorefrontContentSection> {
             '${row.media.width}×${row.media.height} · ${row.media.id.substring(0, 8)}',
           ),
         ),
-  ]);
+  ];
+  Widget _mediaPicker(String path) => _select(path, 'media', _mediaOptions());
   Widget _module(String kind) {
     final value = _get(kind) as Map?;
     final promo = kind == 'promo';
@@ -971,6 +1168,7 @@ class _ContentState extends State<StorefrontContentSection> {
     'story' => 'story',
     'category_presentation' => 'categoryPresentation',
     'item_presentation' => 'itemPresentation',
+    'appearance' => 'appearance',
     _ => null,
   };
 
@@ -990,7 +1188,30 @@ class _ContentState extends State<StorefrontContentSection> {
         source: StorefrontMediaSource.menuImage(image.imageKey),
       ),
   ];
-  Future<void> _publish({bool replay = false}) async {
+  Future<void> _uploadMenuBackground() async {
+    final upload = widget.backgroundUpload;
+    if (!_editable || _dirty || upload == null || widget.publisher == null)
+      return;
+    final binding = _bindingGeneration;
+    _uploadingBackground = true;
+    _setBusy(true);
+    StorefrontMediaSource? source;
+    try {
+      source = await upload.pickAndUpload(isCurrent: () => _current(binding));
+    } catch (_) {
+      if (_current(binding))
+        setState(() => _message = 'menuBackgroundUploadFailed');
+    }
+    if (!_current(binding)) return;
+    _uploadingBackground = false;
+    _setBusy(false);
+    if (source != null) await _publish(uploadedBackground: source);
+  }
+
+  Future<void> _publish({
+    bool replay = false,
+    StorefrontMediaSource? uploadedBackground,
+  }) async {
     if (!mounted ||
         _busy ||
         (!replay && (!_editable || _dirty)) ||
@@ -1001,24 +1222,30 @@ class _ContentState extends State<StorefrontContentSection> {
     final publisher = widget.publisher;
     final reloadSources = widget.reloadSources;
     final branch = widget.savedBranchId;
+    final background =
+        uploadedBackground != null || (replay && _pendingPublish!.background);
     if (publisher == null) return;
     final initial = _sources(
       widget.sources,
     ).where((source) => source.id == _sourceId).firstOrNull;
-    if (!replay && initial == null) return;
-    if (!replay && !await _confirm('publishConfirm')) return;
+    if (!replay && !background && initial == null) return;
+    if (!replay && !background && !await _confirm('publishConfirm')) return;
     if (!_current(binding)) return;
     if (!replay && (!_editable || _dirty)) return;
     _setBusy(true);
-    final source = _pendingPublish?.source ?? initial!.source;
+    final source =
+        _pendingPublish?.source ?? uploadedBackground ?? initial!.source;
     StorefrontSourceOptions? fresh;
-    try {
-      fresh = await reloadSources?.call();
-    } catch (_) {
-      fresh = null;
+    if (!background) {
+      try {
+        fresh = await reloadSources?.call();
+      } catch (_) {
+        fresh = null;
+      }
     }
     if (!_current(binding)) return;
     if (!replay &&
+        !background &&
         (fresh == null ||
             !_sources(fresh).any(
               (entry) =>
@@ -1037,7 +1264,12 @@ class _ContentState extends State<StorefrontContentSection> {
           source.key,
         ], DateTime.now().microsecondsSinceEpoch);
     StorefrontPublishResult result;
-    _pendingPublish = (source: source, requestId: requestId, branchId: branch);
+    _pendingPublish = (
+      source: source,
+      requestId: requestId,
+      branchId: branch,
+      background: background,
+    );
     try {
       result = await publisher.publish(
         slot: StorefrontEditorialTarget.editorial,
@@ -1052,6 +1284,17 @@ class _ContentState extends State<StorefrontContentSection> {
       );
     }
     if (!_current(binding)) return;
+    if (result.isPublished &&
+        background &&
+        (result.media == null ||
+            result.media!.variant != StorefrontVariant.w960 ||
+            result.media!.sourceBucket != source.bucket ||
+            result.media!.sourceKey != source.key)) {
+      _pendingPublish = null;
+      setState(() => _message = 'mediaUnavailable');
+      _setBusy(false);
+      return;
+    }
     if (result.isPublished) {
       // No slot/profile write here. The owner selects a content media reference
       // and saves the whole document through the same global profile CAS.
@@ -1060,6 +1303,7 @@ class _ContentState extends State<StorefrontContentSection> {
         source: source,
         requestId: requestId,
         branchId: branch,
+        backgroundMediaId: background ? result.media!.id : null,
       );
       await _refreshConfirmed(binding);
     } else if (result.status == StorefrontPublishStatus.uncertain) {
@@ -1068,6 +1312,7 @@ class _ContentState extends State<StorefrontContentSection> {
           source: source,
           requestId: requestId,
           branchId: branch,
+          background: background,
         );
         _busy = false;
         _message = 'publishUncertain';
@@ -1127,6 +1372,7 @@ class _ContentState extends State<StorefrontContentSection> {
         ),
         if (_pendingPublish != null)
           TextButton(
+            key: const Key('content-retry-publish'),
             onPressed: _busy || _bindingHold
                 ? null
                 : () => _publish(replay: true),
@@ -1174,6 +1420,12 @@ class _ContentState extends State<StorefrontContentSection> {
           for (final warning in _read!.snapshot!.warnings)
             Text(_warningText(warning)),
           if (!widget.enabled) Text(c('otherEdits')),
+          _title('appearance'),
+          Text(c('appearanceHelp')),
+          _appearanceColor('text_color', 'appearanceTextColor'),
+          _appearanceColor('button_text_color', 'appearanceButtonTextColor'),
+          _appearanceFont(),
+          _menuBackground(),
           TextField(
             key: const Key('content-hero-headline'),
             controller: _headline,

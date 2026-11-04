@@ -2,7 +2,7 @@
 
 This extends the Edge Function contract in [API_CONTRACT.md §4.44](../../../docs/API_CONTRACT.md#444-edge-function-storefront-media-publish-storefront-publish-001-proposed-decision-d-040).
 It does not change the pinned `storefront-media-c4` recipe, codec pins, quality
-ladder, byte limits, caller authentication, CORS, or logo/hero request behavior.
+ladder, byte limits, caller authentication, CORS, or logo/hero request shape.
 
 ## Item request
 
@@ -36,8 +36,17 @@ may have distinct media IDs sharing the same immutable content-addressed public
 object, including bytes already used by a logo/hero. The function refuses an
 item stage answer unless source bucket, key, and variant exactly match the
 request and `source_mismatch` is false. Finalize must confirm that same media ID,
-object key, and published state. Legacy logo/hero source-mismatch behavior is
-unchanged; item publication never substitutes an existing logo/hero association.
+object key, and published state. Item publication never substitutes an existing
+logo/hero association.
+
+BIZBOT-STOREFRONT-CINEMATIC-001B also requires that exact source association for
+logo/hero requests, before any public Storage operation or finalize, regardless
+of the returned state. A legacy cross-source dedup answer returns the existing
+`409 object_conflict`. Finalizing another source's row could republish it and
+repoint its Hero, including when a live stage answer races with retraction.
+Existing eligible media remains selectable through the Dashboard picker instead
+of republishing identical bytes from another private key. Same-source recovery
+and item error semantics remain unchanged.
 
 ## Outcomes and recovery
 
@@ -53,7 +62,7 @@ unchanged; item publication never substitutes an existing logo/hero association.
 - A refreshed generation changes the stage fingerprint. Reusing an already
   claimed request ID with that generation returns `409 restart_required` under
   the existing idempotency contract; use a new request ID from rung zero.
-- Malformed or mismatched upstream success envelopes fail closed with
+- Malformed or mismatched item success envelopes fail closed with
   `500 internal_error`; `uncertain` is false before stage and true after stage.
 
 All existing uncertain-outcome retries, derived stage/finalize IDs, ladder
@@ -69,5 +78,7 @@ cross-scope keys. `test/handler.test.mjs` F39–F50 cover the item path, authori
 snapshot origin/shape, lost-response recovery, source removal/replacement,
 overwrite races, identical-byte association sharing, response identity, caps,
 and new-generation restarts. Existing logo/hero, recipe, engine, license, and
-static-guard suites remain regression checks. The service double is not a
-database isolation proof; the migration's pgTAP tests verify those invariants.
+static-guard suites remain regression checks. F36–F36c cover editorial duplicate
+refusal in every state, a retraction race, and exact-source recovery. The service
+double is not a database isolation proof; the migration's pgTAP tests verify
+those invariants.

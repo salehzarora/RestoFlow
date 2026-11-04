@@ -240,13 +240,16 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
           || typeof staged.source_bucket !== 'string' || typeof staged.source_key !== 'string' || typeof staged.variant !== 'string') {
         return fail(500, 'internal_error', { retryable: true, uncertain: true });
       }
-      // Item publication needs its own source association even when another item or
-      // profile slot already owns identical public bytes. Never report that other
-      // association as this item's publication (or finalize its logo/hero row).
-      if (r.slot === 'item' && (staged.source_bucket !== r.sourceBucket
+      // Identical bytes can belong to another source association. Finalizing that
+      // row can republish/repoint its original Hero, including when a published
+      // stage response races with retraction. Require our exact association for
+      // every slot and state BEFORE any public Storage operation or finalize.
+      if (staged.source_bucket !== r.sourceBucket
           || staged.source_key !== r.sourceKey || staged.variant !== r.variant
-          || staged.source_mismatch !== false)) {
-        return fail(500, 'internal_error', { retryable: true, uncertain: true });
+          || staged.source_mismatch !== false) {
+        return r.slot === 'item'
+          ? fail(500, 'internal_error', { retryable: true, uncertain: true })
+          : fail(409, 'object_conflict');
       }
 
       // (8) the derivative into the PUBLIC bucket, as the caller, never overwriting. Done for
@@ -324,10 +327,10 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
         republished: fin.republished === true,
         replaced_media_id: typeof fin.replaced_media_id === 'string' ? fin.replaced_media_id : null,
         profile_version: Number.isInteger(fin.profile_version) ? fin.profile_version : null,
-        // true when the bytes were already registered for ANOTHER source / variant: `media`
-        // then describes that existing row (identical bytes), not the requested source.
-        // Item requests require an exact association above and cannot take this path.
-        source_mismatch: staged.source_mismatch === true,
+        // Retain the response field; all successful publications now prove the
+        // requested association above. Existing eligible media can be selected
+        // through the picker instead of republishing another source's bytes.
+        source_mismatch: false,
         media: {
           id: staged.media_id, object_key: objectKey, content_hash: d.sha256,
           width: d.width, height: d.height, bytes: d.byteLength,

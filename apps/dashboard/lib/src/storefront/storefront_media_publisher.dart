@@ -336,7 +336,9 @@ class StorefrontMediaPublisher {
         calls++;
         step = _classify(reply, rung);
         // A product may only claim publication of its exact current source.
-        // Logo/hero retain their existing cross-source deduplication contract.
+        // Editorial decoding still tolerates historical dedup responses. The
+        // updated server rejects cross-source associations before finalization;
+        // background selection also verifies the exact uploaded source.
         final media = step.media;
         if (slot == StorefrontItemTarget.item &&
             media != null &&

@@ -1,9 +1,11 @@
-// Approved Oct22 design module order; historical module-order evidence remains in Git.
+// Approved cinematic design module order; historical order evidence remains in Git.
 //
 // SOURCE OF TRUTH for the eight named modules:
 //   BIZBOT_STOREFRONT_DESIGN_HANDOFF/OPEN_QUESTIONS.md:23 - "This release ships
 //   historical fixed order, superseded for covered surfaces by the Oct22 approval:
 //   header -> hero -> announcement -> menu -> optional content -> footer.
+// BIZBOT-STOREFRONT-CINEMATIC-001 consolidates service information inside the
+// footer after optional content. Its marker follows the enclosing footer marker.
 // 'compact', 'notice' and 'footer' are NOT named by the handoff. Their
 // positions are this implementation's and are pinned here so they cannot drift.
 //
@@ -14,7 +16,7 @@
 // Everything below anchors to real markup and demands EXACTLY ONE occurrence.
 export const LOCKED_MODULE_ORDER = Object.freeze([
   'compact', 'hero', 'announce', 'notice',
-  'categories', 'sections', 'service', 'promo', 'story', 'footer',
+  'categories', 'sections', 'promo', 'story', 'footer', 'service',
 ]);
 
 /** Comments removed: these rules are about CODE and MARKUP, not prose. */
@@ -87,7 +89,6 @@ export const CHROME_ANCHORS = Object.freeze([
   ['categories', 'data-sf-module="categories"'],
   ['results', 'data-sf-module="sections"'],
   ['category', '<MenuSection'],
-  ['service', '{service}'],
 ]);
 
 export const PAGE_ANCHORS = Object.freeze([
@@ -95,4 +96,10 @@ export const PAGE_ANCHORS = Object.freeze([
   ['promo', '<PromoBanner'],
   ['story', '<StoryCard'],
   ['footer', '<SiteFooter'],
+]);
+
+export const FOOTER_ANCHORS = Object.freeze([
+  ['footer', 'data-sf-module="footer"'],
+  ['service', '<ServiceStatusStrip'],
+  ['brand', '<BrandLockup'],
 ]);

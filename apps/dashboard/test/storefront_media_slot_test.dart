@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_copy.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_publisher.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_repository.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_slot.dart';
@@ -1250,7 +1251,9 @@ void main() {
     await _confirm(tester, 'storefront-media-retract-confirm-$_mediaOld');
     expect(
       _message(tester, 'logo'),
-      l10n.storefrontMediaInUseError(l10n.storefrontSlotHeroTitle),
+      l10n.storefrontMediaInUseError(
+        storefrontContentCopy(l10n, 'backgroundImage'),
+      ),
     );
   });
 

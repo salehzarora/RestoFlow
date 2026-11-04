@@ -1,6 +1,6 @@
-/** v4 is a separate strict wire boundary. Server drift normalization is NOT
+/** v4 and v5 are separate strict wire boundaries. Server drift normalization is NOT
  * decoder repair. No network, environment, v3 endpoint retry or fixture path. */
-import type { HeroFormat, ImageFit, CardLayout } from '../types';
+import type { HeroFormat, ImageFit, CardLayout, FontFamily } from '../types';
 import { contentTextValid, heroFormatValid } from '../../content/unicode';
 import { EnvelopeError, type StorefrontMenuFailure } from './decode';
 import { decodeStorefrontMenuV3, type StorefrontMenuV3Ok } from './decodeFeaturedItems';
@@ -10,8 +10,16 @@ export interface WireCategoryPresentation {
   readonly image_url:string|null; readonly image_fit:ImageFit|null; readonly card_layout:CardLayout|null;
 }
 export interface WireItemPresentation { readonly item_id:string; readonly image_fit:ImageFit|null; readonly card_layout:CardLayout|null; }
+export interface WireAppearance {
+  readonly text_color:string|null; readonly button_text_color:string|null;
+  readonly font_family?:FontFamily|null;
+  readonly menu_background_url?:string|null;
+  readonly menu_background_dim?:number|null;
+}
 export interface WireContentV1 {
   readonly schema:1;
+  /** Only menu v5 exposes these fields; v4 rejects them. */
+  readonly appearance?:WireAppearance;
   readonly hero:{ readonly mode:'editorial'|'item';readonly item_id:string|null;readonly format:HeroFormat|null;readonly eyebrow:string|null;readonly stamp:string|null;readonly footnote:string|null; };
   readonly announcement_segments:readonly string[]|null;
   readonly promo:null|{readonly kind:'category';readonly category_id:string;readonly kicker:string;readonly title:string;readonly body:string;readonly image_url:string}|{readonly kind:'item';readonly item_id:string;readonly kicker:string;readonly title:string;readonly body:string};
@@ -38,6 +46,17 @@ function fit(v:unknown,field:string):ImageFit|null{return v===null?null:choice<I
 function layout(v:unknown,field:string):CardLayout|null{return v===null?null:choice<CardLayout>(v,['standard','cutout'],field);}
 function image(v:unknown,field:string,nullable=false):string|null{if(v===null&&nullable)return null;if(typeof v!=='string'||!MEDIA.test(v))return reject(field);return v;}
 function integer(v:unknown,field:string):number{if(typeof v!=='number'||!Number.isSafeInteger(v))return reject(field);return v;}
+function colour(v:unknown,field:string):string|null{
+  if(v===null)return null;
+  if(typeof v!=='string'||v.length!==7||!/^#[0-9a-fA-F]{6}$/.test(v))return reject(field);
+  return v.toLowerCase();
+}
+function dim(v:unknown,field:string):number|null{
+  if(v===null)return null;
+  const value=integer(v,field);
+  if(value<0||value>80)return reject(field);
+  return value;
+}
 function array(v:unknown,max:number,field:string):unknown[]{if(!Array.isArray(v)||v.length>max)return reject(field);return v;}
 function format(v:unknown,headline:string|null):HeroFormat|null{
   if(v===null)return null;const o=record(v,['text','highlight','break_before'],'hero.format');
@@ -48,7 +67,15 @@ function format(v:unknown,headline:string|null):HeroFormat|null{
   if((highlight===null&&b===null)||!heroFormatValid(o.text,highlight?.start??null,highlight?.end??null,b))return reject('hero.format');
   return {text:o.text,highlight,break_before:b};
 }
+export type StorefrontMenuV5Ok = StorefrontMenuV4Ok;
+export type StorefrontMenuV5Envelope = StorefrontMenuV5Ok|StorefrontMenuFailure;
 export function decodeStorefrontMenuV4(raw:unknown):StorefrontMenuV4Envelope{
+  return decodeContent(raw,false);
+}
+export function decodeStorefrontMenuV5(raw:unknown):StorefrontMenuV5Envelope{
+  return decodeContent(raw,true);
+}
+function decodeContent(raw:unknown,allowAppearance:boolean):StorefrontMenuV5Envelope{
   if(typeof raw!=='object'||raw===null||Array.isArray(raw))return reject('envelope');
   const e=raw as Record<string,unknown>;
   if(e.ok===false)return decodeStorefrontMenuV3(e) as StorefrontMenuFailure;
@@ -62,7 +89,21 @@ export function decodeStorefrontMenuV4(raw:unknown):StorefrontMenuV4Envelope{
   if(itemMap.size!==base.items.length||categoryMap.size!==base.categories.length)return reject('base identities');
   const servedItems=new Set(base.items.filter(i=>categoryMap.has(i.category_id)).map(i=>i.id));
   const populated=new Set(base.items.filter(i=>servedItems.has(i.id)).map(i=>i.category_id));
-  const o=record(content,['schema','hero','announcement_segments','promo','story','category_presentation','item_presentation'],'object');if(o.schema!==1)return reject('schema');
+  const contentKeys=['schema','hero','announcement_segments','promo','story','category_presentation','item_presentation'];
+  if(allowAppearance&&typeof content==='object'&&content!==null&&Object.hasOwn(content,'appearance'))contentKeys.push('appearance');
+  const o=record(content,contentKeys,'object');if(o.schema!==1)return reject('schema');
+  let appearance:WireAppearance|undefined;
+  if(Object.hasOwn(o,'appearance')){
+    const keys=['text_color','button_text_color'];
+    for(const key of ['font_family','menu_background_url','menu_background_dim']){
+      if(typeof o.appearance==='object'&&o.appearance!==null&&Object.hasOwn(o.appearance,key))keys.push(key);
+    }
+    const a=record(o.appearance,keys,'appearance');
+    appearance={text_color:colour(a.text_color,'appearance.text_color'),button_text_color:colour(a.button_text_color,'appearance.button_text_color'),
+      ...(Object.hasOwn(a,'font_family')?{font_family:a.font_family===null?null:choice<FontFamily>(a.font_family,['rubik','alexandria','system'],'appearance.font_family')}:{}),
+      ...(Object.hasOwn(a,'menu_background_url')?{menu_background_url:image(a.menu_background_url,'appearance.menu_background_url',true)}:{}),
+      ...(Object.hasOwn(a,'menu_background_dim')?{menu_background_dim:dim(a.menu_background_dim,'appearance.menu_background_dim')}:{})};
+  }
   const h=record(o.hero,['mode','item_id','format','eyebrow','stamp','footnote'],'hero');
   const mode=choice(h.mode,['editorial','item'],'hero.mode');const itemId=h.item_id===null?null:id(h.item_id,'hero.item_id');
   if(mode==='editorial'?itemId!==null:itemId===null||!servedItems.has(itemId))return reject('hero.item_id');
@@ -91,5 +132,5 @@ export function decodeStorefrontMenuV4(raw:unknown):StorefrontMenuV4Envelope{
   }
   let story:WireContentV1['story']=null;
   if(o.story!==null){const s=record(o.story,['kicker','title','body','image_url','facts'],'story');story={kicker:text(s.kicker,60,'story.kicker')!,title:text(s.title,120,'story.title')!,body:text(s.body,600,'story.body')!,image_url:image(s.image_url,'story.image')!,facts:array(s.facts,3,'story.facts').map(f=>text(f,80,'story.facts')!)};}
-  return {...base,content_v1:{schema:1,hero,announcement_segments:segments,promo,story,category_presentation:cats,item_presentation:items}};
+  return {...base,content_v1:{schema:1,hero,announcement_segments:segments,promo,story,category_presentation:cats,item_presentation:items,...(appearance===undefined?{}:{appearance})}};
 }

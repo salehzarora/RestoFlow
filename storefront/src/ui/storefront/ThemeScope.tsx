@@ -21,11 +21,14 @@ export function ThemeScope({
   className,
   children,
   dir,
+  menuImageDim,
 }: {
   tokens: ThemeTokens;
   className: string;
   children: ReactNode;
   dir: 'rtl' | 'ltr';
+  /** Only Home supplies this presentation value; other screens stay unchanged. */
+  menuImageDim?: number | null;
 }) {
   const host = useRef<HTMLDivElement>(null);
 
@@ -35,7 +38,10 @@ export function ThemeScope({
     for (const [name, value] of themeEntries(tokens)) {
       el.style.setProperty(name, value);
     }
-  }, [tokens]);
+    if (typeof menuImageDim === 'number' && Number.isInteger(menuImageDim) && menuImageDim >= 0 && menuImageDim <= 80) {
+      el.style.setProperty('--menu-image-dim', String(menuImageDim / 100));
+    } else el.style.removeProperty('--menu-image-dim');
+  }, [tokens, menuImageDim]);
 
   return (
     <div ref={host} className={className} dir={dir} data-sf-root="">

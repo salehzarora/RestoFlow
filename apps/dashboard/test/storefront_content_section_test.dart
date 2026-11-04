@@ -23,6 +23,7 @@ class ContentRepo implements StorefrontContentRepository {
   var readStatus = StorefrontContentReadStatus.ok;
   String? invalidReason, invalidField;
   final warnings = <StorefrontContentWarning>[];
+  final mediaRows = <StorefrontContentMediaRow>[];
   @override
   Future<StorefrontContentRead> readContent() async => StorefrontContentRead(
     readStatus,
@@ -38,7 +39,7 @@ class ContentRepo implements StorefrontContentRepository {
   );
   @override
   Future<StorefrontContentMediaList?> listContentMedia() async =>
-      StorefrontContentMediaList(version: version, rows: []);
+      StorefrontContentMediaList(version: version, rows: mediaRows);
   @override
   StorefrontContentAttempt prepareContent({
     required int expectedVersion,
@@ -195,6 +196,183 @@ Future<void> edit(WidgetTester tester, String key, String text) async {
 }
 
 void main() {
+  testWidgets('HEX controls reject invalid input and save blank as inherited', (
+    tester,
+  ) async {
+    final repo = ContentRepo();
+    await mount(tester, repo);
+    final textColor = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextFormField &&
+          widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith(
+            'content-appearance.text_color-',
+          ),
+    );
+    await tester.ensureVisible(textColor);
+    await tester.enterText(textColor, 'red');
+    await tester.pumpAndSettle();
+    tester
+        .widget<FilledButton>(find.byKey(const Key('content-save')))
+        .onPressed!();
+    await tester.pumpAndSettle();
+    expect(repo.calls, isEmpty);
+    expect(
+      find.text('Enter # followed by six hexadecimal digits.'),
+      findsOneWidget,
+    );
+    await tester.enterText(textColor, '#Aa00Ff');
+    await tester.pumpAndSettle();
+    tester
+        .widget<FilledButton>(find.byKey(const Key('content-save')))
+        .onPressed!();
+    await tester.pumpAndSettle();
+    expect(repo.calls.single.document.json['appearance'], {
+      'text_color': '#aa00ff',
+      'button_text_color': null,
+    });
+    await tester.ensureVisible(textColor);
+    await tester.enterText(textColor, '');
+    await tester.pumpAndSettle();
+    tester
+        .widget<FilledButton>(find.byKey(const Key('content-save')))
+        .onPressed!();
+    await tester.pumpAndSettle();
+    expect(repo.calls.last.document.json['appearance'], {
+      'text_color': null,
+      'button_text_color': null,
+    });
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+    'font choice saves through existing content and explicitly resets',
+    (tester) async {
+      final repo = ContentRepo();
+      await mount(tester, repo);
+      final font = find.byWidgetPredicate(
+        (widget) =>
+            widget is DropdownButtonFormField<String> &&
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'content-appearance.font_family-',
+            ),
+      );
+      await tester.ensureVisible(font);
+      tester.widget<DropdownButtonFormField<String>>(font).onChanged!(
+        'alexandria',
+      );
+      await tester.pumpAndSettle();
+      tester
+          .widget<FilledButton>(find.byKey(const Key('content-save')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(repo.calls.single.document.json['appearance'], {
+        'text_color': null,
+        'button_text_color': null,
+        'font_family': 'alexandria',
+      });
+      tester.widget<DropdownButtonFormField<String>>(font).onChanged!('');
+      await tester.pumpAndSettle();
+      tester
+          .widget<FilledButton>(find.byKey(const Key('content-save')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(
+        (repo.calls.last.document.json['appearance'] as Map)['font_family'],
+        isNull,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'menu background selection and dim save without changing hero or font',
+    (tester) async {
+      final repo = ContentRepo();
+      repo.doc = StorefrontContentDocument.fromJson(
+        repo.doc.editableCopy()
+          ..['appearance'] = {
+            'text_color': '#fff4e6',
+            'button_text_color': '#14120f',
+            'font_family': 'alexandria',
+          },
+      );
+      final hero = repo.doc.json['hero'];
+      repo.mediaRows.add(
+        StorefrontContentMediaRow.fromJson({
+          'id': request,
+          'source_bucket': 'menu-images',
+          'source_key': 'synthetic/image.png',
+          'variant': 'w960',
+          'object_key': 'synthetic/w960.webp',
+          'content_hash': 'a' * 64,
+          'width': 960,
+          'height': 640,
+          'bytes': 123,
+          'state': 'published',
+          'published_at': '2026-10-22T00:00:00Z',
+          'unpublished_at': null,
+          'created_at': '2026-10-22T00:00:00Z',
+          'in_use': [],
+          'content_in_use': [
+            {'kind': 'menu_background'},
+          ],
+        }),
+      );
+      await mount(tester, repo);
+      final background = find.byWidgetPredicate(
+        (widget) =>
+            widget is DropdownButtonFormField<String> &&
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'content-appearance.menu_background_media_id-',
+            ),
+      );
+      final dim = find.byKey(
+        const Key('content-appearance.menu_background_dim'),
+      );
+      expect(tester.widget<Slider>(dim).value, 15);
+      expect(tester.widget<Slider>(dim).onChanged, isNull);
+      await tester.ensureVisible(background);
+      tester.widget<DropdownButtonFormField<String>>(background).onChanged!(
+        request,
+      );
+      await tester.pumpAndSettle();
+      tester.widget<Slider>(dim).onChanged!(35);
+      await tester.pumpAndSettle();
+      tester
+          .widget<FilledButton>(find.byKey(const Key('content-save')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(repo.calls.single.document.json['appearance'], {
+        'text_color': '#fff4e6',
+        'button_text_color': '#14120f',
+        'font_family': 'alexandria',
+        'menu_background_media_id': request,
+        'menu_background_dim': 35,
+      });
+      expect(repo.calls.single.document.json['hero'], hero);
+      expect(tester.widget<Slider>(dim).value, 35);
+      tester
+          .widget<TextButton>(
+            find.byKey(const Key('content-menu-background-dim-reset')),
+          )
+          .onPressed!();
+      tester.widget<DropdownButtonFormField<String>>(background).onChanged!('');
+      await tester.pumpAndSettle();
+      tester
+          .widget<FilledButton>(find.byKey(const Key('content-save')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+      final cleared = repo.calls.last.document.json['appearance'] as Map;
+      expect(cleared.containsKey('menu_background_media_id'), true);
+      expect(cleared.containsKey('menu_background_dim'), true);
+      expect(cleared['menu_background_media_id'], isNull);
+      expect(cleared['menu_background_dim'], isNull);
+      expect(cleared['font_family'], 'alexandria');
+      expect(repo.calls.last.document.json['hero'], hero);
+      expect(tester.takeException(), isNull);
+    },
+  );
   for (final status in [
     StorefrontContentReadStatus.unavailable,
     StorefrontContentReadStatus.denied,

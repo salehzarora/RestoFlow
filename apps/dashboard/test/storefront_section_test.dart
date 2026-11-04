@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_dashboard/src/admin/real_admin_views.dart';
@@ -505,6 +509,88 @@ void _expectPublishedWithNote(
 }
 
 void main() {
+  for (final locale in ['ar', 'he', 'en']) {
+    for (final field in ['primary', 'accent']) {
+      testWidgets(
+        '$locale $field colour retains input state through first dirty transition',
+        (tester) async {
+          final repo = _FeaturedRepo();
+          repo.profile!['is_published'] = true;
+          await _pump(
+            tester,
+            StorefrontSection(
+              seams: StorefrontEditorSeams(
+                scopeIdentity: 'colour-focus',
+                profileRepository: repo,
+                mediaRepository: _FakeMediaRepo(),
+                branchSource: _FakeBranches(),
+                sourceCatalog: _FakeSources(),
+                featuredCatalog: _FeaturedCatalog(),
+                publisher: StorefrontMediaPublisher(
+                  invoker: content_fixture.PublisherInvoker(),
+                  organizationId: _rest,
+                  restaurantId: _rest,
+                ),
+              ),
+            ),
+            locale: locale,
+          );
+          final fieldFinder = find.byKey(Key('storefront-$field-color'));
+          final editable = find.descendant(
+            of: fieldFinder,
+            matching: find.byType(EditableText),
+          );
+          await _tap(tester, fieldFinder);
+          final originalState = tester.state<EditableTextState>(editable);
+          final focus = originalState.widget.focusNode;
+          expect(focus.hasFocus, isTrue);
+          // One focus action only. Subsequent text arrives through the active
+          // platform text-input connection; tester.enterText would refocus.
+          tester.testTextInput.enterText('');
+          await tester.pumpAndSettle();
+          expect(
+            tester.state<EditableTextState>(editable),
+            same(originalState),
+          );
+          expect(originalState.widget.focusNode, same(focus));
+          expect(focus.hasFocus, isTrue);
+          expect(
+            find.byKey(const Key('storefront-featured-separate-edits')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const Key('storefront-media-save-first')),
+            findsOneWidget,
+          );
+          final value = field == 'primary' ? '#211A16' : '#EAB082';
+          for (var length = 1; length <= value.length; length++) {
+            tester.testTextInput.enterText(value.substring(0, length));
+            await tester.pumpAndSettle();
+            expect(
+              tester.state<EditableTextState>(editable),
+              same(originalState),
+            );
+            expect(focus.hasFocus, isTrue);
+          }
+          await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+          await tester.pumpAndSettle();
+          expect(focus.hasFocus, isFalse);
+          expect(originalState.widget.controller.text, value);
+          await _tap(tester, find.byKey(const Key('storefront-save')));
+          expect(repo.saves, hasLength(1));
+          expect(
+            repo.saves.single.patch['${field}_color'],
+            value.toLowerCase(),
+          );
+          expect(
+            tester.widget<TextField>(fieldFinder).controller!.text,
+            value.toLowerCase(),
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
   testWidgets(
     'old in-flight profile completion cannot refresh or unlock replaced binding',
     (tester) async {
@@ -1752,7 +1838,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byKey(warning), findsOneWidget, reason: hex);
         expect(
-          find.text(l10n.storefrontPrimaryContrastWarning),
+          find.text(storefrontContentCopy(l10n, 'colorContrastHelp')),
           findsOneWidget,
         );
       }
@@ -2053,6 +2139,102 @@ void main() {
       expect(_enabled(tester, const Key('storefront-publish')), isTrue);
     });
 
+    testWidgets('cinematic hours fixture permits a colour-only profile Save', (
+      tester,
+    ) async {
+      // Read the exact JSON consumed by the real-service bootstrap so its
+      // prerequisites cannot silently drift from the editor's validation.
+      final fixture = [
+        File('e2e/cinematic/profile-hours.json'),
+        File('../../e2e/cinematic/profile-hours.json'),
+      ].firstWhere((file) => file.existsSync());
+      final hours =
+          jsonDecode(fixture.readAsStringSync()) as Map<String, Object?>;
+      final parsed = OpeningHours.fromJson(hours);
+      expect(parsed.isValid, isTrue);
+      expect(parsed.hasUnreadableEntries, isFalse);
+      expect(parsed.hasTouchingWindows, isFalse);
+      expect(parsed.overlaps(), isEmpty);
+      expect(parsed.weekly.map((window) => window.dow).toSet(), {
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+      });
+      expect(parsed.toJson(), hours);
+      final repo = _FakeProfileRepo(
+        profile: _profileJson(published: true, openingHours: hours),
+        timezone: 'UTC',
+      );
+      await _pump(tester, StorefrontSection(seams: _seams(repo)));
+      await tester.enterText(
+        find.byKey(const Key('storefront-primary-color')),
+        '#211A16',
+      );
+      await tester.enterText(
+        find.byKey(const Key('storefront-accent-color')),
+        '#EAB082',
+      );
+      await tester.pumpAndSettle();
+      expect(_enabled(tester, const Key('storefront-save')), isTrue);
+      await _tap(tester, find.byKey(const Key('storefront-save')));
+      expect(repo.saves.single.patch, {
+        'primary_color': '#211a16',
+        'accent_color': '#eab082',
+      });
+      expect(repo.profile!['opening_hours'], hours);
+      expect(repo.profile!['primary_color'], '#211a16');
+      expect(repo.profile!['accent_color'], '#eab082');
+    });
+
+    testWidgets(
+      'cinematic old midnight-touching hours still block profile Save',
+      (tester) async {
+        final hours = {
+          'weekly': [
+            for (var dow = 0; dow < 7; dow++) ...[
+              {'dow': dow, 'open': '00:00', 'close': '12:00'},
+              {'dow': dow, 'open': '11:00', 'close': '00:00'},
+            ],
+          ],
+          'exceptions': <Object?>[],
+        };
+        final parsed = OpeningHours.fromJson(hours);
+        // The wire grammar permits these hours. The blocking issue is the
+        // midnight touch on every weekday, distinct from advisory overlaps.
+        expect(parsed.isValid, isTrue);
+        expect(parsed.hasUnreadableEntries, isFalse);
+        expect(parsed.touchingWindows(), hasLength(7));
+        expect(parsed.overlaps(), hasLength(7));
+        final repo = _FakeProfileRepo(
+          profile: _profileJson(published: true, openingHours: hours),
+          timezone: 'UTC',
+        );
+        await _pump(tester, StorefrontSection(seams: _seams(repo)));
+        await tester.enterText(
+          find.byKey(const Key('storefront-primary-color')),
+          '#211A16',
+        );
+        await tester.enterText(
+          find.byKey(const Key('storefront-accent-color')),
+          '#EAB082',
+        );
+        await tester.pumpAndSettle();
+        expect(_enabled(tester, const Key('storefront-save')), isFalse);
+        for (var dow = 0; dow < 7; dow++) {
+          expect(
+            find.byKey(Key('storefront-hours-touching-$dow')),
+            findsOneWidget,
+          );
+        }
+        expect(repo.saves, isEmpty);
+        expect(repo.profile!['opening_hours'], hours);
+      },
+    );
+
     testWidgets('Q-038: touching periods in the DRAFT disable Save; merging '
         'them into one continuous period re-enables it', (tester) async {
       final l10n = await _l10n();
@@ -2278,6 +2460,90 @@ void main() {
       role: MembershipRole.orgOwner,
       status: 'active',
     );
+
+    for (final locale in ['ar', 'he', 'en']) {
+      testWidgets(
+        'scrolled content Save stays accessible in real Settings ($locale)',
+        (tester) async {
+          tester.view.physicalSize = const Size(1440, 1000);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.reset);
+          final content = content_fixture.ContentRepo();
+          final profile = _FakeProfileRepo(profile: _profileJson(version: 3));
+          await tester.pumpWidget(
+            MaterialApp(
+              locale: Locale(locale),
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              home: Scaffold(
+                body: RealSettingsView(
+                  membership: owner,
+                  currencyCode: 'ILS',
+                  settingsRepository: _FakeSettings(),
+                  storefrontSeams: StorefrontEditorSeams(
+                    scopeIdentity: 'save-accessibility',
+                    profileRepository: profile,
+                    mediaRepository: _FakeMediaRepo(),
+                    branchSource: _FakeBranches(),
+                    sourceCatalog: _FakeSources(),
+                    contentRepository: content,
+                    contentCatalog: content_fixture.ContentCatalog(),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          Future<void> reveal(Finder finder) async {
+            for (var step = 0; step < 50; step++) {
+              final rect = finder.evaluate().isEmpty
+                  ? null
+                  : tester.getRect(finder);
+              if (rect != null && rect.top >= 96 && rect.bottom <= 936) return;
+              await tester.sendEventToBinding(
+                PointerScrollEvent(
+                  position: const Offset(24, 500),
+                  scrollDelta: Offset(
+                    0,
+                    rect != null && rect.top < 96 ? -336 : 336,
+                  ),
+                ),
+              );
+              await tester.pumpAndSettle();
+            }
+            fail('The real Settings control never entered the viewport.');
+          }
+
+          final color = find.byKey(
+            const Key('content-appearance.text_color-1'),
+          );
+          await reveal(color);
+          await tester.enterText(color, '#fff1da');
+          await tester.pumpAndSettle();
+          final save = find.byKey(const Key('content-save'));
+          await reveal(save);
+          final copy = storefrontContentCopy(await _l10n(locale), 'save');
+          expect(
+            tester.semantics.simulatedAccessibilityTraversal(),
+            contains(
+              isSemantics(
+                label: copy,
+                isButton: true,
+                isEnabled: true,
+                isHidden: false,
+              ),
+            ),
+          );
+          await tester.tap(save);
+          await tester.pumpAndSettle();
+          expect(content.calls, hasLength(1));
+          expect(
+            content.calls.single.document.json['appearance'],
+            containsPair('text_color', '#fff1da'),
+          );
+        },
+      );
+    }
 
     testWidgets('scrolled out of the lazy Settings list and back: the draft '
         'and the same-request Try again are kept, with no extra read', (

@@ -17,6 +17,15 @@ const storefrontContentKeys = {
   'category_presentation',
   'item_presentation',
 };
+const storefrontAppearanceKeys = {'text_color', 'button_text_color'};
+// Keep optional keys absent until edited; the writer preserves omitted values.
+const storefrontAppearanceOptionalKeys = {
+  'font_family',
+  'menu_background_media_id',
+  'menu_background_dim',
+};
+const storefrontFontFamilies = {'rubik', 'alexandria', 'system'};
+final storefrontAppearanceHex = RegExp(r'^#[0-9A-Fa-f]{6}$');
 const storefrontContentReasons = {
   'document_not_object',
   'document_too_large',
@@ -72,6 +81,12 @@ bool contentFieldPath(Object? value) => const {
   'story.editorial_media_id',
   'category_presentation',
   'item_presentation',
+  'appearance',
+  'appearance.text_color',
+  'appearance.button_text_color',
+  'appearance.font_family',
+  'appearance.menu_background_media_id',
+  'appearance.menu_background_dim',
 }.contains(value);
 
 Object? _freeze(Object? value) => switch (value) {
@@ -87,9 +102,57 @@ class StorefrontContentDocument {
   final Map<String, Object?> json;
 
   factory StorefrontContentDocument.fromJson(Object? raw) {
-    final j = contentObject(raw, storefrontContentKeys, 'document');
+    final j = contentObject(raw, {
+      ...storefrontContentKeys,
+      if (raw is Map && raw.containsKey('appearance')) 'appearance',
+    }, 'document');
     if (utf8.encode(jsonEncode(j)).length > 256 * 1024) {
       throw const StorefrontDecodeException('document', 'document_too_large');
+    }
+    if (j.containsKey('appearance')) {
+      final appearance = contentObject(j['appearance'], {
+        ...storefrontAppearanceKeys,
+        for (final key in storefrontAppearanceOptionalKeys)
+          if (j['appearance'] is Map &&
+              (j['appearance'] as Map).containsKey(key))
+            key,
+      }, 'appearance');
+      for (final key in storefrontAppearanceKeys) {
+        final color = appearance[key];
+        if (color != null &&
+            (color is! String ||
+                color.length != 7 ||
+                !storefrontAppearanceHex.hasMatch(color))) {
+          throw StorefrontDecodeException(
+            'appearance.$key',
+            'presentation_invalid',
+          );
+        }
+        if (color is String) appearance[key] = color.toLowerCase();
+      }
+      final font = appearance['font_family'];
+      if (font != null &&
+          (font is! String || !storefrontFontFamilies.contains(font))) {
+        throw const StorefrontDecodeException(
+          'appearance.font_family',
+          'presentation_invalid',
+        );
+      }
+      final background = appearance['menu_background_media_id'];
+      if (background != null && !contentId(background)) {
+        throw const StorefrontDecodeException(
+          'appearance.menu_background_media_id',
+          'media_invalid',
+        );
+      }
+      final dim = appearance['menu_background_dim'];
+      if (dim != null && (dim is! int || dim < 0 || dim > 80)) {
+        throw const StorefrontDecodeException(
+          'appearance.menu_background_dim',
+          'presentation_invalid',
+        );
+      }
+      j['appearance'] = appearance;
     }
     void text(
       Object? value,
@@ -447,7 +510,12 @@ class StorefrontContentMediaRow {
         'kind',
         if (category) 'category_id',
       }, 'media');
-      if (!{'category', 'promo', 'story'}.contains(u['kind']) ||
+      if (!{
+            'category',
+            'promo',
+            'story',
+            'menu_background',
+          }.contains(u['kind']) ||
           (category && !contentId(u['category_id'])) ||
           !seen.add(jsonEncode(u))) {
         throw const StorefrontDecodeException('media', 'invalid usage');

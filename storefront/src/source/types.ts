@@ -20,6 +20,7 @@ export type BasisPoints = number;
 export type Preset = 'dark' | 'light';
 
 export type ServiceState = 'open' | 'closed' | 'paused';
+export type FontFamily = 'rubik' | 'alexandria' | 'system';
 
 export interface TenantBrand {
   /** Raw tenant input; the theme layer sanitises before use. */
@@ -27,6 +28,10 @@ export interface TenantBrand {
   readonly accent: string;
   /** Logo asset URL, or null for the initial-tile fallback. */
   readonly logo: string | null;
+  /** Optional published appearance overrides; missing preserves theme defaults. */
+  readonly text?: string | null;
+  readonly buttonText?: string | null;
+  readonly fontFamily?: FontFamily | null;
 }
 
 export interface TenantHours {
@@ -90,6 +95,10 @@ export interface Tenant {
    * out of UI-001 by approved decision 8.
    */
   readonly heroImage: string | null;
+  /** Optional menu-only media; missing/null retains the existing hero backdrop. */
+  readonly menuBackgroundImage?: string | null;
+  /** Darkening percentage for the independent menu image, 0–80; null uses 15. */
+  readonly menuBackgroundDim?: number | null;
   readonly currency: 'ILS';
 }
 

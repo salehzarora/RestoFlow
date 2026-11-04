@@ -8,6 +8,7 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'opening_hours_editor.dart';
+import 'storefront_background_upload.dart';
 import 'storefront_contrast.dart';
 import 'storefront_content_models.dart';
 import 'storefront_content_repository.dart';
@@ -36,6 +37,7 @@ class StorefrontEditorSeams {
     StorefrontContentRepository? contentRepository,
     StorefrontContentCatalog? contentCatalog,
     this.publisher,
+    this.backgroundUpload,
     this.publicUrlFor,
   }) : _contentRepository = contentRepository,
        _contentCatalog = contentCatalog;
@@ -70,6 +72,7 @@ class StorefrontEditorSeams {
   /// The Edge Function client (null = image publishing is not available
   /// here; the media slots then show an honest note).
   final StorefrontMediaPublisher? publisher;
+  final StorefrontBackgroundUpload? backgroundUpload;
 
   /// The public URL of a published derivative (preview only; null = none).
   final Uri Function(String objectKey)? publicUrlFor;
@@ -387,7 +390,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         !identical(old?.mediaRepository, current?.mediaRepository) ||
         !identical(old?.contentRepository, current?.contentRepository) ||
         !identical(old?.contentCatalog, current?.contentCatalog) ||
-        !identical(old?.publisher, current?.publisher)) {
+        !identical(old?.publisher, current?.publisher) ||
+        !identical(old?.backgroundUpload, current?.backgroundUpload)) {
       final keepDraft =
           _patch().isNotEmpty ||
           _homeDirty ||
@@ -1432,6 +1436,10 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       key: const Key('storefront-section'),
       title: l10n.storefrontSectionTitle,
       icon: Icons.storefront_outlined,
+      // This form is taller than the Settings viewport. A single merged Card
+      // semantics node clips later controls out of Flutter web's accessible
+      // tree even while they are painted. Keep each field/action explicit.
+      semanticContainer: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1504,7 +1512,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   }
 
   /// Fields that stack on narrow widths and pair up on wide ones.
-  Widget _grid(List<Widget> children) => LayoutBuilder(
+  Widget _grid(List<Widget> children, {Key? key}) => LayoutBuilder(
+    key: key,
     builder: (context, constraints) {
       final max = constraints.maxWidth;
       final width = max >= 560
@@ -1813,6 +1822,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               _homePending == null &&
               _featuredPending == null,
           publisher: widget.seams!.publisher,
+          backgroundUpload: widget.seams!.backgroundUpload,
           sources: _sources,
           reloadSources: _reloadSources,
           publicUrlFor: widget.seams!.publicUrlFor,
@@ -1832,6 +1842,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       const Divider(height: RestoflowSpacing.xl),
       Text(l10n.storefrontLookTitle, style: theme.textTheme.titleSmall),
       const SizedBox(height: RestoflowSpacing.sm),
+      // Dirty notices are inserted before and after this grid. Preserve its
+      // input state/focus while those unkeyed sibling positions change.
       _grid([
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1839,7 +1851,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
             _textField(
               key: const Key('storefront-primary-color'),
               controller: _primary,
-              label: l10n.storefrontPrimaryColorLabel,
+              label: storefrontContentCopy(l10n, 'primaryColor'),
               helper: l10n.storefrontColorHelp,
               error: _colorError(l10n, _primary),
               ltr: true,
@@ -1849,7 +1861,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               Padding(
                 padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
                 child: Text(
-                  l10n.storefrontPrimaryContrastWarning,
+                  storefrontContentCopy(l10n, 'colorContrastHelp'),
                   key: const Key('storefront-primary-contrast-warning'),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: RestoflowTone.warning.styleOf(theme).accent,
@@ -1861,7 +1873,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         _textField(
           key: const Key('storefront-accent-color'),
           controller: _accent,
-          label: l10n.storefrontAccentColorLabel,
+          label: storefrontContentCopy(l10n, 'accentColor'),
           helper: l10n.storefrontColorHelp,
           error: _colorError(l10n, _accent),
           ltr: true,
@@ -1922,7 +1934,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           ],
           onChanged: (v) => _motion = v,
         ),
-      ]),
+      ], key: const Key('storefront-appearance-grid')),
       const SizedBox(height: RestoflowSpacing.sm),
       SwitchListTile(
         key: const Key('storefront-pickup'),

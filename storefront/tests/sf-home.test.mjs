@@ -20,7 +20,7 @@ const { buildHome, homeOptionsFor, HOME_SCENARIO_NAMES, homeSlugs } = await impo
 const { SCENARIOS, SCENARIO_SLUGS } = await import('../src/source/scenarios.ts');
 const { fixtureSource } = await import('../src/source/fixtures.ts');
 const { storefrontMessages, fill } = await import('../src/i18n/storefront.ts');
-const { anchorOrder, CHROME_ANCHORS, PAGE_ANCHORS, LOCKED_MODULE_ORDER } = await import(
+const { anchorOrder, CHROME_ANCHORS, PAGE_ANCHORS, FOOTER_ANCHORS, LOCKED_MODULE_ORDER } = await import(
   '../scripts/module-order.mjs'
 );
 const { CATEGORIES, MENU_ITEMS, TAX_RATE_BP } = await import('../src/source/menu-fixture.ts');
@@ -85,6 +85,7 @@ test('announcement keeps one complete tenant run and decorative separators witho
 const tenant = fixtureSource.getTenant('maps-burger');
 const homeSource = read('src/ui/storefront/home/Home.tsx');
 const partsSource = read('src/ui/storefront/home/HomeParts.tsx');
+const footerSource = partsSource.slice(partsSource.indexOf('export function SiteFooter'), partsSource.indexOf('export function EmptyMenu'));
 const css = read('src/ui/storefront/home/home.module.css');
 
 test('the fixture tenant and menu load', () => {
@@ -107,6 +108,9 @@ test('module order is FIXED and expressed once, in source order', () => {
   const chrome = read('src/ui/storefront/home/HomeChrome.tsx');
   assert.deepEqual(anchorOrder(chrome, CHROME_ANCHORS), []);
   assert.deepEqual(anchorOrder(homeSource, PAGE_ANCHORS), []);
+  assert.deepEqual(anchorOrder(footerSource, FOOTER_ANCHORS), []);
+  assert.equal((partsSource.match(/<ServiceStatusStrip\b/g) ?? []).length, 1);
+  assert.doesNotMatch(homeSource + chrome, /<ServiceStatusStrip\b/);
 });
 
 test('NEGATIVE CONTROL: approved source order catches reordered, deleted and duplicated markup', () => {
@@ -118,8 +122,11 @@ test('NEGATIVE CONTROL: approved source order catches reordered, deleted and dup
   assert.ok(anchorOrder(homeSource.replace('<StoryCard', '<NotAModule'), PAGE_ANCHORS).length > 0);
   const duplicated = chrome.replace('data-sf-module="announce"', 'data-sf-module="announce" title="data-sf-module=\u0022announce\u0022"');
   assert.ok(anchorOrder(duplicated, CHROME_ANCHORS).some(x => x.includes('occurs 2x')));
+  assert.ok(anchorOrder(footerSource.replace('<ServiceStatusStrip', '<MissingService'), FOOTER_ANCHORS).length > 0);
+  assert.ok(anchorOrder(footerSource.replace('<ServiceStatusStrip', '<ServiceStatusStrip /><ServiceStatusStrip'), FOOTER_ANCHORS).some(x => x.includes('occurs 2x')));
   assert.deepEqual(anchorOrder(chrome, CHROME_ANCHORS), []);
   assert.deepEqual(anchorOrder(homeSource, PAGE_ANCHORS), []);
+  assert.deepEqual(anchorOrder(footerSource, FOOTER_ANCHORS), []);
 });
 
 test('no module-order data or reorder mechanism exists', () => {
@@ -233,12 +240,14 @@ test('the menu stays browsable while closed or paused', () => {
   }
 });
 
-test('a disabled service remains struck through and labelled unavailable', () => {
+test('a disabled service remains visible, muted and labelled unavailable', () => {
   assert.match(partsSource, /service\.pickupEnabled \? '' : styles\.serviceOff/);
   assert.match(partsSource, /service\.deliveryEnabled \? '' : styles\.serviceOff/);
-  assert.match(partsSource, /service\.pickupEnabled \? tenant\.city : m\.unavailableNow/);
-  assert.match(css, /\.serviceOff\s+\.serviceLabel\s*\{\s*text-decoration\s*:\s*line-through\s*;?/);
-  assert.match(css, /\.serviceOff\s*\{\s*opacity\s*:\s*0\.55\s*;?/);
+  assert.match(partsSource, /service\.pickupEnabled \? m\.pickup : m\.pickupOff/);
+  assert.match(partsSource, /service\.deliveryEnabled \? m\.delivery : m\.deliveryOff/);
+  const offRules = [...css.matchAll(/\.serviceOff\s*\{([^}]*)\}/g)];
+  for (const rule of offRules) { const opacity = rule[1].match(/opacity\s*:\s*([.\d]+)/); if (opacity) assert.ok(Number(opacity[1]) >= .5 && Number(opacity[1]) < 1); }
+  for (const rule of offRules) assert.doesNotMatch(rule[1], /display\s*:\s*none|visibility\s*:\s*hidden/);
 });
 
 // ----------------------------------------------------------------- the rails
@@ -490,8 +499,8 @@ test('H02 empty menu retains its route and passes an explicit empty surface into
 
 test('H03 pickupOff / deliveryOff render as unavailable, not as absent', () => {
   const parts = read('src/ui/storefront/home/HomeParts.tsx');
-  assert.match(parts, /service\.pickupEnabled \? tenant\.city : m\.unavailableNow/);
-  assert.match(parts, /service\.deliveryEnabled \? \(/);
+  assert.match(parts, /service\.pickupEnabled \? m\.pickup : m\.pickupOff/);
+  assert.match(parts, /service\.deliveryEnabled \? m\.delivery : m\.deliveryOff/);
   // Both disabled states are carried by scenario routes, so they are also seen.
   const closed = SCENARIOS.find((x) => x.slug === 'demo-closed');
   const paused = SCENARIOS.find((x) => x.slug === 'demo-paused');
