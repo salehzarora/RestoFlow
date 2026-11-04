@@ -15,6 +15,12 @@ export function localMediaTarget(value, method = 'GET') {
   if (method !== 'GET' || !mediaPath.test(u.pathname)) deny();
   return LOCAL_API + u.pathname;
 }
+export function localProductMediaTarget(value, method = 'GET') {
+  // storefront_product_images_v1 returns exact root-relative derivative paths.
+  // Keep their bytes unchanged and admit no caller-supplied origin.
+  if (typeof value !== 'string' || method !== 'GET' || !mediaPath.test(value)) deny();
+  return exactUrl(LOCAL_API + value, LOCAL_API).href;
+}
 export function logicalMediaUrl(value) {
   const u = exactUrl(value, LOCAL_API);
   if (!mediaPath.test(u.pathname)) deny();

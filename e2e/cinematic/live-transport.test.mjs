@@ -6,7 +6,7 @@ import { once } from 'node:events';
 import { mkdtempSync, writeFileSync, unlinkSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMenuTransport, LOGICAL_ORIGIN, LOCAL_API, localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
+import { createMenuTransport, LOGICAL_ORIGIN, LOCAL_API, localMediaTarget, localProductMediaTarget, logicalMediaUrl } from './live-transport.mjs';
 
 const anonKey = `test.${Buffer.from(JSON.stringify({ role: 'anon' })).toString('base64url')}.test`;
 const slug = 'cinematic-transport-test';
@@ -64,6 +64,27 @@ test('only exact public derivative GETs map and image identity retains the same 
   }
   for (const method of ['HEAD', 'POST', 'PUT', 'DELETE']) assert.throws(() => localMediaTarget(LOGICAL_ORIGIN + derivative, method));
   for (const origin of ['https://other.supabase.co', LOCAL_API, 'http://localhost:54321', LOGICAL_ORIGIN + '.evil.test']) assert.throws(() => localMediaTarget(origin + derivative));
+});
+
+test('product SQL relative derivative paths map exactly without admitting caller origins or normalization', () => {
+  for (const path of [derivative, derivative.replace('b'.repeat(64), 'c'.repeat(64))]) {
+    // The old logical-origin adapter must keep rejecting this separate contract.
+    assert.throws(() => localMediaTarget(path), /cinematic_transport_denied/);
+    assert.equal(localProductMediaTarget(path), LOCAL_API + path);
+  }
+  for (const value of [
+    undefined, null, 1, { toString: () => derivative },
+    `${LOGICAL_ORIGIN}${derivative}`, `${LOCAL_API}${derivative}`, `//example.invalid${derivative}`,
+    derivative + '?download=1', derivative + '#hash', derivative + '\n',
+    ' ' + derivative, derivative.replace('/public/', '/authenticated/'),
+    derivative.replace('/public/', '/sign/'), derivative.replace('storefront-media', 'menu-images'),
+    derivative.replace('.webp', '.png'), derivative.replace('/public/', '/%70ublic/'),
+    '/x/..' + derivative, derivative.replace('/public/', '/public/../public/'),
+    derivative.replace('/public/', '/public\\'),
+  ]) assert.throws(() => localProductMediaTarget(value), /cinematic_transport_denied/);
+  for (const method of ['HEAD', 'POST', 'PUT', 'DELETE']) {
+    assert.throws(() => localProductMediaTarget(derivative, method), /cinematic_transport_denied/);
+  }
 });
 
 test('installed socket/DNS boundary forwards unchanged loopback HTTP bytes and rejects redirects before external access', async () => {

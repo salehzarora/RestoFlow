@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { enableFlutterSemantics, waitForFlutterBoot } from '../lib/flutter';
 import { fillField, tapButton, tapNav, tapText, waitForText } from '../lib/dashboard';
 import { API_URL, DASHBOARD_URL, readFixture, scope, rpc, request, storagePath, readInvariants } from './service.mjs';
-import { localMediaTarget } from './live-transport.mjs';
+import { localProductMediaTarget } from './live-transport.mjs';
 import { captureProductResponse, createProductProgress, type ProductProgress } from './product-progress.mjs';
 import { observeResponse, responseAfterAction } from './control-progress.mjs';
 
@@ -386,7 +386,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     const publishedImages: Record<string, unknown>[] = [];
     for (const size of [480, 960]) {
       advance('published-image-fetch');
-      const target = localMediaTarget(row[`w${size}_url`], 'GET');
+      const target = localProductMediaTarget(row[`w${size}_url`], 'GET');
       const response = await fetch(target, { redirect: 'error', signal: AbortSignal.timeout(15_000) });
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('image/webp');
