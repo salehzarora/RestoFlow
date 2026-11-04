@@ -73,7 +73,11 @@ export function installChildProcessBoundary(sourceDir, preload, phase) {
   childProcess.spawn = (command, args, options) => {
     if (phase !== 'build' || canonical(command) !== canonical(process.execPath) || !Array.isArray(args) ||
         canonical(args[0] ?? '') !== canonical(resolve(sourceDir, 'node_modules/typescript/bin/tsc')) ||
-        !options || canonical(options.cwd ?? '') !== canonical(sourceDir) || options.shell || options.detached) deny();
+        !options || canonical(options.cwd ?? '') !== canonical(sourceDir) || options.shell ||
+        // Next 16.4.3 runTypeScriptCli uses a process group on non-Windows so
+        // termination reaches the compiler. Only this exact guarded tsc form
+        // may use it; runtime children and other build commands stay denied.
+        options.detached !== (process.platform !== 'win32')) deny();
     const project = resolve(sourceDir, 'tsconfig.json');
     const forms = [
       ['--showConfig', '--project', project, '--pretty', 'false'],

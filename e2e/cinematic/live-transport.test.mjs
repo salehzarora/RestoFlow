@@ -86,6 +86,7 @@ test('installed socket/DNS boundary forwards unchanged loopback HTTP bytes and r
     const script = `
       import assert from 'node:assert/strict';
       import childProcess from 'node:child_process';
+      import { resolve } from 'node:path';
       import { installLoopbackNetworkBoundary, networkCanaries, installChildProcessBoundary } from ${JSON.stringify(new URL('./loopback-network.mjs', import.meta.url).href)};
       import { createMenuTransport } from ${JSON.stringify(new URL('./live-transport.mjs', import.meta.url).href)};
       installLoopbackNetworkBoundary();
@@ -98,6 +99,35 @@ test('installed socket/DNS boundary forwards unchanged loopback HTTP bytes and r
       assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], [0,255,7,8,9]);
       await assert.rejects(transport(${JSON.stringify(url)}, ${JSON.stringify(init)}));
       await assert.rejects(original('https://oqmevrndtivqxgyvcmwy.supabase.co/'));
+      // Exercise the installed full spawn guard for both platform forms. The
+      // native spawn spy records admission only; no compiler/process starts.
+      const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+      const nativeSpawn = childProcess.spawn;
+      const priorOptions = process.env.NODE_OPTIONS;
+      const preload = '--import=file:///synthetic-boundary-only.mjs';
+      process.env.NODE_OPTIONS = preload;
+      for (const platform of ['linux', 'win32']) {
+        Object.defineProperty(process, 'platform', { ...platformDescriptor, value: platform });
+        let admissions = 0;
+        childProcess.spawn = () => { admissions++; return { diagnosticOnly: true }; };
+        installChildProcessBoundary(process.cwd(), preload, 'build');
+        const args = [resolve('node_modules/typescript/bin/tsc'), '--showConfig', '--project', resolve('tsconfig.json'), '--pretty', 'false'];
+        const options = { cwd: process.cwd(), shell: false, detached: platform !== 'win32', env: { ...process.env } };
+        assert.deepEqual(childProcess.spawn(process.execPath, args, options), { diagnosticOnly: true });
+        for (const [command, alteredArgs, alteredOptions] of [
+          [process.execPath, args, { ...options, detached: !options.detached }],
+          [process.execPath, args, { ...options, detached: undefined }],
+          [process.execPath, [...args, '--eval=unapproved'], options],
+          [process.execPath, ['other.js', ...args.slice(1)], options],
+          ['unapproved-native-command', args, options],
+          [process.execPath, args, { ...options, shell: true }],
+          [process.execPath, args, { ...options, env: { ...options.env, NODE_OPTIONS: '' } }],
+        ]) assert.throws(() => childProcess.spawn(command, alteredArgs, alteredOptions), /cinematic_network_denied/);
+        assert.equal(admissions, 1);
+      }
+      Object.defineProperty(process, 'platform', platformDescriptor);
+      childProcess.spawn = nativeSpawn;
+      if (priorOptions === undefined) delete process.env.NODE_OPTIONS; else process.env.NODE_OPTIONS = priorOptions;
       installChildProcessBoundary(process.cwd(), '--import=file:///not-real.mjs', 'runtime');
       for (const attempt of [() => childProcess.exec('not-an-approved-command'), () => childProcess.spawn(process.execPath, ['-e', '']), () => childProcess.fork('not-approved.js'), () => childProcess.execSync('not-approved')]) assert.throws(attempt, /cinematic_network_denied/);
       console.log('PASS: 8 network canaries, identical HTTP bytes/status/header, redirect denied');
