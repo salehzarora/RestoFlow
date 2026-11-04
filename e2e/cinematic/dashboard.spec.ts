@@ -2,10 +2,10 @@ import { test, expect, type BrowserContext, type Page, type Response, type Locat
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { enableFlutterSemantics, waitForFlutterBoot, readAccessibleText } from '../lib/flutter';
-import { controlGeometry } from './control-geometry.mjs';
+import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { MAX_REVEAL_WHEELS, nextRevealMove, observeResponse, responseAfterAction } from './control-progress.mjs';
 import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } from './auth-diagnostics.mjs';
-import { fillField, tapButton, tapNav, tapText, selectDropdown } from '../lib/dashboard';
+import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
 
 // This suite drives the shipped Flutter app. It never installs a mocked
 // repository, injects a session, calls a privileged client, or writes SQL.
@@ -137,7 +137,7 @@ async function targetGeometry(page: Page, target: Locator) {
       hitRelation: hit === null ? 'none' : hit === el ? 'self' : el.contains(hit) ? 'descendant' : hit.contains(el) ? 'ancestor' : 'other' };
   });
 }
-type RevealPurpose = 'upload' | 'content-save' | 'profile-save' | 'field' | 'dimming' | 'other';
+type RevealPurpose = 'upload' | 'content-save' | 'content-status' | 'profile-save' | 'field' | 'dimming' | 'other';
 type ScrollScope = { x: number; y: number; width: number; height: number; source: 'target' | 'editor-anchor' | 'cached' | 'settings-gutter'; kind: 'clipping-ancestor' | 'flutter-view' | 'settings-viewport' };
 type RevealSample = { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>>; hiddenGeometry: Awaited<ReturnType<typeof targetGeometry>>; normalMatches: number; hiddenMatches: number; labelEvidence: { exact: number; normalized: number; button: number; hidden: number; textExact: number; textNormalized: number; textButton: number } | null; progressed: boolean | null; visibleNodes: number; surface: ScrollScope; direction: number; reversed: boolean };
 type RevealTrace = { purpose: RevealPurpose; result: 'ready' | 'stalled' | 'ambiguous' | 'iteration-limit' | 'disabled'; wheelSteps: number; samples: RevealSample[] };
@@ -222,7 +222,9 @@ async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'oth
   const traces = revealTraces.get(page) ?? [];
   if (traces.length < 80) traces.push(trace);
   revealTraces.set(page, traces);
-  let state = { direction: 1, reversed: false, stalled: 0, wheelSteps: 0 };
+  // Content status lives above this long form; Save is at its bottom. Start
+  // that observed scan upward while retaining the same progress/end bounds.
+  let state = { direction: purpose === 'content-status' ? -1 : 1, reversed: false, stalled: 0, wheelSteps: 0 };
   let progressed: boolean | null = null;
   // Start where the owner actually is and scan nearby controls first. The
   // Settings editor keeps its draft alive while it moves outside the viewport.
@@ -262,8 +264,14 @@ async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'oth
     samples.push(sample);
     if (normalMatches > 1) { trace.result = 'ambiguous'; break; }
     const geometry = controlGeometry(box, viewport, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false);
-    if (geometry.ready && await target.isVisible()) {
-      if (!(await target.isEnabled())) { trace.result = 'disabled'; break; }
+    const readableStatus = purpose === 'content-status' && visibleGeometry(box, viewport);
+    if ((readableStatus || geometry.ready) && await target.isVisible()) {
+      if (purpose !== 'content-status') {
+        // Flutter temporarily disables its native range input after pointer
+        // input; observe it re-enable before allowing keyboard interaction.
+        try { await expect(target, 'Revealed control settles enabled').toBeEnabled(); }
+        catch { trace.result = 'disabled'; break; }
+      }
       trace.result = 'ready';
       return;
     }
@@ -284,25 +292,38 @@ async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'oth
   }
   throw new ControlRevealError(purpose, samples);
 }
-async function tapRevealedButton(page: Page, name: string): Promise<void> {
-  const target = page.getByRole('button', { name, exact: true });
+async function tapRevealedControl(page: Page, target: Locator): Promise<void> {
   await expect(target, 'The actual Flutter control is enabled').toBeEnabled();
   const box = await targetGeometry(page, target);
   expect(controlGeometry(box, page.viewportSize()!, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false).ready,
     'The control is in the viewport with an unobstructed same-view Flutter input surface').toBe(true);
-  if (box!.centerHit) return tapButton(page, name);
+  if (box!.centerHit) return target.click();
   // Send an ordinary physical pointer click through the actual Flutter input
   // surface. No force click, DOM event dispatch, or application callback.
   // The chooser/Storage/publisher/save assertions still prove the action.
   await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+}
+async function tapRevealedButton(page: Page, name: string): Promise<void> {
+  await tapRevealedControl(page, page.getByRole('button', { name, exact: true }));
+}
+async function selectRevealedDropdown(page: Page, current: string | RegExp, option: string): Promise<void> {
+  await tapRevealedControl(page, page.getByRole('button', { name: current, exact: false }));
+  await tapText(page, option, 'last');
 }
 async function revealButton(page: Page, name: string): Promise<void> {
   await reveal(page, page.getByRole('button', { name, exact: true }), name === L.save ? 'content-save' : name === L.saveProfile ? 'profile-save' : 'other', page.getByRole('button', { name, exact: true, includeHidden: true }));
   await expect(page.getByRole('button', { name, exact: true }), 'Actual revealed control is enabled').toBeEnabled();
 }
 async function fill(page: Page, name: string, value: string): Promise<void> {
-  await reveal(page, page.getByRole('textbox', { name }), 'field', page.getByRole('textbox', { name, includeHidden: true }));
-  await fillField(page, name, value);
+  const field = page.getByRole('textbox', { name, exact: true });
+  await reveal(page, field, 'field', page.getByRole('textbox', { name, exact: true, includeHidden: true }));
+  await tapRevealedControl(page, field);
+  await expect(field, 'Actual field receives focus before keyboard input').toBeFocused();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.press('Delete');
+  await expect(field, 'Actual field is cleared by keyboard input').toHaveValue('');
+  await page.keyboard.type(value, { delay: 12 });
+  await expect(field, 'Actual field reflects ordinary keyboard input').toHaveValue(value);
 }
 async function semantics(page: Page): Promise<void> {
   await waitForFlutterBoot(page);
@@ -310,6 +331,13 @@ async function semantics(page: Page): Promise<void> {
 }
 async function textContains(page: Page, text: string): Promise<void> {
   await expect.poll(() => readAccessibleText(page)).toContain(text);
+}
+async function revealSavedStatus(page: Page): Promise<void> {
+  // Flutter also copies live-region text into an offscreen announcement node.
+  // Reveal the real form text instead of accepting that invisible duplicate.
+  const status = page.locator('flt-semantics').getByText(L.saved, { exact: true });
+  await reveal(page, status, 'content-status');
+  await textContains(page, L.saved);
 }
 async function openEditor(page: Page, reload = false): Promise<void> {
   if (reload) await page.reload({ waitUntil: 'domcontentloaded' });
@@ -324,7 +352,7 @@ async function saveContent(page: Page): Promise<void> {
   const response = await responseAfterAction(saved, () => tapRevealedButton(page, L.save));
   expect(response.status(), 'Content writer HTTP result').toBe(200);
   expect((await response.json()).ok, 'Content writer accepted actual owner session').toBe(true);
-  await textContains(page, L.saved);
+  await revealSavedStatus(page);
 }
 async function invariants(f: Fixture, token: string): Promise<void> {
   const profile = await rpc(f, token, 'get_restaurant_storefront_profile');
@@ -705,7 +733,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       await fill(page, L.textColor, '#FFF1DA');
       await fill(page, L.buttonText, '#20140C');
       await reveal(page, page.getByRole('button', { name: fromFont, exact: false }), 'other', page.getByRole('button', { name: fromFont, exact: false, includeHidden: true }));
-      await selectDropdown(page, fromFont, label);
+      await selectRevealedDropdown(page, fromFont, label);
       await setDim(page, dim);
       await saveContent(page);
       await openEditor(page, true);
@@ -714,7 +742,9 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       expect(a.text_color).toBe('#fff1da');
       expect(a.button_text_color).toBe('#20140c');
       expect(a.font_family).toBe(font);
+      await reveal(page, page.getByRole('button', { name: label, exact: false }), 'other', page.getByRole('button', { name: label, exact: false, includeHidden: true }));
       await textContains(page, label);
+      await reveal(page, page.getByRole('slider'), 'dimming', page.getByRole('slider', { includeHidden: true }));
       expect(await readDim(page)).toBe(dim);
       await renderMenu(menu, f, firstUrl, dim, {
         text: '#fff1da', button: '#20140c', primary: '#211a16', accent: '#eab082',
@@ -759,8 +789,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
 
     stage = 'clear-selection-fallback-media-retained';
     await reveal(page, page.getByRole('button', { name: new RegExp(second.slice(0, 8)) }), 'other', page.getByRole('button', { name: new RegExp(second.slice(0, 8)), includeHidden: true }));
-    await page.getByRole('button', { name: new RegExp(second.slice(0, 8)) }).first().click();
-    await tapText(page, L.inherit, 'last');
+    await selectRevealedDropdown(page, new RegExp(second.slice(0, 8)), L.inherit);
     await saveContent(page);
     await openEditor(page, true);
     expect((await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id).toBeNull();
@@ -773,14 +802,12 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
 
     stage = 'clear-shared-hero-media-retained';
     await reveal(page, page.getByRole('button', { name: new RegExp(L.inherit) }), 'other', page.getByRole('button', { name: new RegExp(L.inherit), includeHidden: true }));
-    await page.getByRole('button', { name: new RegExp(L.inherit) }).first().click();
-    await tapText(page, f.heroMediaId.slice(0, 8), 'last');
+    await selectRevealedDropdown(page, new RegExp(L.inherit), f.heroMediaId.slice(0, 8));
     await saveContent(page);
     expect((await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id).toBe(f.heroMediaId);
     await invariants(f, token);
     await reveal(page, page.getByRole('button', { name: new RegExp(f.heroMediaId.slice(0, 8)) }), 'other', page.getByRole('button', { name: new RegExp(f.heroMediaId.slice(0, 8)), includeHidden: true }));
-    await page.getByRole('button', { name: new RegExp(f.heroMediaId.slice(0, 8)) }).first().click();
-    await tapText(page, L.inherit, 'last');
+    await selectRevealedDropdown(page, new RegExp(f.heroMediaId.slice(0, 8)), L.inherit);
     await saveContent(page);
     await openEditor(page, true);
     expect((await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id).toBeNull();

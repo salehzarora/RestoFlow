@@ -1,3 +1,7 @@
+export function visibleGeometry(
+  rect: { x: number; y: number; width: number; height: number } | null,
+  viewport: { width: number; height: number },
+): boolean;
 export function controlGeometry(
   rect: { x: number; y: number; width: number; height: number } | null,
   viewport: { width: number; height: number },

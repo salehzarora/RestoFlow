@@ -1,7 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { controlGeometry } from './control-geometry.mjs';
+import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 const viewport = { width: 1440, height: 1000 };
+
+test('noninteractive status can be read without qualifying as a pointer-reachable control', () => {
+  const status = { x: 900, y: 450, width: 170, height: 20 };
+  assert.equal(visibleGeometry(status, viewport), true);
+  assert.equal(controlGeometry(status, viewport, false).ready, false);
+  assert.equal(visibleGeometry({ ...status, y: -100 }, viewport), false);
+  assert.equal(visibleGeometry({ ...status, y: 930 }, viewport), false);
+  assert.equal(visibleGeometry(null, viewport), false);
+});
 test('attached control clipped at the CI screenshot bottom requires a real downward wheel', () => {
   const result = controlGeometry({ x: 900, y: 983, width: 170, height: 40 }, viewport, true);
   assert.equal(result.ready, false);
