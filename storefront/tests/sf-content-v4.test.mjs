@@ -66,14 +66,31 @@ test('adapter resolves presentation without mutating canonical identity, order o
   assert.equal(result.view.modules.promo.priceMinor,previous.view.items[0].priceMinor);assert.equal(result.view.modules.promo.image,previous.view.items[0].image);assert.equal(result.view.modules.promo.hasOptions,previous.view.items[0].hasOptions);
   const b=adaptStorefront(decodeStorefrontMenuV4(menu()),ORIGIN);assert.equal(b.view.categories[0].heading,null);assert.equal(b.view.items[0].imageFit,'fill');assert.equal(b.view.modules.story,null);
 });
-test('live composition requests v4 exactly once and never downgrades on old/malformed/error responses',async()=>{
+test('live composition requests v5 exactly once and never downgrades on old/malformed/error responses',async()=>{
   const old=globalThis.fetch,calls=[];const source=liveStorefrontSource({url:ORIGIN,anonKey:'SYNTHETIC_PUBLIC_KEY_NOT_A_REAL_SECRET'});
   try {
-    globalThis.fetch=async(url,init)=>{calls.push(url);assert.equal(url,ORIGIN+'/rest/v1/rpc/storefront_menu_v4');assert.equal(init.body,JSON.stringify({p_slug:'sf-synth-a'}));return {ok:true,json:async()=>menu()};};
+    globalThis.fetch=async(url,init)=>{calls.push(url);assert.equal(url,ORIGIN+'/rest/v1/rpc/storefront_menu_v5');assert.equal(init.body,JSON.stringify({p_slug:'sf-synth-a'}));return {ok:true,json:async()=>menu()};};
     assert.equal((await source.getStorefront('sf-synth-a')).view.tenant.slug,'sf-synth-a');assert.equal(calls.length,1);
     const {content_v1,...legacy}=menu();
     for(const body of [legacy,menu({schema:99}),{ok:false,error:'temporary',entity:'storefront_menu'}]){globalThis.fetch=async()=>{calls.push('only');return {ok:true,json:async()=>body};};await assert.rejects(()=>source.getStorefront('sf-synth-a'));}
     assert.equal(calls.length,4);
     globalThis.fetch=async()=>{calls.push('http');return {ok:false,status:404};};await assert.rejects(()=>source.getStorefront('sf-synth-a'),/HTTP 404/);assert.equal(calls.length,5);
   }finally{globalThis.fetch=old;}
+});
+
+test('new public reader never retries an older contract on missing, denied or transport failure', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const failure of [401, 403, 404, 500, 'network']) {
+      const calls = [];
+      globalThis.fetch = async (url) => {
+        calls.push(url);
+        if (failure === 'network') throw new Error('synthetic network failure');
+        return { ok: false, status: failure };
+      };
+      const source = liveStorefrontSource({ url: ORIGIN, anonKey: 'synthetic-publishable-key-only' });
+      await assert.rejects(() => source.getStorefront('sf-synth-a'));
+      assert.deepEqual(calls, [ORIGIN + '/rest/v1/rpc/storefront_menu_v5']);
+    }
+  } finally { globalThis.fetch = original; }
 });

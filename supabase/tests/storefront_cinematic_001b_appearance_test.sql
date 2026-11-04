@@ -48,31 +48,57 @@ select is(app.storefront_publish_blockers(pg_temp.aid('org'),pg_temp.aid('restau
 insert into app_users(id,email) values(pg_temp.aid('user'),'appearance@example.test');
 insert into memberships(id,app_user_id,organization_id,restaurant_id,role) values(pg_temp.aid('membership'),pg_temp.aid('user'),pg_temp.aid('org'),pg_temp.aid('restaurant'),'manager');
 select set_config('app.current_app_user_id',pg_temp.aid('user')::text,true);
+-- Exercise the actual legacy wire contract at each stored appearance state.
+create function pg_temp.assert_read_compatibility(label text) returns setof text language plpgsql as $$
+declare old_read jsonb; new_read jsonb; old_media jsonb; new_media jsonb; projected jsonb;
+begin
+ old_read:=public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'));
+ new_read:=public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'));
+ return next is(old_read->'document',(new_read->'document')-'appearance',label||': v1 document is exact legacy projection');
+ return next ok(not (old_read->'document') ? 'appearance',label||': v1 never contains appearance, including null');
+ return next is(old_read->'warnings',coalesce((select jsonb_agg(v) from jsonb_array_elements(new_read->'warnings') x(v)
+  where v->>'field' not like 'appearance%'),'[]'::jsonb),label||': legacy warning paths remain closed');
+ old_media:=public.list_storefront_content_media_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'));
+ new_media:=public.list_storefront_content_media_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'));
+ select coalesce(jsonb_agg(jsonb_set(v,'{content_in_use}',coalesce((select jsonb_agg(u) from jsonb_array_elements(v->'content_in_use') y(u)
+  where u->>'kind'<>'menu_background'),'[]'::jsonb)) order by n),'[]'::jsonb) into projected
+  from jsonb_array_elements(new_media->'media') with ordinality x(v,n);
+ return next is(old_media,jsonb_set(new_media,'{media}',projected),label||': media v1 retains exact legacy usage enums and envelope');
+end; $$;
 set local role authenticated;
+select * from pg_temp.assert_read_compatibility('appearance absent');
 select is(pg_temp.appearance_save('save',pg_temp.appearance_document()||'{"appearance":{"text_color":"#FFF4E6","button_text_color":"#14120F"}}',10)->>'version','11','appearance saves in existing single version step');
 select is(pg_temp.appearance_save('save',pg_temp.appearance_document()||'{"appearance":{"text_color":"#FFF4E6","button_text_color":"#14120F"}}',10)->>'idempotent_replay','true','exact appearance save replays');
-select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance}',
+select is(public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance}',
  '{"text_color":"#fff4e6","button_text_color":"#14120f"}'::jsonb,'private read roundtrips saved colors');
-select is(pg_temp.appearance_save('legacy',pg_temp.appearance_document(),11)->>'version','12','legacy content write remains accepted');
-select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,text_color}','#fff4e6','legacy content write preserves appearance');
+select * from pg_temp.assert_read_compatibility('populated');
+select is(pg_temp.appearance_save('legacy',public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))->'document',11)->>'version','12','legacy content write remains accepted');
+select is(public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,text_color}','#fff4e6','legacy content write preserves appearance');
 reset role;
-select is(public.storefront_menu_v4('appearance-cinematic-001b')#>>'{content_v1,appearance,text_color}','#fff4e6','public projection carries appearance');
+select is(public.storefront_menu_v4('appearance-cinematic-001b'),public.storefront_menu_v5('appearance-cinematic-001b')#-'{content_v1,appearance}',
+ 'legacy public menu preserves its exact projection across appearance state');
+select is(public.storefront_menu_v5('appearance-cinematic-001b')#>>'{content_v1,appearance,text_color}','#fff4e6','public projection carries appearance');
 select throws_ok($$update app.storefront_content_profiles set appearance='{"text_color":"red","button_text_color":null}' where restaurant_id=pg_temp.aid('restaurant')$$,'23514',null,'table constraint rejects invalid HEX');
 set local role authenticated;
 select is(pg_temp.appearance_save('clear',pg_temp.appearance_document()||'{"appearance":{"text_color":null,"button_text_color":null}}',12)->>'version','13','null color overrides explicitly restore defaults');
-select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance}',
+select is(public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance}',
  '{"text_color":null,"button_text_color":null}'::jsonb,'cleared overrides roundtrip');
+select * from pg_temp.assert_read_compatibility('explicit null');
 select is(pg_temp.appearance_save('font',pg_temp.appearance_document()||'{"appearance":{"text_color":null,"button_text_color":null,"font_family":"alexandria"}}',13)->>'version','14','font saves through the existing version step');
-select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,font_family}','alexandria','private read roundtrips the selected font');
+select is(public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,font_family}','alexandria','private read roundtrips the selected font');
 select is(pg_temp.appearance_save('old-color-editor',pg_temp.appearance_document()||'{"appearance":{"text_color":"#F0F0F0","button_text_color":null}}',14)->>'version','15','older color-only editor remains accepted');
-select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,font_family}','alexandria','omitted font preserves existing selection');
+select is(public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,font_family}','alexandria','omitted font preserves existing selection');
 reset role;
-select is(public.storefront_menu_v4('appearance-cinematic-001b')#>>'{content_v1,appearance,font_family}','alexandria','public projection carries selected font');
+select is(public.storefront_menu_v4('appearance-cinematic-001b'),public.storefront_menu_v5('appearance-cinematic-001b')#-'{content_v1,appearance}',
+ 'legacy public menu preserves its exact projection across appearance state');
+select is(public.storefront_menu_v5('appearance-cinematic-001b')#>>'{content_v1,appearance,font_family}','alexandria','public projection carries selected font');
 select throws_ok($$update app.storefront_content_profiles set appearance='{"text_color":null,"button_text_color":null,"font_family":"Arial"}' where restaurant_id=pg_temp.aid('restaurant')$$,'23514',null,'table constraint rejects unlisted font');
 set local role authenticated;
 select is(pg_temp.appearance_save('clear-font',pg_temp.appearance_document()||'{"appearance":{"text_color":"#f0f0f0","button_text_color":null,"font_family":null}}',15)->>'version','16','explicit null restores the default font');
-select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance,font_family}','null'::jsonb,'cleared font roundtrips');
+select is(public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance,font_family}','null'::jsonb,'cleared font roundtrips');
 reset role;
+select is(public.storefront_menu_v4('appearance-cinematic-001b'),public.storefront_menu_v5('appearance-cinematic-001b')#-'{content_v1,appearance}',
+ 'legacy public menu preserves its exact projection across appearance state');
 -- v5: independent menu backdrop uses only existing published w960 media.
 create function pg_temp.background_source(label text) returns text language sql immutable as $$
  select pg_temp.aid('org')::text||'/'||pg_temp.aid('restaurant')::text||'/logo/'||pg_temp.aid('original-'||label)::text||'.png';$$;
@@ -90,7 +116,7 @@ insert into public.storefront_media(id,organization_id,restaurant_id,source_buck
  pg_temp.aid('foreign-org')::text||'/'||pg_temp.aid('foreign-restaurant')::text||'/logo/'||pg_temp.aid('foreign-original')::text||'.png',
  'w960',app.storefront_media_prefix(pg_temp.aid('foreign-restaurant'))||'/'||repeat('6',64)||'.webp',repeat('6',64),960,640,1000,now());
 create function pg_temp.appearance_version() returns integer language sql stable as $$
- select (public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))->>'version')::integer;$$;
+ select (public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))->>'version')::integer;$$;
 create function pg_temp.background_document(media uuid,dim jsonb) returns jsonb language sql immutable as $$
  select pg_temp.appearance_document()||jsonb_build_object('appearance',jsonb_build_object('text_color','#f0f0f0','button_text_color',null,
   'menu_background_media_id',media,'menu_background_dim',dim));$$;
@@ -101,26 +127,35 @@ select is(app.storefront_content_document_shape_v1(jsonb_set(pg_temp.background_
 set local role authenticated;
 select is(public.set_restaurant_storefront_profile(pg_temp.aid('set-original-hero'),pg_temp.aid('org'),pg_temp.aid('restaurant'),pg_temp.appearance_version(),jsonb_build_object('hero_media_id',pg_temp.aid('media-hero')))->>'ok','true','independent Hero seed uses existing profile writer');
 select is(pg_temp.appearance_save('menu-select',pg_temp.background_document(pg_temp.aid('media-menu-a'),'15'),pg_temp.appearance_version())->>'ok','true','select menu background through existing writer');
-select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_media_id}',pg_temp.aid('media-menu-a')::text,'private read keeps selected ID');
+select is(public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_media_id}',pg_temp.aid('media-menu-a')::text,'private read keeps selected ID');
+select * from pg_temp.assert_read_compatibility('background selected');
 select is(pg_temp.appearance_save('menu-foreign',pg_temp.background_document(pg_temp.aid('foreign-media'),'15'),pg_temp.appearance_version())->>'reason','media_invalid','foreign media refused');
 select is(pg_temp.appearance_save('menu-staged',pg_temp.background_document(pg_temp.aid('media-staged'),'15'),pg_temp.appearance_version())->>'reason','media_invalid','unpublished media refused');
 select is(public.retract_storefront_media(pg_temp.aid('retract-menu-active'),pg_temp.aid('org'),pg_temp.aid('restaurant'),pg_temp.aid('media-menu-a'))->>'error','media_in_use','existing retract protects menu background reference');
-select is((select m->'content_in_use' from jsonb_array_elements(public.list_storefront_content_media_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))->'media') x(m) where m->>'id'=pg_temp.aid('media-menu-a')::text),'[{"kind":"menu_background"}]'::jsonb,'existing editor media list reports usage');
+select is((select m->'content_in_use' from jsonb_array_elements(public.list_storefront_content_media_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))->'media') x(m) where m->>'id'=pg_temp.aid('media-menu-a')::text),'[{"kind":"menu_background"}]'::jsonb,'existing editor media list reports usage');
+select is((select m->'content_in_use' from jsonb_array_elements(public.list_storefront_content_media_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))->'media') x(m) where m->>'id'=pg_temp.aid('media-menu-a')::text),'[]'::jsonb,'legacy media projection omits unsupported usage but retract remains authoritative');
+select is(pg_temp.appearance_save('menu-legacy-document',public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))->'document',pg_temp.appearance_version())->>'ok','true','old v1 reader document remains writable after a new appearance save');
+select is(public.retract_storefront_media(pg_temp.aid('retract-after-old-write'),pg_temp.aid('org'),pg_temp.aid('restaurant'),pg_temp.aid('media-menu-a'))->>'error','media_in_use','old full-document write retains authoritative menu-background retraction protection');
 select is(pg_temp.appearance_save('menu-old-editor',pg_temp.appearance_document()||'{"appearance":{"text_color":"#FFFFFF","button_text_color":null}}',pg_temp.appearance_version())->>'ok','true','older color writer remains accepted');
-select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_media_id}',pg_temp.aid('media-menu-a')::text,'older writer preserves background');
-select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_dim}','15','older writer preserves dim');
+select is(public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_media_id}',pg_temp.aid('media-menu-a')::text,'older writer preserves background');
+select is(public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_dim}','15','older writer preserves dim');
 reset role;
-select is(public.storefront_menu_v4('appearance-cinematic-001b')#>>'{content_v1,appearance,menu_background_url}',
+select is(public.storefront_menu_v4('appearance-cinematic-001b'),public.storefront_menu_v5('appearance-cinematic-001b')#-'{content_v1,appearance}',
+ 'legacy public menu preserves its exact projection across appearance state');
+select is(public.storefront_menu_v5('appearance-cinematic-001b')#>>'{content_v1,appearance,menu_background_url}',
  '/storage/v1/object/public/storefront-media/'||app.storefront_media_prefix(pg_temp.aid('restaurant'))||'/'||repeat('2',64)||'.webp','public projects eligible URL');
-select ok(not (public.storefront_menu_v4('appearance-cinematic-001b')#>'{content_v1,appearance}') ? 'menu_background_media_id','public never exposes private media ID field');
+select ok(not (public.storefront_menu_v5('appearance-cinematic-001b')#>'{content_v1,appearance}') ? 'menu_background_media_id','public never exposes private media ID field');
 select is((select hero_media_id from public.restaurant_storefront_profiles where restaurant_id=pg_temp.aid('restaurant')),pg_temp.aid('media-hero'),'menu selection never changes Hero');
 select throws_ok($$update app.storefront_content_profiles set appearance=jsonb_set(appearance,'{menu_background_dim}','81') where restaurant_id=pg_temp.aid('restaurant')$$,'23514',null,'table constraint rejects invalid dim');
 set local role authenticated;
+select * from pg_temp.assert_read_compatibility('old partial writer preserves background');
 select is(pg_temp.appearance_save('menu-replace',pg_temp.background_document(pg_temp.aid('media-menu-b'),'60'),pg_temp.appearance_version())->>'ok','true','replace menu background and dim');
 select is(public.retract_storefront_media(pg_temp.aid('retract-menu-previous'),pg_temp.aid('org'),pg_temp.aid('restaurant'),pg_temp.aid('media-menu-a'))->>'ok','true','old unselected background may be retracted');
 select is(public.finalize_storefront_media(pg_temp.aid('finalize-menu-replacement'),pg_temp.aid('org'),pg_temp.aid('restaurant'),pg_temp.aid('media-menu-b-replacement'))->>'ok','true','existing same-source finalize repoints background');
-select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_media_id}',pg_temp.aid('media-menu-b-replacement')::text,'republished derivative pointer roundtrips');
+select is(public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>>'{document,appearance,menu_background_media_id}',pg_temp.aid('media-menu-b-replacement')::text,'republished derivative pointer roundtrips');
 reset role;
+select is(public.storefront_menu_v4('appearance-cinematic-001b'),public.storefront_menu_v5('appearance-cinematic-001b')#-'{content_v1,appearance}',
+ 'legacy public menu preserves its exact projection across appearance state');
 select is((select hero_media_id from public.restaurant_storefront_profiles where restaurant_id=pg_temp.aid('restaurant')),pg_temp.aid('media-hero'),'replacement and republication preserve Hero');
 -- Move only this rollback-only fixture's metadata so the registered key is absent.
 -- Do not disable Storage's delete guard or delete object metadata directly.
@@ -129,17 +164,27 @@ with moved as (
  where bucket_id='storefront-media' and name=app.storefront_media_prefix(pg_temp.aid('restaurant'))||'/'||repeat('4',64)||'.webp'
  returning 1
 ) select is((select count(*)::integer from moved),1,'missing-object fixture moves exactly its synthetic replacement object');
-select is(public.storefront_menu_v4('appearance-cinematic-001b')#>'{content_v1,appearance,menu_background_url}','null'::jsonb,'unavailable public object projects null');
-select ok((public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))->'warnings') @> '[{"field":"appearance.menu_background_media_id","reason":"media_unavailable"}]'::jsonb,'private read warns on unavailable object');
+select is(public.storefront_menu_v5('appearance-cinematic-001b')#>'{content_v1,appearance,menu_background_url}','null'::jsonb,'unavailable public object projects null');
+select ok((public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))->'warnings') @> '[{"field":"appearance.menu_background_media_id","reason":"media_unavailable"}]'::jsonb,'private read warns on unavailable object');
+select * from pg_temp.assert_read_compatibility('unavailable background');
 select is((select appearance->>'menu_background_media_id' from app.storefront_content_profiles
  where restaurant_id=pg_temp.aid('restaurant') and storefront_branch_id=pg_temp.aid('branch') and deleted_at is null),
  pg_temp.aid('media-menu-b-replacement')::text,'unavailable public object does not mutate the saved background ID');
 set local role authenticated;
 select is(pg_temp.appearance_save('menu-clear',pg_temp.background_document(null,'null'),pg_temp.appearance_version())->>'ok','true','explicit null clears background and dim');
-select is(public.get_restaurant_storefront_content_v1(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance,menu_background_media_id}','null'::jsonb,'clear readback is explicit null');
+select is(public.get_restaurant_storefront_content_v2(pg_temp.aid('org'),pg_temp.aid('restaurant'))#>'{document,appearance,menu_background_media_id}','null'::jsonb,'clear readback is explicit null');
 reset role;
-select is(public.storefront_menu_v4('appearance-cinematic-001b')#>'{content_v1,appearance,menu_background_dim}','null'::jsonb,'dim clear roundtrips');
+select is(public.storefront_menu_v4('appearance-cinematic-001b'),public.storefront_menu_v5('appearance-cinematic-001b')#-'{content_v1,appearance}',
+ 'legacy public menu preserves its exact projection across appearance state');
+select * from pg_temp.assert_read_compatibility('cleared background');
+select is(public.storefront_menu_v5('appearance-cinematic-001b')#>'{content_v1,appearance,menu_background_dim}','null'::jsonb,'dim clear roundtrips');
 select is((select hero_media_id from public.restaurant_storefront_profiles where restaurant_id=pg_temp.aid('restaurant')),pg_temp.aid('media-hero'),'clearing menu background preserves Hero fallback');
+
+set local role anon;
+select is(public.storefront_menu_v5('appearance-cinematic-001b')->>'ok','true','anonymous new reader can read the eligible published tenant');
+select is(public.storefront_menu_v4('appearance-cinematic-001b'),public.storefront_menu_v5('appearance-cinematic-001b')#-'{content_v1,appearance}',
+ 'anonymous legacy reader stays exact after explicit clear');
+reset role;
 
 select * from finish();
 rollback;

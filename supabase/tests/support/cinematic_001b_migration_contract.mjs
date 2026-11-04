@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 
 export const migrationName = '20261102140930_bizbot_storefront_cinematic_001b_appearance.sql';
 export const migrationVersion = '20261102140930';
+export const wrapperOnlyCommit = '84d73363c218735648ab1b778337fb6ffdebfcd0';
+export const finalFingerprint = 'a276aef4fdd30b35272939e51d649bff3dfeb70b6c806ecb7c2edee94ceb263b';
 export const originalCommit = 'e71ab13dc258b5bc036b29a054e3744cb824d63e';
 export const originalFingerprint = 'b68c7d6a74dd91179042e65f038e2b1a85c58cc6efbc0e8713871f6d34669038';
 export const sha256 = (value) => createHash('sha256').update(value).digest('hex');
@@ -98,6 +100,22 @@ export function proveWrapperOnly(original, corrected, { pinOriginal = true } = {
     statement_bodies_byte_identical: true, other_bytes_preserved: true,
     removed: ['outer begin; line', 'final commit; line'],
   };
+}
+
+// The owner subsequently authorized versioned compatibility projections in
+// this still-unapplied migration. Keep the historical wrapper-only proof above,
+// then independently pin the exact reviewed final SQL and transaction boundary.
+export function proveFinalMigration(sql) {
+  assert.equal(sha256(sql), finalFingerprint, 'Unreviewed final migration bytes');
+  const all = statements(sql);
+  assert.ok(all.every(item => !/^(?:begin|commit|rollback)\s*;$/i.test(item.text)), 'Unexpected top-level transaction control');
+  for (const identity of ['app.storefront_content_read_v1', 'app.get_restaurant_storefront_content_v1',
+    'public.get_restaurant_storefront_content_v1', 'app.list_storefront_content_media_v1',
+    'public.list_storefront_content_media_v1', 'public.storefront_menu_v4']) {
+    assert.ok(!all.some(item => item.text.toLowerCase().startsWith(`create or replace function ${identity}(`) ||
+      item.text.toLowerCase().startsWith(`create function ${identity}(`)), `Legacy reader must remain unchanged: ${identity}`);
+  }
+  return { final_sha256: sha256(sql), final_statements: all.length, no_embedded_transaction: true, legacy_readers_unchanged: true };
 }
 
 export function requireEphemeralCi(env) {

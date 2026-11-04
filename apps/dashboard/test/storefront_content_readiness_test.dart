@@ -11,7 +11,8 @@ const _restaurant = '22222222-2222-4222-8222-222222222222';
 const _branch = '33333333-3333-4333-8333-333333333333';
 
 class _ReadinessTransport implements SyncRpcTransport {
-  _ReadinessTransport({this.missing = false, this.dim});
+  _ReadinessTransport({this.missing = false, this.dim, this.failure});
+  final SyncTransportException? failure;
   final bool missing;
   final int? dim;
   final calls = <String>[];
@@ -20,7 +21,8 @@ class _ReadinessTransport implements SyncRpcTransport {
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
     calls.add(function);
     expect(params, {'p_organization_id': _org, 'p_restaurant_id': _restaurant});
-    if (function == 'list_storefront_content_media_v1') {
+    if (failure != null) throw failure!;
+    if (function == 'list_storefront_content_media_v2') {
       return {
         'ok': true,
         'entity': 'storefront_content_media',
@@ -88,6 +90,30 @@ void main() {
     expect(result.snapshot, isNull);
     expect(transport.calls, ['get_restaurant_storefront_content_v2']);
   });
+
+  for (final failure in const [
+    SyncTransportException(SyncTransportErrorKind.server, code: '42501'),
+    SyncTransportException(SyncTransportErrorKind.auth, code: 'PGRST301'),
+    SyncTransportException(SyncTransportErrorKind.transient),
+    SyncTransportException(SyncTransportErrorKind.server, code: 'PGRST202'),
+  ]) {
+    test(
+      'content and media failures never downgrade: ${failure.code}',
+      () async {
+        final transport = _ReadinessTransport(failure: failure);
+        final repo = _repository(transport);
+        expect(
+          (await repo.readContent()).status,
+          StorefrontContentReadStatus.unavailable,
+        );
+        expect(await repo.listContentMedia(), isNull);
+        expect(transport.calls, [
+          'get_restaurant_storefront_content_v2',
+          'list_storefront_content_media_v2',
+        ]);
+      },
+    );
+  }
 
   test('ready backend accepts an untouched legacy document', () async {
     final result = await _repository(_ReadinessTransport()).readContent();

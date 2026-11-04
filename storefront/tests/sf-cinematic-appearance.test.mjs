@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { syntheticV4Envelope } from './support/content-envelope.mjs';
 
-const { decodeStorefrontMenuV4 } = await import('../src/source/live/decodeContentV1.ts');
+const { decodeStorefrontMenuV4, decodeStorefrontMenuV5 } = await import('../src/source/live/decodeContentV1.ts');
 const { EnvelopeError } = await import('../src/source/live/decode.ts');
 const { adaptStorefront } = await import('../src/source/live/adapter.ts');
 const { buildCinematicTheme } = await import('../src/theme/buildCinematicTheme.ts');
@@ -20,12 +20,12 @@ const withAppearance = appearance => {
   return envelope;
 };
 
-test('old v4 content remains exact and optional appearance never changes catalog or order data', () => {
-  const old = decodeStorefrontMenuV4(syntheticV4Envelope());
+test('v5 accepts legacy content and optional appearance never changes catalog or order data', () => {
+  const old = decodeStorefrontMenuV5(syntheticV4Envelope());
   assert.equal(Object.hasOwn(old.content_v1, 'appearance'), false);
   const before = adaptStorefront(old, ORIGIN);
   assert.equal(Object.hasOwn(before.view.tenant.brand, 'text'), false);
-  const decoded = decodeStorefrontMenuV4(withAppearance({ text_color: '#AbC123', button_text_color: '#000000' }));
+  const decoded = decodeStorefrontMenuV5(withAppearance({ text_color: '#AbC123', button_text_color: '#000000' }));
   assert.deepEqual(decoded.content_v1.appearance, { text_color: '#abc123', button_text_color: '#000000' });
   const after = adaptStorefront(decoded, ORIGIN);
   const { text, buttonText, ...oldBrand } = after.view.tenant.brand;
@@ -33,26 +33,42 @@ test('old v4 content remains exact and optional appearance never changes catalog
   assert.equal(buttonText, '#000000');
   assert.deepEqual(oldBrand, before.view.tenant.brand);
   assert.deepEqual({ ...after, view: { ...after.view, tenant: before.view.tenant } }, before);
-  const cleared = adaptStorefront(decodeStorefrontMenuV4(withAppearance({ text_color: null, button_text_color: null })), ORIGIN);
+  const cleared = adaptStorefront(decodeStorefrontMenuV5(withAppearance({ text_color: null, button_text_color: null })), ORIGIN);
   assert.equal(cleared.view.tenant.brand.text, null);
   assert.equal(cleared.view.tenant.brand.buttonText, null);
 });
 
+test('strict legacy v4 rejects every appearance extension while v5 accepts only its contract', () => {
+  const baseline = syntheticV4Envelope();
+  assert.deepEqual(decodeStorefrontMenuV4(baseline), decodeStorefrontMenuV5(baseline));
+  for (const appearance of [
+    { text_color: '#ffffff', button_text_color: '#121212', font_family: 'rubik' },
+    { text_color: null, button_text_color: null },
+    { text_color: null, button_text_color: null, menu_background_url: null, menu_background_dim: null },
+  ]) {
+    const raw = withAppearance(appearance);
+    assert.throws(() => decodeStorefrontMenuV4(raw), EnvelopeError);
+    assert.deepEqual(decodeStorefrontMenuV5(raw).content_v1.appearance, appearance);
+    delete raw.content_v1.appearance;
+    assert.deepEqual(decodeStorefrontMenuV4(raw), decodeStorefrontMenuV4(baseline));
+  }
+});
+
 test('appearance is a closed pair of nullable full HEX colours and rejects CSS or malformed payloads', () => {
   for (const value of [null, [], false, {}, { text_color: '#ffffff' }, { text_color: null, button_text_color: null, css: 'color:red' }]) {
-    assert.throws(() => decodeStorefrontMenuV4(withAppearance(value)), EnvelopeError);
+    assert.throws(() => decodeStorefrontMenuV5(withAppearance(value)), EnvelopeError);
   }
   for (const value of ['#abc', '#abcdef\n', ' #abcdef', '#abcdef00', 'white', 'var(--tx)', 'url(https://example.invalid)', 123, undefined]) {
     for (const key of ['text_color', 'button_text_color']) {
-      assert.throws(() => decodeStorefrontMenuV4(withAppearance({ text_color: null, button_text_color: null, [key]: value })), EnvelopeError);
+      assert.throws(() => decodeStorefrontMenuV5(withAppearance({ text_color: null, button_text_color: null, [key]: value })), EnvelopeError);
     }
   }
   for (const value of ['#000000', '#FFFFFF', '#f0aB76']) {
-    assert.equal(decodeStorefrontMenuV4(withAppearance({ text_color: value, button_text_color: value })).content_v1.appearance.text_color, value.toLowerCase());
+    assert.equal(decodeStorefrontMenuV5(withAppearance({ text_color: value, button_text_color: value })).content_v1.appearance.text_color, value.toLowerCase());
   }
   const unknown = withAppearance({ text_color: null, button_text_color: null });
   unknown.content_v1.extra = null;
-  assert.throws(() => decodeStorefrontMenuV4(unknown), EnvelopeError);
+  assert.throws(() => decodeStorefrontMenuV5(unknown), EnvelopeError);
 });
 
 test('cinematic defaults retain all valid brand colours and automatic control contrast', () => {
@@ -91,10 +107,10 @@ test('explicit appearance remains exact, including owner-chosen low-contrast col
 
 test('font selection is optional, allowlisted and travels through the public adapter without changing menu authority', () => {
   const colours = { text_color: '#fff4e6', button_text_color: null };
-  const baseline = adaptStorefront(decodeStorefrontMenuV4(withAppearance(colours)), ORIGIN);
+  const baseline = adaptStorefront(decodeStorefrontMenuV5(withAppearance(colours)), ORIGIN);
   assert.equal(Object.hasOwn(baseline.view.tenant.brand, 'fontFamily'), false);
   for (const font of ['rubik', 'alexandria', 'system', null]) {
-    const decoded = decodeStorefrontMenuV4(withAppearance({ ...colours, font_family: font }));
+    const decoded = decodeStorefrontMenuV5(withAppearance({ ...colours, font_family: font }));
     assert.equal(decoded.content_v1.appearance.font_family, font);
     const resolution = adaptStorefront(decoded, ORIGIN);
     assert.equal(resolution.view.tenant.brand.fontFamily, font);
@@ -102,7 +118,7 @@ test('font selection is optional, allowlisted and travels through the public ada
     assert.equal(buildCinematicTheme(resolution.view.tenant.brand).font, storefrontFont(font));
   }
   for (const font of ['', 'Arial', 'Alexandria', 'rubik ', 'url(https://example.invalid/font)', 'var(--unsafe)', 1, true, [], {}, undefined]) {
-    assert.throws(() => decodeStorefrontMenuV4(withAppearance({ ...colours, font_family: font })), EnvelopeError);
+    assert.throws(() => decodeStorefrontMenuV5(withAppearance({ ...colours, font_family: font })), EnvelopeError);
   }
 });
 
@@ -120,12 +136,12 @@ test('independent menu background selects, replaces and clears without changing 
   const path = hash => '/storage/v1/object/public/storefront-media/' + 'a'.repeat(32) + '/' + hash.repeat(64) + '.webp';
   const envelope = syntheticV4Envelope();
   envelope.restaurant.hero_url = path('b');
-  const original = adaptStorefront(decodeStorefrontMenuV4(envelope), ORIGIN);
+  const original = adaptStorefront(decodeStorefrontMenuV5(envelope), ORIGIN);
   assert.deepEqual(menuBackground(original.view.tenant), { kind: 'legacy', image: ORIGIN + path('b'), dim: null });
   for (const [image, dim, expectedDim] of [[path('c'), 0, 0], [path('d'), 80, 80], [path('c'), null, 15], [null, 55, null]]) {
     const next = structuredClone(envelope);
     next.content_v1.appearance = { text_color: '#fff4e6', button_text_color: '#131313', font_family: 'alexandria', menu_background_url: image, menu_background_dim: dim };
-    const resolved = adaptStorefront(decodeStorefrontMenuV4(next), ORIGIN);
+    const resolved = adaptStorefront(decodeStorefrontMenuV5(next), ORIGIN);
     assert.equal(resolved.view.tenant.heroImage, original.view.tenant.heroImage);
     assert.deepEqual(resolved.view.items, original.view.items);
     assert.deepEqual(resolved.groups, original.groups);
@@ -141,13 +157,13 @@ test('independent menu background selects, replaces and clears without changing 
 test('menu background wire fields reject arbitrary URLs, private IDs and invalid dim values', () => {
   const colours = { text_color: null, button_text_color: null };
   for (const image of ['', 'https://example.com/a.webp', 'javascript:alert(1)', '/cinematic-preview/menu-background.webp', 1, false, {}]) {
-    assert.throws(() => decodeStorefrontMenuV4(withAppearance({ ...colours, menu_background_url: image })), EnvelopeError);
+    assert.throws(() => decodeStorefrontMenuV5(withAppearance({ ...colours, menu_background_url: image })), EnvelopeError);
   }
-  assert.throws(() => decodeStorefrontMenuV4(withAppearance({ ...colours, menu_background_media_id: null })), EnvelopeError);
+  assert.throws(() => decodeStorefrontMenuV5(withAppearance({ ...colours, menu_background_media_id: null })), EnvelopeError);
   for (const dim of [-1, 81, 15.5, '15', false, [], {}, undefined, Infinity]) {
-    assert.throws(() => decodeStorefrontMenuV4(withAppearance({ ...colours, menu_background_dim: dim })), EnvelopeError);
+    assert.throws(() => decodeStorefrontMenuV5(withAppearance({ ...colours, menu_background_dim: dim })), EnvelopeError);
   }
   for (const dim of [0, 15, 80, null]) {
-    assert.equal(decodeStorefrontMenuV4(withAppearance({ ...colours, menu_background_dim: dim })).content_v1.appearance.menu_background_dim, dim);
+    assert.equal(decodeStorefrontMenuV5(withAppearance({ ...colours, menu_background_dim: dim })).content_v1.appearance.menu_background_dim, dim);
   }
 });

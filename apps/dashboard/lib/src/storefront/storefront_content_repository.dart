@@ -101,7 +101,7 @@ class SupabaseStorefrontContentRepository
   // backend can return a valid legacy document without supporting these writes.
   static const readFunction = 'get_restaurant_storefront_content_v2';
   static const writeFunction = 'set_restaurant_storefront_content_v1';
-  static const mediaFunction = 'list_storefront_content_media_v1';
+  static const mediaFunction = 'list_storefront_content_media_v2';
   Map<String, dynamic> get _scope => {
     'p_organization_id': organizationId,
     'p_restaurant_id': restaurantId,

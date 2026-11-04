@@ -65,10 +65,10 @@ globalThis.fetch = async function(input, init) {
  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
  const headers = new Headers(init?.headers ?? input?.headers);
  const method = (init?.method ?? input?.method ?? 'GET').toUpperCase();
- if (url !== logical + '/rest/v1/rpc/storefront_menu_v4' || method !== 'POST' || headers.get('apikey') !== key || headers.get('authorization') !== 'Bearer ' + key) throw new Error('seo_loopback_boundary_denied');
+ if (url !== logical + '/rest/v1/rpc/storefront_menu_v5' || method !== 'POST' || headers.get('apikey') !== key || headers.get('authorization') !== 'Bearer ' + key) throw new Error('seo_loopback_boundary_denied');
  let body; try { body = JSON.parse(init?.body); } catch { throw new Error('seo_loopback_body_denied'); }
  if (!body || Object.keys(body).join(',') !== 'p_slug' || !allowedSlugs.has(body.p_slug)) throw new Error('seo_loopback_scope_denied');
- return originalFetch('http://127.0.0.1:${rpcPort}/rest/v1/rpc/storefront_menu_v4', { ...init, method, headers, redirect:'error' });
+ return originalFetch('http://127.0.0.1:${rpcPort}/rest/v1/rpc/storefront_menu_v5', { ...init, method, headers, redirect:'error' });
 };
 `;
 }
@@ -108,7 +108,7 @@ test('real live Next emits scoped menu metadata while retaining noindex and one 
     for await (const chunk of req) { text += chunk; if (text.length > 1024) { res.writeHead(413).end(); return; } }
     let body; try { body = JSON.parse(text); } catch { body = null; }
     const slug = body?.p_slug;
-    if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu_v4' || req.headers.apikey !== SYNTHETIC_KEY || req.headers.authorization !== `Bearer ${SYNTHETIC_KEY}` || !Object.values(slugs).includes(slug) || Object.keys(body).join(',') !== 'p_slug') {
+    if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu_v5' || req.headers.apikey !== SYNTHETIC_KEY || req.headers.authorization !== `Bearer ${SYNTHETIC_KEY}` || !Object.values(slugs).includes(slug) || Object.keys(body).join(',') !== 'p_slug') {
       rejected.push({ method: req.method, path: req.url }); res.writeHead(403).end(); return;
     }
     counts.set(slug, (counts.get(slug) ?? 0) + 1);

@@ -1,4 +1,4 @@
-/** v4 is a separate strict wire boundary. Server drift normalization is NOT
+/** v4 and v5 are separate strict wire boundaries. Server drift normalization is NOT
  * decoder repair. No network, environment, v3 endpoint retry or fixture path. */
 import type { HeroFormat, ImageFit, CardLayout, FontFamily } from '../types';
 import { contentTextValid, heroFormatValid } from '../../content/unicode';
@@ -18,7 +18,7 @@ export interface WireAppearance {
 }
 export interface WireContentV1 {
   readonly schema:1;
-  /** Additive visual fields; the original v4 content shape remains valid. */
+  /** Only menu v5 exposes these fields; v4 rejects them. */
   readonly appearance?:WireAppearance;
   readonly hero:{ readonly mode:'editorial'|'item';readonly item_id:string|null;readonly format:HeroFormat|null;readonly eyebrow:string|null;readonly stamp:string|null;readonly footnote:string|null; };
   readonly announcement_segments:readonly string[]|null;
@@ -67,7 +67,15 @@ function format(v:unknown,headline:string|null):HeroFormat|null{
   if((highlight===null&&b===null)||!heroFormatValid(o.text,highlight?.start??null,highlight?.end??null,b))return reject('hero.format');
   return {text:o.text,highlight,break_before:b};
 }
+export type StorefrontMenuV5Ok = StorefrontMenuV4Ok;
+export type StorefrontMenuV5Envelope = StorefrontMenuV5Ok|StorefrontMenuFailure;
 export function decodeStorefrontMenuV4(raw:unknown):StorefrontMenuV4Envelope{
+  return decodeContent(raw,false);
+}
+export function decodeStorefrontMenuV5(raw:unknown):StorefrontMenuV5Envelope{
+  return decodeContent(raw,true);
+}
+function decodeContent(raw:unknown,allowAppearance:boolean):StorefrontMenuV5Envelope{
   if(typeof raw!=='object'||raw===null||Array.isArray(raw))return reject('envelope');
   const e=raw as Record<string,unknown>;
   if(e.ok===false)return decodeStorefrontMenuV3(e) as StorefrontMenuFailure;
@@ -82,7 +90,7 @@ export function decodeStorefrontMenuV4(raw:unknown):StorefrontMenuV4Envelope{
   const servedItems=new Set(base.items.filter(i=>categoryMap.has(i.category_id)).map(i=>i.id));
   const populated=new Set(base.items.filter(i=>servedItems.has(i.id)).map(i=>i.category_id));
   const contentKeys=['schema','hero','announcement_segments','promo','story','category_presentation','item_presentation'];
-  if(typeof content==='object'&&content!==null&&Object.hasOwn(content,'appearance'))contentKeys.push('appearance');
+  if(allowAppearance&&typeof content==='object'&&content!==null&&Object.hasOwn(content,'appearance'))contentKeys.push('appearance');
   const o=record(content,contentKeys,'object');if(o.schema!==1)return reject('schema');
   let appearance:WireAppearance|undefined;
   if(Object.hasOwn(o,'appearance')){

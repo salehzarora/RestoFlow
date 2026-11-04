@@ -33,7 +33,7 @@ export async function startFixture() {
     let body = '';
     for await (const chunk of req) { body += chunk; if (body.length > 1024) { res.writeHead(413); res.end(); return; } }
     let json; try { json = JSON.parse(body); } catch { json = null; }
-    const valid = req.method === 'POST' && req.url === '/rest/v1/rpc/storefront_menu_v4' && req.headers.apikey === SYNTHETIC_KEY && req.headers.authorization === `Bearer ${SYNTHETIC_KEY}` && json && Object.keys(json).length === 1 && SLUGS.includes(json.p_slug);
+    const valid = req.method === 'POST' && req.url === '/rest/v1/rpc/storefront_menu_v5' && req.headers.apikey === SYNTHETIC_KEY && req.headers.authorization === `Bearer ${SYNTHETIC_KEY}` && json && Object.keys(json).length === 1 && SLUGS.includes(json.p_slug);
     if (!valid) { rejected.push({ method: req.method, path: req.url }); res.writeHead(403); res.end(); return; }
     calls.push({ method: req.method, path: req.url, slug: json.p_slug });
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(envelope(json.p_slug)));
@@ -45,15 +45,15 @@ export async function startFixture() {
   // Demonstrate that the exact logical read maps to synthetic bytes, while
   // near-misses reject before the original fetch/socket implementation.
   const request = { method: 'POST', headers: { apikey: SYNTHETIC_KEY, authorization: `Bearer ${SYNTHETIC_KEY}`, 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ p_slug: SLUGS[0] }) };
-  const positive = await fetch(`${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v4`, request);
+  const positive = await fetch(`${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v5`, request);
   assert.equal(positive.status, 200); assert.equal((await positive.json()).restaurant.slug, SLUGS[0]);
   const beforeRejectedCalls = calls.length;
   const negatives = [
     [`${LOGICAL_ORIGIN}/functions/v1/web-order-submit`, request],
-    [`${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v4`, { ...request, method: 'GET', body: undefined }],
+    [`${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v5`, { ...request, method: 'GET', body: undefined }],
     [`${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v3`, request],
-    [`${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v4`, { ...request, body: JSON.stringify({ p_slug: 'not-approved' }) }],
-    [`${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v4?unexpected=1`, request],
+    [`${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v5`, { ...request, body: JSON.stringify({ p_slug: 'not-approved' }) }],
+    [`${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v5?unexpected=1`, request],
     ['https://example.invalid/', { method: 'GET' }],
   ];
   for (const [url, init] of negatives) await assert.rejects(fetch(url, init), /cart_navigation_offline_boundary_denied/);

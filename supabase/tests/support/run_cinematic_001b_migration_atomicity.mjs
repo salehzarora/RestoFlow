@@ -7,7 +7,7 @@ import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from '
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  migrationName, migrationVersion, originalCommit, proveWrapperOnly,
+  migrationName, migrationVersion, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration,
   requireEphemeralCi, sha256,
 } from './cinematic_001b_migration_contract.mjs';
 
@@ -49,9 +49,21 @@ function schemaSnapshot() {
     .split('\n').filter((line) => !/^\\(?:un)?restrict [A-Za-z0-9]+$/.test(line)).join('\n');
 }
 const historyQuery = "select coalesce(jsonb_agg(to_jsonb(h) order by version),'[]'::jsonb)::text from supabase_migrations.schema_migrations h;";
+const legacyReadersQuery = `select jsonb_agg(jsonb_build_object(
+  'identity', p.oid::regprocedure::text, 'definition', pg_get_functiondef(p.oid),
+  'acl', p.proacl, 'owner', p.proowner) order by p.oid::regprocedure::text)::text
+  from pg_proc p where p.oid in (
+    'app.storefront_content_read_v1(uuid,uuid,uuid,text,text,text,jsonb)'::regprocedure,
+    'app.get_restaurant_storefront_content_v1(uuid,uuid)'::regprocedure,
+    'public.get_restaurant_storefront_content_v1(uuid,uuid)'::regprocedure,
+    'app.list_storefront_content_media_v1(uuid,uuid)'::regprocedure,
+    'public.list_storefront_content_media_v1(uuid,uuid)'::regprocedure,
+    'public.storefront_menu_v4(text)'::regprocedure);`;
 const readinessQuery = `select json_build_object(
   'column', exists(select 1 from pg_attribute where attrelid='app.storefront_content_profiles'::regclass and attname='appearance' and not attisdropped),
   'rpc', to_regprocedure('public.get_restaurant_storefront_content_v2(uuid,uuid)') is not null,
+  'media_rpc', to_regprocedure('public.list_storefront_content_media_v2(uuid,uuid)') is not null,
+  'menu_rpc', to_regprocedure('public.storefront_menu_v5(text)') is not null,
   'history', (select count(*) from supabase_migrations.schema_migrations where version='${migrationVersion}'))::text;`;
 
 try {
@@ -74,7 +86,8 @@ try {
   const migrationPath = join(root, 'supabase/migrations', migrationName);
   const corrected = await readFile(migrationPath, 'utf8');
   const original = checked('git', ['show', `${originalCommit}:supabase/migrations/${migrationName}`]);
-  Object.assign(receipt, proveWrapperOnly(original, corrected), {
+  const historical = checked('git', ['show', `${wrapperOnlyCommit}:supabase/migrations/${migrationName}`]);
+  Object.assign(receipt, { historical_wrapper_only: proveWrapperOnly(original, historical) }, proveFinalMigration(corrected), {
     tested_commit: checked('git', ['rev-parse', 'HEAD']).trim(),
     tested_tree: checked('git', ['rev-parse', 'HEAD^{tree}']).trim(),
     cli_version: '2.107.0',
@@ -86,11 +99,13 @@ try {
 
   phase = 'prepare_before_target';
   checked('supabase', ['db', 'reset', '--local', '--version', previousVersion, '--no-seed', '--yes']);
-  assert.deepEqual(JSON.parse(sql(readinessQuery)), { column: false, rpc: false, history: 0 });
+  assert.deepEqual(JSON.parse(sql(readinessQuery)), { column: false, rpc: false, media_rpc: false, menu_rpc: false, history: 0 });
   const beforeSchema = schemaSnapshot();
   const beforeHistory = sql(historyQuery);
+  const beforeLegacyReaders = sql(legacyReadersQuery);
   receipt.before_schema_sha256 = sha256(beforeSchema);
   receipt.before_history_sha256 = sha256(beforeHistory);
+  receipt.legacy_readers_before_sha256 = sha256(beforeLegacyReaders);
   temporary = await mkdtemp(join(process.env.RUNNER_TEMP, 'cinematic-migration-failure-'));
   await mkdir(join(temporary, 'supabase'), { recursive: true });
   await writeFile(join(temporary, 'supabase/config.toml'), config);
@@ -99,7 +114,9 @@ try {
   // deliberate exception must roll them, their ACLs and migration history back.
   const failure = `\ndo $cinematic_late_failure$\nbegin
  if not exists(select 1 from pg_attribute where attrelid='app.storefront_content_profiles'::regclass and attname='appearance' and not attisdropped)
-  or to_regprocedure('public.get_restaurant_storefront_content_v2(uuid,uuid)') is null then
+  or to_regprocedure('public.get_restaurant_storefront_content_v2(uuid,uuid)') is null
+  or to_regprocedure('public.list_storefront_content_media_v2(uuid,uuid)') is null
+  or to_regprocedure('public.storefront_menu_v5(text)') is null then
   raise exception 'BIZBOT_CINEMATIC_FAILURE_PRECONDITION';
  end if;
  raise exception 'BIZBOT_CINEMATIC_LATE_FAILURE' using errcode='P0001';
@@ -112,15 +129,19 @@ end;\n$cinematic_late_failure$;\n`;
   assert.match(failed.stderr + failed.stdout, /SQLSTATE P0001/);
   receipt.expected_failure = { exit_code: failed.code, marker: 'BIZBOT_CINEMATIC_LATE_FAILURE', sqlstate: 'P0001' };
   phase = 'assert_atomic_rollback';
-  assert.deepEqual(JSON.parse(sql(readinessQuery)), { column: false, rpc: false, history: 0 });
+  assert.deepEqual(JSON.parse(sql(readinessQuery)), { column: false, rpc: false, media_rpc: false, menu_rpc: false, history: 0 });
   assert.equal(schemaSnapshot(), beforeSchema, 'Schema (including replaced functions and ACLs) must roll back');
   assert.equal(sql(historyQuery), beforeHistory, 'Entire migration history must roll back with schema');
   receipt.schema_and_history_rollback = 'PASS';
 
   phase = 'apply_corrected_target';
   checked('supabase', ['migration', 'up', '--local']);
-  assert.deepEqual(JSON.parse(sql(readinessQuery)), { column: true, rpc: true, history: 1 });
+  assert.deepEqual(JSON.parse(sql(readinessQuery)), { column: true, rpc: true, media_rpc: true, menu_rpc: true, history: 1 });
   assert.equal(await readFile(migrationPath, 'utf8'), corrected, 'Tracked migration must remain unmodified');
+  const afterLegacyReaders = sql(legacyReadersQuery);
+  assert.equal(afterLegacyReaders, beforeLegacyReaders, 'Legacy reader definitions, ACLs and owners must remain byte-identical');
+  receipt.legacy_readers_after_sha256 = sha256(afterLegacyReaders);
+  receipt.legacy_reader_catalog_preservation = 'PASS';
   receipt.successful_target_application = 'PASS';
   receipt.after_schema_sha256 = sha256(schemaSnapshot());
   receipt.after_history_sha256 = sha256(sql(historyQuery));

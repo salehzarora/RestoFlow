@@ -2,7 +2,7 @@
 // `next start` of a LIVE-MODE build (STOREFRONT_SOURCE=live at build time - the
 // spec refuses a fixture build). Two sources of truth, one contract:
 //
-//   STUB   an in-process HTTP server that answers `/rest/v1/rpc/storefront_menu_v4`
+//   STUB   an in-process HTTP server that answers `/rest/v1/rpc/storefront_menu_v5`
 //          with the SAME synthetic envelope the unit tests use
 //          (tests/support/envelope.mjs). Always runs. Proves the served
 //          contract without a database: cache segregation and the ISR header
@@ -193,7 +193,7 @@ test.describe('STOREFRONT-READ-001 live read against a STUB envelope server', ()
       let body = '';
       req.on('data', (c) => (body += c));
       req.on('end', () => {
-        if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu_v4') {
+        if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu_v5') {
           res.writeHead(404, { 'content-type': 'application/json' });
           res.end('{"message":"not found"}');
           return;

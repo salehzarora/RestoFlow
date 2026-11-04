@@ -42,7 +42,7 @@ const api = createServer((req, res) => {
     res.end(readFileSync(path.join(root, 'public/cinematic-preview/cover.webp')));
     return;
   }
-  if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu_v4') { res.writeHead(404); res.end(); return; }
+  if (req.method !== 'POST' || req.url !== '/rest/v1/rpc/storefront_menu_v5') { res.writeHead(404); res.end(); return; }
   let body = '';
   req.on('data', chunk => { body += chunk; });
   req.on('end', () => {
@@ -53,7 +53,7 @@ const api = createServer((req, res) => {
 });
 await new Promise(resolve => api.listen(4495, '127.0.0.1', resolve));
 const preload = path.join(output, 'closeout-fetch.mjs');
-writeFileSync(preload, `const realFetch = globalThis.fetch;\nglobalThis.fetch = (input, init) => {\n const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;\n if (url !== ${JSON.stringify(`${publicOrigin}/rest/v1/rpc/storefront_menu_v4`)}) throw new Error('unexpected_offline_fetch');\n return realFetch(${JSON.stringify(`${apiOrigin}/rest/v1/rpc/storefront_menu_v4`)}, init);\n};\n`);
+writeFileSync(preload, `const realFetch = globalThis.fetch;\nglobalThis.fetch = (input, init) => {\n const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;\n if (url !== ${JSON.stringify(`${publicOrigin}/rest/v1/rpc/storefront_menu_v5`)}) throw new Error('unexpected_offline_fetch');\n return realFetch(${JSON.stringify(`${apiOrigin}/rest/v1/rpc/storefront_menu_v5`)}, init);\n};\n`);
 const server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', '4494'], {
   cwd: root, stdio: ['ignore', 'ignore', 'pipe'], env: { ...process.env, STOREFRONT_SOURCE: 'live',
     NODE_OPTIONS: `--import=${preload}`, STOREFRONT_SUPABASE_URL: publicOrigin,

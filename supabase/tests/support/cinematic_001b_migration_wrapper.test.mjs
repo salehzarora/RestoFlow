@@ -3,16 +3,24 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
-  migrationName, originalCommit, proveWrapperOnly, requireEphemeralCi,
+  migrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration, requireEphemeralCi,
   statements, withoutOuterTransaction,
 } from './cinematic_001b_migration_contract.mjs';
 
-test('actual migration removes exactly two outer statement lines', () => {
+test('historical migration removed exactly two outer statement lines', () => {
   const original = execFileSync('git', ['show', `${originalCommit}:supabase/migrations/${migrationName}`], { encoding: 'utf8' });
-  const corrected = readFileSync(new URL(`../../migrations/${migrationName}`, import.meta.url), 'utf8');
+  const corrected = execFileSync('git', ['show', `${wrapperOnlyCommit}:supabase/migrations/${migrationName}`], { encoding: 'utf8' });
   const proof = proveWrapperOnly(original, corrected);
   assert.equal(proof.corrected_statements, 11);
   assert.equal(proof.corrected_sha256, '478e950e8e3ac571e439b9dc8a4ae757db7e1e53c234d8f2fb30e9c3343b0462');
+});
+
+test('final authorized compatibility migration is pinned, atomic and preserves legacy readers', () => {
+  const sql = readFileSync(new URL(`../../migrations/${migrationName}`, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+  const proof = proveFinalMigration(sql);
+  assert.equal(proof.legacy_readers_unchanged, true);
+  assert.throws(() => proveFinalMigration(sql + '\ncommit;\n'));
+  assert.throws(() => proveFinalMigration(sql.replace('storefront_menu_v5', 'storefront_menu_v4')));
 });
 
 const wrapped = `-- do not remove this begin;\nbegin;\n\n/* outer /* inner ; */ comment */\ncreate function f() returns void language plpgsql as $body$\nbegin perform ';'; /* commit; */ end;\n$body$;\nselect E'quote\\\';inside', 'doubled'';', "quoted;";\n\ncommit;\n-- keep the tail\n`;

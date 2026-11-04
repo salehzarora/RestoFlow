@@ -1,9 +1,13 @@
 -- BIZBOT-STOREFRONT-CINEMATIC-001B: optional colors, font and menu background.
--- Reuses versioned content RPCs and the existing published editorial media.
--- Hero remains independent. A readiness reader reuses existing authorization;
--- no RLS, order, payment or existing writer/media permission changes.
--- Deploy readers accepting optional appearance before enabling color saves.
+-- Versioned reads preserve legacy strict clients after appearance is saved.
+-- Content/media v1 and public menu v4 remain byte-for-byte unchanged.
+-- New content/media v2 and public menu v5 use the existing authorization.
+-- Apply this migration before deploying the new readers/editor.
 -- Existing documents omit appearance; legacy saves preserve stored overrides.
+
+-- Bound lock acquisition and execution inside the official migration transaction.
+set local lock_timeout = '5s';
+set local statement_timeout = '30s';
 
 alter table app.storefront_content_profiles
  add column appearance jsonb,
@@ -177,7 +181,7 @@ begin
  return jsonb_build_object('document',d);
 end; $$;
 
-create or replace function app.storefront_content_read_v1(p_org uuid,p_restaurant uuid,p_branch uuid,p_headline text,p_subline text,p_announcement text,p_catalog jsonb)
+create function app.storefront_content_read_v2(p_org uuid,p_restaurant uuid,p_branch uuid,p_headline text,p_subline text,p_announcement text,p_catalog jsonb)
 returns jsonb language plpgsql stable set search_path='' as $$
 declare r app.storefront_content_profiles%rowtype; cr app.storefront_category_presentation%rowtype;
  ir app.storefront_item_presentation%rowtype; h jsonb; f jsonb:='null';promo jsonb:='null';story jsonb:='null';cats jsonb:='[]';items jsonb:='[]';warnings jsonb:='[]';
@@ -257,6 +261,21 @@ begin
  return jsonb_build_object('document',v_doc,'warnings',warnings);
 end; $$;
 
+create function app.get_restaurant_storefront_content_v2(p_organization_id uuid,p_restaurant_id uuid)
+returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare p public.restaurant_storefront_profiles%rowtype;v jsonb;actor_rank integer;
+begin
+ if app.current_app_user_id() is null then raise exception 'storefront content authentication required' using errcode='42501';end if;
+ if p_organization_id is null or p_restaurant_id is null or not exists(select 1 from public.restaurants r where r.id=p_restaurant_id and r.organization_id=p_organization_id and r.deleted_at is null) then raise exception 'storefront content scope denied' using errcode='42501';end if;
+ actor_rank:=app.actor_rank_in_scope(p_organization_id,p_restaurant_id,null);
+ if actor_rank=0 then raise exception 'storefront content authority denied' using errcode='42501';end if;
+ if actor_rank<2 then return jsonb_build_object('ok',false,'error','not_found','entity','restaurant_storefront_content');end if;
+ select * into p from public.restaurant_storefront_profiles where organization_id=p_organization_id and restaurant_id=p_restaurant_id and deleted_at is null;
+ if not found then return jsonb_build_object('ok',false,'error','not_found','entity','restaurant_storefront_content');end if;
+ v:=app.storefront_content_read_v2(p_organization_id,p_restaurant_id,p.storefront_branch_id,p.hero_headline,p.hero_subline,p.announcement_text,app.storefront_content_catalog_v1(p_organization_id,p_restaurant_id,p.storefront_branch_id));
+ return jsonb_build_object('ok',true,'entity','restaurant_storefront_content','restaurant_id',p_restaurant_id,'version',p.version,'storefront_branch_id',p.storefront_branch_id,'document',v->'document','warnings',v->'warnings');
+end; $$;
+
 create or replace function app.set_restaurant_storefront_content_v1(p_client_request_id uuid,p_organization_id uuid,p_restaurant_id uuid,p_expected_version integer,p_expected_storefront_branch_id uuid,p_document jsonb)
 returns jsonb language plpgsql volatile security definer set search_path='' as $$
 declare actor uuid:=app.current_app_user_id();rank_value integer;p public.restaurant_storefront_profiles%rowtype;
@@ -317,7 +336,7 @@ begin
  end loop;
  result:=jsonb_build_object('ok',true,'idempotent_replay',false,'entity',c_entity,'restaurant_id',p_restaurant_id,'version',p.version+1,'slug',p.slug,'is_published',p.is_published);
  replay:=app.management_claim_request(actor,p_client_request_id,c_operation,fp,result);if replay is not null then return replay;end if;
- old_doc:=app.get_restaurant_storefront_content_v1(p_organization_id,p_restaurant_id)->'document';
+ old_doc:=app.get_restaurant_storefront_content_v2(p_organization_id,p_restaurant_id)->'document';
  -- Existing writer compatibility trigger clears OLD formatting first. The new
  -- validated tuple is installed only afterward, in this same transaction.
  update public.restaurant_storefront_profiles set hero_headline=d->>'hero_headline',hero_subline=d->>'hero_subline',announcement_text=d->>'announcement_text',version=p.version+1
@@ -352,12 +371,12 @@ begin
   values(p_organization_id,p_restaurant_id,p.storefront_branch_id,(v->>'item_id')::uuid,v->>'image_fit',v->>'card_layout')
   on conflict(organization_id,restaurant_id,storefront_branch_id,item_id) do update set image_fit=excluded.image_fit,card_layout=excluded.card_layout,deleted_at=null;
  end loop;
- new_doc:=app.get_restaurant_storefront_content_v1(p_organization_id,p_restaurant_id)->'document';
+ new_doc:=app.get_restaurant_storefront_content_v2(p_organization_id,p_restaurant_id)->'document';
  perform app.management_audit(p_organization_id,p_restaurant_id,p.storefront_branch_id,'settings.storefront.content.updated',old_doc,new_doc);
  return result;
 end; $$;
 
-create or replace function public.storefront_menu_v4(p_slug text)
+create function public.storefront_menu_v5(p_slug text)
 returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare m jsonb;p public.restaurant_storefront_profiles%rowtype;v jsonb;d jsonb;content jsonb;promo jsonb;story jsonb;cats jsonb;h jsonb;appearance jsonb;
 begin
@@ -369,7 +388,7 @@ begin
  where p0.slug=p_slug and p0.deleted_at is null and p0.is_published and o.status='active' and o.deleted_at is null and r.status='active' and r.deleted_at is null
   and b.status='active' and b.deleted_at is null and coalesce(b.timezone,r.timezone) is not null and coalesce(r.currency_override,o.default_currency)='ILS' and (not b.tax_enabled or b.tax_mode='exclusive');
  if not found then return jsonb_build_object('ok',false,'error','not_found','entity','storefront_menu');end if;
- v:=app.storefront_content_read_v1(p.organization_id,p.restaurant_id,p.storefront_branch_id,p.hero_headline,p.hero_subline,p.announcement_text,m);d:=v->'document';h:=d->'hero';
+ v:=app.storefront_content_read_v2(p.organization_id,p.restaurant_id,p.storefront_branch_id,p.hero_headline,p.hero_subline,p.announcement_text,m);d:=v->'document';h:=d->'hero';
  if h->>'mode'='editorial' then h:=jsonb_set(h,'{item_id}','null');end if;
  promo:=d->'promo';if promo<>'null'::jsonb then
   if promo#>>'{target,kind}'='category' then promo:=(promo-'target'-'editorial_media_id')||jsonb_build_object('kind','category','category_id',promo#>'{target,category_id}','image_url',app.storefront_content_media_url_v1(p.organization_id,p.restaurant_id,p.storefront_branch_id,(promo->>'editorial_media_id')::uuid));
@@ -411,7 +430,7 @@ begin
  perform app.management_audit(p_org,p_restaurant,p_branch,'settings.storefront.content.media_replaced',jsonb_build_object('media_id',p_old),jsonb_build_object('media_id',p_new));
 end; $$;
 
-create or replace function app.list_storefront_content_media_v1(p_organization_id uuid,p_restaurant_id uuid)
+create function app.list_storefront_content_media_v2(p_organization_id uuid,p_restaurant_id uuid)
 returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare p public.restaurant_storefront_profiles%rowtype;media jsonb;
 begin
@@ -438,17 +457,28 @@ begin
  return jsonb_build_object('ok',true,'entity','storefront_content_media','restaurant_id',p_restaurant_id,'version',p.version,'media_prefix',app.storefront_media_prefix(p_restaurant_id),'media',media);
 end; $$;
 
--- The new editor must not mistake a valid legacy-shaped document on an old
--- backend for proof that appearance writes are installed. This read-only name
--- is deployed atomically with this migration and preserves the v1 envelope and
--- its existing principal/membership checks. Existing readers remain available.
+-- Authenticated versioned wrappers are the only new management endpoints.
+-- Omission of appearance is valid, but an absent v2 endpoint is not readiness.
 create function public.get_restaurant_storefront_content_v2(
  p_organization_id uuid,p_restaurant_id uuid)
 returns jsonb language sql stable security invoker set search_path='' as $$
- select app.get_restaurant_storefront_content_v1(p_organization_id,p_restaurant_id);
+ select app.get_restaurant_storefront_content_v2(p_organization_id,p_restaurant_id);
 $$;
-revoke all on function public.get_restaurant_storefront_content_v2(uuid,uuid)
- from public,anon,authenticated,service_role;
-grant execute on function public.get_restaurant_storefront_content_v2(uuid,uuid)
- to authenticated;
-
+create function public.list_storefront_content_media_v2(
+ p_organization_id uuid,p_restaurant_id uuid)
+returns jsonb language sql stable security invoker set search_path='' as $$
+ select app.list_storefront_content_media_v2(p_organization_id,p_restaurant_id);
+$$;
+revoke all on function app.storefront_content_read_v2(uuid,uuid,uuid,text,text,text,jsonb),
+ app.get_restaurant_storefront_content_v2(uuid,uuid),
+ public.get_restaurant_storefront_content_v2(uuid,uuid),
+ app.list_storefront_content_media_v2(uuid,uuid),
+ public.list_storefront_content_media_v2(uuid,uuid),
+ public.storefront_menu_v5(text) from public,anon,authenticated,service_role;
+grant execute on function app.get_restaurant_storefront_content_v2(uuid,uuid),
+ public.get_restaurant_storefront_content_v2(uuid,uuid),
+ app.list_storefront_content_media_v2(uuid,uuid),
+ public.list_storefront_content_media_v2(uuid,uuid) to authenticated;
+-- Same bounded public read authority as v4; no management or helper grants.
+grant execute on function public.storefront_menu_v5(text) to anon,service_role;
+comment on function public.storefront_menu_v5(text) is 'BIZBOT-STOREFRONT-CINEMATIC-001B: versioned appearance read; legacy v4 unchanged. Same published tenant scope and public media URL checks. No order, payment, device or print authority.';
