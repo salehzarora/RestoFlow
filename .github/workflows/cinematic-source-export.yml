@@ -1,0 +1,39 @@
+name: Cinematic source-only review snapshot
+
+# Temporary PR379 recovery job. Removed before merge; no application execution,
+# hosted credentials, deployment or production access.
+on:
+  push:
+    branches:
+      - fix/BIZBOT-STOREFRONT-CINEMATIC-001B-source-rebuild
+    paths:
+      - .github/workflows/cinematic-source-export.yml
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    if: github.repository == 'salehzarora/RestoFlow'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Archive tracked source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pr379-source"
+          git rev-parse HEAD > "$RUNNER_TEMP/pr379-source/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$RUNNER_TEMP/pr379-source/tree-sha.txt"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/pr379-source/source.tar.gz" HEAD
+          cd "$RUNNER_TEMP/pr379-source"
+          sha256sum source.tar.gz > source.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr379-source-${{ github.sha }}
+          path: ${{ runner.temp }}/pr379-source/
+          if-no-files-found: error
+          retention-days: 1
