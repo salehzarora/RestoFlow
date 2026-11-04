@@ -12,7 +12,7 @@ const anonKey = `test.${Buffer.from(JSON.stringify({ role: 'anon' })).toString('
 const slug = 'cinematic-transport-test';
 const headers = { accept: 'application/json', 'content-type': 'application/json', apikey: anonKey, authorization: `Bearer ${anonKey}` };
 const init = { method: 'POST', headers, body: JSON.stringify({ p_slug: slug }) };
-const url = `${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v5`;
+const url = `${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v6`;
 const derivative = `/storage/v1/object/public/storefront-media/${'a'.repeat(32)}/${'b'.repeat(64)}.webp`;
 
 test('transport preserves the exact Response and sends only the fixed local request', async () => {
@@ -21,7 +21,7 @@ test('transport preserves the exact Response and sends only the fixed local requ
   let count = 0;
   const transport = createMenuTransport(async (target, forwarded) => {
     count++;
-    assert.equal(target, `${LOCAL_API}/rest/v1/rpc/storefront_menu_v5`);
+    assert.equal(target, `${LOCAL_API}/rest/v1/rpc/storefront_menu_v6`);
     assert.equal(forwarded.body, init.body);
     assert.deepEqual(Object.fromEntries(forwarded.headers), headers);
     assert.equal(forwarded.redirect, 'error');
@@ -36,11 +36,12 @@ test('all unapproved request shapes fail before any native transport', async () 
   let sent = 0;
   const transport = createMenuTransport(() => { sent++; throw new Error('native call forbidden'); }, { anonKey, slug });
   for (const target of [
-    'https://example.invalid/', `${LOCAL_API}/rest/v1/rpc/storefront_menu_v5`,
+    'https://example.invalid/', `${LOCAL_API}/rest/v1/rpc/storefront_menu_v6`,
     `${LOGICAL_ORIGIN}/functions/v1/web-order-submit`, `${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v4`,
-    `${url}?x=1`, `${url}#x`, `${LOGICAL_ORIGIN}:443/rest/v1/rpc/storefront_menu_v5`,
-    `https://x@${new URL(LOGICAL_ORIGIN).host}/rest/v1/rpc/storefront_menu_v5`,
-    `${LOGICAL_ORIGIN}/x/../rest/v1/rpc/storefront_menu_v5`,
+    `${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v5`,
+    `${url}?x=1`, `${url}#x`, `${LOGICAL_ORIGIN}:443/rest/v1/rpc/storefront_menu_v6`,
+    `https://x@${new URL(LOGICAL_ORIGIN).host}/rest/v1/rpc/storefront_menu_v6`,
+    `${LOGICAL_ORIGIN}/x/../rest/v1/rpc/storefront_menu_v6`,
   ]) await assert.rejects(transport(target, init), /cinematic_transport_denied/);
   for (const changed of [
     { method: 'GET' }, { method: 'DELETE' }, { body: JSON.stringify({ p_slug: 'cinematic-other' }) },
@@ -57,7 +58,7 @@ test('all unapproved request shapes fail before any native transport', async () 
 test('only exact public derivative GETs map and image identity retains the same path', () => {
   assert.equal(localMediaTarget(LOGICAL_ORIGIN + derivative), LOCAL_API + derivative);
   assert.equal(logicalMediaUrl(LOCAL_API + derivative), LOGICAL_ORIGIN + derivative);
-  for (const path of ['/functions/v1/web-order-submit', '/rest/v1/rpc/storefront_menu_v5', '/storage/v1/object/public/other/file.webp', derivative + '?download=1', derivative + '#hash', derivative.replace('.webp', '.jpg'), derivative.replace('/public/', '/sign/'), '/x/..' + derivative]) {
+  for (const path of ['/functions/v1/web-order-submit', '/rest/v1/rpc/storefront_menu_v6', '/storage/v1/object/public/other/file.webp', derivative + '?download=1', derivative + '#hash', derivative.replace('.webp', '.jpg'), derivative.replace('/public/', '/sign/'), '/x/..' + derivative]) {
     assert.throws(() => localMediaTarget(LOGICAL_ORIGIN + path));
     assert.throws(() => logicalMediaUrl(LOCAL_API + path));
   }
@@ -73,7 +74,7 @@ test('installed socket/DNS boundary forwards unchanged loopback HTTP bytes and r
   const server = createServer(async (request, response) => {
     received++;
     assert.equal(request.method, 'POST');
-    assert.equal(request.url, '/rest/v1/rpc/storefront_menu_v5');
+    assert.equal(request.url, '/rest/v1/rpc/storefront_menu_v6');
     assert.equal(request.headers.apikey, anonKey);
     const chunks = []; for await (const chunk of request) chunks.push(chunk);
     assert.equal(Buffer.concat(chunks).toString(), init.body);

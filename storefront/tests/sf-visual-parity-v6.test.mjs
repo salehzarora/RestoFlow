@@ -74,3 +74,22 @@ test('adapter maps validated variants without touching order data; small sources
   raw.product_images_v1[0] = { ...row(), width480: 120, height480: 80, width960: 120, height960: 80 };
   assert.equal(adaptStorefront(decodeStorefrontMenuV6(raw), ORIGIN).view.items[0].imageVariants.length, 1);
 });
+
+test('selecting product presentation preserves the independent Welcome and menu background sources', () => {
+  const raw = menu();
+  const welcome = SYNTH_MEDIA_PATH.replace(/a{64}/, 'c'.repeat(64));
+  const background = SYNTH_MEDIA_PATH.replace(/a{64}/, 'd'.repeat(64));
+  raw.restaurant.hero_url = welcome;
+  raw.content_v1.hero = { ...raw.content_v1.hero, mode: 'item', item_id: SYNTH_IDS.burger };
+  raw.content_v1.appearance.menu_background_url = background;
+  const original = adaptStorefront(decodeStorefrontMenuV6(raw), ORIGIN);
+  const cutout = SYNTH_MEDIA_PATH.replace(/a{64}/, 'e'.repeat(64));
+  raw.items.find(item => item.id === SYNTH_IDS.burger).image_url = cutout;
+  raw.product_images_v1[0].w480_url = cutout;
+  const selected = adaptStorefront(decodeStorefrontMenuV6(raw), ORIGIN);
+  assert.equal(selected.view.items.find(item => item.id === SYNTH_IDS.burger).image, ORIGIN + cutout);
+  assert.equal(selected.view.tenant.heroImage, ORIGIN + welcome);
+  assert.equal(selected.view.tenant.menuBackgroundImage, ORIGIN + background);
+  assert.deepEqual(selected.view.tenant, original.view.tenant);
+  assert.deepEqual(selected.view.modules.campaign, original.view.modules.campaign);
+});

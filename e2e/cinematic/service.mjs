@@ -108,7 +108,7 @@ export async function rpc(fixture, token, name, args) {
 }
 
 export async function readContent(fixture, token, owner = fixture.ownerA) {
-  const result = await rpc(fixture, token, 'get_restaurant_storefront_content_v2', scope(owner));
+  const result = await rpc(fixture, token, 'get_restaurant_storefront_content_v3', scope(owner));
   assert.equal(result.status, 200, 'Authorized content read must succeed');
   assert.equal(result.data?.ok, true);
   return result.data;
