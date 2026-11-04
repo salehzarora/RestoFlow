@@ -3,13 +3,13 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
-  migrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration, requireEphemeralCi,
+  migrationName, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration, requireEphemeralCi,
   statements, withoutOuterTransaction,
 } from './cinematic_001b_migration_contract.mjs';
 
 test('historical migration removed exactly two outer statement lines', () => {
-  const original = execFileSync('git', ['show', `${originalCommit}:supabase/migrations/${migrationName}`], { encoding: 'utf8' });
-  const corrected = execFileSync('git', ['show', `${wrapperOnlyCommit}:supabase/migrations/${migrationName}`], { encoding: 'utf8' });
+  const original = execFileSync('git', ['show', `${originalCommit}:supabase/migrations/${historicalMigrationName}`], { encoding: 'utf8' });
+  const corrected = execFileSync('git', ['show', `${wrapperOnlyCommit}:supabase/migrations/${historicalMigrationName}`], { encoding: 'utf8' });
   const proof = proveWrapperOnly(original, corrected);
   assert.equal(proof.corrected_statements, 11);
   assert.equal(proof.corrected_sha256, '478e950e8e3ac571e439b9dc8a4ae757db7e1e53c234d8f2fb30e9c3343b0462');

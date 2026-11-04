@@ -7,7 +7,7 @@ import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from '
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  migrationName, migrationVersion, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration,
+  migrationName, migrationVersion, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration,
   requireEphemeralCi, sha256,
 } from './cinematic_001b_migration_contract.mjs';
 
@@ -85,8 +85,8 @@ try {
   assert.equal(sql('select (select count(*) from auth.users)+(select count(*) from public.restaurants)+(select count(*) from public.orders);'), '0', 'Only a fresh stack before fixtures may be reset');
   const migrationPath = join(root, 'supabase/migrations', migrationName);
   const corrected = await readFile(migrationPath, 'utf8');
-  const original = checked('git', ['show', `${originalCommit}:supabase/migrations/${migrationName}`]);
-  const historical = checked('git', ['show', `${wrapperOnlyCommit}:supabase/migrations/${migrationName}`]);
+  const original = checked('git', ['show', `${originalCommit}:supabase/migrations/${historicalMigrationName}`]);
+  const historical = checked('git', ['show', `${wrapperOnlyCommit}:supabase/migrations/${historicalMigrationName}`]);
   Object.assign(receipt, { historical_wrapper_only: proveWrapperOnly(original, historical) }, proveFinalMigration(corrected), {
     tested_commit: checked('git', ['rev-parse', 'HEAD']).trim(),
     tested_tree: checked('git', ['rev-parse', 'HEAD^{tree}']).trim(),

@@ -3,8 +3,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 
-export const migrationName = '20261102140930_bizbot_storefront_cinematic_001b_appearance.sql';
-export const migrationVersion = '20261102140930';
+export const historicalMigrationName = '20261102140930_bizbot_storefront_cinematic_001b_appearance.sql';
+export const migrationName = '20261104131256_bizbot_storefront_cinematic_001b_appearance.sql';
+export const migrationVersion = '20261104131256';
 export const wrapperOnlyCommit = '84d73363c218735648ab1b778337fb6ffdebfcd0';
 export const finalFingerprint = 'a276aef4fdd30b35272939e51d649bff3dfeb70b6c806ecb7c2edee94ceb263b';
 export const originalCommit = 'e71ab13dc258b5bc036b29a054e3744cb824d63e';

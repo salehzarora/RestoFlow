@@ -88,3 +88,30 @@ protection setting was changed to obtain access.
 
 Release verification is pending. This document is the release procedure and
 baseline, not an assertion that deployment or acceptance has succeeded.
+
+## Applied migration receipt — 2026-11-04
+
+The release agent applied `bizbot_storefront_cinematic_001b_appearance` once
+through the official Supabase migration operation. It returned success and
+recorded version `20261104131256`. Read-only history verification found exactly
+one appearance-family entry, containing one stored statement whose SHA-256 is
+`a276aef4fdd30b35272939e51d649bff3dfeb70b6c806ecb7c2edee94ceb263b`.
+
+The repository filename is reconciled from
+`20261102140930_bizbot_storefront_cinematic_001b_appearance.sql` to
+`20261104131256_bizbot_storefront_cinematic_001b_appearance.sql`; all 51,466 LF
+SQL bytes are unchanged. Historical Git proofs retain the original filename,
+commit references and hash pins. The timestamp reconciliation requires review
+and fresh CI before merge.
+
+Independent review of the saved post-apply captures passed the six exact legacy
+readers plus the menu-v3 dependency, all ten reviewed function-source hashes,
+ACLs, owners and security settings. The only relation changes are the nullable
+`appearance` JSONB column and its validated, nondeferrable CHECK. The actual
+CHECK expression matches the reviewed SQL; its deparsed definition SHA-256 is
+`c05111e14235fc63658ae4079beea50aee8ec8cd415ae1e165adbdbba4b60e1a`.
+
+All seven protected-state counts and fingerprints remain unchanged, including
+625 historical holds. The existing content-profile row remains present with
+NULL appearance. This receipt establishes the database prerequisite; publisher,
+frontend deployment and final release verification require their own evidence.

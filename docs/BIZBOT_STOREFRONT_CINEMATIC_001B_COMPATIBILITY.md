@@ -69,7 +69,7 @@ revalidation and inspect the serving deployment and public read version.
 
 ## Provenance and verification
 
-Final SQL file: `20261102140930_bizbot_storefront_cinematic_001b_appearance.sql`.
+Final SQL file: `20261104131256_bizbot_storefront_cinematic_001b_appearance.sql`.
 Final LF SQL SHA-256:
 `a276aef4fdd30b35272939e51d649bff3dfeb70b6c806ecb7c2edee94ceb263b`.
 This agent applied it zero times locally or hosted. Production application
