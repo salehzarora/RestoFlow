@@ -65,6 +65,8 @@ logo and menu texture remain in place; current original-photo copies stay local.
 After archival the final local snapshot measured 3,636,170 bytes, leaving
 558,134 bytes below the same ceiling. Build, typecheck, input audit, all 468
 Storefront tests, all 31 output tests, and output/first-load audits passed.
-First-load JS measured 577,154 bytes raw and 154,308 bytes Brotli; CSS and font
-limits passed without new exceptions. These are local measurements on the
+The entry route's first-load JS measured 577,154 bytes raw and 154,308 bytes
+Brotli; the worst routes measured 681,257 bytes raw and 183,958 bytes Brotli.
+Worst CSS measured 58,668 bytes raw / 11,808 bytes Brotli, and font preloads
+67,816 bytes. All limits passed without new exceptions. These are local measurements on the
 frontend change, not hosted transfer or final integrated CI results.
