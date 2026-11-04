@@ -99,6 +99,8 @@ export interface Tenant {
   readonly menuBackgroundImage?: string | null;
   /** Darkening percentage for the independent menu image, 0–80; null uses 15. */
   readonly menuBackgroundDim?: number | null;
+  /** Explicit scene opt-in; omitted/null retains the existing merchant look. */
+  readonly scenePreset?: 'reference_dark' | null;
   readonly currency: 'ILS';
 }
 

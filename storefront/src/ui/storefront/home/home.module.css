@@ -378,3 +378,21 @@
 }
 
 .menuAccent{color:var(--accLargeText)}
+
+/* Opt-in reference scene. All earlier merchant defaults remain unchanged.
+   Brand accents still belong to controls; photographs and glass use charcoal.
+   A viewport-sized cover preserves image proportions on long menus instead of
+   enlarging a photograph to the height of the whole document. */
+[data-sf-scene="reference_dark"] .page .header,
+[data-sf-scene="reference_dark"] .page .categoryWrap{background:var(--sceneGlass);backdrop-filter:none;-webkit-backdrop-filter:none}
+[data-sf-scene="reference_dark"] .page .searchBox,
+[data-sf-scene="reference_dark"] .page .suggestionSlot .suggest,
+[data-sf-scene="reference_dark"] .page .announce,
+[data-sf-scene="reference_dark"] .page .servicePanel,
+[data-sf-scene="reference_dark"] .page .contactLine,
+[data-sf-scene="reference_dark"] .page[data-sf-screen="intro"] .serviceWrap{background:var(--sceneGlassSoft);border-color:var(--sceneLine)}
+[data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .menuBackdrop img,
+[data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop img{position:fixed;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center;opacity:1;filter:none;transform:none}
+[data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .menuBackdrop::after,
+[data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop::after{background:#000;opacity:var(--menu-image-dim,.15)}
+[data-sf-scene="reference_dark"] .footerPhoto img{filter:none}

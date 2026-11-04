@@ -23,10 +23,10 @@ export function Home({ resolution, locale, slug, hrefFor }: {
   const { view, groups, zones, taxRateBp, menuVersion } = resolution;
   const { tenant, modules, categories, items, cardMode } = view;
   const m = storefrontMessages(locale);
-  const tokens = buildCinematicTheme(tenant.brand);
-  const background = menuBackground(tenant);
+  const tokens = buildCinematicTheme(tenant.brand, tenant.scenePreset);
+  const background = menuBackground(tenant, tenant.scenePreset);
   return (
-    <ThemeScope tokens={tokens} menuImageDim={background.dim} className={`${shell.root} ${MOTION_CLASS[view.motion]}`} dir={dirOf(locale)}>
+    <ThemeScope tokens={tokens} menuImageDim={background.dim} scenePreset={tenant.scenePreset} className={`${shell.root} ${MOTION_CLASS[view.motion]}`} dir={dirOf(locale)}>
       <StorefrontRuntime source={resolution.source} slug={slug} menuVersion={menuVersion} items={items} groups={groups} zones={zones} taxRateBp={taxRateBp} orderingEnabled={tenant.service.orderingEnabled} locale={locale} motion={view.motion} state={tenant.service.state} opensAt={tenant.hours.opens}>
         <main className={styles.page} data-sf-screen="home">
           <MenuBackdrop background={background} />

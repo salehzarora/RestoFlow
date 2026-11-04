@@ -26,10 +26,10 @@ export function StorefrontScreen({
   campaign?: CampaignModule;
   motion?: MotionMode;
 }) {
-  const tokens = buildCinematicTheme(tenant.brand);
+  const tokens = buildCinematicTheme(tenant.brand, tenant.scenePreset);
 
   return (
-    <ThemeScope tokens={tokens} className={`${shell.root}`} dir={dirOf(locale)}>
+    <ThemeScope tokens={tokens} scenePreset={tenant.scenePreset} className={`${shell.root}`} dir={dirOf(locale)}>
       <IntroGate slug={slug} homeHref={`${storefrontPath(locale, slug)}/menu`}>
         <Intro tenant={tenant} locale={locale} campaign={campaign} motion={motion} />
       </IntroGate>
