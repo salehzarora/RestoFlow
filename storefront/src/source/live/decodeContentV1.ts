@@ -1,4 +1,4 @@
-/** v4 and v5 are separate strict wire boundaries. Server drift normalization is NOT
+/** v4, v5 and v6 are separate strict wire boundaries. Server drift normalization is NOT
  * decoder repair. No network, environment, v3 endpoint retry or fixture path. */
 import type { HeroFormat, ImageFit, CardLayout, FontFamily } from '../types';
 import { contentTextValid, heroFormatValid } from '../../content/unicode';
@@ -15,10 +15,11 @@ export interface WireAppearance {
   readonly font_family?:FontFamily|null;
   readonly menu_background_url?:string|null;
   readonly menu_background_dim?:number|null;
+  readonly scene_preset?:'reference_dark'|null;
 }
 export interface WireContentV1 {
   readonly schema:1;
-  /** Only menu v5 exposes these fields; v4 rejects them. */
+  /** Menu v5 exposes appearance; only v6 permits scene_preset. */
   readonly appearance?:WireAppearance;
   readonly hero:{ readonly mode:'editorial'|'item';readonly item_id:string|null;readonly format:HeroFormat|null;readonly eyebrow:string|null;readonly stamp:string|null;readonly footnote:string|null; };
   readonly announcement_segments:readonly string[]|null;
@@ -75,7 +76,37 @@ export function decodeStorefrontMenuV4(raw:unknown):StorefrontMenuV4Envelope{
 export function decodeStorefrontMenuV5(raw:unknown):StorefrontMenuV5Envelope{
   return decodeContent(raw,true);
 }
-function decodeContent(raw:unknown,allowAppearance:boolean):StorefrontMenuV5Envelope{
+export interface WireProductImages {
+  readonly item_id:string; readonly w480_url:string; readonly w960_url:string;
+  readonly width480:number; readonly height480:number; readonly width960:number; readonly height960:number;
+}
+export interface StorefrontMenuV6Ok extends StorefrontMenuV5Ok { readonly product_images_v1?:readonly WireProductImages[]; }
+export type StorefrontMenuV6Envelope=StorefrontMenuV6Ok|StorefrontMenuFailure;
+export function decodeStorefrontMenuV6(raw:unknown):StorefrontMenuV6Envelope{
+  if(typeof raw!=='object'||raw===null||Array.isArray(raw))return reject('envelope');
+  const e=raw as Record<string,unknown>;
+  const {product_images_v1:variants,...rest}=e;
+  const decoded=decodeContent(rest,true,true);
+  if(!Object.hasOwn(e,'product_images_v1'))return decoded;
+  if(!decoded.ok)return reject('product_images_v1');
+  const items=new Map(decoded.items.map(item=>[item.id,item]));
+  const seen=new Set<string>();
+  const rows=array(variants,500,'product_images_v1').map(value=>{
+    const row=record(value,['item_id','w480_url','w960_url','width480','height480','width960','height960'],'product_images_v1');
+    const item_id=id(row.item_id,'product_images_v1.item_id');
+    if(seen.has(item_id)||!items.has(item_id))return reject('product_images_v1.item_id');
+    seen.add(item_id);
+    const w480_url=image(row.w480_url,'product_images_v1.w480_url')!;
+    const w960_url=image(row.w960_url,'product_images_v1.w960_url')!;
+    if(w480_url!==items.get(item_id)!.image_url)return reject('product_images_v1.w480_url');
+    const width480=integer(row.width480,'product_images_v1.width480'),height480=integer(row.height480,'product_images_v1.height480');
+    const width960=integer(row.width960,'product_images_v1.width960'),height960=integer(row.height960,'product_images_v1.height960');
+    if(width480<1||height480<1||width480>480||height480>480||width960<width480||height960<height480||width960>960||height960>960)return reject('product_images_v1.dimensions');
+    return {item_id,w480_url,w960_url,width480,height480,width960,height960};
+  });
+  return {...decoded,product_images_v1:rows};
+}
+function decodeContent(raw:unknown,allowAppearance:boolean,allowScene=false):StorefrontMenuV5Envelope{
   if(typeof raw!=='object'||raw===null||Array.isArray(raw))return reject('envelope');
   const e=raw as Record<string,unknown>;
   if(e.ok===false)return decodeStorefrontMenuV3(e) as StorefrontMenuFailure;
@@ -98,11 +129,13 @@ function decodeContent(raw:unknown,allowAppearance:boolean):StorefrontMenuV5Enve
     for(const key of ['font_family','menu_background_url','menu_background_dim']){
       if(typeof o.appearance==='object'&&o.appearance!==null&&Object.hasOwn(o.appearance,key))keys.push(key);
     }
+    if(allowScene&&typeof o.appearance==='object'&&o.appearance!==null&&Object.hasOwn(o.appearance,'scene_preset'))keys.push('scene_preset');
     const a=record(o.appearance,keys,'appearance');
     appearance={text_color:colour(a.text_color,'appearance.text_color'),button_text_color:colour(a.button_text_color,'appearance.button_text_color'),
       ...(Object.hasOwn(a,'font_family')?{font_family:a.font_family===null?null:choice<FontFamily>(a.font_family,['rubik','alexandria','system'],'appearance.font_family')}:{}),
       ...(Object.hasOwn(a,'menu_background_url')?{menu_background_url:image(a.menu_background_url,'appearance.menu_background_url',true)}:{}),
-      ...(Object.hasOwn(a,'menu_background_dim')?{menu_background_dim:dim(a.menu_background_dim,'appearance.menu_background_dim')}:{})};
+      ...(Object.hasOwn(a,'menu_background_dim')?{menu_background_dim:dim(a.menu_background_dim,'appearance.menu_background_dim')}:{}),
+      ...(Object.hasOwn(a,'scene_preset')?{scene_preset:a.scene_preset===null?null:choice<'reference_dark'>(a.scene_preset,['reference_dark'],'appearance.scene_preset')}:{})};
   }
   const h=record(o.hero,['mode','item_id','format','eyebrow','stamp','footnote'],'hero');
   const mode=choice(h.mode,['editorial','item'],'hero.mode');const itemId=h.item_id===null?null:id(h.item_id,'hero.item_id');

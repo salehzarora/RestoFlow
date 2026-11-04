@@ -206,6 +206,8 @@ export interface MenuItem {
   readonly description: string;
   readonly priceMinor: Minor;
   readonly image: string | null;
+  /** Authorized, immutable product variants; legacy catalogues omit them. */
+  readonly imageVariants?: readonly { readonly url:string; readonly width:number; readonly height:number }[];
   /** Featured items render as the large card at the top of their section. */
   readonly featured: boolean;
   /** Signature items are the ones eligible for the popular rail. */
