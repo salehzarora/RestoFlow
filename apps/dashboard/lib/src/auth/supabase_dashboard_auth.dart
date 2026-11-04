@@ -21,6 +21,8 @@ import '../admin/supabase_admin_device_repository.dart';
 import '../branding/restaurant_logo_storage.dart';
 import '../admin/supabase_users_repository.dart';
 import '../menu/supabase_menu_image_storage.dart';
+import '../storefront/product_cutout_gateway.dart';
+import '../storefront/product_cutout_repository.dart';
 import '../printers/printers_repository.dart';
 import '../staff/staff_repository.dart';
 import '../storefront/storefront_media_publisher.dart';
@@ -72,6 +74,7 @@ const String kDefaultOnboardingTimezone = 'Asia/Jerusalem';
   MenuReadSource menuReadSource,
   MenuWriter menuWriter,
   MenuImageStorage menuImageStorage,
+  ProductCutoutGateway productCutoutGateway,
   RestaurantLogoStorage brandingLogoStorage,
   PrintersRepository Function(AdminScope scope) printersRepositoryFor,
   StaffRepository Function(AdminScope scope) staffRepositoryFor,
@@ -133,6 +136,7 @@ buildDashboardRealAuth(
     // Menu/media sprint: REAL item image storage over the same authenticated
     // client (RF-110 bucket + policies; signed URLs only — D-032).
     menuImageStorage: menuImageStorage,
+    productCutoutGateway: StorefrontProductCutoutRepository.supabase(client),
     // PRINT-BRANDING-LOGO-001: the restaurant-logo blob store over the same
     // authenticated anon-key client (D-011).
     brandingLogoStorage: brandingLogoStorage,

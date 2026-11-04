@@ -60,6 +60,11 @@ if [ "${RESTOFLOW_STOREFRONT_EDITOR:-}" = "true" ] && [ "${VERCEL_ENV:-}" = "pro
 echo "dashboard storefront editor gate: $STOREFRONT_EDITOR (VERCEL_ENV=${VERCEL_ENV:-unset})"
 
 # 1. Dashboard (root, base-href /) — the output directory Vercel serves.
+# The local product editor loads the model only on demand. Build from the
+# hash-pinned manifest here; no model or inference dependency enters Storefront.
+if [ "$STOREFRONT_EDITOR" = "true" ]; then
+  (cd apps/dashboard/cutout && npm ci --ignore-scripts && npm run prepare)
+fi
 (cd apps/dashboard && "$FLUTTER" build web --release --base-href=/ "${DEFINES[@]}" --dart-define=RESTOFLOW_STOREFRONT_EDITOR="$STOREFRONT_EDITOR")
 
 # 2. POS (base-href /pos/).

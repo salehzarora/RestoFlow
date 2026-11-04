@@ -34,6 +34,8 @@ import 'storefront/storefront_dark_gate.dart';
 import 'storefront/storefront_background_upload.dart';
 import 'storefront/storefront_media_publisher.dart';
 import 'storefront/storefront_media_repository.dart';
+import 'storefront/product_cutout_gateway.dart';
+import 'storefront/product_cutout_editor.dart';
 import 'storefront/storefront_profile_repository.dart';
 import 'storefront/storefront_section.dart';
 import 'storefront/seo_consent_repository.dart';
@@ -140,6 +142,7 @@ class DashboardShell extends StatefulWidget {
     this.menuReadSource,
     this.menuWriter,
     this.menuImageStorage,
+    this.productCutoutGateway,
     this.brandingLogoStorage,
     this.printersRepository,
     this.staffRepository,
@@ -181,6 +184,7 @@ class DashboardShell extends StatefulWidget {
   /// gets a labelled in-memory fake; a real surface without it shows the image
   /// panel's honest "not connected" state.
   final MenuImageStorage? menuImageStorage;
+  final ProductCutoutGateway? productCutoutGateway;
 
   /// PRINT-BRANDING-LOGO-001: the restaurant-logo blob store (real mode only;
   /// null in demo -> the branding card shows an honest note).
@@ -1150,7 +1154,18 @@ class _DashboardShellState extends State<DashboardShell> {
           // its honest "not connected" state (never a fake uploader).
           imageStorage: imageStorage == null
               ? null
-              : MenuImageStorageConfig(storage: imageStorage),
+              : MenuImageStorageConfig(
+                  storage: imageStorage,
+                  editorExtension:
+                      widget.storefrontEditorEnabled &&
+                          widget.productCutoutGateway != null
+                      ? (context, item) => ProductCutoutEditor(
+                          key: ValueKey('cutout-${item.id}'),
+                          item: item,
+                          gateway: widget.productCutoutGateway!,
+                        )
+                      : null,
+                ),
         ),
         child: const MenuManagementScreen(),
       );
