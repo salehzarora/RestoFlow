@@ -30,6 +30,7 @@ class FakeAuthRepository implements DashboardAuthRepository {
   AuthOutcome signUpOutcome;
   final _controller = StreamController<AuthSessionStatus>.broadcast();
   int signOutCount = 0;
+  int signInCount = 0;
   String? lastSignInEmail;
 
   @override
@@ -43,6 +44,7 @@ class FakeAuthRepository implements DashboardAuthRepository {
     required String email,
     required String password,
   }) async {
+    signInCount++;
     lastSignInEmail = email;
     if (signInOutcome is AuthSignedIn) _emit(AuthSessionStatus.signedIn);
     return signInOutcome;
@@ -293,6 +295,55 @@ void main() {
 
     expect(find.text(l10n.authInvalidCredentials), findsOneWidget);
     expect(find.byType(DashboardHomeScreen), findsNothing);
+  });
+
+  testWidgets('Arabic first sign-in label selects the mode; last submits', (
+    tester,
+  ) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+    final auth = FakeAuthRepository();
+    await _pump(
+      tester,
+      MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: restoflowLocalizationsDelegates,
+        supportedLocales: kSupportedLocales,
+        theme: restoflowBaseTheme(),
+        home: LoginSignupScreen(authRepository: auth),
+      ),
+    );
+    await tester.enterText(find.byKey(const Key('auth-email')), 'owner@x.test');
+    await tester.enterText(find.byKey(const Key('auth-password')), 'secret1');
+
+    // Reproduce the ambiguous E2E name on the actual screen. The first match
+    // is an already-selected mode control, which intentionally does not submit.
+    expect(l10n.authSignInTab, l10n.authSignInAction);
+    final labels = find.text(l10n.authSignInAction);
+    expect(labels, findsNWidgets(2));
+    expect(
+      find.ancestor(
+        of: labels.first,
+        matching: find.byWidgetPredicate((widget) => widget is SegmentedButton),
+      ),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(labels.first);
+    await tester.tap(labels.first);
+    await tester.pumpAndSettle();
+    expect(auth.signInCount, 0);
+
+    expect(
+      find.ancestor(
+        of: labels.last,
+        matching: find.byKey(const Key('auth-submit')),
+      ),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(labels.last);
+    await tester.tap(labels.last);
+    await tester.pumpAndSettle();
+    expect(auth.signInCount, 1);
+    expect(auth.lastSignInEmail, 'owner@x.test');
   });
 
   testWidgets(

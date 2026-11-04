@@ -98,8 +98,12 @@ async function login(page: Page, email: string, password: string): Promise<strin
       message: 'Complete Dashboard password remains correct after blur',
     }).toBe(true);
     advance('auth-submit');
+    // The actual Arabic screen has two identical labels: the first selects
+    // sign-in mode; the last is auth-submit. The widget regression proves that
+    // clicking the already-selected mode sends no Auth call. Match main login.
+    await expect(page.getByRole('button', { name: 'تسجيل الدخول', exact: true })).toHaveCount(2);
     const grant = page.waitForResponse(r => post(r, '/auth/v1/token') && new URL(r.url()).searchParams.get('grant_type') === 'password');
-    await tapButton(page, 'تسجيل الدخول');
+    await tapButton(page, 'تسجيل الدخول', { which: 'last' });
     advance('auth-response');
     const response = await grant;
     expect(response.status(), 'Real UI sign-in succeeds').toBe(200);
