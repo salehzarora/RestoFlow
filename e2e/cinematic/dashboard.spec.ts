@@ -184,6 +184,7 @@ type ScrollScope = { x: number; y: number; width: number; height: number; source
 type RevealSample = { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>>; hiddenGeometry: Awaited<ReturnType<typeof targetGeometry>>; normalMatches: number; hiddenMatches: number; labelEvidence: { exact: number; normalized: number; button: number; hidden: number; textExact: number; textNormalized: number; textButton: number } | null; progressed: boolean | null; visibleNodes: number; surface: ScrollScope; direction: number; reversed: boolean };
 type RevealTrace = { purpose: RevealPurpose; result: 'ready' | 'stalled' | 'ambiguous' | 'iteration-limit' | 'disabled'; wheelSteps: number; samples: RevealSample[] };
 const revealTraces = new WeakMap<Page, RevealTrace[]>();
+const clickTraces = new WeakMap<Page, { modal: boolean; geometry: Awaited<ReturnType<typeof targetGeometry>> }[]>();
 const scrollScopes = new WeakMap<Page, ScrollScope>();
 class ControlRevealError extends Error {
   constructor(readonly purpose: RevealPurpose, readonly samples: RevealSample[]) {
@@ -244,7 +245,7 @@ async function renderedProgress(page: Page, scope: ScrollScope): Promise<{ signa
     return { signature: parts.join('|'), visibleNodes: parts.length };
   }, scope);
 }
-async function settleScroll(page: Page, scope: ScrollScope): Promise<{ signature: string; visibleNodes: number }> {
+async function settleScroll(page: Page, scope: ScrollScope, requireStable = false): Promise<{ signature: string; visibleNodes: number }> {
   let previous = await renderedProgress(page, scope), stable = 0;
   // Observe several settled rendered samples rather than outrunning Flutter's
   // semantics updates with a fixed series of large wheel movements.
@@ -255,6 +256,7 @@ async function settleScroll(page: Page, scope: ScrollScope): Promise<{ signature
     previous = current;
     if (stable >= 3) return current;
   }
+  if (requireStable) throw new Error('Dashboard geometry did not settle after the modal returned.');
   return previous;
 }
 async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'other', hiddenTarget = target): Promise<void> {
@@ -347,6 +349,11 @@ async function tapRevealedControl(page: Page, target: Locator, modal = false): P
     : controlGeometry(box, viewport, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false).ready;
   expect(ready,
     'The control is in the viewport with an unobstructed same-view Flutter input surface').toBe(true);
+  // Record the actual click rectangle, which may differ from an earlier reveal
+  // sample. Geometry and a fixed modal flag only; no label, value or credential.
+  const clicks = clickTraces.get(page) ?? [];
+  if (clicks.length < 160) clicks.push({ modal, geometry: box });
+  clickTraces.set(page, clicks);
   if (box!.centerHit) return target.click();
   // Send an ordinary physical pointer click through the actual Flutter input
   // surface. No force click, DOM event dispatch, or application callback.
@@ -456,8 +463,13 @@ async function useVisualColorPicker(page: Page, name: string, apply: boolean, ca
   await expect(sv, 'Apply or Cancel closes the visual picker').toHaveCount(0);
   // Flutter removes the modal slider inputs before restoring the editor's
   // semantics. Absence of sliders alone does not mean Advanced is collapsed.
-  await expect(page.getByRole('textbox', { name, exact: true }),
+  const returnedField = page.getByRole('textbox', { name, exact: true });
+  await expect(returnedField,
     'Returning from the picker restores the still-expanded draft field').toHaveCount(1);
+  // Apply inserts dirty notices above this field while the route dismisses.
+  // Presence can precede the final geometry: settle before the single readback
+  // click, and fail explicitly if the bounded observation never stabilizes.
+  await settleScroll(page, await scrollScope(page, returnedField), true);
 }
 async function saveProfile(page: Page): Promise<void> {
   await revealButton(page, L.saveProfile);
@@ -1172,7 +1184,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await renderMenu(menu, f, f.heroUrl, null);
     stages.push(stage);
     await network.check();
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlReveals: revealTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
+    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
   } catch (error) {
     const statuses = stages.includes('login') ? await editorStatus(page).catch(() => ['unreadable']) : [];
     const failureCapture = stages.includes('login')
@@ -1180,7 +1192,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
       login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
       controlReveal: error instanceof ControlRevealError ? error.samples : null,
-      controlReveals: revealTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
+      controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
   }
 });
