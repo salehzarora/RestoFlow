@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_dashboard/src/admin/real_admin_views.dart';
@@ -506,6 +507,88 @@ void _expectPublishedWithNote(
 }
 
 void main() {
+  for (final locale in ['ar', 'he', 'en']) {
+    for (final field in ['primary', 'accent']) {
+      testWidgets(
+        '$locale $field colour retains input state through first dirty transition',
+        (tester) async {
+          final repo = _FeaturedRepo();
+          repo.profile!['is_published'] = true;
+          await _pump(
+            tester,
+            StorefrontSection(
+              seams: StorefrontEditorSeams(
+                scopeIdentity: 'colour-focus',
+                profileRepository: repo,
+                mediaRepository: _FakeMediaRepo(),
+                branchSource: _FakeBranches(),
+                sourceCatalog: _FakeSources(),
+                featuredCatalog: _FeaturedCatalog(),
+                publisher: StorefrontMediaPublisher(
+                  invoker: content_fixture.PublisherInvoker(),
+                  organizationId: _rest,
+                  restaurantId: _rest,
+                ),
+              ),
+            ),
+            locale: locale,
+          );
+          final fieldFinder = find.byKey(Key('storefront-$field-color'));
+          final editable = find.descendant(
+            of: fieldFinder,
+            matching: find.byType(EditableText),
+          );
+          await _tap(tester, fieldFinder);
+          final originalState = tester.state<EditableTextState>(editable);
+          final focus = originalState.widget.focusNode;
+          expect(focus.hasFocus, isTrue);
+          // One focus action only. Subsequent text arrives through the active
+          // platform text-input connection; tester.enterText would refocus.
+          tester.testTextInput.enterText('');
+          await tester.pumpAndSettle();
+          expect(
+            tester.state<EditableTextState>(editable),
+            same(originalState),
+          );
+          expect(originalState.widget.focusNode, same(focus));
+          expect(focus.hasFocus, isTrue);
+          expect(
+            find.byKey(const Key('storefront-featured-separate-edits')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const Key('storefront-media-save-first')),
+            findsOneWidget,
+          );
+          final value = field == 'primary' ? '#211A16' : '#EAB082';
+          for (var length = 1; length <= value.length; length++) {
+            tester.testTextInput.enterText(value.substring(0, length));
+            await tester.pumpAndSettle();
+            expect(
+              tester.state<EditableTextState>(editable),
+              same(originalState),
+            );
+            expect(focus.hasFocus, isTrue);
+          }
+          await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+          await tester.pumpAndSettle();
+          expect(focus.hasFocus, isFalse);
+          expect(originalState.widget.controller.text, value);
+          await _tap(tester, find.byKey(const Key('storefront-save')));
+          expect(repo.saves, hasLength(1));
+          expect(
+            repo.saves.single.patch['${field}_color'],
+            value.toLowerCase(),
+          );
+          expect(
+            tester.widget<TextField>(fieldFinder).controller!.text,
+            value.toLowerCase(),
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
   testWidgets(
     'old in-flight profile completion cannot refresh or unlock replaced binding',
     (tester) async {

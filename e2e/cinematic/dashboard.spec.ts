@@ -353,16 +353,23 @@ async function revealButton(page: Page, name: string): Promise<void> {
   await reveal(page, page.getByRole('button', { name, exact: true }), name === L.save ? 'content-save' : name === L.saveProfile ? 'profile-save' : 'other', page.getByRole('button', { name, exact: true, includeHidden: true }));
   await expect(page.getByRole('button', { name, exact: true }), 'Actual revealed control is enabled').toBeEnabled();
 }
-async function fill(page: Page, name: string, value: string): Promise<void> {
+async function fill(page: Page, name: string, value: string, { blur = false }: { blur?: boolean } = {}): Promise<void> {
   const field = page.getByRole('textbox', { name, exact: true });
   await reveal(page, field, 'field', page.getByRole('textbox', { name, exact: true, includeHidden: true }));
-  await tapRevealedControl(page, field);
+  // Ordinary Tab from the preceding field may already have focused this one.
+  // There is still only one initial focus action, never a refocus while typing.
+  if (!(await field.evaluate(el => el === document.activeElement))) await tapRevealedControl(page, field);
   await expect(field, 'Actual field receives focus before keyboard input').toBeFocused();
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.press('Delete');
   await expect(field, 'Actual field is cleared by keyboard input').toHaveValue('');
   await page.keyboard.type(value, { delay: 12 });
   await expect(field, 'Actual field reflects ordinary keyboard input').toHaveValue(value);
+  if (blur) {
+    await page.keyboard.press('Tab');
+    await expect(field, 'Ordinary Tab leaves the edited field').not.toBeFocused();
+    await expect(field, 'Complete field value remains after blur').toHaveValue(value);
+  }
 }
 async function semantics(page: Page): Promise<void> {
   await waitForFlutterBoot(page);
@@ -796,14 +803,22 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     stages.push(stage);
 
     stage = 'profile-colours';
-    await fill(page, L.primary, '#211A16');
-    await fill(page, L.accent, '#EAB082');
+    await fill(page, L.primary, '#211A16', { blur: true });
+    await fill(page, L.accent, '#EAB082', { blur: true });
     await revealButton(page, L.saveProfile);
     const profileSaved = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_profile')));
     const profileResponse = await responseAfterAction(profileSaved, () => tapRevealedButton(page, L.saveProfile));
     expect(profileResponse.status(), 'Profile writer HTTP result').toBe(200);
     expect((await profileResponse.json()).ok).toBe(true);
+    const savedProfile = await rpc(f, token, 'get_restaurant_storefront_profile');
+    expect(savedProfile.profile.primary_color, 'Authoritative saved primary HEX').toBe('#211a16');
+    expect(savedProfile.profile.accent_color, 'Authoritative saved accent HEX').toBe('#eab082');
     await openEditor(page, true);
+    for (const [name, value] of [[L.primary, '#211a16'], [L.accent, '#eab082']]) {
+      const field = page.getByRole('textbox', { name, exact: true });
+      await reveal(page, field, 'field', page.getByRole('textbox', { name, exact: true, includeHidden: true }));
+      await expect(field, 'Reloaded Dashboard retains the complete saved HEX').toHaveValue(value);
+    }
     stages.push(stage);
 
     for (const [dim, fromFont, label, font] of [

@@ -1512,7 +1512,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
   }
 
   /// Fields that stack on narrow widths and pair up on wide ones.
-  Widget _grid(List<Widget> children) => LayoutBuilder(
+  Widget _grid(List<Widget> children, {Key? key}) => LayoutBuilder(
+    key: key,
     builder: (context, constraints) {
       final max = constraints.maxWidth;
       final width = max >= 560
@@ -1841,6 +1842,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       const Divider(height: RestoflowSpacing.xl),
       Text(l10n.storefrontLookTitle, style: theme.textTheme.titleSmall),
       const SizedBox(height: RestoflowSpacing.sm),
+      // Dirty notices are inserted before and after this grid. Preserve its
+      // input state/focus while those unkeyed sibling positions change.
       _grid([
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1931,7 +1934,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           ],
           onChanged: (v) => _motion = v,
         ),
-      ]),
+      ], key: const Key('storefront-appearance-grid')),
       const SizedBox(height: RestoflowSpacing.sm),
       SwitchListTile(
         key: const Key('storefront-pickup'),
