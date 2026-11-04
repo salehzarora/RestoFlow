@@ -51,10 +51,31 @@ const stages = new Set([
   "success-evidence"
 ]);
 const samples = new Set(['burger', 'fries-cup', 'platter', 'drink']);
+const operations = new Set(['save-source', 'original-read']);
+// Exact literals from menu_upsert_item and get_storefront_product_original_v1.
+const responseCodes = new Set(['permission_denied', 'source_not_found', '42501']);
+
+function responseFacts(status, body) {
+  const record = body !== null && typeof body === 'object' && !Array.isArray(body);
+  const code = record ? body.error ?? body.code : undefined;
+  return {
+    httpStatus: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
+    envelopeOk: record && typeof body.ok === 'boolean' ? body.ok : null,
+    responseCode: !record ? 'unclassified' : code === undefined || code === null ? 'missing'
+      : responseCodes.has(code) ? code : 'unclassified',
+  };
+}
+
+export async function captureProductResponse(progress, operation, status, readBody) {
+  let body;
+  try { body = await readBody(); } catch { /* Never retain a parser error or change the original assertion. */ }
+  progress.recordResponse(operation, status, body);
+}
 
 export function createProductProgress() {
   let current = { stage: 'fixture', sample: null };
   const completed = [];
+  const responses = new Map();
   let passed = false;
   return {
     advance(stage, sample = current?.sample ?? null) {
@@ -70,12 +91,20 @@ export function createProductProgress() {
       current = null;
       passed = true;
     },
+    recordResponse(operation, status, body) {
+      if (!operations.has(operation)) throw new Error('Invalid fixed product response operation');
+      const sample = current?.sample ?? null;
+      const key = `${sample}:${operation}`;
+      // Keep the first observation for each fixed sample/operation pair.
+      if (!responses.has(key)) responses.set(key, { operation, sample, ...responseFacts(status, body) });
+    },
     snapshot() {
       return {
         status: passed ? 'PASS' : 'FAIL',
         failedStage: current?.stage ?? null,
         sample: current?.sample ?? null,
         completedStages: completed.map(entry => ({ ...entry })),
+        responses: [...responses.values()].map(entry => ({ ...entry })),
       };
     },
   };

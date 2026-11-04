@@ -48,12 +48,22 @@ export type ProductStage =
   | 'transport-boundary'
   | 'success-evidence';
 export type ProductSample = 'burger' | 'fries-cup' | 'platter' | 'drink';
+export type ProductOperation = 'save-source' | 'original-read';
+export type ProductResponseFacts = {
+  operation: ProductOperation; sample: ProductSample | null;
+  httpStatus: number | null; envelopeOk: boolean | null;
+  responseCode: 'permission_denied' | 'source_not_found' | '42501' | 'missing' | 'unclassified';
+};
 export type ProductProgress = {
   advance(stage: ProductStage, sample?: ProductSample | null): void;
   complete(): void;
+  recordResponse(operation: ProductOperation, status: unknown, body: unknown): void;
   snapshot(): {
     status: 'PASS' | 'FAIL'; failedStage: ProductStage | null; sample: ProductSample | null;
     completedStages: { stage: ProductStage; sample: ProductSample | null }[];
+    responses: ProductResponseFacts[];
   };
 };
 export function createProductProgress(): ProductProgress;
+export function captureProductResponse(progress: ProductProgress, operation: ProductOperation,
+  status: unknown, readBody: () => Promise<unknown>): Promise<void>;

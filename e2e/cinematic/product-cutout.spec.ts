@@ -6,7 +6,7 @@ import { enableFlutterSemantics, waitForFlutterBoot } from '../lib/flutter';
 import { fillField, tapButton, tapNav, tapText, waitForText } from '../lib/dashboard';
 import { API_URL, DASHBOARD_URL, readFixture, scope, rpc, request, storagePath, readInvariants } from './service.mjs';
 import { localMediaTarget } from './live-transport.mjs';
-import { createProductProgress, type ProductProgress } from './product-progress.mjs';
+import { captureProductResponse, createProductProgress, type ProductProgress } from './product-progress.mjs';
 
 // Real owner session + shipped uploader/worker/repository/publisher. The guard
 // rejects execution outside the disposable Actions stack, even for local runs.
@@ -212,6 +212,9 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     const saved = page.waitForResponse(response => post(response, '/rest/v1/rpc/menu_upsert_item'));
     await click(page, L.save);
     const sourceWrite = await saved;
+    // Parse only for bounded facts; a diagnostic parse failure is swallowed.
+    // The existing status and JSON assertions below keep their original order.
+    await captureProductResponse(progress, 'save-source', sourceWrite.status(), () => sourceWrite.json());
     advance('save-source-status');
     expect(sourceWrite.status()).toBe(200);
     advance('save-source-result');
@@ -223,6 +226,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     const readOriginal = () => rpc(fixture, token, 'get_storefront_product_original_v1', { ...scope(fixture.ownerA), p_item_id: itemId });
     advance('original-read-status');
     const before = await readOriginal();
+    progress.recordResponse('original-read', before.status, before.data);
     expect(before.status).toBe(200);
     advance('original-read-result');
     expect(before.data.ok).toBe(true);
