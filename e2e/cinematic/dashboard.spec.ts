@@ -184,7 +184,7 @@ type ScrollScope = { x: number; y: number; width: number; height: number; source
 type RevealSample = { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>>; hiddenGeometry: Awaited<ReturnType<typeof targetGeometry>>; normalMatches: number; hiddenMatches: number; labelEvidence: { exact: number; normalized: number; button: number; hidden: number; textExact: number; textNormalized: number; textButton: number } | null; progressed: boolean | null; visibleNodes: number; surface: ScrollScope; direction: number; reversed: boolean };
 type RevealTrace = { purpose: RevealPurpose; result: 'ready' | 'stalled' | 'ambiguous' | 'iteration-limit' | 'disabled'; wheelSteps: number; samples: RevealSample[] };
 const revealTraces = new WeakMap<Page, RevealTrace[]>();
-const clickTraces = new WeakMap<Page, { modal: boolean; geometry: Awaited<ReturnType<typeof targetGeometry>> }[]>();
+const clickTraces = new WeakMap<Page, { modal: boolean; method: 'physical' | 'locator'; geometry: Awaited<ReturnType<typeof targetGeometry>> }[]>();
 const scrollScopes = new WeakMap<Page, ScrollScope>();
 class ControlRevealError extends Error {
   constructor(readonly purpose: RevealPurpose, readonly samples: RevealSample[]) {
@@ -349,10 +349,10 @@ async function tapRevealedControl(page: Page, target: Locator, modal = false): P
     : controlGeometry(box, viewport, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false).ready;
   expect(ready,
     'The control is in the viewport with an unobstructed same-view Flutter input surface').toBe(true);
-  // Record the actual click rectangle, which may differ from an earlier reveal
-  // sample. Geometry and a fixed modal flag only; no label, value or credential.
+  // This is pre-click geometry. It determines the physical click coordinates;
+  // locator.click can auto-wait/recompute them. No label, value or credential.
   const clicks = clickTraces.get(page) ?? [];
-  if (clicks.length < 160) clicks.push({ modal, geometry: box });
+  if (clicks.length < 160) clicks.push({ modal, method: box!.centerHit ? 'locator' : 'physical', geometry: box });
   clickTraces.set(page, clicks);
   if (box!.centerHit) return target.click();
   // Send an ordinary physical pointer click through the actual Flutter input
