@@ -7,6 +7,7 @@ import { fillField, tapButton, tapNav, tapText, waitForText } from '../lib/dashb
 import { API_URL, DASHBOARD_URL, readFixture, scope, rpc, request, storagePath, readInvariants } from './service.mjs';
 import { localMediaTarget } from './live-transport.mjs';
 import { captureProductResponse, createProductProgress, type ProductProgress } from './product-progress.mjs';
+import { observeResponse, responseAfterAction } from './control-progress.mjs';
 
 // Real owner session + shipped uploader/worker/repository/publisher. The guard
 // rejects execution outside the disposable Actions stack, even for local runs.
@@ -151,17 +152,23 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
   const advance = progress.advance;
   advance('route-setup');
   let violation = false, modelReads = 0, registerCalls = 0;
+  let fileChoosers = 0, originalUploads = 0, itemSaves = 0;
   let modelFault: 'none' | 'hold' | 'fail' = 'none';
   let heldModelRequest: Route | undefined;
   let injectedModelFailures = 0;
   const publisherCalls: { variant: string; status: number }[] = [];
   const registrations: Record<string, unknown>[] = [];
   const publishedReplies: Promise<void>[] = [];
+  page.on('filechooser', () => { fileChoosers++; });
   await context.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.protocol !== 'http:' || ![API_URL, DASHBOARD_URL].includes(url.origin) || url.username || url.password) {
       violation = true; await route.abort('blockedbyclient'); return;
     }
+    if (url.origin === API_URL && ['POST', 'PUT', 'PATCH'].includes(route.request().method())
+      && url.pathname.startsWith('/storage/v1/object/menu-images/')) originalUploads++;
+    if (url.origin === API_URL && route.request().method() === 'POST'
+      && url.pathname === '/rest/v1/rpc/menu_upsert_item') itemSaves++;
     if (url.origin === DASHBOARD_URL && /\/product-cutout\/vendor\/u2net-\d+\.bin$/.test(url.pathname)) {
       modelReads++;
       if (modelFault === 'hold') {
@@ -194,6 +201,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
   expect(modelReads, 'No model is loaded for login or ordinary Dashboard navigation').toBe(0);
   const evidence: Record<string, unknown>[] = [];
   for (const sample of samples) {
+    const beforeChoose = { fileChoosers, originalUploads, itemSaves };
     advance('open-product', sample.name);
     await tapNav(page, 'القائمة');
     await tapText(page, sample.category);
@@ -207,7 +215,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     const source = readFileSync(path);
     await (await chooser).setFiles(path);
     const previousModelReads = modelReads, previousRegisters = registerCalls;
-    if (sample.name === 'burger') modelFault = 'hold';
+    if (sample.name === 'burger' || sample.name === 'fries-cup') modelFault = 'hold';
     advance('save-source');
     const saved = page.waitForResponse(response => post(response, '/rest/v1/rpc/menu_upsert_item'));
     await click(page, L.save);
@@ -242,6 +250,37 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     advance('private-original-bytes');
     expect(sha(privateBefore.bytes), 'The real private upload retains exact source bytes').toBe(sha(source));
     let successfulModelStart = previousModelReads;
+    let existingBaseline: typeof beforeChoose | undefined;
+    if (sample.name === 'fries-cup') {
+      advance('existing-await-auto');
+      await expect.poll(() => heldModelRequest !== undefined).toBe(true);
+      // First prove these observers saw the ordinary upload. Unchanged counts
+      // later can then prove the reopened path performs no chooser/upload/save.
+      expect(fileChoosers).toBe(beforeChoose.fileChoosers + 1);
+      expect(originalUploads).toBe(beforeChoose.originalUploads + 1);
+      expect(itemSaves).toBe(beforeChoose.itemSaves + 1);
+      existingBaseline = { fileChoosers, originalUploads, itemSaves };
+      const worker = page.workers().find(worker => new URL(worker.url()).pathname.endsWith('/product-cutout/worker.mjs'));
+      expect(worker, 'Automatic preparation owns an actual worker').toBeDefined();
+      advance('existing-close');
+      // The held first chunk prevents inference from completing naturally.
+      // Observe actual disposal before releasing the route or resetting counts.
+      await responseAfterAction(observeResponse(worker!.waitForEvent('close')),
+        () => tapButton(page, 'إلغاء'));
+      await expect(page.getByRole('button', { name: L.prepare, exact: true })).toHaveCount(0);
+      await heldModelRequest!.abort('aborted').catch(() => {});
+      heldModelRequest = undefined;
+      expect(page.workers().filter(worker => new URL(worker.url()).pathname.endsWith('/product-cutout/worker.mjs'))).toHaveLength(0);
+      advance('existing-reopen');
+      await tapNav(page, 'القائمة');
+      await tapText(page, sample.category);
+      await tapText(page, sample.item);
+      await expect(page.getByRole('button', { name: L.prepare, exact: true })).toBeEnabled();
+      await expect(page.getByRole('button', { name: L.remove, exact: true })).toHaveCount(0);
+      successfulModelStart = modelReads;
+      advance('existing-prepare');
+      await click(page, L.prepare);
+    }
     if (sample.name === 'burger') {
       advance('cancel-await-model-download');
       await expect.poll(() => heldModelRequest !== undefined,
@@ -288,6 +327,19 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       expect(modelReads - successfulModelStart, 'Successful retry fetches all eleven pinned model chunks').toBe(11);
       advance('cutout-choice-enabled');
       await expect(page.getByRole('button', { name: L.remove, exact: true })).toBeEnabled();
+    }
+    if (existingBaseline) {
+      advance('existing-verify');
+      expect({ fileChoosers, originalUploads, itemSaves },
+        'Reopening and preparing an existing photo uses no chooser, upload or source save').toEqual(existingBaseline);
+      const existing = await readOriginal();
+      expect(existing.status).toBe(200); expect(existing.data.ok).toBe(true);
+      expect(existing.data.source_key).toBe(originalKey);
+      expect(existing.data.source_snapshot).toEqual(before.data.source_snapshot);
+      expect(existing.data.selected_derivative_id).toBeNull();
+      const unchanged = await downloadOriginal();
+      expect(unchanged.status).toBe(200);
+      expect(sha(unchanged.bytes)).toBe(sha(privateBefore.bytes));
     }
     advance('prepublication-no-register');
     expect(registerCalls, 'Saving an original and automatic local review never publishes a candidate').toBe(previousRegisters);
@@ -372,6 +424,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       modelPartReads: modelReads - previousModelReads, originalPreserved: sha(privateAfter.bytes) === sha(privateBefore.bytes),
       privateBeforeSha256: sha(privateBefore.bytes), privateAfterSha256: sha(privateAfter.bytes),
       cancelAndFailedFetchRetainedOriginal: sample.name === 'burger', publishedImages,
+      existingOriginalPreparedWithoutUpload: sample.name === 'fries-cup',
       explicitPublication: true, ...dimensions });
     advance('close-product');
     await tapButton(page, 'إلغاء'); // close the item editor; already saved source/presentation remain
