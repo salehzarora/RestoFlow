@@ -64,6 +64,6 @@ try {
       await context.close();
     }
   }
-  writeFileSync(join(out, 'preview-results.json'), JSON.stringify({ status: 'PASS', scope: 'local Next dev renderer; captured public bytes; no publication/hosted claim', records }, null, 2));
+  writeFileSync(join(out, 'preview-results.json'), JSON.stringify({ status: 'PASS', scope: 'local Next renderer; captured public bytes; no publication/hosted claim', records }, null, 2));
   console.log(`PASS: ${records.length} same-source menu captures, actual carousel interaction, no external requests`);
 } finally { await browser.close(); }

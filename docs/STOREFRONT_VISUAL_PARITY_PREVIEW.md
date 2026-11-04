@@ -16,7 +16,9 @@ to view this captured review dataset. No SQL or merchant setting is changed.
 ## Photograph provenance
 
 The prior cinematic Preview's 16 generative cutouts are **not used** by this review
-profile. They remain in their previous paths for historical work. The profile now
+profile. The 20 previous product files are preserved byte-for-byte in
+`docs/visual-references/PR379-cinematic-preview/`, outside deployed static assets,
+with a SHA-256 manifest and their recorded individual treatments. The profile now
 uses 20 byte-identical copies of the original public URLs already recorded in
 `runtime.snapshot.json`, captured on 2026-11-04 into
 `public/cinematic-preview/originals/`. Their source URL, SHA-256, byte count, and
@@ -50,3 +52,19 @@ upscaled 960px image; DPR requirements beyond that native size remain capped.
 The actual service journey is separately defined in `e2e/cinematic/dashboard.spec.ts`.
 Its Actions-only gate, timeout, Storage/publication checks, and source-byte checks
 remain in force. Local Preview and controlled source tests do not replace it.
+
+## Static asset budget
+
+The first snapshot retaining both historical products and the new source copies
+measured 4,673,899 bytes against the unchanged 4,194,304-byte ceiling. Its only
+output failure was total size; JS, CSS, font and individual-file budgets passed.
+The measured overage was 479,595 bytes. The bounded remedy archives exactly the
+20 unused prior product files, preserving every byte and their history. Cover,
+logo and menu texture remain in place; current original-photo copies stay local.
+
+After archival the final local snapshot measured 3,636,170 bytes, leaving
+558,134 bytes below the same ceiling. Build, typecheck, input audit, all 468
+Storefront tests, all 31 output tests, and output/first-load audits passed.
+First-load JS measured 577,154 bytes raw and 154,308 bytes Brotli; CSS and font
+limits passed without new exceptions. These are local measurements on the
+frontend change, not hosted transfer or final integrated CI results.

@@ -1,0 +1,187 @@
+{
+  "archivedAt": "2026-11-04",
+  "sourceInventory": "docs/BIZBOT_STOREFRONT_CINEMATIC_001_ASSETS.md",
+  "note": "Historical review candidates only; bytes preserved unchanged; not deployed or used in current Preview",
+  "records": [
+    {
+      "id": "8ee6e82d-7a09-4b54-8e41-42ccfa4e12e2",
+      "name": "golden pops",
+      "previousPath": "storefront/public/cinematic-preview/8ee6e82d-7a09-4b54-8e41-42ccfa4e12e2.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/8ee6e82d-7a09-4b54-8e41-42ccfa4e12e2.webp",
+      "sha256": "6577d5fe9320342587d7a76851def6df2640a0615ead9d1ea0bea84034e3a517",
+      "bytes": 75880,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "b2d952db-ad93-4259-958c-58b6c200d895",
+      "name": "maps monster",
+      "previousPath": "storefront/public/cinematic-preview/b2d952db-ad93-4259-958c-58b6c200d895.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/b2d952db-ad93-4259-958c-58b6c200d895.webp",
+      "sha256": "095d4783034baa095b7fe80eaf01b31066bcb0f1918e49ba8d50b06140b5e5ab",
+      "bytes": 81868,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "338bd2c8-07a8-49d9-9648-4b2e8c6646cf",
+      "name": "Cup Map x Cheesy Fries",
+      "previousPath": "storefront/public/cinematic-preview/338bd2c8-07a8-49d9-9648-4b2e8c6646cf.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/338bd2c8-07a8-49d9-9648-4b2e8c6646cf.webp",
+      "sha256": "d784c7b8f20b8cd770ec8ec6f2ed13970af385ae481c89b8a6a51c5206f1e6db",
+      "bytes": 53234,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "4afa95e4-ca37-4e21-9c11-75913fbd6302",
+      "name": "map x",
+      "previousPath": "storefront/public/cinematic-preview/4afa95e4-ca37-4e21-9c11-75913fbd6302.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/4afa95e4-ca37-4e21-9c11-75913fbd6302.webp",
+      "sha256": "87cc39140be260986b56a171dcce5d53a46bd0c178cec031b12274803883f539",
+      "bytes": 71408,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "8a7b43d0-5011-4376-bd5a-8cb518db81e1",
+      "name": "كلاسيك برجر",
+      "previousPath": "storefront/public/cinematic-preview/8a7b43d0-5011-4376-bd5a-8cb518db81e1.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/8a7b43d0-5011-4376-bd5a-8cb518db81e1.webp",
+      "sha256": "65db670c8290e9f4a813e97f15fa832152e17ce6ce024015cef2d8c9d9c50590",
+      "bytes": 74156,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "1094c5e8-111a-45fa-9727-4262d347c248",
+      "name": "🇮🇹 إيطاليانو برجر",
+      "previousPath": "storefront/public/cinematic-preview/1094c5e8-111a-45fa-9727-4262d347c248.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/1094c5e8-111a-45fa-9727-4262d347c248.webp",
+      "sha256": "28d2d55f419a0a8d1f2be5fa5308893d838a80bd14b2a598e1a28bf72060d450",
+      "bytes": 55438,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "3a0bd3b4-4800-49a0-a718-1b1dba5da64a",
+      "name": "Cup Map Volcano Cheesy Fries",
+      "previousPath": "storefront/public/cinematic-preview/3a0bd3b4-4800-49a0-a718-1b1dba5da64a.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/3a0bd3b4-4800-49a0-a718-1b1dba5da64a.webp",
+      "sha256": "9ed13462ee81f6b983c14cf97aaccbdcefdea7daac78c40e1fc867f62789e707",
+      "bytes": 53396,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "43fa2239-6034-4a2b-b4aa-1082533f6f09",
+      "name": "map vlcano cheesy fries",
+      "previousPath": "storefront/public/cinematic-preview/43fa2239-6034-4a2b-b4aa-1082533f6f09.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/43fa2239-6034-4a2b-b4aa-1082533f6f09.webp",
+      "sha256": "31cb960fccc5935303bb295fee102e9d7392e2d0d6bbf169ede6334030c664c7",
+      "bytes": 76866,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "69631efa-d00e-4b6f-82a3-7a4b49a6806d",
+      "name": "cup golden",
+      "previousPath": "storefront/public/cinematic-preview/69631efa-d00e-4b6f-82a3-7a4b49a6806d.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/69631efa-d00e-4b6f-82a3-7a4b49a6806d.webp",
+      "sha256": "d884eb9a2aa91e101c7553bf0a46811be54f4e06f1955d8a8ece62c97430ce7f",
+      "bytes": 51462,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "a3064d51-5096-4e8e-9d2e-4d486d9dea90",
+      "name": "برجر عربي",
+      "previousPath": "storefront/public/cinematic-preview/a3064d51-5096-4e8e-9d2e-4d486d9dea90.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/a3064d51-5096-4e8e-9d2e-4d486d9dea90.webp",
+      "sha256": "d0f2862921ecfb7818d1b8f722ac9c5a3c08671bcf6625757505da8e03044b98",
+      "bytes": 62102,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "26c3e4b9-27db-415a-8dae-4633b3106f62",
+      "name": "🌶️ مكسيكاني برجر",
+      "previousPath": "storefront/public/cinematic-preview/26c3e4b9-27db-415a-8dae-4633b3106f62.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/26c3e4b9-27db-415a-8dae-4633b3106f62.webp",
+      "sha256": "cd7de0e96707204787abdb7d669df98e6b87ddaadc08f9506089afa8fd84ad80",
+      "bytes": 64136,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "e2339127-1541-4ea3-8089-a36364c6de66",
+      "name": "سماش برجر",
+      "previousPath": "storefront/public/cinematic-preview/e2339127-1541-4ea3-8089-a36364c6de66.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/e2339127-1541-4ea3-8089-a36364c6de66.webp",
+      "sha256": "9fce9e335e363e5f32bdb753c90b304e103e9f878757bdbbf775b400122f8cb4",
+      "bytes": 77902,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "1047d262-2c4b-4f3b-9989-d74d881af724",
+      "name": "برجر كرسبي",
+      "previousPath": "storefront/public/cinematic-preview/1047d262-2c4b-4f3b-9989-d74d881af724.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/1047d262-2c4b-4f3b-9989-d74d881af724.webp",
+      "sha256": "bb66b34be6b94317ce61b0a77d552d9a1f92fa018523023fda4fd743e0544f7d",
+      "bytes": 64712,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "ecffd581-67d4-47d9-9669-489db9f81d12",
+      "name": "Cola",
+      "previousPath": "storefront/public/cinematic-preview/ecffd581-67d4-47d9-9669-489db9f81d12.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/ecffd581-67d4-47d9-9669-489db9f81d12.webp",
+      "sha256": "bf1df2d00972158a639fee9c65a0e987c76f6d20845f3dc52cacaaf235607c9d",
+      "bytes": 15454,
+      "recordedTreatment": "Original transparent image, optimized"
+    },
+    {
+      "id": "98b27b08-4f06-4a3c-8c51-33b9d598360e",
+      "name": "Cola zero",
+      "previousPath": "storefront/public/cinematic-preview/98b27b08-4f06-4a3c-8c51-33b9d598360e.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/98b27b08-4f06-4a3c-8c51-33b9d598360e.webp",
+      "sha256": "ae781f47fe9f9d2ca94570f53ac66b37519aa69c0fab02889814f5fed8692159",
+      "bytes": 51334,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "f199fe04-a3f3-44f6-b9e3-603a624effd3",
+      "name": "Fanta",
+      "previousPath": "storefront/public/cinematic-preview/f199fe04-a3f3-44f6-b9e3-603a624effd3.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/f199fe04-a3f3-44f6-b9e3-603a624effd3.webp",
+      "sha256": "f71000f24d5b2287e23f2059f1a0521495cea92aed48eeeee5b84bdffcb70208",
+      "bytes": 19992,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    },
+    {
+      "id": "7b98ae51-eed3-4e4d-b5cb-818327ed0d60",
+      "name": "Sprite",
+      "previousPath": "storefront/public/cinematic-preview/7b98ae51-eed3-4e4d-b5cb-818327ed0d60.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/7b98ae51-eed3-4e4d-b5cb-818327ed0d60.webp",
+      "sha256": "fd4b39b56c064359a197957f490f7287c279302fe5e0814c63b85dc3333a1797",
+      "bytes": 13326,
+      "recordedTreatment": "Original transparent image, optimized"
+    },
+    {
+      "id": "c25346fb-2d35-4910-b511-081f60b88583",
+      "name": "Sprite zero",
+      "previousPath": "storefront/public/cinematic-preview/c25346fb-2d35-4910-b511-081f60b88583.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/c25346fb-2d35-4910-b511-081f60b88583.webp",
+      "sha256": "1db8b077138e8ecf7b1726c7ec17fd56a88f613ae8bc072ce1bc908679160c4b",
+      "bytes": 14660,
+      "recordedTreatment": "Original transparent image, optimized"
+    },
+    {
+      "id": "1e4fd530-2c70-49a7-af17-1e355c6d40cf",
+      "name": "XL",
+      "previousPath": "storefront/public/cinematic-preview/1e4fd530-2c70-49a7-af17-1e355c6d40cf.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/1e4fd530-2c70-49a7-af17-1e355c6d40cf.webp",
+      "sha256": "6eaf53a510a270f46d63a818c54020a141622f4fd1ec58ec8c0d71c49f2432cb",
+      "bytes": 17844,
+      "recordedTreatment": "Original transparent image, optimized"
+    },
+    {
+      "id": "f8e87534-a26d-4f8e-a179-5d19ac07d723",
+      "name": "ماء",
+      "previousPath": "storefront/public/cinematic-preview/f8e87534-a26d-4f8e-a179-5d19ac07d723.webp",
+      "archivePath": "docs/visual-references/PR379-cinematic-preview/f8e87534-a26d-4f8e-a179-5d19ac07d723.webp",
+      "sha256": "5d4def296434c9aaa6dc0838e3ef47b428d6252248e9a8f43504624b2cf1a294",
+      "bytes": 42616,
+      "recordedTreatment": "AI background extraction, optimized; fine detail reconstructed"
+    }
+  ]
+}

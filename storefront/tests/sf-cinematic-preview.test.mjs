@@ -1,6 +1,6 @@
 import './support/ts-resolver.mjs';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 
@@ -75,6 +75,19 @@ test('review photographs are unchanged public source bytes, with explicit proven
     assert.ok(bytes.length < 256 * 1024);
     assert.equal(createHash('sha256').update(bytes).digest('hex'), row.sha256);
     assert.ok(row.width > 0 && row.height > 0);
+  }
+});
+
+test('the prior product candidates remain byte-identical in the reference archive outside public assets', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../../docs/visual-references/PR379-cinematic-preview/manifest.json', import.meta.url), 'utf8'));
+  assert.deepEqual(manifest.records.map(row => row.id).sort(), runtime.items.map(item => item.id).sort());
+  for (const row of manifest.records) {
+    assert.equal(row.previousPath, `storefront/public/cinematic-preview/${row.id}.webp`);
+    assert.equal(row.archivePath, `docs/visual-references/PR379-cinematic-preview/${row.id}.webp`);
+    assert.equal(existsSync(new URL(`../../${row.previousPath}`, import.meta.url)), false);
+    const bytes = readFileSync(new URL(`../../${row.archivePath}`, import.meta.url));
+    assert.equal(bytes.length, row.bytes);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), row.sha256);
   }
 });
 
