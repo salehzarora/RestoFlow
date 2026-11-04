@@ -334,10 +334,18 @@ async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'oth
   }
   throw new ControlRevealError(purpose, samples);
 }
-async function tapRevealedControl(page: Page, target: Locator): Promise<void> {
+async function tapRevealedControl(page: Page, target: Locator, modal = false): Promise<void> {
   await expect(target, 'The actual Flutter control is enabled').toBeEnabled();
   const box = await targetGeometry(page, target);
-  expect(controlGeometry(box, page.viewportSize()!, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false).ready,
+  const viewport = page.viewportSize()!;
+  // Modal footer buttons occupy the real viewport's bottom edge; the editor's
+  // reserved header/footer insets apply only to controls behind the modal.
+  const ready = modal
+    ? box !== null && box.width > 0 && box.height > 0 && box.x >= 0 && box.y >= 0 &&
+      box.x + box.width <= viewport.width && box.y + box.height <= viewport.height &&
+      (box.centerHit || box.flutterSurfaceHit)
+    : controlGeometry(box, viewport, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false).ready;
+  expect(ready,
     'The control is in the viewport with an unobstructed same-view Flutter input surface').toBe(true);
   if (box!.centerHit) return target.click();
   // Send an ordinary physical pointer click through the actual Flutter input
@@ -345,8 +353,8 @@ async function tapRevealedControl(page: Page, target: Locator): Promise<void> {
   // The chooser/Storage/publisher/save assertions still prove the action.
   await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
 }
-async function tapRevealedButton(page: Page, name: string): Promise<void> {
-  await tapRevealedControl(page, page.getByRole('button', { name, exact: true }));
+async function tapRevealedButton(page: Page, name: string, modal = false): Promise<void> {
+  await tapRevealedControl(page, page.getByRole('button', { name, exact: true }), modal);
 }
 async function selectRevealedDropdown(page: Page, current: string | RegExp, option: string): Promise<void> {
   await tapRevealedControl(page, page.getByRole('button', { name: current, exact: false }));
@@ -397,21 +405,52 @@ async function readColorDraft(page: Page, name: string): Promise<string> {
 async function useVisualColorPicker(page: Page, name: string, apply: boolean, capture?: string): Promise<void> {
   await revealButton(page, name);
   await tapRevealedButton(page, name);
-  const sv = page.getByRole('slider', { name: L.saturation });
-  const hue = page.getByRole('slider', { name: L.hue });
-  await expect(sv).toHaveCount(1);
-  // Real pointer input selects the square; ordinary keys then refine both axes
-  // in the actual RTL sheet. No HEX input or callback supplies the selection.
-  await tapRevealedControl(page, sv);
-  await sv.focus();
+  // Flutter's incrementable semantics puts the name on the parent surface,
+  // and a native range input inside it. Pointer mode disables that input so
+  // Flutter, rather than the browser range, handles the actual gesture.
+  const svSurface = page.getByLabel(L.saturation, { exact: true });
+  const hueSurface = page.getByLabel(L.hue, { exact: true });
+  const sv = svSurface.getByRole('slider');
+  const hue = hueSurface.getByRole('slider');
+  await expect(svSurface, 'The SV surface has its accessible label').toHaveCount(1);
+  await expect(hueSurface, 'The hue surface has its accessible label').toHaveCount(1);
+  await expect(sv, 'The labeled SV surface exposes one slider').toHaveCount(1);
+  await expect(hue, 'The labeled hue surface exposes one slider').toHaveCount(1);
+  const swatches = page.getByText(/^#[0-9a-f]{6}$/, { exact: true });
+  await expect(swatches, 'The sheet shows current and new HEX swatches').toHaveCount(2);
+  const current = await swatches.nth(0).innerText();
+  const beforeKeys = await swatches.nth(1).innerText();
+  // A modifier enters keyboard mode without changing a draft or focus. Wait
+  // for the native controls to be enabled before ordinary Tab traversal.
+  await page.keyboard.press('Shift');
+  await expect(sv, 'Keyboard mode enables the SV semantics input').toBeEnabled();
+  await page.keyboard.press('Tab');
+  await expect(sv, 'Tab reaches the SV field').toBeFocused();
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('ArrowRight');
-  await tapRevealedControl(page, hue);
-  await hue.focus();
+  await expect(swatches.nth(1), 'SV arrow keys change the visible draft').not.toHaveText(beforeKeys);
+  await page.keyboard.press('Tab');
+  await expect(hue, 'Tab reaches the hue rail').toBeFocused();
+  // Flutter initializes aria-valuetext on the first change, not first focus.
+  // Exercise both directions so initialization cannot masquerade as a change.
+  await page.keyboard.press('ArrowDown');
+  await expect(hue, 'Hue input reports an angle').toHaveAttribute('aria-valuetext', /^\d+°$/);
+  const beforeHueKey = await hue.getAttribute('aria-valuetext');
   await page.keyboard.press('ArrowUp');
+  await expect(hue, 'Hue arrow input reports the changed angle').toHaveAttribute('aria-valuetext', /^\d+°$/);
+  await expect(hue, 'The opposite hue key changes its actual angle').not.toHaveAttribute('aria-valuetext', beforeHueKey!);
+  // Physical pointer input targets each labeled Flutter surface, never the
+  // disabled native range. The visible swatch is authoritative in pointer mode.
+  const beforePointer = await swatches.nth(1).innerText();
+  await tapRevealedControl(page, svSurface);
+  await expect(swatches.nth(1), 'SV pointer selection changes the visible draft').not.toHaveText(beforePointer);
+  const beforeHuePointer = await swatches.nth(1).innerText();
+  await tapRevealedControl(page, hueSurface);
+  await expect(swatches.nth(1), 'Hue pointer selection changes the visible draft').not.toHaveText(beforeHuePointer);
+  await expect(swatches.nth(0), 'Visual gestures preserve the current swatch').toHaveText(current);
   if (capture) await screenshot(page, capture);
-  await tapRevealedButton(page, apply ? L.apply : L.cancel);
-  await expect(sv).toHaveCount(0);
+  await tapRevealedButton(page, apply ? L.apply : L.cancel, true);
+  await expect(sv, 'Apply or Cancel closes the visual picker').toHaveCount(0);
 }
 async function saveProfile(page: Page): Promise<void> {
   await revealButton(page, L.saveProfile);
@@ -424,9 +463,9 @@ async function sceneDialog(page: Page, apply: boolean, legacy = false, capture?:
   await revealButton(page, L.scenePreview);
   await tapRevealedButton(page, L.scenePreview);
   await expect(page.getByRole('button', { name: L.apply, exact: true })).toHaveCount(1);
-  if (legacy) await tapRevealedButton(page, L.sceneLegacy);
+  if (legacy) await tapRevealedButton(page, L.sceneLegacy, true);
   if (capture) await screenshot(page, capture);
-  await tapRevealedButton(page, apply ? L.apply : L.cancel);
+  await tapRevealedButton(page, apply ? L.apply : L.cancel, true);
   await expect(page.getByRole('button', { name: L.apply, exact: true })).toHaveCount(0);
 }
 async function semantics(page: Page): Promise<void> {
