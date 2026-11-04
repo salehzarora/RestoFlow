@@ -21,7 +21,7 @@ const samples = [
   // source/cancel/retry/restore coverage. No fixture catalogue/schema expansion.
   { name: 'burger-highres', file: 'burger-highres.jpg', category: 'وجبات اختبار', item: 'TEST 1', alpha: false },
 ] as const;
-const L = { pick: 'اختيار صورة', save: 'حفظ الصورة', original: 'الأصل', remove: 'إزالة الخلفية',
+const L = { pick: 'اختيار صورة', replace: 'استبدال الصورة', save: 'حفظ الصورة', original: 'الأصل', remove: 'إزالة الخلفية',
   publish: 'نشر الصورة المختارة', published: 'تم نشر الاختيار.', dark: 'فحص الحواف على خلفية داكنة',
   prepare: 'تحضير إزالة الخلفية', cancel: 'إلغاء المعالجة',
   failed: 'تعذرت إزالة الخلفية. الصورة الأصلية محفوظة. أعد المحاولة أو احتفظ بالأصل.',
@@ -223,8 +223,12 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     await tapNav(page, 'القائمة');
     await tapText(page, sample.category);
     await tapText(page, sample.item);
-    const picker = page.getByRole('button', { name: L.pick, exact: true });
+    // The fifth case revisits TEST 1 with its original already saved.
+    const picker = page.getByRole('button', {
+      name: sample.name === 'burger-highres' ? L.replace : L.pick, exact: true,
+    });
     advance('choose-source');
+    await expect(picker).toHaveCount(1);
     await reveal(page, picker);
     const chooser = page.waitForEvent('filechooser');
     await picker.click();
