@@ -1,0 +1,175 @@
+{
+  "model": "U2Net FP32",
+  "modelNativeHeapLimitBytes": 536870912,
+  "fixturesArePublishedCopies": true,
+  "cases": [
+    {
+      "sample": "burger",
+      "sourceKind": "Existing published c4/w480 copy, not private original",
+      "sourceBytes": 27156,
+      "sourceSha256": "5bcfca1884ff3d0cb5dea89a4553664a4f2c205c65081781918e2e75b8ead994",
+      "treatment": "u2net-cutout",
+      "modelPartReads": 13,
+      "originalPreserved": true,
+      "privateBeforeSha256": "5bcfca1884ff3d0cb5dea89a4553664a4f2c205c65081781918e2e75b8ead994",
+      "privateAfterSha256": "5bcfca1884ff3d0cb5dea89a4553664a4f2c205c65081781918e2e75b8ead994",
+      "cancelAndFailedFetchRetainedOriginal": true,
+      "publishedImages": [
+        {
+          "variant": "w480",
+          "bytes": 23926,
+          "sha256": "56e1186c87aeb8d5719a24fcb54d4452f110fffc3ef03b4b143e4f2cdd7f07f1",
+          "width": 360,
+          "height": 480,
+          "transparent": 118576,
+          "partial": 7129,
+          "opaque": 47095,
+          "alphaSha256": "db68c348a56f69e3af8888ecc5a63a33ae77c8a616f50a4d22205f640ecef87d"
+        },
+        {
+          "variant": "w960",
+          "bytes": 23926,
+          "sha256": "56e1186c87aeb8d5719a24fcb54d4452f110fffc3ef03b4b143e4f2cdd7f07f1",
+          "width": 360,
+          "height": 480,
+          "transparent": 118576,
+          "partial": 7129,
+          "opaque": 47095,
+          "alphaSha256": "db68c348a56f69e3af8888ecc5a63a33ae77c8a616f50a4d22205f640ecef87d"
+        }
+      ],
+      "existingOriginalPreparedWithoutUpload": false,
+      "explicitPublication": true,
+      "width480": 360,
+      "height480": 480,
+      "width960": 360,
+      "height960": 480
+    },
+    {
+      "sample": "fries-cup",
+      "sourceKind": "Existing published c4/w480 copy, not private original",
+      "sourceBytes": 46612,
+      "sourceSha256": "698cee5bb2f9281e3be57d78adbc100685b1a8d04969f8248fe6ebe12609106e",
+      "treatment": "u2net-cutout",
+      "modelPartReads": 12,
+      "originalPreserved": true,
+      "privateBeforeSha256": "698cee5bb2f9281e3be57d78adbc100685b1a8d04969f8248fe6ebe12609106e",
+      "privateAfterSha256": "698cee5bb2f9281e3be57d78adbc100685b1a8d04969f8248fe6ebe12609106e",
+      "cancelAndFailedFetchRetainedOriginal": false,
+      "publishedImages": [
+        {
+          "variant": "w480",
+          "bytes": 81048,
+          "sha256": "1083ab138beb6011d0e9299359744d90c5c72ab60293580fc035535000670409",
+          "width": 480,
+          "height": 480,
+          "transparent": 73273,
+          "partial": 121713,
+          "opaque": 35414,
+          "alphaSha256": "9093fb863ad23f044260fde17485c992aa3fab99edc2e0c50bfb026ebf6aa5ec"
+        },
+        {
+          "variant": "w960",
+          "bytes": 81048,
+          "sha256": "1083ab138beb6011d0e9299359744d90c5c72ab60293580fc035535000670409",
+          "width": 480,
+          "height": 480,
+          "transparent": 73273,
+          "partial": 121713,
+          "opaque": 35414,
+          "alphaSha256": "9093fb863ad23f044260fde17485c992aa3fab99edc2e0c50bfb026ebf6aa5ec"
+        }
+      ],
+      "existingOriginalPreparedWithoutUpload": true,
+      "explicitPublication": true,
+      "width480": 480,
+      "height480": 480,
+      "width960": 480,
+      "height960": 480
+    },
+    {
+      "sample": "platter",
+      "sourceKind": "Existing published c4/w480 copy, not private original",
+      "sourceBytes": 33756,
+      "sourceSha256": "f3bb4d896712f0acb9dc1359495e5c2aa3ca0025afff4b39e7fa8bc0118ad2b6",
+      "treatment": "u2net-cutout",
+      "modelPartReads": 11,
+      "originalPreserved": true,
+      "privateBeforeSha256": "f3bb4d896712f0acb9dc1359495e5c2aa3ca0025afff4b39e7fa8bc0118ad2b6",
+      "privateAfterSha256": "f3bb4d896712f0acb9dc1359495e5c2aa3ca0025afff4b39e7fa8bc0118ad2b6",
+      "cancelAndFailedFetchRetainedOriginal": false,
+      "publishedImages": [
+        {
+          "variant": "w480",
+          "bytes": 56382,
+          "sha256": "b41d1daf6d08fddd8db8abbadb5cedbf50c6ea391bb0b1d428e117f15cab37d9",
+          "width": 360,
+          "height": 480,
+          "transparent": 63880,
+          "partial": 65192,
+          "opaque": 43728,
+          "alphaSha256": "65e38fe0e6242b8ef41ee9f362b9751dd2975160f6c291e44f2678d65458bdab"
+        },
+        {
+          "variant": "w960",
+          "bytes": 56382,
+          "sha256": "b41d1daf6d08fddd8db8abbadb5cedbf50c6ea391bb0b1d428e117f15cab37d9",
+          "width": 360,
+          "height": 480,
+          "transparent": 63880,
+          "partial": 65192,
+          "opaque": 43728,
+          "alphaSha256": "65e38fe0e6242b8ef41ee9f362b9751dd2975160f6c291e44f2678d65458bdab"
+        }
+      ],
+      "existingOriginalPreparedWithoutUpload": false,
+      "explicitPublication": true,
+      "width480": 360,
+      "height480": 480,
+      "width960": 360,
+      "height960": 480
+    },
+    {
+      "sample": "drink",
+      "sourceKind": "Existing published c4/w480 copy, not private original",
+      "sourceBytes": 14562,
+      "sourceSha256": "30a7eaf7427448ad96994e0e69da4bf5a603812c1bf2d4db1f4ec6a0aedb891e",
+      "treatment": "original-alpha-bypass",
+      "modelPartReads": 0,
+      "originalPreserved": true,
+      "privateBeforeSha256": "30a7eaf7427448ad96994e0e69da4bf5a603812c1bf2d4db1f4ec6a0aedb891e",
+      "privateAfterSha256": "30a7eaf7427448ad96994e0e69da4bf5a603812c1bf2d4db1f4ec6a0aedb891e",
+      "cancelAndFailedFetchRetainedOriginal": false,
+      "publishedImages": [
+        {
+          "variant": "w480",
+          "bytes": 14360,
+          "sha256": "6f3d38c891ff6d50ab6c3cc31e7bf7805041ea5e84c1ca2b5c8b1d18f75f59f2",
+          "width": 480,
+          "height": 480,
+          "transparent": 173968,
+          "partial": 3745,
+          "opaque": 52687,
+          "alphaSha256": "09decd3c0d3e82f33963756595495e15e95cae6010e27350da2ab553cd32fd65"
+        },
+        {
+          "variant": "w960",
+          "bytes": 14360,
+          "sha256": "6f3d38c891ff6d50ab6c3cc31e7bf7805041ea5e84c1ca2b5c8b1d18f75f59f2",
+          "width": 480,
+          "height": 480,
+          "transparent": 173968,
+          "partial": 3745,
+          "opaque": 52687,
+          "alphaSha256": "09decd3c0d3e82f33963756595495e15e95cae6010e27350da2ab553cd32fd65"
+        }
+      ],
+      "existingOriginalPreparedWithoutUpload": false,
+      "explicitPublication": true,
+      "width480": 480,
+      "height480": 480,
+      "width960": 480,
+      "height960": 480
+    }
+  ]
+}
