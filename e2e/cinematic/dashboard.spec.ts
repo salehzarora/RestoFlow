@@ -3,6 +3,7 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { enableFlutterSemantics, waitForFlutterBoot, readAccessibleText } from '../lib/flutter';
 import { controlGeometry } from './control-geometry.mjs';
+import { MAX_REVEAL_WHEELS, nextRevealMove, observeResponse, responseAfterAction } from './control-progress.mjs';
 import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } from './auth-diagnostics.mjs';
 import { fillField, tapButton, tapNav, tapText, selectDropdown } from '../lib/dashboard';
 
@@ -137,28 +138,141 @@ async function targetGeometry(page: Page, target: Locator) {
   });
 }
 type RevealPurpose = 'upload' | 'content-save' | 'profile-save' | 'field' | 'dimming' | 'other';
+type ScrollScope = { x: number; y: number; width: number; height: number; source: 'target' | 'editor-anchor' | 'cached' | 'settings-gutter'; kind: 'clipping-ancestor' | 'flutter-view' | 'settings-viewport' };
+type RevealSample = { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>>; hiddenGeometry: Awaited<ReturnType<typeof targetGeometry>>; normalMatches: number; hiddenMatches: number; labelEvidence: { exact: number; normalized: number; button: number; hidden: number } | null; progressed: boolean | null; visibleNodes: number; surface: ScrollScope; direction: number; reversed: boolean };
+type RevealTrace = { purpose: RevealPurpose; result: 'ready' | 'stalled' | 'ambiguous' | 'iteration-limit' | 'disabled'; wheelSteps: number; samples: RevealSample[] };
+const revealTraces = new WeakMap<Page, RevealTrace[]>();
+const scrollScopes = new WeakMap<Page, ScrollScope>();
 class ControlRevealError extends Error {
-  constructor(readonly purpose: RevealPurpose, readonly samples: { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>> }[]) {
+  constructor(readonly purpose: RevealPurpose, readonly samples: RevealSample[]) {
     super('Dashboard control did not become visible and pointer-reachable.');
   }
 }
-async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'other'): Promise<void> {
+async function scrollScope(page: Page, target: Locator): Promise<ScrollScope> {
+  const anchors = [target, page.getByRole('button', { name: L.upload, exact: true }),
+    page.getByRole('textbox', { name: L.textColor }), page.getByRole('button', { name: L.saveProfile, exact: true })];
+  for (let index = 0; index < anchors.length; index++) {
+    if (!(await anchors[index].count())) continue;
+    const box = await anchors[index].first().evaluate(el => {
+      const own = el.getBoundingClientRect();
+      if (own.width <= 0 || own.height <= 0 || own.bottom <= 96 || own.top >= innerHeight - 64) return null;
+      const view = el.closest('flutter-view');
+      if (!view) return null;
+      let surface: Element = view;
+      let kind: 'clipping-ancestor' | 'flutter-view' = 'flutter-view';
+      // Use the actual control's rendered clipping ancestor; no Flutter Key is
+      // assumed to become a DOM id and no hidden semantic node is clicked.
+      for (let node = el.parentElement; node && node !== view; node = node.parentElement) {
+        const r = node.getBoundingClientRect(), style = getComputedStyle(node);
+        if (/auto|scroll|hidden|clip/.test(style.overflowY) && r.width > innerWidth / 2 && r.height > 240) {
+          surface = node; kind = 'clipping-ancestor'; break;
+        }
+      }
+      const r = surface.getBoundingClientRect(), top = Math.max(96, r.top), bottom = Math.min(innerHeight - 64, r.bottom);
+      const left = Math.max(0, r.left), right = Math.min(innerWidth, r.right);
+      if (bottom - top < 160 || right - left < 160) return null;
+      return { x: Math.round(left + Math.min(24, (right - left) / 10)), y: Math.round((top + bottom) / 2),
+        width: Math.round(right - left), height: Math.round(bottom - top), kind };
+    });
+    if (box) {
+      const scope: ScrollScope = { ...box, source: index === 0 ? 'target' : 'editor-anchor' };
+      scrollScopes.set(page, scope);
+      return scope;
+    }
+  }
+  const cached = scrollScopes.get(page);
+  if (cached) return { ...cached, source: 'cached' };
+  // Initial navigation can have no materialized editor control yet. Keep the
+  // previously observed RTL Settings gutter explicit in the diagnostic record.
   const viewport = page.viewportSize()!;
-  const samples: { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>> }[] = [];
-  // The tested RTL Settings scroll gutter sits left of its padded form fields.
-  // Wheel there so a multiline input beneath the viewport centre cannot consume it.
-  await page.mouse.move(24, viewport.height / 2);
-  if (!(await target.count())) await page.mouse.wheel(0, -30_000);
-  for (let i = 0; i < 80; i++) {
-    const box = await targetGeometry(page, target);
-    if (i % 8 === 0 || i === 79) samples.push({ iteration: i, geometry: box });
-    const state = controlGeometry(box, viewport, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false);
-    if (state.ready) return;
-    // Flutter Settings is a lazy native scrollable. Drive it with genuine
-    // wheel input until this control is inside the content viewport and its
-    // semantic node or the same Flutter view's input surface is hit-tested.
-    await page.mouse.wheel(0, state.deltaY);
-    await page.waitForTimeout(100);
+  return { x: 24, y: Math.round(viewport.height / 2), width: viewport.width,
+    height: viewport.height - 160, source: 'settings-gutter', kind: 'settings-viewport' };
+}
+async function renderedProgress(page: Page, scope: ScrollScope): Promise<{ signature: string; visibleNodes: number }> {
+  return page.evaluate(({ x, width }) => {
+    const parts: string[] = [];
+    for (const el of Array.from(document.querySelectorAll('flt-semantics, [id^="flt-semantic-node-"]'))) {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0 || r.bottom <= 96 || r.top >= innerHeight - 64 || r.right < x || r.left > x + width) continue;
+      // Only transient identity and geometry are compared in memory. Neither
+      // labels, values, IDs nor this signature are exported in the artifact.
+      parts.push([el.id, Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height),
+        Math.round(el.scrollTop), Math.round(el.scrollHeight)].join(':'));
+    }
+    return { signature: parts.join('|'), visibleNodes: parts.length };
+  }, scope);
+}
+async function settleScroll(page: Page, scope: ScrollScope): Promise<{ signature: string; visibleNodes: number }> {
+  let previous = await renderedProgress(page, scope), stable = 0;
+  // Observe several settled rendered samples rather than outrunning Flutter's
+  // semantics updates with a fixed series of large wheel movements.
+  for (let i = 0; i < 16; i++) {
+    await page.waitForTimeout(50);
+    const current = await renderedProgress(page, scope);
+    stable = current.signature === previous.signature ? stable + 1 : 0;
+    previous = current;
+    if (stable >= 3) return current;
+  }
+  return previous;
+}
+async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'other', hiddenTarget = target): Promise<void> {
+  const viewport = page.viewportSize()!;
+  const samples: RevealSample[] = [];
+  const trace: RevealTrace = { purpose, result: 'iteration-limit', wheelSteps: 0, samples };
+  const traces = revealTraces.get(page) ?? [];
+  if (traces.length < 80) traces.push(trace);
+  revealTraces.set(page, traces);
+  let state = { direction: 1, reversed: false, stalled: 0, wheelSteps: 0 };
+  let progressed: boolean | null = null;
+  // Start where the owner actually is. Jumping to the top of the lazy Settings
+  // list can leave/unmount the unsaved editor before its Save is encountered.
+  // Keep the original maximum of 80 physical wheels. Actual settling is
+  // observed between them; progress/end detection is the normal stop condition.
+  for (let i = 0; i <= MAX_REVEAL_WHEELS; i++) {
+    const normalMatches = await target.count(), hiddenMatches = await hiddenTarget.count();
+    const box = normalMatches === 1 ? await targetGeometry(page, target) : null;
+    const hiddenGeometry = normalMatches === 0 && hiddenMatches === 1 ? await targetGeometry(page, hiddenTarget) : null;
+    const scope = await scrollScope(page, target);
+    const before = await renderedProgress(page, scope);
+    const labelEvidence = purpose !== 'content-save' ? null : await page.evaluate(name => {
+      const normalize = (value: string) => value.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').replace(/\s+/g, ' ').trim();
+      let exact = 0, normalized = 0, button = 0, hidden = 0;
+      for (const el of Array.from(document.querySelectorAll('flt-semantics, [id^="flt-semantic-node-"]'))) {
+        const label = el.getAttribute('aria-label');
+        if (label === name) exact++;
+        if (label !== null && normalize(label) === normalize(name)) {
+          normalized++;
+          if (el.getAttribute('role') === 'button') button++;
+          if (el.getAttribute('aria-hidden') === 'true') hidden++;
+        }
+      }
+      return { exact, normalized, button, hidden };
+    }, L.save);
+    const sample: RevealSample = { iteration: i, geometry: box, hiddenGeometry, normalMatches, hiddenMatches, labelEvidence, progressed,
+      visibleNodes: before.visibleNodes, surface: scope, direction: state.direction, reversed: state.reversed };
+    // Retain every step: only bounded numeric geometry/counts and fixed enums.
+    samples.push(sample);
+    if (normalMatches > 1) { trace.result = 'ambiguous'; break; }
+    const geometry = controlGeometry(box, viewport, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false);
+    if (geometry.ready && await target.isVisible()) {
+      if (!(await target.isEnabled())) { trace.result = 'disabled'; break; }
+      trace.result = 'ready';
+      return;
+    }
+    // A hidden semantic rectangle may steer ordinary wheel input; only the
+    // normal visible, enabled locator can ever satisfy readiness or be clicked.
+    const observedBox = box ?? (hiddenGeometry && hiddenGeometry.width > 0 && hiddenGeometry.height > 0 &&
+      [hiddenGeometry.x, hiddenGeometry.y, hiddenGeometry.width, hiddenGeometry.height].every(Number.isFinite) ? hiddenGeometry : null);
+    const observedDirection = controlGeometry(observedBox, viewport, false).deltaY;
+    const move = nextRevealMove(state, { progressed, targetDelta: observedBox === null ? null : observedDirection,
+      step: Math.max(80, Math.floor(scope.height * 0.4)) });
+    state = move;
+    if (move.stop) { trace.result = move.termination!; break; }
+    await page.mouse.move(scope.x, scope.y);
+    await page.mouse.wheel(0, move.delta);
+    trace.wheelSteps++;
+    const after = await settleScroll(page, scope);
+    progressed = after.signature !== before.signature;
   }
   throw new ControlRevealError(purpose, samples);
 }
@@ -174,12 +288,12 @@ async function tapRevealedButton(page: Page, name: string): Promise<void> {
   // The chooser/Storage/publisher/save assertions still prove the action.
   await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
 }
-async function clickButton(page: Page, name: string): Promise<void> {
-  await reveal(page, page.getByRole('button', { name, exact: true }), name === L.save ? 'content-save' : name === L.saveProfile ? 'profile-save' : 'other');
-  await tapRevealedButton(page, name);
+async function revealButton(page: Page, name: string): Promise<void> {
+  await reveal(page, page.getByRole('button', { name, exact: true }), name === L.save ? 'content-save' : name === L.saveProfile ? 'profile-save' : 'other', page.getByRole('button', { name, exact: true, includeHidden: true }));
+  await expect(page.getByRole('button', { name, exact: true }), 'Actual revealed control is enabled').toBeEnabled();
 }
 async function fill(page: Page, name: string, value: string): Promise<void> {
-  await reveal(page, page.getByRole('textbox', { name }), 'field');
+  await reveal(page, page.getByRole('textbox', { name }), 'field', page.getByRole('textbox', { name, includeHidden: true }));
   await fillField(page, name, value);
 }
 async function semantics(page: Page): Promise<void> {
@@ -193,13 +307,13 @@ async function openEditor(page: Page, reload = false): Promise<void> {
   if (reload) await page.reload({ waitUntil: 'domcontentloaded' });
   await semantics(page);
   await tapNav(page, L.nav);
-  await reveal(page, page.getByRole('button', { name: L.upload, exact: true }), 'upload');
+  await reveal(page, page.getByRole('button', { name: L.upload, exact: true }), 'upload', page.getByRole('button', { name: L.upload, exact: true, includeHidden: true }));
   await expect(page.getByRole('button', { name: L.upload, exact: true })).toBeEnabled();
 }
 async function saveContent(page: Page): Promise<void> {
-  const saved = page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_content_v1'));
-  await clickButton(page, L.save);
-  const response = await saved;
+  await revealButton(page, L.save);
+  const saved = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_content_v1')));
+  const response = await responseAfterAction(saved, () => tapRevealedButton(page, L.save));
   expect(response.status(), 'Content writer HTTP result').toBe(200);
   expect((await response.json()).ok, 'Content writer accepted actual owner session').toBe(true);
   await textContains(page, L.saved);
@@ -293,7 +407,7 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
   try {
     diagnostics.mark('reveal', 'started');
     const target = page.getByRole('button', { name: L.upload, exact: true });
-    await diagnostics.value('reveal', diagnostics.observe('reveal', reveal(page, target, 'upload')));
+    await diagnostics.value('reveal', diagnostics.observe('reveal', reveal(page, target, 'upload', page.getByRole('button', { name: L.upload, exact: true, includeHidden: true }))));
     diagnostics.control = await targetGeometry(page, target);
     const uploaded = diagnostics.observe('private-upload-response', page.waitForResponse(r => {
       const u = new URL(r.url());
@@ -364,7 +478,7 @@ async function readDim(page: Page): Promise<number> {
 }
 async function setDim(page: Page, target: number): Promise<void> {
   const slider = page.getByRole('slider');
-  await reveal(page, slider, 'dimming');
+  await reveal(page, slider, 'dimming', page.getByRole('slider', { includeHidden: true }));
   await expect(slider, 'Exactly one menu dimming slider').toHaveCount(1);
   await slider.focus();
   let current = await readDim(page);
@@ -484,9 +598,8 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       'Actual Dashboard password matches the intended fixture before submission').toBe(true);
     stage = 'login';
     const loginStarted = performance.now();
-    const signedIn = page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API));
-    await tapButton(page, L.login, { which: 'last' });
-    const auth = await signedIn;
+    const signedIn = observeResponse(page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API)));
+    const auth = await responseAfterAction(signedIn, () => tapButton(page, L.login, { which: 'last' }));
     const loginDuration = performance.now() - loginStarted;
     loginEvidence.request = authRequestEvidence(auth.url(), auth.request().postData(), f.ownerA);
     // Parse only for fixed classifications before the status assertion. The
@@ -526,9 +639,11 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     stage = 'profile-colours';
     await fill(page, L.primary, '#211A16');
     await fill(page, L.accent, '#EAB082');
-    const profileSaved = page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_profile'));
-    await clickButton(page, L.saveProfile);
-    expect((await (await profileSaved).json()).ok).toBe(true);
+    await revealButton(page, L.saveProfile);
+    const profileSaved = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_profile')));
+    const profileResponse = await responseAfterAction(profileSaved, () => tapRevealedButton(page, L.saveProfile));
+    expect(profileResponse.status(), 'Profile writer HTTP result').toBe(200);
+    expect((await profileResponse.json()).ok).toBe(true);
     await openEditor(page, true);
     stages.push(stage);
 
@@ -540,7 +655,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       stage = `appearance-${dim}`;
       await fill(page, L.textColor, '#FFF1DA');
       await fill(page, L.buttonText, '#20140C');
-      await reveal(page, page.getByRole('button', { name: fromFont, exact: false }));
+      await reveal(page, page.getByRole('button', { name: fromFont, exact: false }), 'other', page.getByRole('button', { name: fromFont, exact: false, includeHidden: true }));
       await selectDropdown(page, fromFont, label);
       await setDim(page, dim);
       await saveContent(page);
@@ -587,13 +702,13 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await menu.setViewportSize({ width: 390, height: 844 });
     await verifyMenuGeometry(menu);
     await screenshot(menu, resolve(out, 'storefront-mobile-test-data.png'));
-    await reveal(page, page.getByRole('slider'));
+    await reveal(page, page.getByRole('slider'), 'dimming', page.getByRole('slider', { includeHidden: true }));
     await page.getByRole('slider').scrollIntoViewIfNeeded();
     await screenshot(page, resolve(out, 'dashboard-test-data.png'));
     stages.push(stage);
 
     stage = 'clear-selection-fallback-media-retained';
-    await reveal(page, page.getByRole('button', { name: new RegExp(second.slice(0, 8)) }));
+    await reveal(page, page.getByRole('button', { name: new RegExp(second.slice(0, 8)) }), 'other', page.getByRole('button', { name: new RegExp(second.slice(0, 8)), includeHidden: true }));
     await page.getByRole('button', { name: new RegExp(second.slice(0, 8)) }).first().click();
     await tapText(page, L.inherit, 'last');
     await saveContent(page);
@@ -606,13 +721,13 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     stages.push(stage);
 
     stage = 'clear-shared-hero-media-retained';
-    await reveal(page, page.getByRole('button', { name: new RegExp(L.inherit) }));
+    await reveal(page, page.getByRole('button', { name: new RegExp(L.inherit) }), 'other', page.getByRole('button', { name: new RegExp(L.inherit), includeHidden: true }));
     await page.getByRole('button', { name: new RegExp(L.inherit) }).first().click();
     await tapText(page, f.heroMediaId.slice(0, 8), 'last');
     await saveContent(page);
     expect((await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id).toBe(f.heroMediaId);
     await invariants(f, token);
-    await reveal(page, page.getByRole('button', { name: new RegExp(f.heroMediaId.slice(0, 8)) }));
+    await reveal(page, page.getByRole('button', { name: new RegExp(f.heroMediaId.slice(0, 8)) }), 'other', page.getByRole('button', { name: new RegExp(f.heroMediaId.slice(0, 8)), includeHidden: true }));
     await page.getByRole('button', { name: new RegExp(f.heroMediaId.slice(0, 8)) }).first().click();
     await tapText(page, L.inherit, 'last');
     await saveContent(page);
@@ -623,7 +738,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await renderMenu(menu, f, f.heroUrl, null);
     stages.push(stage);
     network.check();
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
+    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), controlReveals: revealTraces.get(page) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
   } catch (error) {
     const statuses = stages.includes('login') ? await editorStatus(page).catch(() => ['unreadable']) : [];
     const failureCapture = stages.includes('login')
@@ -631,7 +746,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
       login: loginEvidence, fonts: network.fonts(), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
       controlReveal: error instanceof ControlRevealError ? error.samples : null,
-      uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
+      controlReveals: revealTraces.get(page) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
   }
 });
