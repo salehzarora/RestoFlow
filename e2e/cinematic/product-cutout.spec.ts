@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Locator, type Response, type Route } from '@playwright/test';
+import { test, expect, type BrowserContext, type Page, type Locator, type Response, type Route } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -6,6 +6,7 @@ import { enableFlutterSemantics, waitForFlutterBoot } from '../lib/flutter';
 import { fillField, tapButton, tapNav, tapText, waitForText } from '../lib/dashboard';
 import { API_URL, DASHBOARD_URL, readFixture, scope, rpc, request, storagePath, readInvariants } from './service.mjs';
 import { localMediaTarget } from './live-transport.mjs';
+import { createProductProgress, type ProductProgress } from './product-progress.mjs';
 
 // Real owner session + shipped uploader/worker/repository/publisher. The guard
 // rejects execution outside the disposable Actions stack, even for local runs.
@@ -14,7 +15,7 @@ const samples = [
   { name: 'fries-cup', file: 'fries-cup.webp', category: 'مقبلات اختبار', item: 'TEST 2', alpha: false },
   { name: 'platter', file: 'platter.webp', category: 'كاسات اختبار', item: 'TEST 3', alpha: false },
   { name: 'drink', file: 'drink.webp', category: 'مشروبات اختبار', item: 'TEST 4', alpha: true },
-];
+] as const;
 const L = { pick: 'اختيار صورة', save: 'حفظ الصورة', original: 'الأصل', remove: 'إزالة الخلفية',
   publish: 'نشر الصورة المختارة', published: 'تم نشر الاختيار.', dark: 'فحص الحواف على خلفية داكنة',
   prepare: 'تحضير إزالة الخلفية', cancel: 'إلغاء المعالجة',
@@ -145,8 +146,10 @@ async function decodedAlpha(page: Page, bytes: Buffer) {
   }, bytes.toString('base64'));
 }
 
-test('product originals survive local review, explicit selection and publication', async ({ page, context }) => {
+async function runProductJourney(page: Page, context: BrowserContext, progress: ProductProgress) {
   const fixture = readFixture();
+  const advance = progress.advance;
+  advance('route-setup');
   let violation = false, modelReads = 0, registerCalls = 0;
   let modelFault: 'none' | 'hold' | 'fail' = 'none';
   let heldModelRequest: Route | undefined;
@@ -183,15 +186,20 @@ test('product originals survive local review, explicit selection and publication
       }));
     }
   });
+  advance('login');
   const token = await login(page, fixture.ownerA.email, fixture.ownerA.password);
+  advance('baseline-invariants');
   const initialInvariants = await readInvariants(fixture, token);
+  advance('initial-model-count');
   expect(modelReads, 'No model is loaded for login or ordinary Dashboard navigation').toBe(0);
   const evidence: Record<string, unknown>[] = [];
   for (const sample of samples) {
+    advance('open-product', sample.name);
     await tapNav(page, 'القائمة');
     await tapText(page, sample.category);
     await tapText(page, sample.item);
     const picker = page.getByRole('button', { name: L.pick, exact: true });
+    advance('choose-source');
     await reveal(page, picker);
     const chooser = page.waitForEvent('filechooser');
     await picker.click();
@@ -200,85 +208,118 @@ test('product originals survive local review, explicit selection and publication
     await (await chooser).setFiles(path);
     const previousModelReads = modelReads, previousRegisters = registerCalls;
     if (sample.name === 'burger') modelFault = 'hold';
+    advance('save-source');
     const saved = page.waitForResponse(response => post(response, '/rest/v1/rpc/menu_upsert_item'));
     await click(page, L.save);
     const sourceWrite = await saved;
+    advance('save-source-status');
     expect(sourceWrite.status()).toBe(200);
+    advance('save-source-result');
     expect((await sourceWrite.json()).ok).toBe(true);
+    advance('save-source-identifiers');
     const payload = sourceWrite.request().postDataJSON();
     const itemId = payload.p_id as string, originalKey = payload.p_image_path as string;
     expect(typeof itemId).toBe('string'); expect(typeof originalKey).toBe('string');
     const readOriginal = () => rpc(fixture, token, 'get_storefront_product_original_v1', { ...scope(fixture.ownerA), p_item_id: itemId });
+    advance('original-read-status');
     const before = await readOriginal();
-    expect(before.status).toBe(200); expect(before.data.ok).toBe(true);
+    expect(before.status).toBe(200);
+    advance('original-read-result');
+    expect(before.data.ok).toBe(true);
+    advance('original-source-key');
     expect(before.data.source_key).toBe(originalKey);
+    advance('original-selection-default');
     expect(before.data.selected_derivative_id).toBeNull();
     const downloadOriginal = () => request(fixture, token,
       `/storage/v1/object/authenticated/menu-images/${storagePath(originalKey)}`);
+    advance('private-original-status');
     const privateBefore = await downloadOriginal();
     expect(privateBefore.status).toBe(200);
+    advance('private-original-bytes');
     expect(sha(privateBefore.bytes), 'The real private upload retains exact source bytes').toBe(sha(source));
     let successfulModelStart = previousModelReads;
     if (sample.name === 'burger') {
+      advance('cancel-await-model-download');
       await expect.poll(() => heldModelRequest !== undefined,
         { message: 'Automatic preparation reaches a real model download' }).toBe(true);
+      advance('cancel-worker');
       await click(page, L.cancel);
       await expect(page.getByRole('button', { name: L.cancel, exact: true })).toHaveCount(0);
       // Termination normally cancels this request itself; releasing the held
       // route also keeps the test's fault injection bounded after cancellation.
       await heldModelRequest!.abort('aborted').catch(() => {});
       heldModelRequest = undefined;
+      advance('cancel-no-automatic-publication');
       await expect(page.getByRole('button', { name: L.publish, exact: true })).toBeEnabled();
       expect(registerCalls, 'Cancelling processing never publishes').toBe(previousRegisters);
+      advance('cancel-original-bytes');
       expect(sha((await downloadOriginal()).bytes)).toBe(sha(source));
 
       modelFault = 'fail';
+      advance('fault-start-worker');
       await click(page, L.prepare);
       await waitForText(page, L.failed);
+      advance('fault-observed');
       expect(injectedModelFailures).toBe(1);
+      advance('fault-no-automatic-publication');
       expect(registerCalls, 'A failed model fetch never publishes').toBe(previousRegisters);
       await expect(page.getByRole('button', { name: L.publish, exact: true })).toBeEnabled();
+      advance('fault-original-bytes');
       expect(sha((await downloadOriginal()).bytes), 'Failure retains actual private original bytes').toBe(sha(source));
       successfulModelStart = modelReads;
+      advance('retry-worker');
       await click(page, L.prepare); // Retry the actual worker, without mocked inference.
     }
+    advance('worker-ready');
     const publish = page.getByRole('button', { name: L.publish, exact: true });
     await reveal(page, publish);
     await expect(publish).toBeEnabled({ timeout: 150_000 });
     if (sample.alpha) {
+      advance('alpha-bypass-review');
       await waitForText(page, L.transparent);
       expect(modelReads, 'Real alpha returns original bytes without loading model weights').toBe(previousModelReads);
       await expect(page.getByRole('button', { name: L.remove, exact: true })).toBeDisabled();
     } else {
+      advance('model-chunk-count');
       expect(modelReads - successfulModelStart, 'Successful retry fetches all eleven pinned model chunks').toBe(11);
+      advance('cutout-choice-enabled');
       await expect(page.getByRole('button', { name: L.remove, exact: true })).toBeEnabled();
     }
+    advance('prepublication-no-register');
     expect(registerCalls, 'Saving an original and automatic local review never publishes a candidate').toBe(previousRegisters);
     const dark = page.getByRole('switch', { name: L.dark, exact: true });
+    advance('light-review-capture');
     await reveal(page, dark);
     await page.screenshot({ path: resolve(process.env.CINEMATIC_ARTIFACT_DIR!, `product-${sample.name}-light.png`) });
+    advance('dark-review-capture');
     await dark.click();
     await page.screenshot({ path: resolve(process.env.CINEMATIC_ARTIFACT_DIR!, `product-${sample.name}-dark.png`) });
+    advance('publish-selection');
     if (!sample.alpha) await click(page, L.remove);
     await click(page, L.publish);
     await waitForText(page, L.published, 180_000);
+    advance('selection-readback');
     const after = await readOriginal();
     expect(after.data.ok).toBe(true); expect(after.data.source_key).toBe(originalKey);
     expect(after.data.source_snapshot).toEqual(before.data.source_snapshot);
     expect(after.data.selected_derivative_id).toEqual(expect.any(String));
     expect(after.data.selection_version).toBe(before.data.selection_version + 1);
+    advance('original-after-publication');
     const privateAfter = await downloadOriginal();
     expect(privateAfter.status).toBe(200);
     expect(sha(privateAfter.bytes), 'Publication preserves exact private original bytes').toBe(sha(privateBefore.bytes));
+    advance('registration-proof');
     const registered = registrations.at(-1)!;
     expect(registered.p_treatment).toBe(sample.alpha ? 'original' : 'cutout');
     expect(registered.p_original_key).toBe(originalKey);
     if (sample.alpha) expect(registered.p_candidate_key).toBe(originalKey);
     else expect(registered.p_candidate_key).not.toBe(originalKey);
+    advance('selected-private-read');
     const selectedPrivate = await request(fixture, token,
       `/storage/v1/object/authenticated/menu-images/${storagePath(registered.p_candidate_key as string)}`);
     expect(selectedPrivate.status).toBe(200);
     const selectedAlpha = await decodedAlpha(page, selectedPrivate.bytes);
+    advance('live-menu-readback');
     const live = await rpc(fixture, null, 'storefront_menu_v6', { p_slug: fixture.ownerA.slug });
     expect(live.status).toBe(200); expect(live.data.ok).toBe(true);
     const row = live.data.product_images_v1.find((r: { item_id: string }) => r.item_id === itemId);
@@ -286,12 +327,14 @@ test('product originals survive local review, explicit selection and publication
     const dimensions: Record<string, number> = {};
     const publishedImages: Record<string, unknown>[] = [];
     for (const size of [480, 960]) {
+      advance('published-image-fetch');
       const target = localMediaTarget(row[`w${size}_url`], 'GET');
       const response = await fetch(target, { redirect: 'error', signal: AbortSignal.timeout(15_000) });
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('image/webp');
       const bytes = Buffer.from(await response.arrayBuffer());
       expect(bytes.length).toBeGreaterThan(0);
+      advance('published-image-alpha');
       const alpha = await decodedAlpha(page, bytes);
       expect(alpha.width).toBe(row[`width${size}`]);
       expect(alpha.height).toBe(row[`height${size}`]);
@@ -307,9 +350,11 @@ test('product originals survive local review, explicit selection and publication
     // The same open editor must refresh its optimistic selection proof after
     // success: switching back must not fail with selection_stale.
     if (sample.name === 'burger') {
+      advance('restore-original-selection');
       await click(page, L.original);
       await click(page, L.publish);
       await waitForText(page, L.published, 180_000);
+      advance('restore-original-readback');
       const restored = await readOriginal();
       expect(restored.data.source_key).toBe(originalKey);
       expect(restored.data.selection_version).toBe(after.data.selection_version + 1);
@@ -324,15 +369,33 @@ test('product originals survive local review, explicit selection and publication
       privateBeforeSha256: sha(privateBefore.bytes), privateAfterSha256: sha(privateAfter.bytes),
       cancelAndFailedFetchRetainedOriginal: sample.name === 'burger', publishedImages,
       explicitPublication: true, ...dimensions });
+    advance('close-product');
     await tapButton(page, 'إلغاء'); // close the item editor; already saved source/presentation remain
   }
+  advance('publication-counts', null);
   await Promise.all(publishedReplies);
   expect(publisherCalls.filter(call => call.status === 200 && call.variant === 'w480')).toHaveLength(5);
   expect(publisherCalls.filter(call => call.status === 200 && call.variant === 'w960')).toHaveLength(5);
+  advance('unchanged-invariants');
   expect(await readInvariants(fixture, token), 'Hero, logo and receipt settings remain unchanged').toEqual(initialInvariants);
+  advance('transport-boundary');
   expect(violation, 'No image bytes or runtime requests leave the allowed loopback services').toBe(false);
+  advance('success-evidence');
   writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'product-cutout.json'), JSON.stringify({
     model: 'U2Net FP32', modelNativeHeapLimitBytes: 536870912,
     fixturesArePublishedCopies: true, cases: evidence,
   }, null, 2));
+}
+
+test('product originals survive local review, explicit selection and publication', async ({ page, context }) => {
+  const progress = createProductProgress();
+  try {
+    await runProductJourney(page, context, progress);
+    progress.complete();
+  } finally {
+    // Fixed enum receipt survives assertion failures. No values or raw error
+    // text are recorded; login retains its separate credential-free receipt.
+    writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'product-progress.json'),
+      JSON.stringify(progress.snapshot(), null, 2));
+  }
 });
