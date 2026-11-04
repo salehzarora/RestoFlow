@@ -439,8 +439,9 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     // success: switching back must not fail with selection_stale.
     if (sample.name === 'burger-highres') {
       advance('highres-cutout-render');
-      expect(selectedAlpha.width).toBeGreaterThanOrEqual(960);
-      expect(selectedAlpha.height).toBeGreaterThanOrEqual(720);
+      // The unchanged worker caps the original's longest side at 1600, then
+      // c4 independently derives 480/960. Reject a premature smaller raster.
+      expect([selectedAlpha.width, selectedAlpha.height]).toEqual([1600, 1200]);
       expect(selectedAlpha.width / selectedAlpha.height).toBeCloseTo(sourceGeometry.width / sourceGeometry.height, 6);
       writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'quality-highres-processed.png'), selectedPrivate.bytes);
       const rendered = await captureHighResolutionMenu(context.browser()!, fixture.ownerA.slug, itemId,
@@ -486,7 +487,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
           if (size === 960) await saveDecodedPublicPreview(page, bytes, 'quality-highres-published-original-w960.png');
         }
         const rendered = await captureHighResolutionMenu(context.browser()!, fixture.ownerA.slug, itemId,
-          'original', originalImages, process.env.CINEMATIC_ARTIFACT_DIR!);
+          'original', originalImages, process.env.CINEMATIC_ARTIFACT_DIR!, source);
         qualityEvidence.push({ treatment: 'original', sourceBytes: source.length, sourceSha256: sha(source), sourceGeometry,
           privateOriginalSha256AfterBothPublications: sha(privateRestored.bytes), originalPreserved: true,
           publishedImages: originalImages, rendered });

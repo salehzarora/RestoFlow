@@ -1,5 +1,6 @@
 import { expect, type Browser, type Request } from '@playwright/test';
 import { createHash } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { API_URL, STOREFRONT_URL } from './service.mjs';
 import { LOGICAL_ORIGIN, localMediaTarget } from './live-transport.mjs';
@@ -10,12 +11,58 @@ export type PublishedProductImage = {
   opaque: number; alphaSha256: string;
 };
 
+async function composeSourceComparison(browser: Browser, source: Buffer, crop: Buffer) {
+  // Only an isolated, empty canvas page composes the evidence. The menu page,
+  // its DOM/CSS and its actual screenshot bytes are never changed.
+  const context = await browser.newContext({ serviceWorkers: 'block' });
+  await context.route('**/*', route => route.abort('blockedbyclient'));
+  try {
+    const page = await context.newPage();
+    return await page.evaluate(async ({ source64, crop64 }) => {
+      const decode = (value: string) => createImageBitmap(new Blob([Uint8Array.from(atob(value), char => char.charCodeAt(0))]));
+      const [original, display] = await Promise.all([decode(source64), decode(crop64)]);
+      const pad = 24, gap = 32, heading = 118;
+      const board = new OffscreenCanvas(display.width * 2 + pad * 2 + gap, display.height + heading + pad);
+      const ctx = board.getContext('2d', { willReadFrequently: true })!;
+      ctx.fillStyle = '#eeeeee'; ctx.fillRect(0, 0, board.width, board.height);
+      ctx.fillStyle = '#111111'; ctx.font = 'bold 20px sans-serif';
+      ctx.fillText('Genuine source vs actual menu display', pad, 28);
+      ctx.font = '16px sans-serif';
+      ctx.fillText('Camera JPEG: downsampled reference', pad, 58);
+      ctx.fillText('Actual browser screenshot crop', pad + display.width + gap, 58);
+      ctx.font = '14px sans-serif';
+      ctx.fillText('Canvas high-quality scaling; no recovered detail', pad, 82);
+      ctx.fillText('Copied at 1:1 screenshot pixels; not re-encoded media', pad + display.width + gap, 82);
+      ctx.fillText(`Both panels: ${display.width} × ${display.height} physical pixels`, pad, 106);
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(original, pad, heading, display.width, display.height);
+      ctx.drawImage(display, pad + display.width + gap, heading);
+      const check = new OffscreenCanvas(display.width, display.height);
+      const checkCtx = check.getContext('2d', { willReadFrequently: true })!;
+      checkCtx.drawImage(display, 0, 0);
+      const expected = checkCtx.getImageData(0, 0, display.width, display.height).data;
+      const actual = ctx.getImageData(pad + display.width + gap, heading, display.width, display.height).data;
+      const unchanged = expected.every((value, index) => value === actual[index]);
+      const physical = { width: display.width, height: display.height };
+      original.close(); display.close();
+      const bytes = new Uint8Array(await (await board.convertToBlob({ type: 'image/png' })).arrayBuffer());
+      let value = ''; for (const byte of bytes) value += String.fromCharCode(byte);
+      return { png64: btoa(value), physical, unchanged };
+    }, { source64: source.toString('base64'), crop64: crop.toString('base64') });
+  } finally { await context.close(); }
+}
+
 /** Actual served menu and image bytes; no fixture DOM, CSS injection or image replacement. */
 export async function captureHighResolutionMenu(browser: Browser, slug: string, itemId: string,
-  treatment: 'original' | 'experimental-cutout', variants: PublishedProductImage[], out: string) {
+  treatment: 'original' | 'experimental-cutout', variants: PublishedProductImage[], out: string, sourceOriginal?: Buffer) {
   expect(slug).toMatch(/^cinematic-[a-z0-9-]+$/);
   expect(itemId).toMatch(/^[0-9a-f-]{36}$/);
   expect(variants).toHaveLength(2);
+  if (treatment === 'original') {
+    expect(sourceOriginal).toBeDefined();
+    expect(createHash('sha256').update(sourceOriginal!).digest('hex'))
+      .toBe('81f08a1cb0256293b862db2a661b76f9f9a54067ae5651469a454f7899b50bb3');
+  }
   const rows = [];
   for (const width of [390, 1440]) for (const dpr of [1, 2, 3]) {
     const context = await browser.newContext({ viewport: { width, height: width === 390 ? 844 : 1000 },
@@ -93,7 +140,7 @@ export async function captureHighResolutionMenu(browser: Browser, slug: string, 
         return { currentPath: new URL(img.currentSrc).pathname, srcset: img.srcset, sizes: img.sizes,
           browserDensityCorrectedNatural: { width: img.naturalWidth, height: img.naturalHeight },
           box: { x: box.x, y: box.y, width: box.width, height: box.height },
-          objectFit: css.objectFit, imageFilter: css.filter, parentFilter: parent.filter,
+          objectFit: css.objectFit, objectPosition: css.objectPosition, imageFilter: css.filter, parentFilter: parent.filter,
           parentOpacity: parent.opacity, parentTransform: parent.transform,
           viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
           overflow: document.documentElement.scrollWidth > innerWidth };
@@ -118,7 +165,42 @@ export async function captureHighResolutionMenu(browser: Browser, slug: string, 
       expect(rejected).toBe(0); expect(errors).toEqual([]);
       const screenshot = `quality-highres-${treatment}-${width}-dpr${dpr}.png`;
       await page.screenshot({ path: resolve(out, screenshot) });
-      rows.push({ treatment, screenshot, ...measured, resource: chosen, painted,
+      let sourceComparison = null;
+      if (treatment === 'original' && dpr === 2) {
+        expect(measured.objectPosition, 'The measured contain image is centered before cropping').toBe('50% 50%');
+        const clip = { x: measured.box.x + (measured.box.width - painted.width) / 2,
+          y: measured.box.y + (measured.box.height - painted.height) / 2, ...painted };
+        expect(clip.x).toBeGreaterThanOrEqual(0); expect(clip.y).toBeGreaterThanOrEqual(0);
+        expect(clip.x + clip.width).toBeLessThanOrEqual(measured.viewport.width);
+        expect(clip.y + clip.height).toBeLessThanOrEqual(measured.viewport.height);
+        const uncovered = await image.evaluate((img, rect) => {
+          // Images have pointer-events:none. Their owning slide must be the
+          // frontmost hit at the photo corners and center, not a sticky overlay.
+          const owner = img.closest('[data-sf-carousel-product]');
+          return [[rect.x + 1, rect.y + 1], [rect.x + rect.width - 1, rect.y + 1],
+            [rect.x + 1, rect.y + rect.height - 1], [rect.x + rect.width - 1, rect.y + rect.height - 1],
+            [rect.x + rect.width / 2, rect.y + rect.height / 2]].every(([x, y]) =>
+              document.elementFromPoint(x, y)?.closest('[data-sf-carousel-product]') === owner);
+        }, clip);
+        expect(uncovered, 'The actual photo crop is visible and unobscured').toBe(true);
+        const cropFile = `quality-highres-display-crop-${width}-dpr${dpr}.png`;
+        const crop = await page.screenshot({ path: resolve(out, cropFile), clip, scale: 'device' });
+        const board = await composeSourceComparison(browser, sourceOriginal!, crop);
+        expect(board.unchanged, 'The board retains actual screenshot pixels without scaling').toBe(true);
+        expect(Math.abs(board.physical.width - clip.width * dpr)).toBeLessThanOrEqual(2);
+        expect(Math.abs(board.physical.height - clip.height * dpr)).toBeLessThanOrEqual(2);
+        const file = `quality-highres-source-vs-display-${width}-dpr${dpr}.png`;
+        const boardBytes = Buffer.from(board.png64, 'base64');
+        writeFileSync(resolve(out, file), boardBytes);
+        sourceComparison = { file, cropFile, viewportCssCrop: clip, dpr, actualCropPixels: board.physical,
+          actualScreenshotCropSha256: createHash('sha256').update(crop).digest('hex'),
+          boardSha256: createHash('sha256').update(boardBytes).digest('hex'),
+          sourceSha256: createHash('sha256').update(sourceOriginal!).digest('hex'),
+          reference: 'Genuine original JPEG downsampled with Canvas high-quality scaling to actual crop pixel size; no recovered detail',
+          display: 'Unmodified actual menu screenshot crop copied 1:1 into board',
+          centeredContain: true, fullyVisibleAndUncovered: true, screenshotPixelsUnchanged: true };
+      }
+      rows.push({ treatment, screenshot, sourceComparison, ...measured, resource: chosen, painted,
         requiredDevicePixels: { width: requiredWidth, height: painted.height * dpr },
         sourcePixelsPerRequiredPixel: chosen!.width / requiredWidth,
         limitedByLargestPublishedVariant: requiredWidth > ordered.at(-1)!.width,

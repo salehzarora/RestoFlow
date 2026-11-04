@@ -58,6 +58,16 @@ painted size/aspect, filters, `sizes`/`srcset`, and supplied/required device-pix
 ratio. It observes the normal 60-second cache; no response, product DOM or CSS is
 fabricated. Public decoded previews and the actual worker PNG are included.
 
+At 390px and 1440px viewport widths, DPR 2, the Original treatment also emits
+`quality-highres-source-vs-display-*-dpr2.png`: the genuine camera JPEG downsampled
+to the measured screenshot crop's physical pixel size beside the actual browser
+crop copied at 1:1 pixels. Composition uses a separate blank canvas page, never
+the application DOM. Centered `contain`, viewport bounds and five unobscured hit
+points are checked first. The receipt records CSS crop geometry, actual PNG
+dimensions, DPR and hashes, and verifies the board's displayed panel preserves
+all captured pixels. The source reference is labeled as a downsample, with no
+claim of recovered detail. The untouched screenshot crops are also artifacts.
+
 The recipe still caps the longest side at 960 pixels. A desktop 448 CSS-pixel
 wide image at DPR 3 requires 1344 pixels, so its maximum 960-pixel resource can
 only supply about 71% of that width. The receipt reports the measured cap; the
