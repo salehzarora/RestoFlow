@@ -4,7 +4,8 @@
 // The installed Supabase CLI 2.107.0 ignores PGOPTIONS, so the three startup settings travel in the `options`
 // parameter of a PASSWORDLESS --db-url; the password comes only from an owner-private PGPASSFILE; PGSSLMODE=require
 // makes the CLI refuse a session without TLS. Nothing edits the SQL, writes the migration ledger by hand, passes
-// --include-all, calls `migration repair` or retries the push.
+// --include-all, calls `migration repair` or retries the push, and the CLI's own advice to do any of that is never
+// relayed: every failure ends in a STOP verdict.
 // Inputs, from the environment only and never printed: BIZBOT_GR37_DB_URL (passwordless), BIZBOT_GR37_PASSFILE and
 // BIZBOT_GR37_SUPABASE_CLI (the absolute path of the pinned supabase.exe).
 // Usage: node tools/supabase/bounded-db-push.mjs --mode local|hosted [--project-ref <ref>] --workdir <dir> [--apply]
@@ -82,8 +83,16 @@ export function parseArgs(argv) {
   return out;
 }
 
-export function refuseDebug(env) {
+// The wrapper holds the password in memory: no debug variable, no NODE_OPTIONS, and no inspector or preloaded module
+// on this Node process.
+export function refuseDebug(env, execArgv = process.execArgv) {
   if (Object.keys(env).some((key) => /debug/i.test(key))) refuse('debug_refused', 'a debug environment variable is set');
+  if (Object.keys(env).some((key) => key.toUpperCase() === 'NODE_OPTIONS' && String(env[key]).trim() !== '')) {
+    refuse('debug_refused', 'NODE_OPTIONS is set');
+  }
+  if (execArgv.some((a) => a === '-r' || /^--(inspect|debug|require|import|loader|experimental-loader)\b/.test(a))) {
+    refuse('debug_refused', 'an inspector or preload flag is set on this Node process');
+  }
 }
 
 // postgresql://<user>@<host>:<port>/<database> and nothing else: no password, no query, no fragment.
@@ -121,20 +130,22 @@ export function buildChildEnv(parent, passfile) {
   return env;
 }
 
-// .pgpass syntax: host:port:database:user:password, with \: and \\ escapes.
+// .pgpass entries as the CLI's own reader (jackc/pgpassfile v1.0.0) reads them: '#' comments, the \\ and \: escapes,
+// exactly five ':'-separated fields. A line that this reader, libpq and the CLI could read differently is malformed
+// (null) rather than guessed: surrounding whitespace, a character outside printable ASCII, any other backslash, or a
+// field count other than five.
 export function parsePassfile(text) {
   const entries = [];
-  for (const line of text.split(/\r?\n/)) {
+  for (const raw of text.split('\n')) {
+    const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
     if (line === '' || line.startsWith('#')) continue;
-    const fields = [];
-    let current = '';
-    let escaped = false;
-    for (const ch of line) {
-      if (escaped) { current += ch; escaped = false; } else if (ch === '\\') escaped = true;
-      else if (ch === ':' && fields.length < 4) { fields.push(current); current = ''; } else current += ch;
+    if (line !== line.trim() || /[^\x20-\x7e]/.test(line) || /\\(?!:)/.test(line.replace(/\\\\/g, ''))) {
+      entries.push(null);
+      continue;
     }
-    fields.push(current);
-    entries.push(fields.length === 5 && !escaped ? fields : null);
+    const fields = line.replace(/\\\\/g, '\u0000').replace(/\\:/g, '\u0001').split(':')
+      .map((f) => f.replace(/\u0000/g, '\\').replace(/\u0001/g, ':'));
+    entries.push(fields.length === 5 ? fields : null);
   }
   return entries;
 }
@@ -149,7 +160,7 @@ export function selectPassfileEntry(entries, { host, port, database, user }) {
 
 const within = (child, parent) => {
   const rel = path.relative(parent, child);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)); // '..x' is inside
 };
 
 // Refused anywhere inside the repository, its parent folder (the store, or the worktrees folder and its store), the
@@ -280,13 +291,19 @@ function runCli(cli, args, env) {
   });
 }
 
+// The CLI's advice that the failure rule forbids (repair the history, pull or reset, include out-of-order files, rerun
+// with debug output) is never relayed.
+const CLI_ADVICE = /migration repair|db pull|db reset|--include-all|--debug|try repairing|update local migrations|make sure your local git repo|rerun the command/i;
+
 // The CLI's verdict lines, not the SQL it echoes: on failure the error lines (a statement text can run to dozens of
 // lines and push the error out of a plain tail), on success the apply lines.
 export function summarize(text, failed, n = 8) {
-  const all = text.replace(/\r/g, '').split('\n').filter((l) => l.trim() && !/new version of supabase cli|recommend updating/i.test(l));
+  const all = text.replace(/\r/g, '').split('\n')
+    .filter((l) => l.trim() && !/new version of supabase cli|recommend updating/i.test(l) && !CLI_ADVICE.test(l));
   const signal = failed
     ? (l) => /^\s*(ERROR|FATAL)\b/.test(l)
       || /SQLSTATE|^\s*At statement|canceling statement|failed to connect|authentication failed|refused TLS|connection refused/i.test(l)
+      || /migration versions not found|inserted before the last migration/i.test(l)
     : (l) => /Applying migration|Finished|up to date/i.test(l);
   const picked = all.filter(signal).slice(0, n);
   return (picked.length ? picked : all.slice(-n)).map((l) => `    ${l.trim().slice(0, 220)}`).join('\n');
@@ -316,6 +333,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, prin
     const dry = await runCli(cli, dryRunArgs(dbUrl, args.workdir), childEnv);
     if (dry.code !== 0) {
       say(`gr37: dry run failed (exit ${dry.code}); nothing was pushed\n${summarize(dry.out, true)}`);
+      say('RESULT: DRY_RUN_FAILED (STOP: preserve the evidence; no retry, no repair, no --include-all)');
       return 3;
     }
     const pending = parsePending(dry.out);
@@ -336,7 +354,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, prin
     const after = post.code === 0 ? parsePending(post.out) : null;
     say(`gr37: post-check dry run exit ${post.code}; pending ${after ? JSON.stringify(after) : 'unreadable'}`);
     if (push.code !== 0) {
-      say(`RESULT: PUSH_FAILED (STOP: preserve the evidence; forward-fix only; no retry, no repair)`);
+      say('RESULT: PUSH_FAILED (STOP: preserve the evidence; forward-fix only; no retry, no repair, no --include-all)');
       return 3;
     }
     if (!after || after.length !== 0) {

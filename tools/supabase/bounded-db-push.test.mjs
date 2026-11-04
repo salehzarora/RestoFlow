@@ -38,8 +38,10 @@ test('the pinned constants are the approved ones', () => {
 });
 
 test('the committed 001D migration has the pinned bytes', (t) => {
+  const tree = spawnSync('git', ['-C', REPO, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8' });
+  if (tree.status !== 0 || tree.stdout.trim() !== 'true') return t.skip('not a Git work tree');
   const r = spawnSync('git', ['-C', REPO, 'show', `HEAD:supabase/migrations/${MIGRATION}`], { maxBuffer: 1 << 26 });
-  if (r.status !== 0) return t.skip('the migration is not committed at HEAD in this checkout');
+  assert.equal(r.status, 0, `the pinned ${MIGRATION} is not committed at HEAD`);
   assert.equal(sha(r.stdout), MIGRATION_SHA256);
 });
 
@@ -68,11 +70,18 @@ test('arguments: only --mode, --project-ref, --workdir and --apply; debug flags 
   assert.throws(() => parseArgs(['--mode', 'local', '--workdir', wd, CANARY]), (e) => e.code === 'bad_arguments' && !e.message.includes(CANARY));
 });
 
-test('any DEBUG variable refuses, whatever its value', () => {
+test('any DEBUG variable, NODE_OPTIONS or inspector / preload flag refuses', () => {
   for (const key of ['SUPABASE_DEBUG', 'SUPABASE_INTERNAL_DEBUG', 'SUPABASE_SSL_DEBUG', 'SUPABASE_TELEMETRY_DEBUG', 'DEBUG', 'debug']) {
-    assert.throws(() => refuseDebug({ PATH: 'x', [key]: '' }), refusal('debug_refused'), key);
+    assert.throws(() => refuseDebug({ PATH: 'x', [key]: '' }, []), refusal('debug_refused'), key);
   }
-  assert.doesNotThrow(() => refuseDebug({ PATH: 'x', PGSSLMODE: 'require' }));
+  for (const value of ['--inspect', '--require ./x.cjs', ' --max-old-space-size=4096']) {
+    assert.throws(() => refuseDebug({ PATH: 'x', NODE_OPTIONS: value }, []), refusal('debug_refused'), value);
+  }
+  assert.throws(() => refuseDebug({ PATH: 'x', node_options: '--inspect' }, []), refusal('debug_refused'));
+  for (const flag of ['--inspect', '--inspect-brk=9229', '--inspect-port=0', '--debug-port=1', '-r', '--require=x', '--import=x', '--loader=x', '--experimental-loader=x']) {
+    assert.throws(() => refuseDebug({ PATH: 'x' }, ['--no-warnings', flag]), refusal('debug_refused'), flag);
+  }
+  assert.doesNotThrow(() => refuseDebug({ PATH: 'x', PGSSLMODE: 'require', NODE_OPTIONS: '' }, ['--no-warnings']));
 });
 
 test('URL: passwordless, explicit port, no query, no pooler; local loopback; hosted exact direct host', () => {
@@ -146,15 +155,25 @@ test('child environment: an allowlist plus PGPASSFILE, PGSSLMODE=require and tel
   assert.ok(!JSON.stringify(env).includes(CANARY));
 });
 
-test('passfile: exact single entry, escapes, no wildcard, no malformed line', () => {
+test('passfile: read as the CLI reads it (pgpassfile v1.0.0); exact single entry, no wildcard, nothing ambiguous', () => {
   const t = { host: '127.0.0.1', port: '56622', database: 'postgres', user: 'postgres' };
   assert.equal(selectPassfileEntry(parsePassfile(`# comment\n\n127.0.0.1:56622:postgres:postgres:${CANARY}\n`), t), CANARY);
-  assert.equal(selectPassfileEntry(parsePassfile('127.0.0.1:56622:postgres:postgres:a\\:b:c\\\\d\r\n'), t), 'a:b:c\\d');
+  assert.equal(selectPassfileEntry(parsePassfile('127.0.0.1:56622:postgres:postgres:a\\:b\\:c\\\\d\r\n'), t), 'a:b:c\\d');
+  assert.equal(selectPassfileEntry(parsePassfile('127.0.0.1:56622:postgres:postgres:a\\\\\\:b\n'), t), 'a\\:b');
   assert.equal(selectPassfileEntry(parsePassfile('h\\:x:1:d:u:p\nother:1:d:u:q\n'), { host: 'h:x', port: '1', database: 'd', user: 'u' }), 'p');
   assert.equal(selectPassfileEntry(parsePassfile('127.0.0.1:56623:postgres:postgres:x\n127.0.0.1:56622:postgres:postgres:y\n'), t), 'y');
+  assert.equal(selectPassfileEntry(parsePassfile('127.0.0.1:56622:postgres:postgres:p w\n'), t), 'p w');
   for (const [text, code] of [
     ['127.0.0.1:56622:postgres\n', 'passfile_malformed'],
     ['127.0.0.1:56622:postgres:postgres:x\\\n', 'passfile_malformed'],
+    // Readers disagree on these (the CLI would ignore the line, trim it or read another escape), so none is guessed.
+    ['127.0.0.1:56622:postgres:postgres:a:b\n', 'passfile_malformed'],
+    [' 127.0.0.1:56622:postgres:postgres:p1\n127.0.0.1:56622:postgres:postgres:p2\n', 'passfile_malformed'],
+    ['127.0.0.1:56622:postgres:postgres:p1  \n', 'passfile_malformed'],
+    ['127.0.0.1:56622:postgres:postgres:pa\\ss\n', 'passfile_malformed'],
+    ['127.0.0.1:56622:postgres:postgres:p\t1\n', 'passfile_malformed'],
+    ['\ufeff127.0.0.1:56622:postgres:postgres:p\n', 'passfile_malformed'],
+    ['  # an indented comment\n127.0.0.1:56622:postgres:postgres:p\n', 'passfile_malformed'],
     ['*:56622:postgres:postgres:x\n', 'passfile_wildcard'],
     ['127.0.0.1:*:postgres:postgres:x\n', 'passfile_wildcard'],
     ['127.0.0.1:56622:postgres:postgres:x\n127.0.0.1:56622:postgres:postgres:y\n', 'passfile_entry'],
@@ -176,7 +195,12 @@ test('passfile location: outside the repository, the store, worktrees, evidence 
   assert.ok(passfileLocationProblem(path.join(workdir, 'pgpass'), { repoRoot: repo, workdir }));
   assert.ok(passfileLocationProblem(path.resolve(path.sep, 'x', 'Evidence', 'pgpass'), { repoRoot: repo, workdir }));
   assert.ok(passfileLocationProblem(path.resolve(path.sep, 'x', 'worktrees', 'pgpass'), { repoRoot: repo, workdir }));
+  // A child folder whose name starts with two dots is still inside.
+  assert.ok(passfileLocationProblem(path.join(root, '..private', 'pgpass'), { repoRoot: repo, workdir }));
+  assert.ok(passfileLocationProblem(path.join(workdir, '..x', 'pgpass'), { repoRoot: repo, workdir }));
+  assert.ok(passfileLocationProblem(path.join(repo, '..pgpass'), { repoRoot: repo, workdir }));
   assert.equal(passfileLocationProblem(path.resolve(path.sep, 'private', 'gr37', 'pgpass'), { repoRoot: repo, workdir }), null);
+  assert.equal(passfileLocationProblem(path.resolve(path.sep, '..private', 'gr37', 'pgpass'), { repoRoot: repo, workdir }), null);
 });
 
 test('passfile permissions: Windows ACL with the current user only; POSIX 0600 owned by the user', () => {
@@ -270,6 +294,31 @@ test('CLI output summary: the error lines on failure (not the echoed SQL), the a
   assert.match(ok, /Applying migration/);
   assert.match(ok, /Finished supabase db push/);
   assert.equal(summarize('only noise\nmore noise\n', true), '    only noise\n    more noise');
+});
+
+test('CLI output summary: a ledger mismatch keeps the error and never relays the CLI\'s repair or include-all advice', () => {
+  const advice = /migration repair|db pull|db reset|--include-all|--debug|try repairing|update local migrations|make sure your local git repo/i;
+  // The pinned CLI's text when the remote history holds a version the local folder lacks (rehearsal D).
+  const remoteAhead = [
+    'Using workdir <redacted>', 'DRY RUN: migrations will *not* be pushed to the database.', 'Connecting to local database...',
+    'Remote migration versions not found in local migrations directory.', '',
+    'Make sure your local git repo is up-to-date. If the error persists, try repairing the migration history table:',
+    'supabase migration repair --status reverted 20261104131256', '', 'And update local migrations to match remote database:',
+    'supabase db pull',
+  ].join('\n');
+  const a = summarize(remoteAhead, true);
+  assert.match(a, /Remote migration versions not found in local migrations directory/);
+  assert.ok(!advice.test(a), a);
+  // ... and when a pending local version sorts before the remote's latest.
+  const outOfOrder = [
+    'Connecting to remote database...', 'Found local migration files to be inserted before the last migration on remote database.', '',
+    'Rerun the command with --include-all flag to apply these migrations:', `supabase/migrations/${MIGRATION}`,
+  ].join('\n');
+  const b = summarize(outOfOrder, true);
+  assert.match(b, /inserted before the last migration on remote database/);
+  assert.ok(!advice.test(b) && !/rerun the command/i.test(b), b);
+  // Advice lines are dropped even when no line is recognised as an error.
+  assert.equal(summarize('something unexpected\nsupabase migration repair --status applied 1\nsupabase db pull\n', true), '    something unexpected');
 });
 
 test('the URL shape is printed unmasked and holds only placeholders; every other URL is masked whole', () => {
