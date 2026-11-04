@@ -31,8 +31,9 @@ The v6 decoder also accepts absence of this optional array for legacy/default do
 
 Work ID `BIZBOT-STOREFRONT-VISUAL-PARITY-001-MEDIA` adds six versioned public
 invoker wrappers over scoped app definers. Only real authenticated managers or
-owners covering the organization and restaurant may call them; anonymous users,
-devices without that authority and `service_role` have no grant. Every operation
+owners covering the organization and restaurant may call them. The `anon` and
+`service_role` roles have no grant; an authenticated session without scoped
+manager authority is refused by the body. Every operation
 requires explicit organization/restaurant IDs. Private originals remain in
 `menu-images`; `menu_items.image_path`, receipt/logo and editorial Hero pointers
 are not changed by product selection.
