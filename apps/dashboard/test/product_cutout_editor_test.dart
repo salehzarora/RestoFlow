@@ -320,4 +320,50 @@ void main() {
     await tap(tester, 'product-cutout-publish');
     expect(gateway.requests.single.candidate, isNull);
   });
+  testWidgets(
+    'retry readiness requires a candidate, not the prior Original publish button',
+    (tester) async {
+      final gateway = Gateway(), processor = Processor()..fail = true;
+      await mount(tester, gateway, processor);
+      await tap(tester, 'product-cutout-prepare');
+      final publish = find.byKey(const Key('product-cutout-publish'));
+      bool canPublish() =>
+          tester.widget<FilledButton>(publish).onPressed != null;
+      bool canRemove() => tester
+          .widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>))
+          .segments
+          .singleWhere((segment) => segment.value)
+          .enabled;
+      // A failed fetch deliberately leaves Original publishable, without a mask.
+      expect(canPublish(), isTrue);
+      expect(canRemove(), isFalse);
+      processor.fail = false;
+      processor.pending = Completer<ProductCutoutCandidate>();
+      await tester.ensureVisible(
+        find.byKey(const Key('product-cutout-prepare')),
+      );
+      await tester.tap(find.byKey(const Key('product-cutout-prepare')));
+      // Pointer dispatch alone is not a rendered loading/completion barrier.
+      // This is the stale enabled state that the old E2E predicate accepted.
+      expect(canPublish(), isTrue);
+      expect(canRemove(), isFalse);
+      await tester.pump();
+      await tester.pump();
+      expect(canPublish(), isFalse);
+      expect(canRemove(), isFalse);
+      expect(gateway.requests, isEmpty);
+      processor.pending!.complete(
+        ProductCutoutCandidate(
+          bytes: pixels,
+          mimeType: 'image/png',
+          width: 1,
+          height: 1,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(canRemove(), isTrue);
+      expect(canPublish(), isTrue);
+      expect(gateway.requests, isEmpty);
+    },
+  );
 }

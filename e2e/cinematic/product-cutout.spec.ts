@@ -323,10 +323,12 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       expect(modelReads, 'Real alpha returns original bytes without loading model weights').toBe(previousModelReads);
       await expect(page.getByRole('button', { name: L.remove, exact: true })).toBeDisabled();
     } else {
+      // Publish also permits Original after failure; candidate readiness must
+      // precede observing the completed retry's exact model downloads.
+      advance('cutout-choice-enabled');
+      await expect(page.getByRole('button', { name: L.remove, exact: true })).toBeEnabled({ timeout: 150_000 });
       advance('model-chunk-count');
       expect(modelReads - successfulModelStart, 'Successful retry fetches all eleven pinned model chunks').toBe(11);
-      advance('cutout-choice-enabled');
-      await expect(page.getByRole('button', { name: L.remove, exact: true })).toBeEnabled();
     }
     if (existingBaseline) {
       advance('existing-verify');
