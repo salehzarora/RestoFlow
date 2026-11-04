@@ -817,7 +817,14 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     for (const [name, value] of [[L.primary, '#211a16'], [L.accent, '#eab082']]) {
       const field = page.getByRole('textbox', { name, exact: true });
       await reveal(page, field, 'field', page.getByRole('textbox', { name, exact: true, includeHidden: true }));
+      // Flutter initializes an unfocused semantic input's DOM value lazily.
+      // Acquire ordinary focus once to read it; this does not edit the value.
+      if (!(await field.evaluate(el => el === document.activeElement))) await tapRevealedControl(page, field);
+      await expect(field, 'Reloaded field receives ordinary focus before reading').toBeFocused();
       await expect(field, 'Reloaded Dashboard retains the complete saved HEX').toHaveValue(value);
+      await page.keyboard.press('Tab');
+      await expect(field, 'Ordinary Tab leaves the reloaded field').not.toBeFocused();
+      await expect(field, 'Complete saved HEX remains after blur').toHaveValue(value);
     }
     stages.push(stage);
 
