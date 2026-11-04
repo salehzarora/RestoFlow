@@ -12,6 +12,38 @@ export const originalCommit = 'e71ab13dc258b5bc036b29a054e3744cb824d63e';
 export const originalFingerprint = 'b68c7d6a74dd91179042e65f038e2b1a85c58cc6efbc0e8713871f6d34669038';
 export const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 
+// BIZBOT-STOREFRONT-VISUAL-PARITY-001: this bounded extension does not make the
+// historical atomicity proof a generic migration runner. Pins are exact Git LF
+// bytes; another migration or any changed byte requires another review.
+export const predecessorMigrationName = '20261102015942_bizbot_storefront_seo_discovery_001.sql';
+export const followupMigrations = Object.freeze([
+  Object.freeze({ name: '20261104154000_bizbot_storefront_visual_parity_product_media.sql',
+    sha256: 'a901a709970b4629b22357743831aab687c2882fe066776dd7913b82c29c77d5' }),
+  Object.freeze({ name: '20261104155000_bizbot_storefront_visual_parity_scene.sql',
+    sha256: '7bfac52a707b20fdf9b67a466d84290a7565fe574850ce1e992c093d5f19b520' }),
+]);
+
+export function proveMigrationSequence(names, sourceByName) {
+  assert.ok(Array.isArray(names) && names.every(name => /^\d{14}_[a-z0-9_]+\.sql$/.test(name)), 'Invalid migration identity');
+  assert.deepEqual(names, [...names].sort(), 'Migration sequence must be ordered');
+  assert.equal(new Set(names.map(name => name.split('_')[0])).size, names.length, 'Duplicate migration version');
+  const targetIndex = names.indexOf(migrationName);
+  assert.ok(targetIndex > 0, 'Pinned target and predecessor must exist');
+  assert.equal(names[targetIndex - 1], predecessorMigrationName, 'Unreviewed target predecessor');
+  assert.deepEqual(names.slice(targetIndex + 1), followupMigrations.map(item => item.name), 'Unreviewed followup migration sequence');
+  const followups = followupMigrations.map(pin => {
+    const sql = sourceByName.get(pin.name);
+    assert.equal(typeof sql, 'string', 'Followup migration bytes missing');
+    assert.equal(sha256(sql), pin.sha256, 'Unreviewed followup migration bytes');
+    const all = statements(sql);
+    assert.ok(all.length > 0 && all.every(item => !/^(?:begin|start\s+transaction|commit|end|rollback|abort|savepoint|release\s+savepoint|prepare\s+transaction)\b/i.test(item.text)), 'Unexpected followup transaction control');
+    return { name: pin.name, version: pin.name.split('_')[0], sha256: pin.sha256,
+      statements: all.length, no_embedded_transaction: true };
+  });
+  return { prefixNames: names.slice(0, targetIndex + 1),
+    previousVersion: names[targetIndex - 1].split('_')[0], followups };
+}
+
 // PostgreSQL's semicolons inside strings, quoted identifiers, nested comments
 // and dollar-quoted bodies do not end top-level statements. In particular,
 // PL/pgSQL BEGIN/END inside a dollar quote is never a transaction wrapper.

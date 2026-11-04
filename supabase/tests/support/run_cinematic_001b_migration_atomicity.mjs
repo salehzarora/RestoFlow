@@ -3,12 +3,12 @@
 // The intentional failure exists only in a disposable copy of the migration.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   migrationName, migrationVersion, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration,
-  requireEphemeralCi, sha256,
+  requireEphemeralCi, sha256, proveMigrationSequence,
 } from './cinematic_001b_migration_contract.mjs';
 
 requireEphemeralCi(process.env); // Must precede subprocesses, including Docker.
@@ -65,6 +65,22 @@ const readinessQuery = `select json_build_object(
   'media_rpc', to_regprocedure('public.list_storefront_content_media_v2(uuid,uuid)') is not null,
   'menu_rpc', to_regprocedure('public.storefront_menu_v5(text)') is not null,
   'history', (select count(*) from supabase_migrations.schema_migrations where version='${migrationVersion}'))::text;`;
+const followupReadinessQuery = `select json_build_object(
+  'content_v3', to_regprocedure('public.get_restaurant_storefront_content_v3(uuid,uuid)') is not null,
+  'menu_v6', to_regprocedure('public.storefront_menu_v6(text)') is not null,
+  'derivatives', to_regclass('app.storefront_product_derivatives') is not null,
+  'selections', to_regclass('app.storefront_product_selections') is not null,
+  'original', to_regprocedure('public.get_storefront_product_original_v1(uuid,uuid,uuid)') is not null,
+  'register', to_regprocedure('public.register_storefront_product_derivative_v1(uuid,uuid,uuid,uuid,text,jsonb,text,text,bigint)') is not null,
+  'source', to_regprocedure('public.get_storefront_product_source_v1(uuid,uuid,uuid)') is not null,
+  'stage', to_regprocedure('public.stage_storefront_product_media_v1(uuid,uuid,uuid,uuid,text,jsonb,text,text,integer,integer,integer)') is not null,
+  'finalize', to_regprocedure('public.finalize_storefront_product_media_v1(uuid,uuid,uuid,uuid)') is not null,
+  'select', to_regprocedure('public.select_storefront_product_derivative_v1(uuid,uuid,uuid,uuid)') is not null)::text;`;
+const followupReadiness = Object.fromEntries(['content_v3', 'menu_v6', 'derivatives', 'selections',
+  'original', 'register', 'source', 'stage', 'finalize', 'select'].map(name => [name, true]));
+const noFollowupReadiness = Object.fromEntries(Object.keys(followupReadiness).map(name => [name, false]));
+const migrationNames = async () => (await readdir(join(root, 'supabase/migrations')))
+  .filter(name => /^\d+_.+\.sql$/.test(name)).sort();
 
 try {
   assert.equal(checked('supabase', ['--version']).trim(), '2.107.0', 'Use the project-pinned CLI');
@@ -92,14 +108,24 @@ try {
     tested_tree: checked('git', ['rev-parse', 'HEAD^{tree}']).trim(),
     cli_version: '2.107.0',
   });
-  const migrations = (await readdir(join(root, 'supabase/migrations'))).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
-  assert.equal(migrations.at(-1), migrationName, 'This narrow proof must be reviewed if later migrations are introduced');
-  const previousVersion = migrations.at(-2).split('_')[0];
-  receipt.previous_version = previousVersion;
+  const migrations = await migrationNames();
+  const sources = new Map(await Promise.all(migrations.map(async name => [name,
+    await readFile(join(root, 'supabase/migrations', name), 'utf8')])));
+  const plan = proveMigrationSequence(migrations, sources);
+  receipt.previous_version = plan.previousVersion;
+  receipt.target_prefix = { last_migration: plan.prefixNames.at(-1), count: plan.prefixNames.length };
+  receipt.reviewed_followups = plan.followups;
+  const unchangedSources = async () => {
+    assert.deepEqual(await migrationNames(), migrations, 'Migration file sequence must remain unchanged');
+    for (const [name, contents] of sources) {
+      assert.equal(await readFile(join(root, 'supabase/migrations', name), 'utf8'), contents, 'Every tracked migration must remain byte-identical');
+    }
+  };
 
   phase = 'prepare_before_target';
-  checked('supabase', ['db', 'reset', '--local', '--version', previousVersion, '--no-seed', '--yes']);
+  checked('supabase', ['db', 'reset', '--local', '--version', plan.previousVersion, '--no-seed', '--yes']);
   assert.deepEqual(JSON.parse(sql(readinessQuery)), { column: false, rpc: false, media_rpc: false, menu_rpc: false, history: 0 });
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), noFollowupReadiness, 'Followup surfaces must be absent before the target');
   const beforeSchema = schemaSnapshot();
   const beforeHistory = sql(historyQuery);
   const beforeLegacyReaders = sql(legacyReadersQuery);
@@ -107,9 +133,15 @@ try {
   receipt.before_history_sha256 = sha256(beforeHistory);
   receipt.legacy_readers_before_sha256 = sha256(beforeLegacyReaders);
   temporary = await mkdtemp(join(process.env.RUNNER_TEMP, 'cinematic-migration-failure-'));
-  await mkdir(join(temporary, 'supabase'), { recursive: true });
+  await mkdir(join(temporary, 'supabase/migrations'), { recursive: true });
   await writeFile(join(temporary, 'supabase/config.toml'), config);
-  await cp(join(root, 'supabase/migrations'), join(temporary, 'supabase/migrations'), { recursive: true });
+  // Both target attempts use the official runner over this exact prefix. Later
+  // migrations cannot alter the catalog before the target's preservation proof.
+  for (const name of plan.prefixNames) {
+    await copyFile(join(root, 'supabase/migrations', name), join(temporary, 'supabase/migrations', name));
+    assert.equal(await readFile(join(temporary, 'supabase/migrations', name), 'utf8'), sources.get(name));
+  }
+  assert.deepEqual((await readdir(join(temporary, 'supabase/migrations'))).sort(), plan.prefixNames);
   // Function declarations above have executed when this block runs. Its
   // deliberate exception must roll them, their ACLs and migration history back.
   const failure = `\ndo $cinematic_late_failure$\nbegin
@@ -135,14 +167,35 @@ end;\n$cinematic_late_failure$;\n`;
   receipt.schema_and_history_rollback = 'PASS';
 
   phase = 'apply_corrected_target';
-  checked('supabase', ['migration', 'up', '--local']);
+  await writeFile(join(temporary, 'supabase/migrations', migrationName), corrected);
+  checked('supabase', ['migration', 'up', '--local', '--workdir', temporary]);
   assert.deepEqual(JSON.parse(sql(readinessQuery)), { column: true, rpc: true, media_rpc: true, menu_rpc: true, history: 1 });
   assert.equal(await readFile(migrationPath, 'utf8'), corrected, 'Tracked migration must remain unmodified');
   const afterLegacyReaders = sql(legacyReadersQuery);
   assert.equal(afterLegacyReaders, beforeLegacyReaders, 'Legacy reader definitions, ACLs and owners must remain byte-identical');
-  receipt.legacy_readers_after_sha256 = sha256(afterLegacyReaders);
-  receipt.legacy_reader_catalog_preservation = 'PASS';
+  receipt.target_legacy_readers_after_sha256 = sha256(afterLegacyReaders);
+  receipt.target_legacy_reader_catalog_preservation = 'PASS';
   receipt.successful_target_application = 'PASS';
+  receipt.target_after_schema_sha256 = sha256(schemaSnapshot());
+  receipt.target_after_history_sha256 = sha256(sql(historyQuery));
+  const targetHistory = JSON.parse(sql(historyQuery));
+  assert.ok(plan.followups.every(item => !targetHistory.some(row => row.version === item.version)), 'Followups must not execute during the target proof');
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), noFollowupReadiness, 'Target-only application must not install followup surfaces');
+  await unchangedSources();
+
+  phase = 'apply_reviewed_followups';
+  checked('supabase', ['migration', 'up', '--local']);
+  const finalHistory = JSON.parse(sql(historyQuery));
+  assert.deepEqual(finalHistory.filter(row => row.version <= migrationVersion), targetHistory, 'Existing migration history must remain unchanged');
+  assert.deepEqual(finalHistory.filter(row => row.version > migrationVersion).map(row => row.version),
+    plan.followups.map(item => item.version), 'Each reviewed followup must have exactly one history entry, with no others');
+  assert.equal(finalHistory.filter(row => row.version === migrationVersion).length, 1);
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), followupReadiness, 'Reviewed v3/v6 and complete product RPC surface must be ready');
+  await unchangedSources();
+  receipt.followup_history_once = 'PASS';
+  receipt.followup_readiness = followupReadiness;
+  receipt.migration_sources_unchanged = 'PASS';
+  receipt.successful_followup_application = 'PASS';
   receipt.after_schema_sha256 = sha256(schemaSnapshot());
   receipt.after_history_sha256 = sha256(sql(historyQuery));
   receipt.status = 'PASS';
