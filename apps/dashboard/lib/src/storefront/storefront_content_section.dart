@@ -8,6 +8,7 @@ import 'storefront_content_models.dart';
 import 'storefront_content_repository.dart';
 import 'storefront_content_unicode.dart' as unicode;
 import 'storefront_copy.dart';
+import 'storefront_color_picker.dart';
 import 'storefront_media_publisher.dart';
 import 'storefront_models.dart';
 import 'storefront_sources.dart';
@@ -45,6 +46,7 @@ class StorefrontContentSection extends StatefulWidget {
     required this.onDraftChanged,
     required this.onBusyChanged,
     this.enabled = true,
+    this.colorSample = const StorefrontColorSample(),
     this.publisher,
     this.backgroundUpload,
     this.sources,
@@ -59,6 +61,7 @@ class StorefrontContentSection extends StatefulWidget {
   final Future<StorefrontContentRefresh> Function() onRefresh;
   final ValueChanged<bool> onDraftChanged, onBusyChanged;
   final bool enabled;
+  final StorefrontColorSample colorSample;
   final StorefrontMediaPublisher? publisher;
   final StorefrontBackgroundUpload? backgroundUpload;
   final StorefrontSourceOptions? sources;
@@ -77,6 +80,7 @@ class _ContentState extends State<StorefrontContentSection> {
   StorefrontContentAttempt? _confirmedSave;
   final _headline = TextEditingController(),
       _selection = TextEditingController();
+  final _appearanceColors = <String, TextEditingController>{};
   bool _busy = false, _dirty = false, _stale = false;
   bool _uploadingBackground = false;
   int _generation = 0;
@@ -123,6 +127,9 @@ class _ContentState extends State<StorefrontContentSection> {
     _generation++;
     _headline.dispose();
     _selection.dispose();
+    for (final controller in _appearanceColors.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -275,6 +282,10 @@ class _ContentState extends State<StorefrontContentSection> {
         _message = null; // The typed failure view owns its reload message.
       if (verified) {
         _draft = snapshot.document.editableCopy();
+        final appearance = _draft!['appearance'] as Map?;
+        for (final entry in _appearanceColors.entries) {
+          entry.value.text = appearance?[entry.key] as String? ?? '';
+        }
         _headline.text = _draft!['hero_headline'] as String? ?? '';
         _selection.text = _headline.text;
         _notifyDraft(false);
@@ -456,30 +467,59 @@ class _ContentState extends State<StorefrontContentSection> {
   Widget _appearanceColor(String field, String label) {
     final appearance = _draft?['appearance'] as Map?;
     final value = appearance?[field] as String? ?? '';
+    final controller = _appearanceColors.putIfAbsent(
+      field,
+      () => TextEditingController(text: value),
+    );
     final valid =
         value.isEmpty ||
         (value.length == 7 && storefrontAppearanceHex.hasMatch(value));
+    final binding = _bindingGeneration;
+    final generation = _generation;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: TextFormField(
-        key: ValueKey('content-appearance.$field-$_generation'),
-        initialValue: value,
-        enabled: _editable,
-        textDirection: TextDirection.ltr,
-        autocorrect: false,
-        decoration: InputDecoration(
-          labelText: c(label),
-          helperText: c('appearanceHexHelp'),
-          errorText: valid ? null : c('appearanceHexInvalid'),
-          prefixIcon: value.isNotEmpty && valid
-              ? Icon(
-                  Icons.circle,
-                  color: Color(int.parse('ff${value.substring(1)}', radix: 16)),
-                )
-              : const Icon(Icons.palette_outlined),
+      child: StorefrontColorControl(
+        key: ValueKey('content-appearance.$field-control-$_generation'),
+        id: 'content-appearance.$field',
+        label: c(label),
+        value: value.isEmpty ? null : value,
+        role: field == 'text_color'
+            ? StorefrontColorRole.text
+            : StorefrontColorRole.buttonText,
+        sample: StorefrontColorSample(
+          background: widget.colorSample.background,
+          accent: widget.colorSample.accent,
+          text: appearance?['text_color'] as String?,
+          buttonText: appearance?['button_text_color'] as String?,
         ),
-        onChanged: (text) =>
-            _changeAppearance(field, text.isEmpty ? null : text),
+        enabled: _editable,
+        onChanged: (hex) {
+          if (_current(binding) && generation == _generation) {
+            _changeAppearance(field, hex);
+          }
+        },
+        advancedField: TextFormField(
+          key: ValueKey('content-appearance.$field-$_generation'),
+          controller: controller,
+          enabled: _editable,
+          textDirection: TextDirection.ltr,
+          autocorrect: false,
+          decoration: InputDecoration(
+            labelText: c(label),
+            helperText: c('appearanceHexHelp'),
+            errorText: valid ? null : c('appearanceHexInvalid'),
+            prefixIcon: value.isNotEmpty && valid
+                ? Icon(
+                    Icons.circle,
+                    color: Color(
+                      int.parse('ff${value.substring(1)}', radix: 16),
+                    ),
+                  )
+                : const Icon(Icons.palette_outlined),
+          ),
+          onChanged: (text) =>
+              _changeAppearance(field, text.isEmpty ? null : text),
+        ),
       ),
     );
   }
@@ -509,6 +549,10 @@ class _ContentState extends State<StorefrontContentSection> {
 
   void _changeAppearance(String field, Object? value) {
     if (!mounted || !_editable) return;
+    final controller = _appearanceColors[field];
+    if (controller != null && controller.text != (value ?? '')) {
+      controller.text = value as String? ?? '';
+    }
     _draft!['appearance'] ??= <String, dynamic>{
       for (final key in storefrontAppearanceKeys) key: null,
     };
