@@ -44,6 +44,11 @@ correlates bounded gateway/runtime log classifications with those stage windows.
 Raw logs, bodies, headers, storage paths and credentials are never exported;
 classification counts alone are not a causal diagnosis.
 
+`stack-startup.json` is retained even when startup fails before fixture creation.
+It reduces a bounded private startup-log tail to fixed error/stage counts and
+status-file presence. It exports no raw lines, credentials, SQL or image URLs;
+zero known classifications means the cause remains unclassified, not a pass.
+
 ## Release and recovery boundary
 
 Deployment is not authorized by this workflow. Before later activation:
