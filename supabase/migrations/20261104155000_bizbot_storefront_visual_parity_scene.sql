@@ -200,7 +200,7 @@ end; $$;
 
 -- The authenticated app helper is a versioned boundary too.
 create or replace function app.get_restaurant_storefront_content_v2(p_organization_id uuid,p_restaurant_id uuid)
-returns jsonb language sql stable security invoker set search_path='' as $$
+returns jsonb language sql stable security definer set search_path='' as $$
  select app.get_restaurant_storefront_content_v3(p_organization_id,p_restaurant_id) #- '{document,appearance,scene_preset}';
 $$;
 create function public.get_restaurant_storefront_content_v3(p_organization_id uuid,p_restaurant_id uuid)
