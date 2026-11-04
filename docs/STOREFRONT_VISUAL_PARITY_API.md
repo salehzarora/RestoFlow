@@ -27,6 +27,51 @@ There are at most 500 rows, no duplicate item IDs and no private source identifi
 
 The v6 decoder also accepts absence of this optional array for legacy/default documents; old decoders reject the extension. Unknown appearance fields, malformed scene tokens, arbitrary image URLs, unknown or duplicate item references and invalid dimensions reject the whole response. The deployed recipe remains `storefront-media-c4`, with unchanged 480/960 variant limits and immutable URLs.
 
+## Private product publication
+
+Work ID `BIZBOT-STOREFRONT-VISUAL-PARITY-001-MEDIA` adds six versioned public
+invoker wrappers over scoped app definers. Only real authenticated managers or
+owners covering the organization and restaurant may call them; anonymous users,
+devices without that authority and `service_role` have no grant. Every operation
+requires explicit organization/restaurant IDs. Private originals remain in
+`menu-images`; `menu_items.image_path`, receipt/logo and editorial Hero pointers
+are not changed by product selection.
+
+| RPC | Additional input and successful result |
+| --- | --- |
+| `get_storefront_product_original_v1` | Item ID → current private source key, Storage snapshot, selection version and selected derivative ID (nullable). |
+| `register_storefront_product_derivative_v1` | Request ID, item ID, original key/snapshot, candidate key, `original`/`cutout` treatment, expected selection version → derivative ID and candidate key. |
+| `get_storefront_product_source_v1` | Derivative ID → registered candidate key and Storage snapshot after both source generations are proved current. |
+| `stage_storefront_product_media_v1` | Request ID, derivative ID, candidate key/snapshot, variant, SHA-256, width/height/bytes → registered media identity and state. |
+| `finalize_storefront_product_media_v1` | Request ID and media ID → published identity only after the current source pair and actual Storage object metadata are verified. |
+| `select_storefront_product_derivative_v1` | Request ID and derivative ID → atomically selected derivative and next selection version, only with both current published variants. |
+
+A source snapshot contains exactly Storage object ID, version (nullable) and
+updated timestamp. Candidate scope must match the original's organization,
+restaurant, branch and item. `original` uses the original key; `cutout` uses a
+different private PNG. Source generations are rechecked before private download,
+stage, finalize, selection and public read. A same-key overwrite invalidates the
+old candidate. The Dashboard also compares source snapshot and exact original
+bytes when refreshing its proof; a selection-version-only advance can retain a
+candidate, an original change cannot.
+
+Writes use the existing actor/request operation ledger and restaurant lock.
+Typed failures do not consume a successful identity. Retries keep the same ID
+and payload; a replay cannot revive a replaced selection. Only the final select
+call changes the active presentation, so failure while publishing the second
+variant leaves the previous pair intact. Unknown network/commit outcomes remain
+uncertain until authoritative readback; they are not reported as success.
+
+The existing Edge function accepts one new exact request shape: `slot: "product"`
+with all existing fields plus `product_derivative_id`; both `w480` and `w960` are
+allowed from `menu-images`. It reads the registered candidate as the caller and
+derives each size directly with unchanged c4. Old slots retain their exact key
+sets. Product finalization never repoints another source's Hero. Separate row
+associations may share identical content-addressed bytes, but bytes are compared
+on retry and never overwritten. The legacy media picker/profile/editorial writer
+exclude product associations; authoritative media-use checks protect selected
+product pairs from retraction.
+
 ## Rollout and verification
 
 The product registration/helper migration must precede `20261104155000_bizbot_storefront_visual_parity_scene.sql`. That migration must precede clients using content v3/menu v6. New private read grants remain `authenticated` only, with the same scoped manager/owner checks; the new public menu grant remains `anon`/`service_role`, and private helpers receive no anonymous authority.
