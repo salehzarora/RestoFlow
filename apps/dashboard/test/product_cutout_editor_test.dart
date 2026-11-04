@@ -140,6 +140,21 @@ void main() {
     await tap(tester, 'product-cutout-prepare');
     expect(processor.runs, 2);
   });
+  testWidgets('existing alpha publishes Original without a candidate upload', (
+    tester,
+  ) async {
+    final gateway = Gateway(), processor = Processor()..transparent = true;
+    await mount(tester, gateway, processor);
+    await tap(tester, 'product-cutout-prepare');
+    expect(find.textContaining('no segmentation was run'), findsOneWidget);
+    final selection = tester.widget<SegmentedButton<bool>>(
+      find.byType(SegmentedButton<bool>),
+    );
+    expect(selection.selected, {false});
+    expect(selection.segments.last.enabled, isFalse);
+    await tap(tester, 'product-cutout-publish');
+    expect(gateway.requests.single.candidate, isNull);
+  });
   testWidgets('uncertain publication retries identical request and selection', (
     tester,
   ) async {

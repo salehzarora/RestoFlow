@@ -94,11 +94,20 @@ late-result rejection and uncertain publication retry.
 it samples the whole launched Chrome process tree; memory includes browser/UI
 and does not measure only JS heap. `evidence.mjs ASSETS OUTPUT_DIRECTORY` creates
 original/light/dark side-by-side screenshots and source/output measurements.
-Inputs are copies of the owner's existing handoff photographs, not alpha fixtures.
+Inputs are copies of the owner's existing handoff photographs or actual current
+published product copies, with provenance explicitly labeled. The CI fixtures in
+`e2e/cinematic/fixtures/product-cutout` contain three opaque product photos and
+one already-transparent cola image. They do not establish private-original
+resolution or four successful segmentation cases. The ordinary UI journey runs
+only on the authorized disposable CI stack; local widget/worker checks do not
+claim to replace that real-service run.
 
 Review is essential: saliency may remove a dark serving plate, part of packaging,
 background objects, or transparent glass. The owner should keep Original when a
 candidate loses required food/serving context. The UI starts on Original and
 shows both backgrounds for edge inspection; no candidate is silently selected.
-The source photographs are 600×600 (burger/fries/drink) and 780×495 (platter), so
-this operation cannot create missing source detail or improve their resolution.
+The handoff photographs are 600×600 (burger/fries) and 780×495 (platter). The
+handoff file called `item-drink.png` depicts a coffee-machine scene and is only
+a complex-scene negative example, not a valid drink cutout. Current published
+copies are 360×480 (burger/platter), 480×480 (fries cup), and an already-alpha
+drink copy. This operation cannot create missing detail or improve resolution.

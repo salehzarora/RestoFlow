@@ -119,6 +119,10 @@ async function main(action) {
     STOREFRONT_SUPABASE_ANON_KEY: status.anonKey, NEXT_TELEMETRY_DISABLED: '1',
     NODE_OPTIONS: `--import=${pathToFileURL(resolve(root, 'e2e/cinematic/live-transport-preload.mjs')).href}` };
   if (action === 'build') {
+    // Build-time model download is pinned and hash-checked. Only Dashboard
+    // receives these same-origin lazy assets; the public Storefront does not.
+    checked('node', ['prepare.mjs'], { cwd: resolve(root, 'apps/dashboard/cutout'), stdio: 'inherit' });
+    checked('npm', ['test'], { cwd: resolve(root, 'apps/dashboard/cutout'), stdio: 'inherit' });
     const defines = resolve(privateDir, 'dashboard-defines.json');
     writeFileSync(defines, JSON.stringify({ RESTOFLOW_DEMO_MODE: 'false', RESTOFLOW_STOREFRONT_EDITOR: 'true',
       RESTOFLOW_SUPABASE_URL: status.url, RESTOFLOW_SUPABASE_ANON_KEY: status.anonKey }), { mode: 0o600 });

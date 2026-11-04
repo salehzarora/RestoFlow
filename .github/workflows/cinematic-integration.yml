@@ -35,6 +35,7 @@ jobs:
           cache-dependency-path: |
             e2e/package-lock.json
             storefront/package-lock.json
+            apps/dashboard/cutout/package-lock.json
 
       - uses: subosito/flutter-action@v2
         with:
@@ -64,6 +65,7 @@ jobs:
           flutter pub get --enforce-lockfile
           npm ci --prefix e2e
           npm ci --prefix storefront
+          npm ci --ignore-scripts --prefix apps/dashboard/cutout
           cd e2e
           npx --no-install playwright install --with-deps chromium
 

@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 // the older smoke config's retries or token-bearing traces/screenshots.
 export default defineConfig({
   testDir: '.',
-  testMatch: 'dashboard.spec.ts',
+  testMatch: ['dashboard.spec.ts', 'product-cutout.spec.ts'],
   fullyParallel: false,
   workers: 1,
   retries: 0,

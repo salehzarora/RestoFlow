@@ -91,7 +91,3 @@ self.onmessage = async ({ data }) => {
     if (session) await session.release();
   }
 };
-
-
-
-
