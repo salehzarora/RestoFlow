@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_content_models.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_content_repository.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_copy.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_featured_items.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_publisher.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_repository.dart';
@@ -317,8 +318,8 @@ class _Invoker implements StorefrontFunctionInvoker {
   }
 }
 
-Widget _application(_Scenario scenario) => MaterialApp(
-  locale: const Locale('en'),
+Widget _application(_Scenario scenario, {String locale = 'en'}) => MaterialApp(
+  locale: Locale(locale),
   localizationsDelegates: restoflowLocalizationsDelegates,
   supportedLocales: kSupportedLocales,
   home: Scaffold(
@@ -409,6 +410,174 @@ void main() {
   tearDown(() {
     HttpOverrides.global = null;
   });
+
+  for (final layout in [
+    (size: const Size(1440, 1000), locale: 'en'),
+    (size: const Size(390, 844), locale: 'ar'),
+  ]) {
+    testWidgets(
+      'dirty notices preserve primary field geometry at ${layout.size.width} ${layout.locale}',
+      (tester) async {
+        tester.view.physicalSize = layout.size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final semantics = tester.ensureSemantics();
+        try {
+          final scenario = _Scenario();
+          await tester.pumpWidget(
+            _application(scenario, locale: layout.locale),
+          );
+          await tester.pumpAndSettle();
+          final l10n = await AppLocalizations.delegate.load(
+            Locale(layout.locale),
+          );
+          final noticeTexts = [
+            l10n.storefrontFeaturedItemsSeparateEdits,
+            storefrontContentCopy(l10n, 'otherEdits'),
+          ];
+          final field = find.byKey(const Key('storefront-primary-color'));
+          final editable = find.descendant(
+            of: field,
+            matching: find.byType(EditableText),
+          );
+          Future<void> tap(Finder target) async {
+            await tester.ensureVisible(target);
+            await tester.pumpAndSettle();
+            await tester.tap(target);
+            await tester.pumpAndSettle();
+          }
+
+          await tap(find.byKey(const Key('storefront-primary-color-advanced')));
+          await tap(field);
+          final originalState = tester.state<EditableTextState>(editable);
+          final controller = originalState.widget.controller;
+          final focus = originalState.widget.focusNode;
+          final original = controller.text;
+          final scroll = Scrollable.of(tester.element(field)).position;
+          Rect documentRect() =>
+              tester.getRect(field).translate(0, scroll.pixels);
+          final initialDocumentRect = documentRect();
+          expect(focus.hasFocus, isTrue);
+
+          // The first dirty transition comes from the actual visual picker.
+          // Advanced remains open under the modal, with the same input state.
+          await tap(find.byKey(const Key('storefront-primary-color-picker')));
+          final square = find.byKey(const Key('storefront-color-sv-field'));
+          await tester.ensureVisible(square);
+          final squareRect = tester.getRect(square);
+          await tester.tapAt(
+            Offset(
+              squareRect.left + squareRect.width * .8,
+              squareRect.top + squareRect.height * .2,
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tap(find.byKey(const Key('storefront-color-apply')));
+          expect(
+            documentRect(),
+            initialDocumentRect,
+            reason: 'Both dirty notices reserve space before the first Apply',
+          );
+          expect(
+            tester.state<EditableTextState>(editable),
+            same(originalState),
+          );
+          expect(originalState.widget.controller, same(controller));
+          expect(originalState.widget.focusNode, same(focus));
+          expect(controller.text, isNot(original));
+          final changed = controller.text;
+          // One ordinary readback click, with no refocus loop or value injection.
+          await tap(field);
+          expect(focus.hasFocus, isTrue);
+          final focusedRect = tester.getRect(field);
+          for (final text in noticeTexts) {
+            final notice = find.text(text);
+            expect(notice, findsOneWidget);
+            expect(
+              tester
+                  .element(notice)
+                  .findAncestorWidgetOfExactType<Visibility>()!
+                  .visible,
+              isTrue,
+            );
+          }
+
+          // Restore through the already-focused platform input connection.
+          // enterText would refocus and could hide a rebuild-related focus loss.
+          tester.testTextInput.enterText(original);
+          await tester.pumpAndSettle();
+          expect(tester.getRect(field), focusedRect);
+          expect(documentRect(), initialDocumentRect);
+          expect(
+            tester.state<EditableTextState>(editable),
+            same(originalState),
+          );
+          expect(focus.hasFocus, isTrue);
+          expect(controller.text, original);
+
+          Future<void> checkNotices({required bool visible}) async {
+            for (final text in noticeTexts) {
+              final notice = find.text(text);
+              expect(
+                notice,
+                findsOneWidget,
+                reason:
+                    'Notice size is retained even when its content is hidden',
+              );
+              final visibility = tester
+                  .element(notice)
+                  .findAncestorWidgetOfExactType<Visibility>()!;
+              expect(visibility.visible, visible);
+              // Retaining layout must not expose invisible notices to assistive
+              // technology, hit testing or focus traversal.
+              expect(visibility.maintainSemantics, isFalse);
+              expect(visibility.maintainInteractivity, isFalse);
+              expect(visibility.maintainFocusability, isFalse);
+              await tester.ensureVisible(notice);
+              await tester.pumpAndSettle();
+              expect(
+                notice.hitTestable(),
+                visible ? findsOneWidget : findsNothing,
+              );
+              expect(
+                find.semantics.byLabel(RegExp(RegExp.escape(text))),
+                visible ? findsWidgets : findsNothing,
+              );
+            }
+          }
+
+          await checkNotices(visible: false);
+          expect(focus.hasFocus, isTrue);
+          tester.testTextInput.enterText(changed);
+          await tester.pumpAndSettle();
+          expect(documentRect(), initialDocumentRect);
+          await checkNotices(visible: true);
+          await tap(find.byKey(const Key('storefront-discard')));
+          expect(
+            documentRect(),
+            initialDocumentRect,
+            reason:
+                'Discard hides both notices without moving the appearance grid',
+          );
+          expect(
+            tester.state<EditableTextState>(editable),
+            same(originalState),
+          );
+          expect(originalState.widget.controller, same(controller));
+          expect(originalState.widget.focusNode, same(focus));
+          expect(controller.text, original);
+          await checkNotices(visible: false);
+          await tap(field);
+          expect(focus.hasFocus, isTrue);
+          expect(scenario.profile.otherWrites, 0);
+          expect(scenario.content.writes, isEmpty);
+          expect(tester.takeException(), isNull);
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+  }
 
   for (final replay in [false, true]) {
     testWidgets(
