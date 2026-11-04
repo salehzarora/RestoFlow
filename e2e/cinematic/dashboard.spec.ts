@@ -489,7 +489,16 @@ async function sceneDialog(page: Page, apply: boolean, legacy = false, capture?:
   await revealButton(page, L.scenePreview);
   await tapRevealedButton(page, L.scenePreview);
   await expect(page.getByRole('button', { name: L.apply, exact: true })).toHaveCount(1);
-  if (legacy) await tapRevealedButton(page, L.sceneLegacy, true);
+  if (legacy) {
+    // Flutter exposes ChoiceChip as a checkbox, including its selected state.
+    const choice = page.getByRole('checkbox', { name: L.sceneLegacy, exact: true });
+    const reference = page.getByRole('checkbox', { name: L.sceneReference, exact: true });
+    await expect(reference).toBeChecked();
+    await expect(choice).not.toBeChecked();
+    await tapRevealedControl(page, choice, true);
+    await expect(choice, 'The ordinary scene choice selects the brand preset').toBeChecked();
+    await expect(reference, 'Scene choices remain mutually exclusive').not.toBeChecked();
+  }
   if (capture) await screenshot(page, capture);
   await tapRevealedButton(page, apply ? L.apply : L.cancel, true);
   await expect(page.getByRole('button', { name: L.apply, exact: true })).toHaveCount(0);
