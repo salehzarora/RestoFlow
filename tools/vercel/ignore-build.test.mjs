@@ -158,7 +158,7 @@ function fixture(options = {}) {
   const repo = mkdtempSync(join(scratch, 'repo-'));
   runGit(repo, ['init', '--quiet', '--initial-branch=main']);
   put(repo, 'pubspec.yaml', rootManifest);
-  const files = ['pubspec.lock', 'vercel.json', 'tools/vercel_build_web.sh', 'site/vercel.json', 'site/package.json', 'site/scripts/build.mjs'];
+  const files = ['pubspec.lock', 'vercel.json', 'tools/vercel_build_web.sh', 'apps/dashboard/cutout/prepare.mjs', 'apps/dashboard/cutout/package.json', 'apps/dashboard/web/product-cutout/limits.mjs', 'site/vercel.json', 'site/package.json', 'site/scripts/build.mjs'];
   for (const path of files) put(repo, path, readFileSync(join(SOURCE_ROOT, path)));
   put(repo, HELPER, readFileSync(join(SOURCE_ROOT, HELPER)));
   for (const [member, text] of manifestTexts) {
@@ -390,6 +390,47 @@ pathCase('native Android and release tooling only', ['apps/pos/android/app/src/m
 pathCase('Admin and currently unused package code', ['apps/admin/lib/filter_fixture.dart', 'packages/feature_reporting/lib/filter_fixture.dart'], 'IGNORE', 'IGNORE', 'IGNORE');
 pathCase('unknown root control config builds conservatively', ['future-build.config.json'], 'BUILD', 'BUILD', 'BUILD');
 pathCase('checkout-transform attributes are shared deployment control', ['.gitattributes'], 'BUILD', 'BUILD', 'BUILD');
+
+for (const file of [
+  'apps/dashboard/cutout/package-lock.json',
+  'apps/dashboard/cutout/licenses/U2NET-LICENSE.txt',
+  'supabase/functions/storefront-media-publish/lib/sniff.mjs',
+  'supabase/functions/storefront-media-publish/lib/pngbound.mjs',
+]) {
+  test(`Dashboard cutout build input additions, edits and deletions: ${file}`, () => {
+    const { repo, base } = fixture();
+    put(repo, file, 'original input\n');
+    const added = commit(repo);
+    expectAll(repo, base, 'IGNORE', 'BUILD', 'IGNORE');
+    appendFileSync(join(repo, file), 'changed input\n');
+    const edited = commit(repo);
+    expectAll(repo, added, 'IGNORE', 'BUILD', 'IGNORE');
+    unlinkSync(join(repo, file));
+    commit(repo);
+    expectAll(repo, edited, 'IGNORE', 'BUILD', 'IGNORE');
+  });
+}
+
+pathCase('Dashboard copied utility exception does not include sibling Supabase files', [
+  'supabase/functions/storefront-media-publish/lib/engine.mjs',
+  'supabase/functions/storefront-media-publish/lib/sniff.mjs.backup',
+  'supabase/functions/storefront-media-publish/test/pngbound.test.mjs',
+], 'IGNORE', 'IGNORE', 'IGNORE');
+
+for (const file of ['tools/vercel_build_web.sh', 'apps/dashboard/cutout/prepare.mjs', 'apps/dashboard/cutout/package.json', 'apps/dashboard/web/product-cutout/limits.mjs']) {
+  test(`persistent changed Dashboard builder requires review: ${file}`, () => {
+    const { repo, base } = fixture({ seed(repo) {
+      // Present in both compared trees: only the contract guard can cause BUILD.
+      appendFileSync(join(repo, file), '\n');
+    } });
+    put(repo, 'docs/only.md', 'unrelated documentation\n');
+    commit(repo);
+    const output = expectDecision(repo, 'product', base, 'BUILD');
+    assert.equal(output.reason, 'unsupported_build_contract');
+    expectDecision(repo, 'marketing', base, 'IGNORE');
+    expectDecision(repo, 'storefront', base, 'IGNORE');
+  });
+}
 
 test('R2 alert scheduler-only additions, modifications and deletions ignore all three projects', () => {
   const { repo, base } = fixture();

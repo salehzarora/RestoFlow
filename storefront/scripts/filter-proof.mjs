@@ -32,6 +32,9 @@ function seedFixture() {
     // product selector fail safe to unsupported_graph, which looks like a
     // decision but proves nothing.
     'tools/vercel_build_web.sh',
+    // The conditional Dashboard prepare step is part of that reviewed contract.
+    'apps/dashboard/cutout/prepare.mjs', 'apps/dashboard/cutout/package.json',
+    'apps/dashboard/web/product-cutout/limits.mjs',
     'site/vercel.json', 'site/package.json', 'site/scripts/build.mjs',
   ];
   for (const rel of copy) {
