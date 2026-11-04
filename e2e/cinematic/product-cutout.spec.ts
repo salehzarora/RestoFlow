@@ -57,29 +57,64 @@ async function click(page: Page, name: string) {
   await control.click();
 }
 async function login(page: Page, email: string, password: string): Promise<string> {
-  await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
-  await waitForFlutterBoot(page);
-  expect(await enableFlutterSemantics(page)).toBe(true);
-  await fillField(page, 'البريد الإلكتروني', email);
-  const input = page.locator('input[type="password"]').first();
-  await input.click();
-  await page.keyboard.press('ControlOrMeta+A');
-  await page.keyboard.press('Delete');
-  let prefix = '';
-  for (const character of password) {
-    await page.keyboard.type(character); prefix += character;
-    await expect.poll(() => input.evaluate((el, value) =>
-      el instanceof HTMLInputElement && el.value === value, prefix),
-    { message: 'The actual password control reflects each ordinary key' }).toBe(true);
+  type LoginStage = 'boot' | 'email-entry' | 'password-focus' | 'password-clear'
+    | 'password-prefix' | 'password-blur' | 'auth-submit' | 'auth-response' | 'complete';
+  let stage: LoginStage = 'boot', passed = false;
+  const completedStages: LoginStage[] = [];
+  const advance = (next: LoginStage) => { completedStages.push(stage); stage = next; };
+  try {
+    await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
+    await waitForFlutterBoot(page);
+    expect(await enableFlutterSemantics(page)).toBe(true);
+    advance('email-entry');
+    await fillField(page, 'البريد الإلكتروني', email);
+    const input = page.locator('input[type="password"]').first();
+    advance('password-focus');
+    await input.click();
+    // Match the proven Dashboard helper: a click completing does not prove
+    // Flutter has installed its focused editing control or applied clearing.
+    await expect.poll(() => input.evaluate(el => el.matches(':focus')), {
+      message: 'Actual Dashboard password control receives focus',
+    }).toBe(true);
+    advance('password-clear');
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.press('Delete');
+    const matches = (expected: string) => input.evaluate((el, value) =>
+      el instanceof HTMLInputElement && el.value === value, expected);
+    await expect.poll(() => matches(''), {
+      message: 'Actual Dashboard password control is cleared by keyboard input',
+    }).toBe(true);
+    advance('password-prefix');
+    let prefix = '';
+    for (const character of password) {
+      await page.keyboard.type(character); prefix += character;
+      await expect.poll(() => matches(prefix), {
+        message: 'The actual password control reflects each ordinary key',
+      }).toBe(true);
+    }
+    advance('password-blur');
+    await page.keyboard.press('Tab');
+    await expect.poll(() => matches(password), {
+      message: 'Complete Dashboard password remains correct after blur',
+    }).toBe(true);
+    advance('auth-submit');
+    const grant = page.waitForResponse(r => post(r, '/auth/v1/token') && new URL(r.url()).searchParams.get('grant_type') === 'password');
+    await tapButton(page, 'تسجيل الدخول');
+    advance('auth-response');
+    const response = await grant;
+    expect(response.status(), 'Real UI sign-in succeeds').toBe(200);
+    const data = await response.json();
+    expect(typeof data.access_token).toBe('string');
+    advance('complete');
+    passed = true;
+    return data.access_token; // stays in test memory; never written to evidence
+  } finally {
+    // Fixed stage names only. Never retain values, prefixes, character counts,
+    // request/response bodies, raw exceptions, screenshots or credential fields.
+    writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'product-login-result.json'), JSON.stringify({
+      status: passed ? 'PASS' : 'FAIL', failedStage: passed ? null : stage, completedStages,
+    }, null, 2));
   }
-  await page.keyboard.press('Tab');
-  const grant = page.waitForResponse(r => post(r, '/auth/v1/token') && new URL(r.url()).searchParams.get('grant_type') === 'password');
-  await tapButton(page, 'تسجيل الدخول');
-  const response = await grant;
-  expect(response.status(), 'Real UI sign-in succeeds').toBe(200);
-  const data = await response.json();
-  expect(typeof data.access_token).toBe('string');
-  return data.access_token; // stays in test memory; never written to evidence
 }
 
 async function decodedAlpha(page: Page, bytes: Buffer) {
