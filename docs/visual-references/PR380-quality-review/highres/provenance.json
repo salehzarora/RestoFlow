@@ -1,0 +1,27 @@
+{
+  "title": "Hamburger (9).jpg",
+  "author": "Miansari66",
+  "sourcePage": "https://commons.wikimedia.org/wiki/File:Hamburger_(9).jpg",
+  "sourceRevision": "https://commons.wikimedia.org/w/index.php?title=File:Hamburger_(9).jpg&oldid=1271359514",
+  "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/61/Hamburger_%289%29.jpg",
+  "license": "CC0 1.0 Universal",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "retrievedUtcDate": "2026-11-05",
+  "sourceKind": "Author's own camera photograph; original JPEG downloaded unchanged; not enlarged from a published derivative and not generated",
+  "camera": "Sony DSC-W50",
+  "originalWidth": 2816,
+  "originalHeight": 2112,
+  "exifOrientation": 1,
+  "originalPixels": 5947392,
+  "originalBytes": 4989591,
+  "originalSha1": "d3935566a26bace256edd0e824f356d7f0aa9690",
+  "originalSha256": "81f08a1cb0256293b862db2a661b76f9f9a54067ae5651469a454f7899b50bb3",
+  "fixture": "../../../../e2e/cinematic/fixtures/product-cutout/burger-highres.jpg",
+  "processing": "Only the unchanged repository c4 recipe and, in isolated review CI only, the actual U2Net worker; source bytes retained",
+  "limits": { "maxBytes": 5242880, "maxPixels": 8388608 },
+  "limitations": [
+    "High source dimensions do not guarantee optical sharpness; this photograph includes camera softness and flash lighting.",
+    "Segmentation quality is unaccepted and separate from publication and pixel-density delivery checks.",
+    "The c4 output cap remains 960 pixels on the longest side; desktop DPR 3 can need more pixels than supplied."
+  ]
+}

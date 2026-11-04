@@ -3,6 +3,7 @@ export type LocalFixture = { apiUrl: string; anonKey: string; ownerA: Principal;
 export type LocalReply = { status: number; ok: boolean; data: Record<string, any>; bytes: Buffer; contentType: string | null };
 export const API_URL: string;
 export const DASHBOARD_URL: string;
+export const STOREFRONT_URL: string;
 export function readFixture(): LocalFixture;
 export function request(fixture: LocalFixture, token: string | null, path: string): Promise<LocalReply>;
 export function storagePath(key: string): string;

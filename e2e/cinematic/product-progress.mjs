@@ -8,6 +8,9 @@ const stages = new Set([
   "initial-model-count",
   "open-product",
   "choose-source",
+  "highres-source-metadata",
+  "highres-cutout-render",
+  "highres-original-render",
   "save-source",
   "save-source-status",
   "save-source-result",
@@ -55,7 +58,7 @@ const stages = new Set([
   "transport-boundary",
   "success-evidence"
 ]);
-const samples = new Set(['burger', 'fries-cup', 'platter', 'drink']);
+const samples = new Set(['burger', 'fries-cup', 'platter', 'drink', 'burger-highres']);
 const operations = new Set(['save-source', 'original-read']);
 // Exact literals from menu_upsert_item and get_storefront_product_original_v1.
 const responseCodes = new Set(['permission_denied', 'source_not_found', '42501']);

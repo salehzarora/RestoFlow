@@ -6,6 +6,9 @@ export type ProductStage =
   | 'initial-model-count'
   | 'open-product'
   | 'choose-source'
+  | 'highres-source-metadata'
+  | 'highres-cutout-render'
+  | 'highres-original-render'
   | 'save-source'
   | 'save-source-status'
   | 'save-source-result'
@@ -52,7 +55,7 @@ export type ProductStage =
   | 'unchanged-invariants'
   | 'transport-boundary'
   | 'success-evidence';
-export type ProductSample = 'burger' | 'fries-cup' | 'platter' | 'drink';
+export type ProductSample = 'burger' | 'fries-cup' | 'platter' | 'drink' | 'burger-highres';
 export type ProductOperation = 'save-source' | 'original-read';
 export type ProductResponseFacts = {
   operation: ProductOperation; sample: ProductSample | null;

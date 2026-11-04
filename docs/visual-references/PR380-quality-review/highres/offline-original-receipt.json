@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "scope": "Offline actual pinned c4 codec derivation; no Storage, service publication or browser rendering claim",
+  "recipe": "storefront-media-c4",
+  "source": {
+    "file": "../../../../e2e/cinematic/fixtures/product-cutout/burger-highres.jpg",
+    "width": 2816,
+    "height": 2112,
+    "pixels": 5947392,
+    "bytes": 4989591,
+    "sha256": "81f08a1cb0256293b862db2a661b76f9f9a54067ae5651469a454f7899b50bb3"
+  },
+  "variants": [
+    {
+      "file": "original-c4-w480.webp",
+      "width": 480,
+      "height": 360,
+      "bytes": 39588,
+      "sha256": "0d9db107e65165de4c5e0d8ec3cb821e877371f399108b868c1ccb77bad3d4d4",
+      "quality": 82,
+      "rung": 0,
+      "hasAlpha": false
+    },
+    {
+      "file": "original-c4-w960.webp",
+      "width": 960,
+      "height": 720,
+      "bytes": 112324,
+      "sha256": "b37a83a1454c98266778394c470a0118b6f458f658e4a32017cc7665ccbe835f",
+      "quality": 82,
+      "rung": 0,
+      "hasAlpha": false
+    }
+  ]
+}

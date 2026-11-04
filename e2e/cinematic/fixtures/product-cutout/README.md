@@ -1,4 +1,4 @@
-# Actual product source copies
+# Actual product sources
 
 BIZBOT-STOREFRONT-VISUAL-PARITY-001. These four files are copies of the owner's
 existing public product photographs, observed in the current Storefront on
@@ -30,3 +30,20 @@ Visual acceptance remains separate: U2Net's current raw soft mask removes part
 of the burger's dark plate, leaves bottles in the fries/platter scenes, and makes
 parts of the cup/plate translucent. Those examples require Original or a better
 validated matte; passing the service journey alone is not a visual-quality pass.
+
+## Genuine high-resolution original
+
+The fifth pass uses `burger-highres.jpg`, the unchanged 2816×2112 camera JPEG
+from [Miansari66's “Hamburger (9).jpg”](https://commons.wikimedia.org/wiki/File:Hamburger_(9).jpg),
+released under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+It is 4,989,591 bytes and 5,947,392 pixels, within the unchanged 5 MiB / 8 MiP
+limits. SHA-256: `81f08a1cb0256293b862db2a661b76f9f9a54067ae5651469a454f7899b50bb3`.
+Full source revision, download URL, EXIF orientation and reuse details are in
+[the provenance receipt](../../../../docs/visual-references/PR380-quality-review/highres/provenance.json).
+
+The isolated Actions review build explicitly enables `SF_PRODUCT_CUTOUT_REVIEW`.
+It publishes the experimental candidate and then Original, verifies both actual
+480×360 and 960×720 public resources, and records mobile/desktop DPR 1/2/3
+`currentSrc`, response hash, painted geometry, fit, blur and native-pixel cap.
+This does not enable removal in the default application or assert a clean mask.
+The genuine source is not a substituted version of the owner's four photos.

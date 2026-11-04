@@ -7,6 +7,7 @@ import { fillField, tapButton, tapNav, tapText, waitForText } from '../lib/dashb
 import { API_URL, DASHBOARD_URL, readFixture, scope, rpc, request, storagePath, readInvariants } from './service.mjs';
 import { localProductMediaTarget } from './live-transport.mjs';
 import { captureProductResponse, createProductProgress, type ProductProgress } from './product-progress.mjs';
+import { captureHighResolutionMenu, type PublishedProductImage } from './product-quality';
 import { observeResponse, responseAfterAction } from './control-progress.mjs';
 
 // Real owner session + shipped uploader/worker/repository/publisher. The guard
@@ -16,6 +17,9 @@ const samples = [
   { name: 'fries-cup', file: 'fries-cup.webp', category: 'مقبلات اختبار', item: 'TEST 2', alpha: false },
   { name: 'platter', file: 'platter.webp', category: 'كاسات اختبار', item: 'TEST 3', alpha: false },
   { name: 'drink', file: 'drink.webp', category: 'مشروبات اختبار', item: 'TEST 4', alpha: true },
+  // A fifth pass replaces only the disposable first item, after its ordinary
+  // source/cancel/retry/restore coverage. No fixture catalogue/schema expansion.
+  { name: 'burger-highres', file: 'burger-highres.jpg', category: 'وجبات اختبار', item: 'TEST 1', alpha: false },
 ] as const;
 const L = { pick: 'اختيار صورة', save: 'حفظ الصورة', original: 'الأصل', remove: 'إزالة الخلفية',
   publish: 'نشر الصورة المختارة', published: 'تم نشر الاختيار.', dark: 'فحص الحواف على خلفية داكنة',
@@ -147,6 +151,18 @@ async function decodedAlpha(page: Page, bytes: Buffer) {
   }, bytes.toString('base64'));
 }
 
+async function saveDecodedPublicPreview(page: Page, bytes: Buffer, name: string) {
+  const png = await page.evaluate(async base64 => {
+    const image = await createImageBitmap(new Blob([Uint8Array.from(atob(base64), value => value.charCodeAt(0))]));
+    const canvas = new OffscreenCanvas(image.width, image.height);
+    canvas.getContext('2d')!.drawImage(image, 0, 0); image.close();
+    const data = new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer());
+    let text = ''; for (const value of data) text += String.fromCharCode(value);
+    return btoa(text);
+  }, bytes.toString('base64'));
+  writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, name), Buffer.from(png, 'base64'));
+}
+
 async function runProductJourney(page: Page, context: BrowserContext, progress: ProductProgress) {
   const fixture = readFixture();
   const advance = progress.advance;
@@ -200,6 +216,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
   advance('initial-model-count');
   expect(modelReads, 'No model is loaded for login or ordinary Dashboard navigation').toBe(0);
   const evidence: Record<string, unknown>[] = [];
+  const qualityEvidence: Record<string, unknown>[] = [];
   for (const sample of samples) {
     const beforeChoose = { fileChoosers, originalUploads, itemSaves };
     advance('open-product', sample.name);
@@ -213,6 +230,15 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     await picker.click();
     const path = resolve(__dirname, 'fixtures/product-cutout', sample.file);
     const source = readFileSync(path);
+    const sourceGeometry = await decodedAlpha(page, source);
+    if (sample.name === 'burger-highres') {
+      advance('highres-source-metadata');
+      expect(source.length).toBe(4_989_591);
+      expect(sha(source)).toBe('81f08a1cb0256293b862db2a661b76f9f9a54067ae5651469a454f7899b50bb3');
+      expect([sourceGeometry.width, sourceGeometry.height]).toEqual([2816, 2112]);
+      expect(sourceGeometry.width * sourceGeometry.height).toBeLessThanOrEqual(8_388_608);
+      expect(source.length).toBeLessThanOrEqual(5 * 1024 * 1024);
+    }
     await (await chooser).setFiles(path);
     const previousModelReads = modelReads, previousRegisters = registerCalls;
     if (sample.name === 'burger' || sample.name === 'fries-cup') modelFault = 'hold';
@@ -383,7 +409,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     const row = live.data.product_images_v1.find((r: { item_id: string }) => r.item_id === itemId);
     expect(row).toBeDefined();
     const dimensions: Record<string, number> = {};
-    const publishedImages: Record<string, unknown>[] = [];
+    const publishedImages: PublishedProductImage[] = [];
     for (const size of [480, 960]) {
       advance('published-image-fetch');
       const target = localProductMediaTarget(row[`w${size}_url`], 'GET');
@@ -401,13 +427,34 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       if (alpha.width === selectedAlpha.width && alpha.height === selectedAlpha.height) {
         expect(alpha.alphaSha256, 'Lossless alpha at unchanged geometry matches the real private source/candidate').toBe(selectedAlpha.alphaSha256);
       }
-      publishedImages.push({ variant: `w${size}`, bytes: bytes.length, sha256: sha(bytes), ...alpha });
+      publishedImages.push({ variant: `w${size}`, path: row[`w${size}_url`], bytes: bytes.length, sha256: sha(bytes), ...alpha });
+      if (sample.name === 'burger-highres') {
+        expect([alpha.width, alpha.height], 'The high-res input produces actual 480/960 derivatives').toEqual([size, size * .75]);
+        if (size === 960) await saveDecodedPublicPreview(page, bytes, 'quality-highres-published-cutout-w960.png');
+      }
       dimensions[`width${size}`] = row[`width${size}`];
       dimensions[`height${size}`] = row[`height${size}`];
     }
     // The same open editor must refresh its optimistic selection proof after
     // success: switching back must not fail with selection_stale.
-    if (sample.name === 'burger') {
+    if (sample.name === 'burger-highres') {
+      advance('highres-cutout-render');
+      expect(selectedAlpha.width).toBeGreaterThanOrEqual(960);
+      expect(selectedAlpha.height).toBeGreaterThanOrEqual(720);
+      expect(selectedAlpha.width / selectedAlpha.height).toBeCloseTo(sourceGeometry.width / sourceGeometry.height, 6);
+      writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'quality-highres-processed.png'), selectedPrivate.bytes);
+      const rendered = await captureHighResolutionMenu(context.browser()!, fixture.ownerA.slug, itemId,
+        'experimental-cutout', publishedImages, process.env.CINEMATIC_ARTIFACT_DIR!);
+      qualityEvidence.push({ treatment: 'experimental-cutout', sourceBytes: source.length, sourceSha256: sha(source),
+        sourceGeometry, processedBytes: selectedPrivate.bytes.length, processedSha256: sha(selectedPrivate.bytes),
+        processedGeometry: selectedAlpha, publishedImages, rendered,
+        visualMaskAcceptance: 'not-established; saliency alpha may lose plate/food detail; inspect original and processed pixels' });
+      writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'quality-highres.json'), JSON.stringify({
+        status: 'PARTIAL', buildContext: 'Isolated Actions review build; SF_PRODUCT_CUTOUT_REVIEW=true; removal unavailable by default',
+        source: 'Wikimedia Commons Hamburger (9).jpg; Miansari66; CC0 1.0; unmodified original', cases: qualityEvidence,
+      }, null, 2));
+    }
+    if (sample.name === 'burger' || sample.name === 'burger-highres') {
       advance('restore-original-selection');
       await click(page, L.original);
       await click(page, L.publish);
@@ -420,9 +467,41 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       const privateRestored = await downloadOriginal();
       expect(privateRestored.status).toBe(200);
       expect(sha(privateRestored.bytes)).toBe(sha(source));
+      if (sample.name === 'burger-highres') {
+        advance('highres-original-render');
+        const originalMenu = await rpc(fixture, null, 'storefront_menu_v6', { p_slug: fixture.ownerA.slug });
+        expect(originalMenu.status).toBe(200); expect(originalMenu.data.ok).toBe(true);
+        const originalRow = originalMenu.data.product_images_v1.find((r: { item_id: string }) => r.item_id === itemId);
+        expect(originalRow).toBeDefined();
+        const originalImages: PublishedProductImage[] = [];
+        for (const size of [480, 960]) {
+          const response = await fetch(localProductMediaTarget(originalRow[`w${size}_url`], 'GET'),
+            { redirect: 'error', signal: AbortSignal.timeout(15_000) });
+          expect(response.status).toBe(200); expect(response.headers.get('content-type')).toContain('image/webp');
+          const bytes = Buffer.from(await response.arrayBuffer()), alpha = await decodedAlpha(page, bytes);
+          expect([alpha.width, alpha.height]).toEqual([size, size * .75]);
+          expect(alpha.width).toBe(originalRow[`width${size}`]); expect(alpha.height).toBe(originalRow[`height${size}`]);
+          expect(alpha.transparent).toBe(0); expect(alpha.opaque).toBe(alpha.width * alpha.height);
+          originalImages.push({ variant: `w${size}`, path: originalRow[`w${size}_url`], bytes: bytes.length, sha256: sha(bytes), ...alpha });
+          if (size === 960) await saveDecodedPublicPreview(page, bytes, 'quality-highres-published-original-w960.png');
+        }
+        const rendered = await captureHighResolutionMenu(context.browser()!, fixture.ownerA.slug, itemId,
+          'original', originalImages, process.env.CINEMATIC_ARTIFACT_DIR!);
+        qualityEvidence.push({ treatment: 'original', sourceBytes: source.length, sourceSha256: sha(source), sourceGeometry,
+          privateOriginalSha256AfterBothPublications: sha(privateRestored.bytes), originalPreserved: true,
+          publishedImages: originalImages, rendered });
+        writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'quality-highres.json'), JSON.stringify({
+          status: 'PASS', scope: 'Actual isolated service publication and shipped menu rendering; no clean-mask acceptance claim',
+          buildContext: 'Isolated Actions review build; SF_PRODUCT_CUTOUT_REVIEW=true; removal unavailable by default',
+          source: 'Wikimedia Commons Hamburger (9).jpg; Miansari66; CC0 1.0; unmodified original', cases: qualityEvidence,
+        }, null, 2));
+      }
     }
-    evidence.push({ sample: sample.name, sourceKind: 'Existing published c4/w480 copy, not private original',
+    evidence.push({ sample: sample.name, sourceKind: sample.name === 'burger-highres'
+      ? 'Genuine licensed camera original, 2816x2112; Wikimedia Commons, Miansari66, CC0 1.0'
+      : 'Existing published c4/w480 copy, not private original', sourceGeometry,
       sourceBytes: source.length, sourceSha256: sha(source), treatment: sample.alpha ? 'original-alpha-bypass' : 'u2net-cutout',
+      processedBytes: selectedPrivate.bytes.length, processedSha256: sha(selectedPrivate.bytes), processedGeometry: selectedAlpha,
       modelPartReads: modelReads - previousModelReads, originalPreserved: sha(privateAfter.bytes) === sha(privateBefore.bytes),
       privateBeforeSha256: sha(privateBefore.bytes), privateAfterSha256: sha(privateAfter.bytes),
       cancelAndFailedFetchRetainedOriginal: sample.name === 'burger', publishedImages,
@@ -433,16 +512,17 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
   }
   advance('publication-counts', null);
   await Promise.all(publishedReplies);
-  expect(publisherCalls.filter(call => call.status === 200 && call.variant === 'w480')).toHaveLength(5);
-  expect(publisherCalls.filter(call => call.status === 200 && call.variant === 'w960')).toHaveLength(5);
+  expect(publisherCalls.filter(call => call.status === 200 && call.variant === 'w480')).toHaveLength(7);
+  expect(publisherCalls.filter(call => call.status === 200 && call.variant === 'w960')).toHaveLength(7);
   advance('unchanged-invariants');
   expect(await readInvariants(fixture, token), 'Hero, logo and receipt settings remain unchanged').toEqual(initialInvariants);
   advance('transport-boundary');
   expect(violation, 'No image bytes or runtime requests leave the allowed loopback services').toBe(false);
   advance('success-evidence');
   writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'product-cutout.json'), JSON.stringify({
+    buildContext: 'Isolated Actions review build; SF_PRODUCT_CUTOUT_REVIEW=true; removal unavailable by default',
     model: 'U2Net FP32', modelNativeHeapLimitBytes: 536870912,
-    fixturesArePublishedCopies: true, cases: evidence,
+    fixturesArePublishedCopies: false, fixtureKinds: ['four-existing-published-copies', 'one-unmodified-licensed-highres-original'], cases: evidence,
   }, null, 2));
 }
 

@@ -112,3 +112,16 @@ test('each sample/operation retains its first facts and snapshots cannot mutate 
   progress.recordResponse('save-source', 200, { ok: true });
   assert.equal(progress.snapshot().responses.length, 2);
 });
+
+test('a high-res rendering failure cannot be mistaken for the preceding successful low-res sample', () => {
+  const progress = createProductProgress();
+  progress.advance('close-product', 'drink');
+  progress.advance('highres-source-metadata', 'burger-highres');
+  progress.advance('highres-cutout-render');
+  progress.advance('highres-original-render');
+  const receipt = progress.snapshot();
+  assert.equal(receipt.status, 'FAIL');
+  assert.equal(receipt.failedStage, 'highres-original-render');
+  assert.equal(receipt.sample, 'burger-highres');
+  assert.deepEqual(receipt.completedStages.at(-1), { stage: 'highres-cutout-render', sample: 'burger-highres' });
+});
