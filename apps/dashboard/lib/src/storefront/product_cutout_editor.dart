@@ -1,4 +1,5 @@
-import 'dart:typed_data';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'product_cutout_gateway.dart';
@@ -43,8 +44,12 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
   @override
   void didUpdateWidget(ProductCutoutEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.item.imagePath != widget.item.imagePath) {
+    if (oldWidget.item.imagePath != widget.item.imagePath ||
+        oldWidget.item.id != widget.item.id ||
+        oldWidget.item.organizationId != widget.item.organizationId ||
+        oldWidget.item.restaurantId != widget.item.restaurantId) {
       _cancel();
+      _saving = false;
       _original = null;
       _candidate = null;
       _status = null;
@@ -54,6 +59,38 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _prepare();
         });
+    }
+  }
+
+  // Selection version advances on publication; it is not source identity.
+  // A same-key overwrite must never rebind an old candidate to a fresh proof.
+  // Compare both the authoritative source snapshot and the downloaded bytes.
+  bool _sameSource(ProductCutoutOriginal before, ProductCutoutOriginal after) {
+    if (before.sourceKey != after.sourceKey ||
+        before.mimeType != after.mimeType ||
+        !listEquals(before.bytes, after.bytes))
+      return false;
+    try {
+      final oldProof = jsonDecode(before.sourceGeneration);
+      final newProof = jsonDecode(after.sourceGeneration);
+      if (oldProof is! Map ||
+          newProof is! Map ||
+          oldProof['source_snapshot'] is! Map ||
+          newProof['source_snapshot'] is! Map)
+        return false;
+      Object? canonical(Object? value) {
+        if (value is Map) {
+          final keys = value.keys.cast<String>().toList()..sort();
+          return {for (final key in keys) key: canonical(value[key])};
+        }
+        if (value is List) return value.map(canonical).toList();
+        return value;
+      }
+
+      return jsonEncode(canonical(oldProof['source_snapshot'])) ==
+          jsonEncode(canonical(newProof['source_snapshot']));
+    } catch (_) {
+      return false; // An unreadable proof requires fresh processing/review.
     }
   }
 
@@ -125,6 +162,8 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
         _processing ||
         (_removeBackground && _candidate == null))
       return;
+    final generation = _generation;
+    final item = widget.item;
     _requestId ??= RandomImageIdGenerator().newImageId();
     setState(() {
       _saving = true;
@@ -132,43 +171,45 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
     });
     try {
       final result = await widget.gateway.publish(
-        item: widget.item,
+        item: item,
         original: original,
         requestId: _requestId!,
         candidateBytes: _removeBackground ? _candidate!.bytes : null,
         candidateMimeType: _removeBackground ? _candidate!.mimeType : null,
       );
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       ProductCutoutOriginal? refreshed;
       if (result.status == ProductCutoutPublishStatus.published) {
         // Publication advances the authoritative selection version. Keep the
         // accepted local candidate, but refresh its source proof before the
         // next explicit choice (e.g. switching back to Original).
         try {
-          refreshed = await widget.gateway.loadOriginal(widget.item);
+          refreshed = await widget.gateway.loadOriginal(item);
         } catch (_) {
           // Success remains success; require a new preparation before another
           // write if the refreshed authoritative proof cannot be read.
         }
       }
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _status = result.status;
         if (result.status == ProductCutoutPublishStatus.published) {
           _original = refreshed;
-          if (refreshed?.sourceKey != original.sourceKey) {
+          if (refreshed == null || !_sameSource(original, refreshed)) {
             _candidate = null;
             _removeBackground = false;
+            if (refreshed != null)
+              _status = ProductCutoutPublishStatus.staleSource;
           }
         }
         if (result.status != ProductCutoutPublishStatus.uncertain)
           _requestId = null;
       });
     } catch (_) {
-      if (mounted)
+      if (mounted && generation == _generation)
         setState(() => _status = ProductCutoutPublishStatus.uncertain);
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted && generation == _generation) setState(() => _saving = false);
     }
   }
 

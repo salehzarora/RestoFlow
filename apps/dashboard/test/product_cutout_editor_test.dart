@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,16 +27,24 @@ MenuItem item(String? path) => MenuItem(
 
 class Gateway implements ProductCutoutGateway {
   int loads = 0;
-  final requests = <({String id, Uint8List? candidate})>[];
+  Uint8List sourceBytes = pixels;
+  Map<String, Object?> snapshot = {'object_id': 'source-A', 'version': 1};
+  int selectionVersion = 0;
+  Completer<ProductCutoutPublishResult>? pendingPublish;
+  final requests =
+      <({String id, Uint8List? candidate, ProductCutoutOriginal original})>[];
   ProductCutoutPublishStatus status = ProductCutoutPublishStatus.published;
   @override
   Future<ProductCutoutOriginal> loadOriginal(MenuItem item) async {
     loads++;
     return ProductCutoutOriginal(
-      bytes: pixels,
+      bytes: sourceBytes,
       mimeType: 'image/png',
       sourceKey: item.imagePath!,
-      sourceGeneration: 'gen',
+      sourceGeneration: jsonEncode({
+        'source_snapshot': snapshot,
+        'selection_version': selectionVersion,
+      }),
     );
   }
 
@@ -47,13 +56,18 @@ class Gateway implements ProductCutoutGateway {
     Uint8List? candidateBytes,
     String? candidateMimeType,
   }) async {
-    requests.add((id: requestId, candidate: candidateBytes));
-    return ProductCutoutPublishResult(status);
+    requests.add((
+      id: requestId,
+      candidate: candidateBytes,
+      original: original,
+    ));
+    return pendingPublish?.future ?? ProductCutoutPublishResult(status);
   }
 }
 
 class Processor implements ProductCutoutProcessor {
   bool fail = false, transparent = false;
+  Uint8List resultBytes = pixels;
   Completer<ProductCutoutCandidate>? pending;
   int cancels = 0, runs = 0;
   @override
@@ -66,7 +80,7 @@ class Processor implements ProductCutoutProcessor {
     if (fail) throw StateError('bad');
     if (pending != null) return pending!.future;
     return ProductCutoutCandidate(
-      bytes: pixels,
+      bytes: resultBytes,
       mimeType: 'image/png',
       width: 1,
       height: 1,
@@ -110,6 +124,104 @@ Future<void> tap(WidgetTester tester, String key) async {
 }
 
 void main() {
+  for (final change in ['snapshot and bytes', 'snapshot only', 'bytes only']) {
+    testWidgets('same-key overwrite ($change) invalidates the old candidate', (
+      tester,
+    ) async {
+      final gateway = Gateway(), processor = Processor();
+      await mount(tester, gateway, processor);
+      await tap(tester, 'product-cutout-prepare');
+      await tester.tap(find.text('Remove background').last);
+      await tester.pumpAndSettle();
+      if (change != 'bytes only')
+        gateway.snapshot = {'object_id': 'source-B', 'version': 2};
+      if (change != 'snapshot only')
+        gateway.sourceBytes = Uint8List.fromList([4, 5, 6]);
+      gateway.selectionVersion = 1;
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests.single.candidate, pixels);
+      expect(
+        find.text('The original changed. Prepare a new preview.'),
+        findsOneWidget,
+      );
+      final selection = tester.widget<SegmentedButton<bool>>(
+        find.byType(SegmentedButton<bool>),
+      );
+      expect(selection.selected, {false});
+      expect(selection.segments.last.enabled, isFalse);
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests.last.candidate, isNull);
+      expect(gateway.requests.last.original.bytes, gateway.sourceBytes);
+      await tap(tester, 'product-cutout-prepare');
+      expect(processor.runs, 2);
+      expect(
+        tester
+            .widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>))
+            .selected,
+        {false},
+      );
+    });
+  }
+  testWidgets(
+    'selection-only refresh retains candidate with the fresh selection proof',
+    (tester) async {
+      final gateway = Gateway(), processor = Processor();
+      await mount(tester, gateway, processor);
+      await tap(tester, 'product-cutout-prepare');
+      await tester.tap(find.text('Remove background').last);
+      await tester.pumpAndSettle();
+      gateway.selectionVersion = 1;
+      // Map order is not source identity either.
+      gateway.snapshot = {'version': 1, 'object_id': 'source-A'};
+      await tap(tester, 'product-cutout-publish');
+      expect(
+        tester
+            .widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>))
+            .selected,
+        {true},
+      );
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests.last.candidate, pixels);
+      expect(
+        jsonDecode(
+          gateway.requests.last.original.sourceGeneration,
+        )['selection_version'],
+        1,
+      );
+      expect(processor.runs, 1);
+    },
+  );
+  testWidgets('delayed publication cannot replace the state of a new source', (
+    tester,
+  ) async {
+    final gateway = Gateway(), processor = Processor();
+    await mount(tester, gateway, processor);
+    await tap(tester, 'product-cutout-prepare');
+    final pending = Completer<ProductCutoutPublishResult>();
+    gateway.pendingPublish = pending;
+    await tester.ensureVisible(find.byKey(const Key('product-cutout-publish')));
+    await tester.tap(find.byKey(const Key('product-cutout-publish')));
+    await tester.pump(); // The publication is intentionally still in flight.
+    gateway.sourceBytes = Uint8List.fromList([4, 5, 6]);
+    gateway.snapshot = {'object_id': 'source-B', 'version': 2};
+    processor.resultBytes = Uint8List.fromList([7, 8, 9]);
+    await mount(tester, gateway, processor, path: 'new-original');
+    expect(processor.runs, 2);
+    final loadsBeforeOldCompletion = gateway.loads;
+    gateway.pendingPublish = null;
+    pending.complete(
+      const ProductCutoutPublishResult(ProductCutoutPublishStatus.published),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.loads, loadsBeforeOldCompletion);
+    expect(find.text('Selection published.'), findsNothing);
+    await tester.tap(find.text('Remove background').last);
+    await tester.pumpAndSettle();
+    await tap(tester, 'product-cutout-publish');
+    expect(gateway.requests.last.original.sourceKey, 'new-original');
+    expect(gateway.requests.last.original.bytes, gateway.sourceBytes);
+    expect(gateway.requests.last.candidate, processor.resultBytes);
+  });
   testWidgets(
     'existing products prepare locally and require explicit publication choice',
     (tester) async {

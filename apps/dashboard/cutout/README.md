@@ -81,6 +81,9 @@ limits: <https://vercel.com/docs/limits>.
 * Publication is a separate explicit action. Processing failure never publishes.
   Uncertain publication retains its request ID and selected bytes. Successful
   publication re-reads the authoritative source/selection proof for later choices.
+  A changed source snapshot or changed bytes (including a same-key overwrite)
+  discards the prior candidate; advancing only selection version retains it.
+  Late publication responses cannot replace another source's editor state.
 
 ## Evidence and limits
 
@@ -89,6 +92,10 @@ native-memory integrity, single-job concurrency, owner-scoped cancel, timeout,
 retry and original retention. Flutter tests cover explicit choice, existing
 images, automatic preparation after original save, failure/retry, cancellation,
 late-result rejection and uncertain publication retry.
+The guarded real-service journey also checks authenticated private original
+SHA-256 before/after publication, actual decoded published alpha, UI cancellation,
+a failed model request, and successful retry. These are pending real-service
+evidence until the Actions run executes them.
 
 `benchmark.mjs INPUT OUTPUT` executes the **actual browser worker**. On Windows
 it samples the whole launched Chrome process tree; memory includes browser/UI

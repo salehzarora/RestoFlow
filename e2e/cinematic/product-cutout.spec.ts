@@ -1,10 +1,10 @@
-import { test, expect, type Page, type Locator, type Response } from '@playwright/test';
+import { test, expect, type Page, type Locator, type Response, type Route } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { enableFlutterSemantics, waitForFlutterBoot } from '../lib/flutter';
 import { fillField, tapButton, tapNav, tapText, waitForText } from '../lib/dashboard';
-import { API_URL, DASHBOARD_URL, readFixture, scope, rpc, readInvariants } from './service.mjs';
+import { API_URL, DASHBOARD_URL, readFixture, scope, rpc, request, storagePath, readInvariants } from './service.mjs';
 import { localMediaTarget } from './live-transport.mjs';
 
 // Real owner session + shipped uploader/worker/repository/publisher. The guard
@@ -17,6 +17,8 @@ const samples = [
 ];
 const L = { pick: 'اختيار صورة', save: 'حفظ الصورة', original: 'الأصل', remove: 'إزالة الخلفية',
   publish: 'نشر الصورة المختارة', published: 'تم نشر الاختيار.', dark: 'فحص الحواف على خلفية داكنة',
+  prepare: 'تحضير إزالة الخلفية', cancel: 'إلغاء المعالجة',
+  failed: 'تعذرت إزالة الخلفية. الصورة الأصلية محفوظة. أعد المحاولة أو احتفظ بالأصل.',
   transparent: 'هذه الصورة شفافة بالفعل؛ لم تُجرَ عملية فصل.' };
 const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 function post(response: Response, path: string) {
@@ -80,9 +82,36 @@ async function login(page: Page, email: string, password: string): Promise<strin
   return data.access_token; // stays in test memory; never written to evidence
 }
 
+async function decodedAlpha(page: Page, bytes: Buffer) {
+  // Decode actual returned image bytes in the browser; no synthetic mask or
+  // mocked codec. Counts, dimensions and a content hash are safe evidence.
+  return page.evaluate(async base64 => {
+    const data = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    const image = await createImageBitmap(new Blob([data]));
+    const canvas = new OffscreenCanvas(image.width, image.height);
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(image, 0, 0);
+    const rgba = ctx.getImageData(0, 0, image.width, image.height).data;
+    const alphaBytes = new Uint8Array(image.width * image.height);
+    let transparent = 0, partial = 0, opaque = 0;
+    for (let i = 3; i < rgba.length; i += 4) {
+      alphaBytes[(i - 3) / 4] = rgba[i];
+      if (rgba[i] === 0) transparent++; else if (rgba[i] === 255) opaque++; else partial++;
+    }
+    const dimensions = { width: image.width, height: image.height };
+    image.close();
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', alphaBytes));
+    const alphaSha256 = Array.from(digest, b => b.toString(16).padStart(2, '0')).join('');
+    return { ...dimensions, transparent, partial, opaque, alphaSha256 };
+  }, bytes.toString('base64'));
+}
+
 test('product originals survive local review, explicit selection and publication', async ({ page, context }) => {
   const fixture = readFixture();
   let violation = false, modelReads = 0, registerCalls = 0;
+  let modelFault: 'none' | 'hold' | 'fail' = 'none';
+  let heldModelRequest: Route | undefined;
+  let injectedModelFailures = 0;
   const publisherCalls: { variant: string; status: number }[] = [];
   const registrations: Record<string, unknown>[] = [];
   const publishedReplies: Promise<void>[] = [];
@@ -91,7 +120,17 @@ test('product originals survive local review, explicit selection and publication
     if (url.protocol !== 'http:' || ![API_URL, DASHBOARD_URL].includes(url.origin) || url.username || url.password) {
       violation = true; await route.abort('blockedbyclient'); return;
     }
-    if (url.origin === DASHBOARD_URL && /\/product-cutout\/vendor\/u2net-\d+\.bin$/.test(url.pathname)) modelReads++;
+    if (url.origin === DASHBOARD_URL && /\/product-cutout\/vendor\/u2net-\d+\.bin$/.test(url.pathname)) {
+      modelReads++;
+      if (modelFault === 'hold') {
+        modelFault = 'none'; heldModelRequest = route;
+        return; // Stop a real in-flight model download until UI cancel.
+      }
+      if (modelFault === 'fail') {
+        modelFault = 'none'; injectedModelFailures++;
+        await route.abort('failed'); return; // One controlled network failure.
+      }
+    }
     if (url.origin === API_URL && url.pathname === '/rest/v1/rpc/register_storefront_product_derivative_v1') {
       registerCalls++; registrations.push(route.request().postDataJSON());
     }
@@ -121,6 +160,7 @@ test('product originals survive local review, explicit selection and publication
     const source = readFileSync(path);
     await (await chooser).setFiles(path);
     const previousModelReads = modelReads, previousRegisters = registerCalls;
+    if (sample.name === 'burger') modelFault = 'hold';
     const saved = page.waitForResponse(response => post(response, '/rest/v1/rpc/menu_upsert_item'));
     await click(page, L.save);
     const sourceWrite = await saved;
@@ -134,6 +174,35 @@ test('product originals survive local review, explicit selection and publication
     expect(before.status).toBe(200); expect(before.data.ok).toBe(true);
     expect(before.data.source_key).toBe(originalKey);
     expect(before.data.selected_derivative_id).toBeNull();
+    const downloadOriginal = () => request(fixture, token,
+      `/storage/v1/object/authenticated/menu-images/${storagePath(originalKey)}`);
+    const privateBefore = await downloadOriginal();
+    expect(privateBefore.status).toBe(200);
+    expect(sha(privateBefore.bytes), 'The real private upload retains exact source bytes').toBe(sha(source));
+    let successfulModelStart = previousModelReads;
+    if (sample.name === 'burger') {
+      await expect.poll(() => heldModelRequest !== undefined,
+        { message: 'Automatic preparation reaches a real model download' }).toBe(true);
+      await click(page, L.cancel);
+      await expect(page.getByRole('button', { name: L.cancel, exact: true })).toHaveCount(0);
+      // Termination normally cancels this request itself; releasing the held
+      // route also keeps the test's fault injection bounded after cancellation.
+      await heldModelRequest!.abort('aborted').catch(() => {});
+      heldModelRequest = undefined;
+      await expect(page.getByRole('button', { name: L.publish, exact: true })).toBeEnabled();
+      expect(registerCalls, 'Cancelling processing never publishes').toBe(previousRegisters);
+      expect(sha((await downloadOriginal()).bytes)).toBe(sha(source));
+
+      modelFault = 'fail';
+      await click(page, L.prepare);
+      await waitForText(page, L.failed);
+      expect(injectedModelFailures).toBe(1);
+      expect(registerCalls, 'A failed model fetch never publishes').toBe(previousRegisters);
+      await expect(page.getByRole('button', { name: L.publish, exact: true })).toBeEnabled();
+      expect(sha((await downloadOriginal()).bytes), 'Failure retains actual private original bytes').toBe(sha(source));
+      successfulModelStart = modelReads;
+      await click(page, L.prepare); // Retry the actual worker, without mocked inference.
+    }
     const publish = page.getByRole('button', { name: L.publish, exact: true });
     await reveal(page, publish);
     await expect(publish).toBeEnabled({ timeout: 150_000 });
@@ -142,7 +211,7 @@ test('product originals survive local review, explicit selection and publication
       expect(modelReads, 'Real alpha returns original bytes without loading model weights').toBe(previousModelReads);
       await expect(page.getByRole('button', { name: L.remove, exact: true })).toBeDisabled();
     } else {
-      expect(modelReads - previousModelReads, 'All eleven pinned model chunks are fetched by the actual worker').toBe(11);
+      expect(modelReads - successfulModelStart, 'Successful retry fetches all eleven pinned model chunks').toBe(11);
       await expect(page.getByRole('button', { name: L.remove, exact: true })).toBeEnabled();
     }
     expect(registerCalls, 'Saving an original and automatic local review never publishes a candidate').toBe(previousRegisters);
@@ -159,16 +228,24 @@ test('product originals survive local review, explicit selection and publication
     expect(after.data.source_snapshot).toEqual(before.data.source_snapshot);
     expect(after.data.selected_derivative_id).toEqual(expect.any(String));
     expect(after.data.selection_version).toBe(before.data.selection_version + 1);
+    const privateAfter = await downloadOriginal();
+    expect(privateAfter.status).toBe(200);
+    expect(sha(privateAfter.bytes), 'Publication preserves exact private original bytes').toBe(sha(privateBefore.bytes));
     const registered = registrations.at(-1)!;
     expect(registered.p_treatment).toBe(sample.alpha ? 'original' : 'cutout');
     expect(registered.p_original_key).toBe(originalKey);
     if (sample.alpha) expect(registered.p_candidate_key).toBe(originalKey);
     else expect(registered.p_candidate_key).not.toBe(originalKey);
+    const selectedPrivate = await request(fixture, token,
+      `/storage/v1/object/authenticated/menu-images/${storagePath(registered.p_candidate_key as string)}`);
+    expect(selectedPrivate.status).toBe(200);
+    const selectedAlpha = await decodedAlpha(page, selectedPrivate.bytes);
     const live = await rpc(fixture, null, 'storefront_menu_v6', { p_slug: fixture.ownerA.slug });
     expect(live.status).toBe(200); expect(live.data.ok).toBe(true);
     const row = live.data.product_images_v1.find((r: { item_id: string }) => r.item_id === itemId);
     expect(row).toBeDefined();
     const dimensions: Record<string, number> = {};
+    const publishedImages: Record<string, unknown>[] = [];
     for (const size of [480, 960]) {
       const target = localMediaTarget(row[`w${size}_url`], 'GET');
       const response = await fetch(target, { redirect: 'error', signal: AbortSignal.timeout(15_000) });
@@ -176,6 +253,15 @@ test('product originals survive local review, explicit selection and publication
       expect(response.headers.get('content-type')).toContain('image/webp');
       const bytes = Buffer.from(await response.arrayBuffer());
       expect(bytes.length).toBeGreaterThan(0);
+      const alpha = await decodedAlpha(page, bytes);
+      expect(alpha.width).toBe(row[`width${size}`]);
+      expect(alpha.height).toBe(row[`height${size}`]);
+      expect(alpha.transparent, 'Actual published WebP preserves transparent background pixels').toBeGreaterThan(0);
+      expect(alpha.opaque, 'Actual published WebP retains opaque subject pixels').toBeGreaterThan(0);
+      if (alpha.width === selectedAlpha.width && alpha.height === selectedAlpha.height) {
+        expect(alpha.alphaSha256, 'Lossless alpha at unchanged geometry matches the real private source/candidate').toBe(selectedAlpha.alphaSha256);
+      }
+      publishedImages.push({ variant: `w${size}`, bytes: bytes.length, sha256: sha(bytes), ...alpha });
       dimensions[`width${size}`] = row[`width${size}`];
       dimensions[`height${size}`] = row[`height${size}`];
     }
@@ -189,10 +275,16 @@ test('product originals survive local review, explicit selection and publication
       expect(restored.data.source_key).toBe(originalKey);
       expect(restored.data.selection_version).toBe(after.data.selection_version + 1);
       expect(registrations.at(-1)!.p_treatment).toBe('original');
+      const privateRestored = await downloadOriginal();
+      expect(privateRestored.status).toBe(200);
+      expect(sha(privateRestored.bytes)).toBe(sha(source));
     }
     evidence.push({ sample: sample.name, sourceKind: 'Existing published c4/w480 copy, not private original',
       sourceBytes: source.length, sourceSha256: sha(source), treatment: sample.alpha ? 'original-alpha-bypass' : 'u2net-cutout',
-      modelPartReads: modelReads - previousModelReads, originalPreserved: true, explicitPublication: true, ...dimensions });
+      modelPartReads: modelReads - previousModelReads, originalPreserved: sha(privateAfter.bytes) === sha(privateBefore.bytes),
+      privateBeforeSha256: sha(privateBefore.bytes), privateAfterSha256: sha(privateAfter.bytes),
+      cancelAndFailedFetchRetainedOriginal: sample.name === 'burger', publishedImages,
+      explicitPublication: true, ...dimensions });
     await tapButton(page, 'إلغاء'); // close the item editor; already saved source/presentation remain
   }
   await Promise.all(publishedReplies);
