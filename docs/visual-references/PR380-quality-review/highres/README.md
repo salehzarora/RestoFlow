@@ -36,6 +36,14 @@ This photograph has normal camera softness/flash lighting. Higher dimensions
 alone do not establish optical sharpness, a clean segmentation mask or pixel
 coverage on every display.
 
+One [local actual-worker preflight](local-worker-receipt.json) also processed
+these exact source bytes with the cached pinned model: 1600×1200 PNG,
+1,262,814 bytes, 30.663 seconds. The sampled whole Chrome process-tree peak was
+1,401,290,752 bytes working set and 1,219,903,488 bytes private memory. This fits
+the unchanged output/time limits, but is not a universal device-memory bound,
+real-service publication result or acceptance of its mask. No second processor
+run was performed just to produce another measurement.
+
 ## Real-service journey and limits
 
 The extension in `e2e/cinematic/product-cutout.spec.ts` runs only in the existing

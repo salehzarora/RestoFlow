@@ -86,8 +86,10 @@ CI build as release-default automatic removal.
 No model, dependency, publication recipe, input cap or public Storefront budget is
 changed. Default processing/model download is zero; the optional experiment still
 uses the same approximately 188 MB lazy editor assets, one worker, 120-second
-timeout and 512 MiB WASM heap limit. The previously measured whole-browser usage
-is about 1.18 GB, not a hard browser-memory cap. Diagnostic files and source photos
+timeout and 512 MiB WASM heap limit. The genuine high-resolution preflight measured
+about 1.40 GB peak Chrome process-tree working set and 1.22 GB private memory;
+the smaller earlier examples measured about 1.18 GB working set. These are local
+measurements, not a hard browser-memory cap. Diagnostic files and source photos
 are documentation/test assets, outside Storefront public assets.
 
 See [runtime, licenses and exact limits](../../../apps/dashboard/cutout/README.md).
