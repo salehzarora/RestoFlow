@@ -139,7 +139,7 @@ async function targetGeometry(page: Page, target: Locator) {
 }
 type RevealPurpose = 'upload' | 'content-save' | 'profile-save' | 'field' | 'dimming' | 'other';
 type ScrollScope = { x: number; y: number; width: number; height: number; source: 'target' | 'editor-anchor' | 'cached' | 'settings-gutter'; kind: 'clipping-ancestor' | 'flutter-view' | 'settings-viewport' };
-type RevealSample = { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>>; hiddenGeometry: Awaited<ReturnType<typeof targetGeometry>>; normalMatches: number; hiddenMatches: number; labelEvidence: { exact: number; normalized: number; button: number; hidden: number } | null; progressed: boolean | null; visibleNodes: number; surface: ScrollScope; direction: number; reversed: boolean };
+type RevealSample = { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>>; hiddenGeometry: Awaited<ReturnType<typeof targetGeometry>>; normalMatches: number; hiddenMatches: number; labelEvidence: { exact: number; normalized: number; button: number; hidden: number; textExact: number; textNormalized: number; textButton: number } | null; progressed: boolean | null; visibleNodes: number; surface: ScrollScope; direction: number; reversed: boolean };
 type RevealTrace = { purpose: RevealPurpose; result: 'ready' | 'stalled' | 'ambiguous' | 'iteration-limit' | 'disabled'; wheelSteps: number; samples: RevealSample[] };
 const revealTraces = new WeakMap<Page, RevealTrace[]>();
 const scrollScopes = new WeakMap<Page, ScrollScope>();
@@ -224,8 +224,8 @@ async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'oth
   revealTraces.set(page, traces);
   let state = { direction: 1, reversed: false, stalled: 0, wheelSteps: 0 };
   let progressed: boolean | null = null;
-  // Start where the owner actually is. Jumping to the top of the lazy Settings
-  // list can leave/unmount the unsaved editor before its Save is encountered.
+  // Start where the owner actually is and scan nearby controls first. The
+  // Settings editor keeps its draft alive while it moves outside the viewport.
   // Keep the original maximum of 80 physical wheels. Actual settling is
   // observed between them; progress/end detection is the normal stop condition.
   for (let i = 0; i <= MAX_REVEAL_WHEELS; i++) {
@@ -236,9 +236,17 @@ async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'oth
     const before = await renderedProgress(page, scope);
     const labelEvidence = purpose !== 'content-save' ? null : await page.evaluate(name => {
       const normalize = (value: string) => value.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').replace(/\s+/g, ' ').trim();
-      let exact = 0, normalized = 0, button = 0, hidden = 0;
+      let exact = 0, normalized = 0, button = 0, hidden = 0, textExact = 0, textNormalized = 0, textButton = 0;
       for (const el of Array.from(document.querySelectorAll('flt-semantics, [id^="flt-semantic-node-"]'))) {
         const label = el.getAttribute('aria-label');
+        // Flutter's button name can be text content rather than aria-label.
+        // Export only counts, never the surrounding rendered fixture values.
+        const text = el.textContent;
+        if (text === name) textExact++;
+        if (text !== null && normalize(text) === normalize(name)) {
+          textNormalized++;
+          if (el.getAttribute('role') === 'button') textButton++;
+        }
         if (label === name) exact++;
         if (label !== null && normalize(label) === normalize(name)) {
           normalized++;
@@ -246,7 +254,7 @@ async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'oth
           if (el.getAttribute('aria-hidden') === 'true') hidden++;
         }
       }
-      return { exact, normalized, button, hidden };
+      return { exact, normalized, button, hidden, textExact, textNormalized, textButton };
     }, L.save);
     const sample: RevealSample = { iteration: i, geometry: box, hiddenGeometry, normalMatches, hiddenMatches, labelEvidence, progressed,
       visibleNodes: before.visibleNodes, surface: scope, direction: state.direction, reversed: state.reversed };
@@ -495,7 +503,7 @@ async function setDim(page: Page, target: number): Promise<void> {
   expect(current, 'Exact dimming value').toBe(target);
 }
 async function backgroundUrl(f: Fixture, token: string, mediaId: string): Promise<string> {
-  const media = await rpc(f, token, 'list_storefront_content_media_v1');
+  const media = await rpc(f, token, 'list_storefront_content_media_v2');
   const rows = media.media ?? media.rows;
   expect(Array.isArray(rows), 'Real content media rows').toBe(true);
   const row = (rows as Obj[]).find(r => r.id === mediaId);
@@ -508,6 +516,45 @@ async function backgroundUrl(f: Fixture, token: string, mediaId: string): Promis
   expect(response.headers.get('content-type')).toContain('image/');
   expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(0);
   return url;
+}
+async function verifyReadCompatibility(f: Fixture, token: string): Promise<void> {
+  // Read-only calls use the owner session captured from the actual UI login.
+  // All fixture mutations remain the real Dashboard journey above/below.
+  const [legacy, current, legacyMedia, currentMedia] = await Promise.all([
+    rpc(f, token, 'get_restaurant_storefront_content_v1'),
+    rpc(f, token, 'get_restaurant_storefront_content_v2'),
+    rpc(f, token, 'list_storefront_content_media_v1'),
+    rpc(f, token, 'list_storefront_content_media_v2'),
+  ]);
+  const legacyDocument = structuredClone(current.document);
+  delete legacyDocument.appearance;
+  expect(legacy.document, 'An old strict reader retains exactly its content document').toEqual(legacyDocument);
+  expect(legacy.version).toBe(current.version);
+  const projectedMedia = structuredClone(currentMedia);
+  const rows = projectedMedia.media ?? projectedMedia.rows;
+  expect(Array.isArray(rows)).toBe(true);
+  for (const row of rows as Obj[]) {
+    row.content_in_use = row.content_in_use.filter((use: Obj) => use.kind !== 'menu_background');
+  }
+  expect(legacyMedia, 'Old media readers omit only the new usage type').toEqual(projectedMedia);
+  const publicRead = async (name: string): Promise<Obj> => {
+    const response = await fetch(`${API}/rest/v1/rpc/${name}`, {
+      method: 'POST', redirect: 'error',
+      headers: { apikey: f.anonKey, Authorization: `Bearer ${f.anonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_slug: f.ownerA.slug }),
+    });
+    expect(response.status, 'Anonymous versioned public menu read succeeds').toBe(200);
+    return response.json() as Promise<Obj>;
+  };
+  const [oldMenu, newMenu] = await Promise.all([publicRead('storefront_menu_v4'), publicRead('storefront_menu_v5')]);
+  // Separate HTTP snapshots have distinct timestamps; every other old field
+  // must remain identical, including prices, modifiers and ordering controls.
+  expect(typeof oldMenu.server_ts).toBe('string');
+  expect(typeof newMenu.server_ts).toBe('string');
+  delete oldMenu.server_ts;
+  delete newMenu.server_ts;
+  delete newMenu.content_v1.appearance;
+  expect(oldMenu, 'Old public readers retain their exact menu projection').toEqual(newMenu);
 }
 async function renderMenu(page: Page, f: Fixture, image: string, dim: number | null, colours?: Obj): Promise<void> {
   const route = `${STOREFRONT}/s/${f.ownerA.slug}/menu`;
@@ -617,6 +664,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     stage = 'open-editor';
     await openEditor(page);
     await invariants(f, token);
+    await verifyReadCompatibility(f, token);
     stages.push(stage);
 
     stage = 'upload-publish-select-save-reload';
@@ -629,6 +677,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     const first = (await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id as string;
     expect(first).not.toBe(f.heroMediaId);
     const firstUrl = await backgroundUrl(f, token, first);
+    await verifyReadCompatibility(f, token);
     stage = 'reload-first-background';
     await openEditor(page, true);
     await invariants(f, token);
@@ -681,6 +730,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     const second = (await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id as string;
     expect(second).not.toBe(first);
     const secondUrl = await backgroundUrl(f, token, second);
+    await verifyReadCompatibility(f, token);
     await openEditor(page, true);
     await invariants(f, token);
     await renderMenu(menu, f, secondUrl, 80);
@@ -714,6 +764,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await saveContent(page);
     await openEditor(page, true);
     expect((await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id).toBeNull();
+    await verifyReadCompatibility(f, token);
     await invariants(f, token);
     await backgroundUrl(f, token, first);
     await backgroundUrl(f, token, second);

@@ -66,6 +66,7 @@ class AdminSectionCard extends StatelessWidget {
     required this.child,
     this.icon,
     this.trailing,
+    this.semanticContainer = true,
     super.key,
   });
 
@@ -74,11 +75,16 @@ class AdminSectionCard extends StatelessWidget {
   final Widget? trailing;
   final Widget child;
 
+  /// Keep separate controls explicit in a long, independently editable form.
+  /// Other section cards preserve their existing semantic grouping by default.
+  final bool semanticContainer;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return Card(
+      semanticContainer: semanticContainer,
       elevation: 0,
       color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(

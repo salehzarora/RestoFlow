@@ -1436,6 +1436,10 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       key: const Key('storefront-section'),
       title: l10n.storefrontSectionTitle,
       icon: Icons.storefront_outlined,
+      // This form is taller than the Settings viewport. A single merged Card
+      // semantics node clips later controls out of Flutter web's accessible
+      // tree even while they are painted. Keep each field/action explicit.
+      semanticContainer: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

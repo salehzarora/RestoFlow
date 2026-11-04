@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -2278,6 +2279,90 @@ void main() {
       role: MembershipRole.orgOwner,
       status: 'active',
     );
+
+    for (final locale in ['ar', 'he', 'en']) {
+      testWidgets(
+        'scrolled content Save stays accessible in real Settings ($locale)',
+        (tester) async {
+          tester.view.physicalSize = const Size(1440, 1000);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.reset);
+          final content = content_fixture.ContentRepo();
+          final profile = _FakeProfileRepo(profile: _profileJson(version: 3));
+          await tester.pumpWidget(
+            MaterialApp(
+              locale: Locale(locale),
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              home: Scaffold(
+                body: RealSettingsView(
+                  membership: owner,
+                  currencyCode: 'ILS',
+                  settingsRepository: _FakeSettings(),
+                  storefrontSeams: StorefrontEditorSeams(
+                    scopeIdentity: 'save-accessibility',
+                    profileRepository: profile,
+                    mediaRepository: _FakeMediaRepo(),
+                    branchSource: _FakeBranches(),
+                    sourceCatalog: _FakeSources(),
+                    contentRepository: content,
+                    contentCatalog: content_fixture.ContentCatalog(),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          Future<void> reveal(Finder finder) async {
+            for (var step = 0; step < 50; step++) {
+              final rect = finder.evaluate().isEmpty
+                  ? null
+                  : tester.getRect(finder);
+              if (rect != null && rect.top >= 96 && rect.bottom <= 936) return;
+              await tester.sendEventToBinding(
+                PointerScrollEvent(
+                  position: const Offset(24, 500),
+                  scrollDelta: Offset(
+                    0,
+                    rect != null && rect.top < 96 ? -336 : 336,
+                  ),
+                ),
+              );
+              await tester.pumpAndSettle();
+            }
+            fail('The real Settings control never entered the viewport.');
+          }
+
+          final color = find.byKey(
+            const Key('content-appearance.text_color-1'),
+          );
+          await reveal(color);
+          await tester.enterText(color, '#fff1da');
+          await tester.pumpAndSettle();
+          final save = find.byKey(const Key('content-save'));
+          await reveal(save);
+          final copy = storefrontContentCopy(await _l10n(locale), 'save');
+          expect(
+            tester.semantics.simulatedAccessibilityTraversal(),
+            contains(
+              isSemantics(
+                label: copy,
+                isButton: true,
+                isEnabled: true,
+                isHidden: false,
+              ),
+            ),
+          );
+          await tester.tap(save);
+          await tester.pumpAndSettle();
+          expect(content.calls, hasLength(1));
+          expect(
+            content.calls.single.document.json['appearance'],
+            containsPair('text_color', '#fff1da'),
+          );
+        },
+      );
+    }
 
     testWidgets('scrolled out of the lazy Settings list and back: the draft '
         'and the same-request Try again are kept, with no extra read', (
