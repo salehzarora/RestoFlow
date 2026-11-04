@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -2136,6 +2138,102 @@ void main() {
       expect(find.byKey(const Key('storefront-ready')), findsOneWidget);
       expect(_enabled(tester, const Key('storefront-publish')), isTrue);
     });
+
+    testWidgets('cinematic hours fixture permits a colour-only profile Save', (
+      tester,
+    ) async {
+      // Read the exact JSON consumed by the real-service bootstrap so its
+      // prerequisites cannot silently drift from the editor's validation.
+      final fixture = [
+        File('e2e/cinematic/profile-hours.json'),
+        File('../../e2e/cinematic/profile-hours.json'),
+      ].firstWhere((file) => file.existsSync());
+      final hours =
+          jsonDecode(fixture.readAsStringSync()) as Map<String, Object?>;
+      final parsed = OpeningHours.fromJson(hours);
+      expect(parsed.isValid, isTrue);
+      expect(parsed.hasUnreadableEntries, isFalse);
+      expect(parsed.hasTouchingWindows, isFalse);
+      expect(parsed.overlaps(), isEmpty);
+      expect(parsed.weekly.map((window) => window.dow).toSet(), {
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+      });
+      expect(parsed.toJson(), hours);
+      final repo = _FakeProfileRepo(
+        profile: _profileJson(published: true, openingHours: hours),
+        timezone: 'UTC',
+      );
+      await _pump(tester, StorefrontSection(seams: _seams(repo)));
+      await tester.enterText(
+        find.byKey(const Key('storefront-primary-color')),
+        '#211A16',
+      );
+      await tester.enterText(
+        find.byKey(const Key('storefront-accent-color')),
+        '#EAB082',
+      );
+      await tester.pumpAndSettle();
+      expect(_enabled(tester, const Key('storefront-save')), isTrue);
+      await _tap(tester, find.byKey(const Key('storefront-save')));
+      expect(repo.saves.single.patch, {
+        'primary_color': '#211a16',
+        'accent_color': '#eab082',
+      });
+      expect(repo.profile!['opening_hours'], hours);
+      expect(repo.profile!['primary_color'], '#211a16');
+      expect(repo.profile!['accent_color'], '#eab082');
+    });
+
+    testWidgets(
+      'cinematic old midnight-touching hours still block profile Save',
+      (tester) async {
+        final hours = {
+          'weekly': [
+            for (var dow = 0; dow < 7; dow++) ...[
+              {'dow': dow, 'open': '00:00', 'close': '12:00'},
+              {'dow': dow, 'open': '11:00', 'close': '00:00'},
+            ],
+          ],
+          'exceptions': <Object?>[],
+        };
+        final parsed = OpeningHours.fromJson(hours);
+        // The wire grammar permits these hours. The blocking issue is the
+        // midnight touch on every weekday, distinct from advisory overlaps.
+        expect(parsed.isValid, isTrue);
+        expect(parsed.hasUnreadableEntries, isFalse);
+        expect(parsed.touchingWindows(), hasLength(7));
+        expect(parsed.overlaps(), hasLength(7));
+        final repo = _FakeProfileRepo(
+          profile: _profileJson(published: true, openingHours: hours),
+          timezone: 'UTC',
+        );
+        await _pump(tester, StorefrontSection(seams: _seams(repo)));
+        await tester.enterText(
+          find.byKey(const Key('storefront-primary-color')),
+          '#211A16',
+        );
+        await tester.enterText(
+          find.byKey(const Key('storefront-accent-color')),
+          '#EAB082',
+        );
+        await tester.pumpAndSettle();
+        expect(_enabled(tester, const Key('storefront-save')), isFalse);
+        for (var dow = 0; dow < 7; dow++) {
+          expect(
+            find.byKey(Key('storefront-hours-touching-$dow')),
+            findsOneWidget,
+          );
+        }
+        expect(repo.saves, isEmpty);
+        expect(repo.profile!['opening_hours'], hours);
+      },
+    );
 
     testWidgets('Q-038: touching periods in the DRAFT disable Save; merging '
         'them into one continuous period re-enables it', (tester) async {

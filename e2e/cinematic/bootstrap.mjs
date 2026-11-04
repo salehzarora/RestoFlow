@@ -58,9 +58,10 @@ fixture.outsider = outsider.person;
 await waitForAuthenticatedPublisher(fixture, a.token, diagnostics);
 
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
-const hours = { weekly: Array.from({ length: 7 }, (_, dow) => [
-  { dow, open: '00:00', close: '12:00' }, { dow, open: '11:00', close: '00:00' },
-]).flat(), exceptions: [] };
+// Use editor-valid hours: closing at midnight would touch the next day's
+// opening and correctly block an unrelated profile edit (Q-038). The brief
+// closed minute is harmless: this journey neither orders nor requires open_now.
+const hours = JSON.parse(readFileSync(new URL('./profile-hours.json', import.meta.url), 'utf8'));
 const statements = ['begin;'];
 for (const person of [a.person, b.person]) {
   for (const [index, name] of ['وجبات اختبار', 'مقبلات اختبار', 'كاسات اختبار', 'مشروبات اختبار'].entries()) {
