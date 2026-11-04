@@ -390,6 +390,9 @@ async function revealColorAdvanced(page: Page, name: string): Promise<void> {
   const advancedName = new RegExp(`${escape(name)}.*${L.advanced}`);
   const advanced = page.getByRole('button', { name: advancedName });
   await reveal(page, advanced, 'field', page.getByRole('button', { name: advancedName, includeHidden: true }));
+  // Revealing the control can also restore its already-expanded field after
+  // scrolling or a modal transition. Reobserve before toggling it closed.
+  if (await page.getByRole('textbox', { name, exact: true, includeHidden: true }).count()) return;
   await tapRevealedControl(page, advanced);
 }
 async function readColorDraft(page: Page, name: string): Promise<string> {
@@ -451,6 +454,10 @@ async function useVisualColorPicker(page: Page, name: string, apply: boolean, ca
   if (capture) await screenshot(page, capture);
   await tapRevealedButton(page, apply ? L.apply : L.cancel, true);
   await expect(sv, 'Apply or Cancel closes the visual picker').toHaveCount(0);
+  // Flutter removes the modal slider inputs before restoring the editor's
+  // semantics. Absence of sliders alone does not mean Advanced is collapsed.
+  await expect(page.getByRole('textbox', { name, exact: true }),
+    'Returning from the picker restores the still-expanded draft field').toHaveCount(1);
 }
 async function saveProfile(page: Page): Promise<void> {
   await revealButton(page, L.saveProfile);
@@ -945,10 +952,15 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       const writesBefore = draftWrites;
       const before = await rpc(f, token, scope === 'profile' ? 'get_restaurant_storefront_profile' : 'get_restaurant_storefront_content_v3');
       for (const [name, key] of roles) {
+        stage = `visual-picker-${scope}-${key}-original`;
         const original = await readColorDraft(page, name);
+        stage = `visual-picker-${scope}-${key}-cancel`;
         await useVisualColorPicker(page, name, false);
+        stage = `visual-picker-${scope}-${key}-cancel-readback`;
         expect(await readColorDraft(page, name), 'Cancel preserves the actual draft field').toBe(original);
+        stage = `visual-picker-${scope}-${key}-apply`;
         await useVisualColorPicker(page, name, true, resolve(out, `picker-${key}-test-data.png`));
+        stage = `visual-picker-${scope}-${key}-apply-readback`;
         const selected = await readColorDraft(page, name);
         expect(selected, 'Visual selection produces a complete color without HEX entry').toMatch(/^#[0-9a-f]{6}$/);
         expect(selected, 'Apply changes the actual draft').not.toBe(original);
@@ -958,6 +970,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       const pending = await rpc(f, token, scope === 'profile' ? 'get_restaurant_storefront_profile' : 'get_restaurant_storefront_content_v3');
       expect(scope === 'profile' ? pending.profile : pending.document, 'Authoritative data stays unchanged before Save')
         .toEqual(scope === 'profile' ? before.profile : before.document);
+      stage = `visual-picker-${scope}-save-reload`;
       if (scope === 'profile') await saveProfile(page); else await saveContent(page);
       const persisted = await rpc(f, token, scope === 'profile' ? 'get_restaurant_storefront_profile' : 'get_restaurant_storefront_content_v3');
       await openEditor(page, true);
