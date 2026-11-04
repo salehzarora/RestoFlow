@@ -584,30 +584,72 @@ async function verifyReadCompatibility(f: Fixture, token: string): Promise<void>
   delete newMenu.content_v1.appearance;
   expect(oldMenu, 'Old public readers retain their exact menu projection').toEqual(newMenu);
 }
+type MenuRenderSample = { ms: number; httpStatus: number | null; roots: number; backgrounds: number; hydrationReady: boolean; imageMatches: boolean; dim: number | null; text: string | null; button: string | null; primary: string | null; accent: string | null; font: 'alexandria' | 'rubik' | 'system' | 'other'; renderedFontMatches: boolean; expectedFontMatches: boolean; coloursMatch: boolean; ready: boolean };
+type MenuRenderTrace = { result: 'pending' | 'ready' | 'failed'; navigations: number; samples: MenuRenderSample[] };
+const menuRenderTraces = new WeakMap<BrowserContext, MenuRenderTrace[]>();
 async function renderMenu(page: Page, f: Fixture, image: string, dim: number | null, colours?: Obj): Promise<void> {
   const route = `${STOREFRONT}/s/${f.ownerA.slug}/menu`;
   localUrl(route);
-  // The real application has 60s ISR. Poll normal reloads (no cache/reader
-  // overrides) until the newly saved projection is visible, within 100s.
-  await expect.poll(async () => {
-    await page.goto(route, { waitUntil: 'domcontentloaded' });
-    const bg = dim === null
-      ? page.locator('main[data-sf-screen="home"] > div[aria-hidden="true"] img').first()
-      : page.locator('[data-sf-menu-background="custom"] > img');
-    if (!(await bg.count())) return false;
-    const root = page.locator('[data-sf-root]');
-    const actual = await root.evaluate(el => {
-      const s = getComputedStyle(el);
-      return { dim: s.getPropertyValue('--menu-image-dim').trim(), tx: s.getPropertyValue('--tx').trim(), onacc: s.getPropertyValue('--onacc').trim(), bg: s.getPropertyValue('--bg').trim(), acc: s.getPropertyValue('--acc').trim(), font: (el as HTMLElement).style.getPropertyValue('--font'), resolvedFont: s.getPropertyValue('--font').trim(), renderedFont: s.fontFamily };
-    });
-    return await bg.getAttribute('src') === image &&
-      (dim === null || Number(actual.dim) === dim / 100) &&
-      (!colours || (actual.resolvedFont.length > 0 && actual.renderedFont.replaceAll('\"', '').replaceAll("'", '').replaceAll(' ', '') === actual.resolvedFont.replaceAll('\"', '').replaceAll("'", '').replaceAll(' ', '') && actual.tx === colours.text && actual.onacc === colours.button && actual.bg === colours.primary && actual.acc === colours.accent && actual.font.includes(colours.font)));
-  }, { timeout: 100_000, intervals: [1000, 3000, 5000] }).toBe(true);
-  await expect(page.locator('[data-sf-root]')).toHaveAttribute('dir', 'rtl');
-  if (dim === null) await expect(page.locator('[data-sf-menu-background="custom"]')).toHaveCount(0);
-  const bg = page.locator('main[data-sf-screen="home"] > div[aria-hidden="true"] img').first();
-  await expect.poll(() => bg.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  const trace: MenuRenderTrace = { result: 'pending', navigations: 0, samples: [] };
+  const traces = menuRenderTraces.get(page.context()) ?? [];
+  traces.push(trace);
+  menuRenderTraces.set(page.context(), traces);
+  const started = Date.now();
+  let hydrated = false, reloadAt = 0, httpStatus: number | null = null;
+  try {
+    // ThemeScope applies CSSOM tokens in useLayoutEffect. DOMContentLoaded is
+    // not hydration: repeatedly reloading at each sample discards that frame.
+    // Observe the current page first, then reload a hydrated stale ISR result.
+    // The original overall 100s budget and normal 60s ISR remain unchanged.
+    await expect.poll(async () => {
+      if (trace.navigations === 0 || (hydrated && Date.now() >= reloadAt)) {
+        const remaining = Math.max(1, 100_000 - (Date.now() - started));
+        const response = await page.goto(route, { waitUntil: 'domcontentloaded', timeout: Math.min(30_000, remaining) });
+        httpStatus = response?.status() ?? null;
+        trace.navigations++;
+        hydrated = false;
+        reloadAt = Date.now() + 5000;
+      }
+      const observation = await page.evaluate(({ expectedImage, expectedDim, expectedColours }) => {
+        const roots = document.querySelectorAll<HTMLElement>('[data-sf-root]');
+        const backgrounds = document.querySelectorAll<HTMLImageElement>(expectedDim === null
+          ? 'main[data-sf-screen="home"] > div[aria-hidden="true"] img'
+          : '[data-sf-menu-background="custom"] > img');
+        const root = roots.length === 1 ? roots[0] : null;
+        const style = root ? getComputedStyle(root) : null;
+        const value = (name: string) => style?.getPropertyValue(name).trim() ?? '';
+        const rawDim = value('--menu-image-dim'), numericDim = rawDim === '' ? null : Number(rawDim);
+        const tx = value('--tx'), onacc = value('--onacc'), bg = value('--bg'), acc = value('--acc');
+        const font = root?.style.getPropertyValue('--font') ?? '', resolvedFont = value('--font');
+        const normalizeFont = (font: string) => font.replaceAll('\"', '').replaceAll("'", '').replaceAll(' ', '');
+        const renderedFontMatches = resolvedFont.length > 0 && normalizeFont(style?.fontFamily ?? '') === normalizeFont(resolvedFont);
+        const expectedFontMatches = !expectedColours || font.includes(expectedColours.font);
+        const coloursMatch = !expectedColours || (tx === expectedColours.text && onacc === expectedColours.button && bg === expectedColours.primary && acc === expectedColours.accent);
+        const hydrationReady = Boolean(root?.style.getPropertyValue('--bg') && font);
+        const imageMatches = (expectedDim === null ? backgrounds.length > 0 : backgrounds.length === 1) && backgrounds[0].getAttribute('src') === expectedImage;
+        const dimMatches = expectedDim === null || (numericDim !== null && numericDim === expectedDim / 100);
+        const colour = (value: string) => /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
+        // Fixed booleans/counts and validated presentation values only. No raw
+        // URL, HTML, slug, exception message, session or request data escapes.
+        return { roots: Math.min(roots.length, 100), backgrounds: Math.min(backgrounds.length, 100), hydrationReady, imageMatches,
+          dim: numericDim !== null && Number.isFinite(numericDim) && numericDim >= 0 && numericDim <= .8 ? numericDim : null,
+          text: colour(tx), button: colour(onacc), primary: colour(bg), accent: colour(acc),
+          font: font.includes('SF Alexandria') ? 'alexandria' as const : font.includes('sf-font-latin') ? 'rubik' as const : font.includes('system-ui') ? 'system' as const : 'other' as const,
+          renderedFontMatches, expectedFontMatches, coloursMatch,
+          ready: hydrationReady && imageMatches && dimMatches && (!expectedColours || (renderedFontMatches && expectedFontMatches && coloursMatch)) };
+      }, { expectedImage: image, expectedDim: dim, expectedColours: colours ?? null });
+      hydrated = observation.hydrationReady;
+      const sample = { ms: Date.now() - started, httpStatus, ...observation };
+      if (trace.samples.length < 120) trace.samples.push(sample);
+      else trace.samples[119] = sample;
+      return observation.ready;
+    }, { timeout: 100_000, intervals: [100, 250, 500, 1000] }).toBe(true);
+    await expect(page.locator('[data-sf-root]')).toHaveAttribute('dir', 'rtl');
+    if (dim === null) await expect(page.locator('[data-sf-menu-background="custom"]')).toHaveCount(0);
+    const bg = page.locator('main[data-sf-screen="home"] > div[aria-hidden="true"] img').first();
+    await expect.poll(() => bg.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+    trace.result = 'ready';
+  } catch (error) { trace.result = 'failed'; throw error; }
 }
 async function verifyMenuGeometry(page: Page): Promise<void> {
   const sections = page.locator('[data-sf-module="sections"]');
@@ -816,7 +858,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await renderMenu(menu, f, f.heroUrl, null);
     stages.push(stage);
     network.check();
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), controlReveals: revealTraces.get(page) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
+    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), controlReveals: revealTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
   } catch (error) {
     const statuses = stages.includes('login') ? await editorStatus(page).catch(() => ['unreadable']) : [];
     const failureCapture = stages.includes('login')
@@ -824,7 +866,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
       login: loginEvidence, fonts: network.fonts(), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
       controlReveal: error instanceof ControlRevealError ? error.samples : null,
-      controlReveals: revealTraces.get(page) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
+      controlReveals: revealTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
   }
 });
