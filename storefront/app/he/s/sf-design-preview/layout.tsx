@@ -7,5 +7,5 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'BIZBOT · Design Preview', robots: { index: false, follow: false } };
 
 export default function Layout({ children }: { children: ReactNode }) {
-  return <CinematicPreviewLayout fontClassName={rubikPreloadHebrew.className}>{children}</CinematicPreviewLayout>;
+  return <CinematicPreviewLayout fontClassName={rubikPreloadHebrew()}>{children}</CinematicPreviewLayout>;
 }

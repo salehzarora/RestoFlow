@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = path.resolve(ROOT, '..');
-const EXPECTED = '59bff99cca265f1246073aec3da7dbbff69a3699bdadaf9587e9baf1d7b01705';
+const EXPECTED = 'f84d4ecc42ea2d0eb7c7ec244f3963c7b63d62d387fd0e62b796bd92b1b72bbe';
 
 const sha = (text) => createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex');
 

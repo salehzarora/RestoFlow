@@ -29,7 +29,7 @@ export default async function SlugLayout({
   const { slug } = await params;
   return (
     <CheckoutEntry source={sourceMode()} slug={slug}>
-      <div className={rubikPreloadArabic.className} data-sf-fonts="">{children}</div>
+      <div className={rubikPreloadArabic()} data-sf-fonts="">{children}</div>
     </CheckoutEntry>
   );
 }
