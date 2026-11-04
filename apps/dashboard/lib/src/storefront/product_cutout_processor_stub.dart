@@ -9,9 +9,13 @@ class _Unsupported implements ProductCutoutProcessor {
     Uint8List bytes,
     String mimeType, {
     void Function(String stage)? onProgress,
-  }) => Future.error(
-    StateError('Local background removal requires the web Dashboard.'),
-  );
+  }) {
+    onProgress?.call('unavailable-device');
+    return Future.error(
+      StateError('Local background removal requires the web Dashboard.'),
+    );
+  }
+
   @override
   void cancel() {}
 }

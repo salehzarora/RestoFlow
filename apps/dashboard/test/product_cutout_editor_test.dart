@@ -27,6 +27,7 @@ MenuItem item(String? path) => MenuItem(
 
 class Gateway implements ProductCutoutGateway {
   int loads = 0;
+  bool failLoad = false;
   Uint8List sourceBytes = pixels;
   Map<String, Object?> snapshot = {'object_id': 'source-A', 'version': 1};
   int selectionVersion = 0;
@@ -37,6 +38,7 @@ class Gateway implements ProductCutoutGateway {
   @override
   Future<ProductCutoutOriginal> loadOriginal(MenuItem item) async {
     loads++;
+    if (failLoad) throw StateError('load failed');
     return ProductCutoutOriginal(
       bytes: sourceBytes,
       mimeType: 'image/png',
@@ -66,7 +68,7 @@ class Gateway implements ProductCutoutGateway {
 }
 
 class Processor implements ProductCutoutProcessor {
-  bool fail = false, transparent = false;
+  bool fail = false, transparent = false, unsupported = false;
   Uint8List resultBytes = pixels;
   Completer<ProductCutoutCandidate>? pending;
   int cancels = 0, runs = 0;
@@ -77,6 +79,10 @@ class Processor implements ProductCutoutProcessor {
     void Function(String)? onProgress,
   }) async {
     runs++;
+    if (unsupported) {
+      onProgress?.call('unavailable-device');
+      throw StateError('fixed capability refusal');
+    }
     if (fail) throw StateError('bad');
     if (pending != null) return pending!.future;
     return ProductCutoutCandidate(
@@ -99,6 +105,7 @@ Future<void> mount(
   Gateway gateway,
   Processor processor, {
   String? path = 'original',
+  bool removalEnabled = true,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -109,6 +116,7 @@ Future<void> mount(
             item: item(path),
             gateway: gateway,
             processor: processor,
+            removalEnabled: removalEnabled,
           ),
         ),
       ),
@@ -124,6 +132,165 @@ Future<void> tap(WidgetTester tester, String key) async {
 }
 
 void main() {
+  test('non-web processor reports a fixed unsupported-device stage', () async {
+    final stages = <String>[];
+    await expectLater(
+      createProductCutoutProcessor().process(
+        pixels,
+        'image/png',
+        onProgress: stages.add,
+      ),
+      throwsStateError,
+    );
+    expect(stages, ['unavailable-device']);
+  });
+  testWidgets(
+    'default original-load failure remains retryable without inference or publication',
+    (tester) async {
+      final gateway = Gateway()..failLoad = true;
+      final processor = Processor();
+      await mount(tester, gateway, processor, removalEnabled: false);
+      await tap(tester, 'product-cutout-prepare');
+      expect(
+        find.textContaining('original photo could not be loaded'),
+        findsOneWidget,
+      );
+      expect(processor.runs, 0);
+      expect(gateway.requests, isEmpty);
+      expect(find.byKey(const Key('product-cutout-publish')), findsNothing);
+      gateway.failLoad = false;
+      await tap(tester, 'product-cutout-prepare');
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests.single.candidate, isNull);
+      expect(processor.runs, 0);
+    },
+  );
+  testWidgets(
+    'release default loads and publishes only Original without inference',
+    (tester) async {
+      final gateway = Gateway(), processor = Processor();
+      // Use the actual constructor default, not the test helper's review opt-in.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: ProductCutoutEditor(
+                item: item('original'),
+                gateway: gateway,
+                processor: processor,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Automatic background removal is unavailable'),
+        findsOneWidget,
+      );
+      expect(find.text('Load Original photo'), findsOneWidget);
+      await tap(tester, 'product-cutout-prepare');
+      expect(processor.runs, 0);
+      expect(gateway.requests, isEmpty);
+      final selection = tester.widget<SegmentedButton<bool>>(
+        find.byType(SegmentedButton<bool>),
+      );
+      expect(selection.selected, {false});
+      expect(selection.segments.last.enabled, isFalse);
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests.single.candidate, isNull);
+      expect(gateway.requests.single.original.bytes, pixels);
+    },
+  );
+  testWidgets(
+    'disabled removal keeps a newly uploaded Original without automatic publication',
+    (tester) async {
+      final gateway = Gateway(), processor = Processor();
+      await mount(
+        tester,
+        gateway,
+        processor,
+        path: null,
+        removalEnabled: false,
+      );
+      await mount(
+        tester,
+        gateway,
+        processor,
+        path: 'new-original',
+        removalEnabled: false,
+      );
+      expect(processor.runs, 0);
+      expect(gateway.loads, 1);
+      expect(gateway.requests, isEmpty);
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests.single.original.sourceKey, 'new-original');
+      expect(gateway.requests.single.original.bytes, pixels);
+      expect(gateway.requests.single.candidate, isNull);
+    },
+  );
+  testWidgets(
+    'disabling review clears a selected candidate and discards late inference',
+    (tester) async {
+      final gateway = Gateway(), processor = Processor();
+      await mount(tester, gateway, processor);
+      await tap(tester, 'product-cutout-prepare');
+      await tester.tap(find.text('Remove background').last);
+      await tester.pumpAndSettle();
+      await mount(tester, gateway, processor, removalEnabled: false);
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests.single.candidate, isNull);
+      await mount(tester, gateway, processor);
+      processor.pending = Completer<ProductCutoutCandidate>();
+      await tester.ensureVisible(
+        find.byKey(const Key('product-cutout-prepare')),
+      );
+      await tester.tap(find.byKey(const Key('product-cutout-prepare')));
+      await tester.pump();
+      await mount(tester, gateway, processor, removalEnabled: false);
+      expect(processor.cancels, 1);
+      processor.pending!.complete(
+        ProductCutoutCandidate(
+          bytes: pixels,
+          mimeType: 'image/png',
+          width: 1,
+          height: 1,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final selection = tester.widget<SegmentedButton<bool>>(
+        find.byType(SegmentedButton<bool>),
+      );
+      expect(selection.selected, {false});
+      expect(selection.segments.last.enabled, isFalse);
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests.last.candidate, isNull);
+    },
+  );
+  testWidgets(
+    'unsupported device explains fallback and retains explicit Original publication',
+    (tester) async {
+      final gateway = Gateway(), processor = Processor()..unsupported = true;
+      await mount(tester, gateway, processor);
+      await tap(tester, 'product-cutout-prepare');
+      expect(
+        find.textContaining('not supported on this device'),
+        findsOneWidget,
+      );
+      expect(gateway.requests, isEmpty);
+      expect(
+        tester
+            .widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>))
+            .segments
+            .last
+            .enabled,
+        isFalse,
+      );
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests.single.candidate, isNull);
+      expect(gateway.requests.single.original.bytes, pixels);
+    },
+  );
   for (final change in ['snapshot and bytes', 'snapshot only', 'bytes only']) {
     testWidgets('same-key overwrite ($change) invalidates the old candidate', (
       tester,

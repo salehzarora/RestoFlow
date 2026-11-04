@@ -124,7 +124,10 @@ async function main(action) {
     checked('node', ['prepare.mjs'], { cwd: resolve(root, 'apps/dashboard/cutout'), stdio: 'inherit' });
     checked('npm', ['test'], { cwd: resolve(root, 'apps/dashboard/cutout'), stdio: 'inherit' });
     const defines = resolve(privateDir, 'dashboard-defines.json');
+    // Experimental segmentation is enabled only in this guarded disposable
+    // acceptance build. Release-default Original behavior has focused tests.
     writeFileSync(defines, JSON.stringify({ RESTOFLOW_DEMO_MODE: 'false', RESTOFLOW_STOREFRONT_EDITOR: 'true',
+      SF_PRODUCT_CUTOUT_REVIEW: 'true',
       RESTOFLOW_SUPABASE_URL: status.url, RESTOFLOW_SUPABASE_ANON_KEY: status.anonKey }), { mode: 0o600 });
     checked('flutter', ['build', 'web', '--release', '--no-pub', '--no-web-resources-cdn', `--dart-define-from-file=${defines}`],
       { cwd: resolve(root, 'apps/dashboard'), stdio: 'inherit' });

@@ -9,6 +9,27 @@ owner explicitly publishes Original or Remove background. The menu image pointer
 and private original stay unchanged. The Dashboard gateway owns authenticated
 source-generation/selection-version checks and existing media publication.
 
+## Release default: Original only
+
+Automatic removal is **unavailable by default**. The demonstrated masks lose
+part of the burger plate, make the fries cup/plate translucent, and retain
+unrelated bottles. Raw model confidence already contains these errors; the
+measured mask processing and c4 alpha transport do not repair or introduce them.
+No threshold/opacity correction or replacement model is adopted as a claimed fix.
+
+The editor still loads, reviews and explicitly publishes **Original**, and the
+ordinary image uploader is unchanged. It does not instantiate a processor worker
+or fetch the model in this default path. `SF_PRODUCT_CUTOUT_REVIEW=true` is an
+explicit build-time opt-in for the isolated quality-review stack only. The
+existing CI harness enables it to exercise the experimental path; those results
+are not proof of release-default automatic removal or acceptable masks.
+
+Focused tests separately cover the constructor default, new/existing original
+photos, failed loading, explicit publication, disabling an already-selected or
+in-flight candidate, and unsupported-device fallback. Keep the review opt-in out
+of release builds until preservation quality is accepted. No hosted environment
+setting is changed by this PR.
+
 ## Chosen runtime and weights
 
 * Code: ONNX Runtime Web **1.23.2**, MIT, exact npm lockfile. Official code license:
@@ -75,9 +96,12 @@ limits: <https://vercel.com/docs/limits>.
   digest copies, source ≤5 MiB, RGBA canvases ≤8 MiP, and output ≤1600 longest
   side/5 MiB PNG. Browsers may have GC/graphics overhead; this is not a hard
   whole-browser RSS limit. Measured fresh Chrome process tree: ~1.18 GB working
-  set / ~1.01 GB private bytes. Devices reporting <4 GB RAM are refused before
-  the model loads. Desktop Chrome with ≥4 GB available system memory is the
-  tested profile; universal mobile support is not claimed.
+  set / ~1.01 GB private bytes. Devices reporting <4 GB RAM and browsers missing
+  required Worker/OffscreenCanvas/createImageBitmap/WebAssembly APIs are refused
+  before worker creation, full image decode or model loading. Reported device
+  memory is not a measurement of free RAM. Desktop Chrome is the tested profile;
+  universal mobile support is not claimed. Ordinary upload and explicit Original
+  publication remain available with a fixed, localized fallback explanation.
 * Publication is a separate explicit action. Processing failure never publishes.
   Uncertain publication retains its request ID and selected bytes. Successful
   publication re-reads the authoritative source/selection proof for later choices.
@@ -90,12 +114,13 @@ limits: <https://vercel.com/docs/limits>.
 `npm test` covers input bounds, tensor normalization, geometry, model-part and
 native-memory integrity, single-job concurrency, owner-scoped cancel, timeout,
 retry and original retention. Flutter tests cover explicit choice, existing
-images, automatic preparation after original save, failure/retry, cancellation,
+images, review-enabled preparation after original save, failure/retry, cancellation,
 late-result rejection and uncertain publication retry.
 The guarded real-service journey also checks authenticated private original
 SHA-256 before/after publication, actual decoded published alpha, UI cancellation,
-a failed model request, and successful retry. These are pending real-service
-evidence until the Actions run executes them.
+a failed model request, and successful retry. Service evidence must identify
+the actual Actions checkout and review-enabled build; earlier source runs do
+not establish execution on a later candidate.
 
 `benchmark.mjs INPUT OUTPUT` executes the **actual browser worker**. On Windows
 it samples the whole launched Chrome process tree; memory includes browser/UI

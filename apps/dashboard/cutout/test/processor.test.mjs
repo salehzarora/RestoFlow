@@ -4,6 +4,43 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { LIMITS, MODEL, outputSize, inputTensor, alphaMatte } from '../../web/product-cutout/limits.mjs';
 import { sniffSource } from '../../web/product-cutout/vendor/sniff.mjs';
+import { unavailableReason } from '../../web/product-cutout/bridge.mjs';
+
+test('unsupported and low-memory devices are refused before worker/decode/model work', async (t) => {
+  const supported = { Worker: class {}, OffscreenCanvas: class {}, createImageBitmap() {}, WebAssembly: {}, navigator: { deviceMemory: 4 } };
+  assert.equal(unavailableReason(supported), null);
+  assert.match(unavailableReason({ ...supported, navigator: { deviceMemory: 2 } }), /less than 4 GB/);
+  for (const api of ['Worker', 'OffscreenCanvas', 'createImageBitmap', 'WebAssembly']) {
+    assert.match(unavailableReason({ ...supported, [api]: undefined }), /unavailable in this browser/);
+  }
+  const keys = ['Worker', 'OffscreenCanvas', 'createImageBitmap', 'WebAssembly', 'navigator', 'fetch'];
+  const previous = keys.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]);
+  t.after(() => { for (const [key, descriptor] of previous) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else delete globalThis[key];
+  } });
+  let workers = 0, fetches = 0;
+  const assign = (key, value) => Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  for (const [key, value] of Object.entries(supported)) assign(key, value);
+  assign('Worker', class { constructor() { workers++; } postMessage() {} terminate() {} });
+  assign('fetch', () => { fetches++; throw new Error('No request allowed'); });
+  const original = new Uint8Array([1, 2, 3]);
+  const { process, cancel } = await import('../../web/product-cutout/bridge.mjs');
+  const stages = [];
+  assign('navigator', { deviceMemory: 2 });
+  await assert.rejects(process(original, 'image/png', stage => stages.push(stage)), /less than 4 GB/);
+  assign('navigator', { deviceMemory: 4 });
+  assign('WebAssembly', undefined);
+  await assert.rejects(process(original, 'image/png', stage => stages.push(stage)), /unavailable in this browser/);
+  assert.deepEqual(stages, ['unavailable-device', 'unavailable-device']);
+  assert.equal(workers, 0); assert.equal(fetches, 0);
+  assert.deepEqual([...original], [1, 2, 3]);
+  assign('WebAssembly', {});
+  const next = process(original, 'image/png', () => {}, 'after-refusal');
+  assert.equal(workers, 1, 'Refusal must not reserve the active owner');
+  cancel('after-refusal');
+  await assert.rejects(next, /Cancelled/);
+});
 
 test('predecode validation refuses oversized/truncated and unsupported originals', () => {
   assert.throws(() => sniffSource(new Uint8Array(LIMITS.maxInputBytes + 1), LIMITS), /input_too_large/);
@@ -35,8 +72,16 @@ test('model parts assemble to licensed pinned artifact and native heap is capped
   assert.ok(runtime.includes('initial:256,maximum:8192,shared:!0'));
   assert.ok(!runtime.includes('initial:256,maximum:65536,shared:!0'));
 });
-test('one worker only, owner-scoped cancel, timeout, retry and original retention', async () => {
+test('one worker only, owner-scoped cancel, timeout, retry and original retention', async (t) => {
   const workers = [];
+  const previous = ['Worker', 'OffscreenCanvas', 'createImageBitmap'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]);
+  t.after(() => { for (const [key, descriptor] of previous) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else delete globalThis[key];
+  } });
+  // This unit test exercises the bridge after capability preflight.
+  globalThis.OffscreenCanvas = class {};
+  globalThis.createImageBitmap = () => {};
   globalThis.Worker = class {
     constructor() { workers.push(this); this.terminated = false; }
     postMessage(message) { this.message = message; }
@@ -52,9 +97,9 @@ test('one worker only, owner-scoped cancel, timeout, retry and original retentio
   const retry = process(original, 'image/png', () => {}, 'first');
   workers[1].onmessage({data:{done:true,bytes:new ArrayBuffer(2)}});
   assert.equal((await retry).bytes.length, 2); assert.equal(workers[1].terminated, true);
-  const previous = globalThis.setTimeout;
-  globalThis.setTimeout = (callback) => previous(callback, 1);
+  const previousTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (callback) => previousTimeout(callback, 1);
   try { await assert.rejects(process(original,'image/png'), /timed out/); }
-  finally { globalThis.setTimeout = previous; }
+  finally { globalThis.setTimeout = previousTimeout; }
   assert.equal(workers[2].terminated, true);
 });
