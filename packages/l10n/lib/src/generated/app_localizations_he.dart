@@ -903,6 +903,60 @@ class AppLocalizationsHe extends AppLocalizations {
   String get activityLogTitlePaymentRecorded => 'תשלום נרשם';
 
   @override
+  String get activityLogTitleCardAttemptStarted => 'תשלום בכרטיס החל במסוף';
+
+  @override
+  String get activityLogTitleCardAttemptApproved =>
+      'ספק הסליקה אישר את התשלום בכרטיס';
+
+  @override
+  String get activityLogTitleCardAttemptDeclined =>
+      'ספק הסליקה סירב לתשלום בכרטיס';
+
+  @override
+  String get activityLogTitleCardAttemptUnknown =>
+      'תוצאת התשלום בכרטיס אינה ידועה';
+
+  @override
+  String get activityLogTitleCardAttemptReleased =>
+      'בקשת התשלום בכרטיס בוטלה במסוף';
+
+  @override
+  String get activityLogTitleCardAttemptAnomalyRaised =>
+      'התראת תשלום בכרטיס: ייתכן שבוצע חיוב';
+
+  @override
+  String get activityLogTitleCardAttemptAnomalyCleared =>
+      'התראת התשלום בכרטיס הוסרה לפי תוצאת ספק הסליקה';
+
+  @override
+  String get activityLogTitleCardAttemptAnomaly =>
+      'חריגה מספק הסליקה בתשלום בכרטיס';
+
+  @override
+  String get activityLogTitleCardAttemptReleaseRequested =>
+      'התבקש ביטול בקשת התשלום בכרטיס במסוף';
+
+  @override
+  String get activityLogTitleCardAttemptReleaseFailed =>
+      'ביטול בקשת התשלום בכרטיס במסוף נכשל';
+
+  @override
+  String get activityLogTitleCardAttemptRecordingRefused =>
+      'לא ניתן לרשום תשלום בכרטיס שספק הסליקה אישר';
+
+  @override
+  String get activityLogTitleCardAttemptOrderFreed =>
+      'נעילת ההזמנה הוסרה לאחר בדיקת התשלום בכרטיס';
+
+  @override
+  String get activityLogTitleCardAttemptResumeRequested =>
+      'התבקש ניסיון חוזר לרישום התשלום בכרטיס';
+
+  @override
+  String get activityLogTitleCardAttemptDenied => 'פעולה על תשלום בכרטיס נדחתה';
+
+  @override
   String get activityLogTitleOrganizationCreated => 'הארגון נוצר';
 
   @override
@@ -6107,6 +6161,197 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogDeniedInvalidDeviceType => 'לא מותר ממכשיר זה';
+
+  @override
+  String get activityLogFieldCardState => 'מצב התשלום בכרטיס';
+
+  @override
+  String get activityLogFieldCardMode => 'מצב הסליקה';
+
+  @override
+  String get activityLogFieldCurrency => 'מטבע';
+
+  @override
+  String get activityLogFieldCardRefusal => 'סיבת דחיית הרישום';
+
+  @override
+  String get activityLogFieldCardReleaseStatus => 'מצב הביטול';
+
+  @override
+  String get activityLogFieldCardAnomaly => 'חריגת ספק';
+
+  @override
+  String get activityLogFieldCardReleaseRequested => 'התבקש ביטול';
+
+  @override
+  String get activityLogFieldCardConfirmationSource => 'אומת באמצעות';
+
+  @override
+  String get activityLogFieldCardPriorRefusal => 'הדחייה הקודמת';
+
+  @override
+  String get activityLogFieldCardResumeCount => 'ניסיונות חוזרים קודמים';
+
+  @override
+  String get activityLogFieldCardResumeOutcome => 'תוצאת הניסיון החוזר';
+
+  @override
+  String get activityLogCardStateSent => 'נשלח למסוף';
+
+  @override
+  String get activityLogCardStateApproved => 'אושר';
+
+  @override
+  String get activityLogCardStateDeclined => 'סורב';
+
+  @override
+  String get activityLogCardStateUnknown => 'לא ידוע';
+
+  @override
+  String get activityLogCardStateReleased => 'הבקשה בוטלה במסוף';
+
+  @override
+  String get activityLogCardModeLive => 'אמיתי';
+
+  @override
+  String get activityLogCardModeTest => 'בדיקה';
+
+  @override
+  String get activityLogCardAnomalyAmountMismatch => 'אי-התאמה בסכום';
+
+  @override
+  String get activityLogCardAnomalyCurrencyMismatch => 'אי-התאמה במטבע';
+
+  @override
+  String get activityLogCardAnomalyPreauthorization => 'הרשאה מוקדמת בלבד';
+
+  @override
+  String get activityLogCardAnomalyPartialRefund => 'זוכה חלקית';
+
+  @override
+  String get activityLogCardAnomalyRefunded => 'זוכה';
+
+  @override
+  String get activityLogCardAnomalyVoided => 'בוטל על ידי ספק הסליקה';
+
+  @override
+  String get activityLogCardAnomalyOutOfContract =>
+      'תשובה לא צפויה מספק הסליקה';
+
+  @override
+  String get activityLogCardRefusalReleaseFailed => 'הביטול במסוף נכשל';
+
+  @override
+  String get activityLogCardRefusalConflict => 'התנגשות עם שינוי אחר';
+
+  @override
+  String get activityLogCardRefusalPreconditionFailed =>
+      'מצב ההזמנה או המשמרת השתנה';
+
+  @override
+  String get activityLogCardRefusalRevokedEmployee => 'העובד אינו פעיל עוד';
+
+  @override
+  String get activityLogCardRefusalRevokedDevice => 'המכשיר אינו מורשה עוד';
+
+  @override
+  String get activityLogCardRefusalPaymentInProgress => 'תשלום אחר בתהליך';
+
+  @override
+  String get activityLogCardRefusalProviderRecordingRefused =>
+      'הרישום נדחה לאחר האישור';
+
+  @override
+  String get activityLogCardRefusalNonrecoverable => 'נדרש טיפול ידני';
+
+  @override
+  String get activityLogCardConfirmationProviderReport => 'דוח ספק הסליקה';
+
+  @override
+  String get activityLogCardConfirmationBackOffice =>
+      'מערכת הניהול של ספק הסליקה';
+
+  @override
+  String get activityLogCardResumeDispatched => 'הניסיון החוזר נשלח';
+
+  @override
+  String get activityLogCardResumeRefused => 'הניסיון החוזר נדחה';
+
+  @override
+  String get activityLogDeniedIneligibleOrderState =>
+      'לא ניתן לשלם על ההזמנה בכרטיס כעת';
+
+  @override
+  String get activityLogDeniedMaxLiveAmountExceeded =>
+      'מעל מגבלת התשלום בכרטיס';
+
+  @override
+  String get activityLogDeniedNoOpenShift => 'אין משמרת פתוחה במכשיר זה';
+
+  @override
+  String get activityLogDeniedNoActiveDrawer => 'אין מגירת מזומנים פעילה';
+
+  @override
+  String get activityLogDeniedNoRecordingAttempt =>
+      'אין ניסיון רישום לדווח עליו';
+
+  @override
+  String get activityLogDeniedAttemptNotFreeable =>
+      'עסקה זו אינה יכולה לשחרר את ההזמנה';
+
+  @override
+  String get activityLogDeniedChargeMayExist =>
+      'ייתכן שבוצע חיוב — יש לבדוק מול ספק הסליקה';
+
+  @override
+  String get activityLogDeniedConfirmationRequired =>
+      'נדרש אימות מול ספק הסליקה';
+
+  @override
+  String get activityLogDeniedDeviceNotActive => 'המכשיר אינו פעיל';
+
+  @override
+  String get activityLogDeniedOperationMismatch =>
+      'הניסיון החוזר אינו תואם לתשלום המקורי';
+
+  @override
+  String get activityLogDeniedResumeLimit => 'מכסת הניסיונות החוזרים מוצתה';
+
+  @override
+  String get activityLogDeniedResumeStale => 'כבר קיים ניסיון חוזר חדש יותר';
+
+  @override
+  String get activityLogDeniedNotRecoverable => 'לא ניתן לנסות שוב';
+
+  @override
+  String get activityLogDeniedPaymentExists => 'התשלום כבר נרשם';
+
+  @override
+  String get activityLogDeniedClaimInactive => 'התשלום בכרטיס אינו פעיל עוד';
+
+  @override
+  String get activityLogDeniedOrderNotChargeable =>
+      'לא ניתן עוד לחייב את ההזמנה';
+
+  @override
+  String get activityLogDeniedContextLost =>
+      'המשמרת או מגירת המזומנים אינן פתוחות עוד';
+
+  @override
+  String get activityLogDeniedAmountMismatch => 'הסכום אינו תואם להזמנה';
+
+  @override
+  String get activityLogDeniedRefusalNotRecorded => 'הדחייה האחרונה טרם דווחה';
+
+  @override
+  String get activityLogDeniedCardPermission =>
+      'אין הרשאה במכשיר זה או לתפקיד זה';
+
+  @override
+  String get activityLogYes => 'כן';
+
+  @override
+  String get activityLogNo => 'לא';
 
   @override
   String get activityLogKitchenChannelKds => 'מסך המטבח';
