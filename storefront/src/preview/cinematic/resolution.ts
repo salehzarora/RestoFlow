@@ -1,5 +1,5 @@
 import type { Category, MenuItem, ModifierGroup, DeliveryZone, MotionMode, StorefrontResolution, Tenant } from '@/source/types';
-import { CINEMATIC_PREVIEW_SLUG, cinematicPreviewAllowed } from './access';
+import { CINEMATIC_PREVIEW_SLUG, cinematicPreviewAllowed, type CinematicPreviewScene } from './access';
 import catalogSnapshot from './catalog.snapshot.json';
 import runtimeSnapshot from './runtime.snapshot.json';
 
@@ -12,7 +12,7 @@ const runtime = runtimeSnapshot as {
 const title = 'الجوع إله وجهة.';
 
 /** A presentation profile over the captured catalog, isolated from every live slug. */
-export function cinematicPreviewResolution(env: NodeJS.ProcessEnv = process.env): StorefrontResolution | null {
+export function cinematicPreviewResolution(env: NodeJS.ProcessEnv = process.env, scene: CinematicPreviewScene = 'reference'): StorefrontResolution | null {
   if (!cinematicPreviewAllowed(env)) return null;
   return {
     source: 'fixture',
@@ -28,6 +28,7 @@ export function cinematicPreviewResolution(env: NodeJS.ProcessEnv = process.env)
         heroImage: '/cinematic-preview/cover.webp',
         menuBackgroundImage: '/cinematic-preview/menu-background.webp',
         menuBackgroundDim: 15,
+        scenePreset: scene === 'legacy' ? null : 'reference_dark',
         brand: {
           ...catalog.tenant.brand,
           primary: '#151513', accent: '#f2ad79', text: '#f7f2ea',
@@ -39,7 +40,8 @@ export function cinematicPreviewResolution(env: NodeJS.ProcessEnv = process.env)
       categories: catalog.categories,
       items: runtime.items.map((item) => ({
         ...item,
-        image: item.image === null ? null : `/cinematic-preview/${item.id}.webp`,
+        // Byte-identical public source copies; never the old generated cutouts.
+        image: item.image === null ? null : `/cinematic-preview/originals/${item.id}.webp`,
         imageFit: 'whole-image', cardLayout: 'cutout',
       })),
       cardMode: 'list',
