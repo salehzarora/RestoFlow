@@ -5,6 +5,8 @@ import { enableFlutterSemantics, waitForFlutterBoot, readAccessibleText } from '
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { MAX_REVEAL_WHEELS, nextRevealMove, observeResponse, responseAfterAction } from './control-progress.mjs';
 import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } from './auth-diagnostics.mjs';
+import { LOGICAL_ORIGIN, localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
+import { createHash } from 'node:crypto';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
 
 // This suite drives the shipped Flutter app. It never installs a mocked
@@ -51,18 +53,49 @@ function localUrl(value: string): URL {
   if (!origins.has(u.origin) || u.username || u.password) throw new Error('Non-ephemeral endpoint rejected.');
   return u;
 }
-async function guardBrowser(context: BrowserContext): Promise<{ check: () => void; fontsReady: () => Promise<void>; fonts: () => string[] }> {
+async function guardBrowser(context: BrowserContext) {
   let violation = false;
   const fonts = new Set<string>();
+  const mediaHashes = new Map<unknown, string>();
+  const mediaChecks: Promise<boolean>[] = [];
+  let mappedMedia = 0, verifiedMediaBytes = 0;
   context.on('response', response => {
     const u = new URL(response.url());
     if (u.origin === DASHBOARD && response.status() === 200) {
       if (u.pathname.startsWith('/cinematic-fonts/roboto/')) fonts.add('Roboto');
       if (u.pathname.startsWith('/cinematic-fonts/notosansarabic/')) fonts.add('Noto Sans Arabic');
     }
+    const expectedHash = mediaHashes.get(response.request());
+    if (expectedHash) mediaChecks.push(response.body().then(bytes => {
+      const equal = createHash('sha256').update(bytes).digest('hex') === expectedHash;
+      if (equal) verifiedMediaBytes++;
+      return equal;
+    }).catch(() => false));
   });
   await context.route('**/*', async route => {
     const u = new URL(route.request().url());
+    if (u.origin === LOGICAL_ORIGIN) {
+      try {
+        const request = route.request();
+        const target = localMediaTarget(request.url(), request.method());
+        const headers = await request.allHeaders();
+        if (request.resourceType() !== 'image' || headers.authorization || headers.apikey || headers.cookie) throw new Error('Media credentials rejected');
+        // Genuine bytes from the running local Storage service. No browser
+        // credential/header is forwarded, no redirect or external fallback.
+        const response = await fetch(target, { redirect: 'error', signal: AbortSignal.timeout(15_000) });
+        if (response.headers.get('content-encoding') && response.headers.get('content-encoding') !== 'identity') throw new Error('Unexpected media encoding');
+        const body = Buffer.from(await response.arrayBuffer());
+        mediaHashes.set(request, createHash('sha256').update(body).digest('hex'));
+        mappedMedia++;
+        const responseHeaders: Record<string, string> = {};
+        response.headers.forEach((value, key) => { responseHeaders[key] = value; });
+        await route.fulfill({ status: response.status, headers: responseHeaders, body });
+      } catch {
+        violation = true;
+        await route.abort('blockedbyclient');
+      }
+      return;
+    }
     if (u.protocol !== 'http:' || !origins.has(u.origin) || u.username || u.password) {
       violation = true;
       await route.abort('blockedbyclient');
@@ -71,7 +104,13 @@ async function guardBrowser(context: BrowserContext): Promise<{ check: () => voi
     await route.continue();
   });
   return {
-    check: () => { if (violation) throw new Error('Browser attempted a non-ephemeral request.'); },
+    check: async () => {
+      if (violation) throw new Error('Browser attempted a non-ephemeral request.');
+      expect(mappedMedia, 'Live media uses actual local Storage responses').toBeGreaterThan(0);
+      expect((await Promise.all(mediaChecks)).every(Boolean), 'Browser receives identical actual Storage bytes').toBe(true);
+      expect(verifiedMediaBytes).toBe(mappedMedia);
+    },
+    media: () => ({ mappedMedia, verifiedMediaBytes }),
     fontsReady: async () => { await expect.poll(() => fonts.has('Roboto') && fonts.has('Noto Sans Arabic'), { message: 'Exact Flutter text fallback fonts load from loopback' }).toBe(true); },
     fonts: () => [...fonts].sort(),
   };
@@ -588,6 +627,7 @@ type MenuRenderSample = { ms: number; httpStatus: number | null; roots: number; 
 type MenuRenderTrace = { result: 'pending' | 'ready' | 'failed'; navigations: number; samples: MenuRenderSample[] };
 const menuRenderTraces = new WeakMap<BrowserContext, MenuRenderTrace[]>();
 async function renderMenu(page: Page, f: Fixture, image: string, dim: number | null, colours?: Obj): Promise<void> {
+  const expectedLogicalImage = logicalMediaUrl(image);
   const route = `${STOREFRONT}/s/${f.ownerA.slug}/menu`;
   localUrl(route);
   const trace: MenuRenderTrace = { result: 'pending', navigations: 0, samples: [] };
@@ -637,7 +677,7 @@ async function renderMenu(page: Page, f: Fixture, image: string, dim: number | n
           font: font.includes('SF Alexandria') ? 'alexandria' as const : font.includes('sf-font-latin') ? 'rubik' as const : font.includes('system-ui') ? 'system' as const : 'other' as const,
           renderedFontMatches, expectedFontMatches, coloursMatch,
           ready: hydrationReady && imageMatches && dimMatches && (!expectedColours || (renderedFontMatches && expectedFontMatches && coloursMatch)) };
-      }, { expectedImage: image, expectedDim: dim, expectedColours: colours ?? null });
+      }, { expectedImage: expectedLogicalImage, expectedDim: dim, expectedColours: colours ?? null });
       hydrated = observation.hydrationReady;
       const sample = { ms: Date.now() - started, httpStatus, ...observation };
       if (trace.samples.length < 120) trace.samples.push(sample);
@@ -857,14 +897,14 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await backgroundUrl(f, token, f.heroMediaId);
     await renderMenu(menu, f, f.heroUrl, null);
     stages.push(stage);
-    network.check();
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), controlReveals: revealTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
+    await network.check();
+    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlReveals: revealTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
   } catch (error) {
     const statuses = stages.includes('login') ? await editorStatus(page).catch(() => ['unreadable']) : [];
     const failureCapture = stages.includes('login')
       ? await failureScreenshot(page, resolve(out, 'dashboard-failure-test-data.png')) : 'withheld';
     writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
-      login: loginEvidence, fonts: network.fonts(), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
+      login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
       controlReveal: error instanceof ControlRevealError ? error.samples : null,
       controlReveals: revealTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;

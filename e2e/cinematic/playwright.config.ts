@@ -24,5 +24,8 @@ export default defineConfig({
     screenshot: 'off',
     video: 'off',
     serviceWorkers: 'block',
+    // Intercepted logical media reads never reach DNS. Everything that does
+    // reach Chromium's network stack must resolve to the owned loopback host.
+    launchOptions: { args: ['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'] },
   },
 });

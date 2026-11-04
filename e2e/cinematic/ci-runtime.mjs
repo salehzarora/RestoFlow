@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { installDashboardFontMirror } from './font-mirror.mjs';
 import { requireEphemeralCi } from '../../supabase/tests/support/cinematic_001b_migration_contract.mjs';
 import { capturePublisherRuntime } from './publisher-diagnostics.mjs';
+import { LOGICAL_ORIGIN } from './live-transport.mjs';
 
 const marker = 'BIZBOT-STOREFRONT-CINEMATIC-001B';
 const api = 'http://127.0.0.1:54321';
@@ -113,8 +114,10 @@ async function main(action) {
     await waitUntil(`${api}/functions/v1/storefront-media-publish`, r => r.status === 401);
     return;
   }
-  const liveEnv = { ...process.env, STOREFRONT_SOURCE: 'live', STOREFRONT_SUPABASE_URL: status.url,
-    STOREFRONT_SUPABASE_ANON_KEY: status.anonKey, NEXT_TELEMETRY_DISABLED: '1' };
+  assert.ok(!process.env.NODE_OPTIONS, 'Do not inherit an alternate Node preload');
+  const liveEnv = { ...process.env, STOREFRONT_SOURCE: 'live', STOREFRONT_SUPABASE_URL: LOGICAL_ORIGIN,
+    STOREFRONT_SUPABASE_ANON_KEY: status.anonKey, NEXT_TELEMETRY_DISABLED: '1',
+    NODE_OPTIONS: `--import=${pathToFileURL(resolve(root, 'e2e/cinematic/live-transport-preload.mjs')).href}` };
   if (action === 'build') {
     const defines = resolve(privateDir, 'dashboard-defines.json');
     writeFileSync(defines, JSON.stringify({ RESTOFLOW_DEMO_MODE: 'false', RESTOFLOW_STOREFRONT_EDITOR: 'true',
@@ -123,7 +126,8 @@ async function main(action) {
       { cwd: resolve(root, 'apps/dashboard'), stdio: 'inherit' });
     const fontMirror = installDashboardFontMirror(root);
     writeFileSync(resolve(publicDir, 'dashboard-font-mirror.json'), JSON.stringify(fontMirror, null, 2));
-    checked('npm', ['run', 'build'], { cwd: resolve(root, 'storefront'), env: liveEnv, stdio: 'inherit' });
+    assert.equal(JSON.parse(readFileSync(resolve(root, 'storefront/package.json'), 'utf8')).scripts.build, 'next build');
+    checked('node', ['node_modules/next/dist/bin/next', 'build'], { cwd: resolve(root, 'storefront'), env: liveEnv, stdio: 'inherit' });
     return;
   }
   assert.equal(action, 'acceptance', 'Unknown cinematic CI action');
