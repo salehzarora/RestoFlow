@@ -164,6 +164,45 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
     'font_alexandria': ['Alexandria', 'الإسكندرية', 'Alexandria'],
     'font_system': ['Device font', 'خط الجهاز', 'גופן המכשיר'],
     'menu_background': ['Menu background', 'خلفية المنيو', 'רקע התפריט'],
+    'sceneTitle': ['Scene treatment', 'مظهر المشهد', 'עיצוב הסצנה'],
+    'sceneOpen': [
+      'Preview scene treatment',
+      'معاينة مظهر المشهد',
+      'תצוגה מקדימה של הסצנה',
+    ],
+    'sceneHelp': [
+      'Compare a neutral dark scene with your brand-derived scene. Apply changes this draft only; Save content publishes it. Brand colors and welcome/menu image choices stay unchanged.',
+      'قارن المشهد الداكن المحايد بالمشهد المستمد من ألوان علامتك. التطبيق يعدّل المسودة فقط؛ حفظ المحتوى ينشره. تبقى ألوان العلامة وصور الترحيب والمنيو كما هي.',
+      'השוו סצנה כהה ניטרלית לסצנה המבוססת על צבעי המותג. החלה מעדכנת את הטיוטה בלבד; שמירת תוכן מפרסמת אותה. צבעי המותג ובחירת תמונות הפתיחה והתפריט נשארים כפי שהם.',
+    ],
+    'sceneReference': [
+      'Neutral dark reference',
+      'مرجع داكن محايد',
+      'סצנה כהה ניטרלית',
+    ],
+    'sceneLegacy': [
+      'Inherit brand scene',
+      'استخدام مشهد العلامة',
+      'ירושה מסצנת המותג',
+    ],
+    'sceneCurrent': ['Current draft', 'المسودة الحالية', 'הטיוטה הנוכחית'],
+    'sceneSelected': ['Selected', 'محدد', 'נבחר'],
+    'sceneMenu': ['Menu', 'المنيو', 'תפריט'],
+    'sceneNoImage': [
+      'No background image selected. Choose a menu or welcome image to compare the photograph.',
+      'لم تُحدد صورة خلفية. اختر صورة للمنيو أو الترحيب لمقارنة الصورة.',
+      'לא נבחרה תמונת רקע. בחרו תמונת תפריט או פתיחה כדי להשוות את התמונה.',
+    ],
+    'sceneImageUnavailable': [
+      'Image preview unavailable',
+      'معاينة الصورة غير متاحة',
+      'תצוגת התמונה אינה זמינה',
+    ],
+    'scenePreviewNote': [
+      'Miniature scene samples using the same current image, colors and dimming. The final look also depends on your photograph and palette; compare the full Storefront preview before publishing.',
+      'عينات مصغرة للمشهد تستخدم الصورة والألوان والتعتيم الحالي نفسه. يعتمد المظهر النهائي أيضًا على صورتك ولوحتك؛ قارن معاينة المتجر الكاملة قبل النشر.',
+      'דוגמאות סצנה מוקטנות עם אותה תמונה, אותם צבעים ואותו עמעום נוכחי. המראה הסופי תלוי גם בתמונה ובפלטת הצבעים; השוו בתצוגת החנות המלאה לפני הפרסום.',
+    ],
     'menuBackgroundImage': ['Menu image', 'صورة خلفية المنيو', 'תמונת התפריט'],
     'menuBackgroundUpload': [
       'Upload and publish menu background',

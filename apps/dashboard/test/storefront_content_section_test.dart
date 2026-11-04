@@ -6,6 +6,7 @@ import 'package:restoflow_dashboard/src/storefront/storefront_content_repository
 import 'package:restoflow_dashboard/src/storefront/storefront_content_section.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_publisher.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_sources.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_scene_preset_dialog.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 const restaurant = '22222222-2222-4222-8222-222222222222';
@@ -125,6 +126,7 @@ Future<void> mount(
   ContentCatalog? catalog,
   double width = 1024,
   double textScale = 1,
+  Uri Function(String)? publicUrlFor,
 }) async {
   await tester.binding.setSurfaceSize(Size(width, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -153,6 +155,7 @@ Future<void> mount(
                   profileVersion: repo.version,
                   savedBranchId: branch,
                   enabled: enabled,
+                  publicUrlFor: publicUrlFor,
                   onRefresh: () async {
                     update(() {});
                     return StorefrontContentRefresh(
@@ -197,6 +200,115 @@ Future<void> edit(WidgetTester tester, String key, String text) async {
 }
 
 void main() {
+  for (final dim in [0, 15, 80]) {
+    testWidgets(
+      'scene Apply/Cancel/save/reread preserves dim $dim and independent images/colors',
+      (tester) async {
+        final repo = ContentRepo();
+        final appearance = {
+          'text_color': '#fafafa',
+          'button_text_color': '#102030',
+          'font_family': 'alexandria',
+          'menu_background_media_id': request,
+          'menu_background_dim': dim,
+        };
+        repo.doc = StorefrontContentDocument.fromJson(
+          repo.doc.editableCopy()..['appearance'] = appearance,
+        );
+        final hero = repo.doc.json['hero'];
+        for (final (id, key, inUse) in [
+          (request, 'synthetic/menu.webp', <String>[]),
+          (item, 'synthetic/welcome.webp', ['hero']),
+        ]) {
+          repo.mediaRows.add(
+            StorefrontContentMediaRow.fromJson({
+              'id': id,
+              'source_bucket': 'menu-images',
+              'source_key': 'synthetic/$id.png',
+              'variant': 'w960',
+              'object_key': key,
+              'content_hash': 'a' * 64,
+              'width': 960,
+              'height': 640,
+              'bytes': 123,
+              'state': 'published',
+              'published_at': '2026-10-22T00:00:00Z',
+              'unpublished_at': null,
+              'created_at': '2026-10-22T00:00:00Z',
+              'in_use': inUse,
+              'content_in_use': <Object?>[],
+            }),
+          );
+        }
+        await mount(
+          tester,
+          repo,
+          publicUrlFor: (key) => Uri.parse('https://example.invalid/$key'),
+        );
+        Future<void> tap(String key) async {
+          final target = find.byKey(Key(key));
+          await tester.ensureVisible(target);
+          await tester.pumpAndSettle();
+          await tester.tap(target);
+          await tester.pumpAndSettle();
+        }
+
+        await tap('content-scene-preview');
+        final dialog = tester.widget<StorefrontScenePresetDialog>(
+          find.byType(StorefrontScenePresetDialog),
+        );
+        expect(dialog.dim, dim);
+        expect(
+          dialog.backgroundUrl.toString(),
+          'https://example.invalid/synthetic/menu.webp',
+        );
+        expect(dialog.customBackground, isTrue);
+        expect(dialog.sample.text, '#fafafa');
+        await tap('storefront-scene-cancel');
+        expect(repo.calls, isEmpty);
+        expect(
+          tester
+              .widget<FilledButton>(find.byKey(const Key('content-save')))
+              .onPressed,
+          isNull,
+        );
+        await tap('content-scene-preview');
+        await tap('storefront-scene-apply');
+        expect(
+          repo.calls,
+          isEmpty,
+          reason: 'Apply only changes the content draft',
+        );
+        await tap('content-save');
+        expect(repo.calls, hasLength(1));
+        expect(repo.doc.json['appearance'], {
+          ...appearance,
+          'scene_preset': 'reference_dark',
+        });
+        expect(repo.doc.json['hero'], hero);
+        await tap('content-scene-preview');
+        expect(
+          tester
+              .widget<StorefrontScenePresetDialog>(
+                find.byType(StorefrontScenePresetDialog),
+              )
+              .currentPreset,
+          'reference_dark',
+          reason: 'confirmed save was reread',
+        );
+        await tap('storefront-scene-legacy');
+        await tap('storefront-scene-apply');
+        expect(repo.calls, hasLength(1));
+        await tap('content-save');
+        expect(repo.doc.json['appearance'], {
+          ...appearance,
+          'scene_preset': null,
+        });
+        expect(repo.doc.json['hero'], hero);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   for (final field in ['text_color', 'button_text_color']) {
     testWidgets(
       '$field visual picker keeps Cancel clean and saves Apply/inherit through content',

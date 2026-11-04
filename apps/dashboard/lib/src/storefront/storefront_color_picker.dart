@@ -136,7 +136,11 @@ class _ColorControlState extends State<StorefrontColorControl> {
             key: Key('${widget.id}-advanced'),
             onPressed: () => setState(() => _advanced = !_advanced),
             icon: Icon(_advanced ? Icons.expand_less : Icons.expand_more),
-            label: Text(copy('colorAdvanced')),
+            label: Semantics(
+              label: '${widget.label}: ${copy('colorAdvanced')}',
+              excludeSemantics: true,
+              child: Text(copy('colorAdvanced')),
+            ),
           ),
         ),
         if (_advanced) widget.advancedField,

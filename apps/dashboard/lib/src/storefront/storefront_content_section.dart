@@ -12,6 +12,7 @@ import 'storefront_color_picker.dart';
 import 'storefront_media_publisher.dart';
 import 'storefront_models.dart';
 import 'storefront_sources.dart';
+import 'storefront_scene_preset_dialog.dart';
 
 /// A read acknowledgment from the actual parent editor. A completed Future is
 /// not evidence that the profile and its media were both refreshed.
@@ -566,6 +567,14 @@ class _ContentState extends State<StorefrontContentSection> {
     final media = (_media?.rows ?? <StorefrontContentMediaRow>[])
         .where((row) => row.media.id == mediaId && row.media.isLive)
         .firstOrNull;
+    final referenceFallback =
+        appearance?['scene_preset'] == 'reference_dark' &&
+        (_media?.rows.any(
+              (row) =>
+                  row.media.isLive &&
+                  row.media.inUse.contains(StorefrontSlot.hero),
+            ) ??
+            false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -623,7 +632,7 @@ class _ContentState extends State<StorefrontContentSection> {
           max: 80,
           divisions: 80,
           label: '${dim ?? 15}%',
-          onChanged: _editable && media != null
+          onChanged: _editable && (media != null || referenceFallback)
               ? (value) =>
                     _changeAppearance('menu_background_dim', value.round())
               : null,
@@ -641,6 +650,72 @@ class _ContentState extends State<StorefrontContentSection> {
         ),
       ],
     );
+  }
+
+  Widget _scenePreset() {
+    final appearance = _draft?['appearance'] as Map?;
+    final current = appearance?['scene_preset'] as String?;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _title('sceneTitle'),
+        Text(
+          c(current == 'reference_dark' ? 'sceneReference' : 'sceneLegacy'),
+          key: const Key('content-scene-selection'),
+        ),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: OutlinedButton.icon(
+            key: const Key('content-scene-preview'),
+            onPressed: _editable ? _previewScene : null,
+            icon: const Icon(Icons.compare_outlined),
+            label: Text(c('sceneOpen')),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _previewScene() async {
+    if (!_editable) return;
+    final binding = _bindingGeneration, generation = _generation;
+    final appearance = _draft?['appearance'] as Map?;
+    final current = appearance?['scene_preset'] as String?;
+    final mediaId = appearance?['menu_background_media_id'] as String?;
+    final rows = (_media?.rows ?? <StorefrontContentMediaRow>[]).where(
+      (row) => row.media.isLive,
+    );
+    final custom = rows.where((row) => row.media.id == mediaId).firstOrNull;
+    final image =
+        custom ??
+        rows
+            .where((row) => row.media.inUse.contains(StorefrontSlot.hero))
+            .firstOrNull;
+    final result = await showDialog<StorefrontSceneChoice>(
+      context: context,
+      builder: (_) => StorefrontScenePresetDialog(
+        currentPreset: current,
+        sample: StorefrontColorSample(
+          background: widget.colorSample.background,
+          accent: widget.colorSample.accent,
+          text: appearance?['text_color'] as String?,
+          buttonText: appearance?['button_text_color'] as String?,
+        ),
+        backgroundUrl: image == null
+            ? null
+            : widget.publicUrlFor?.call(image.media.objectKey),
+        customBackground: custom != null,
+        dim: appearance?['menu_background_dim'] as int? ?? 15,
+        headline: _headline.text,
+      ),
+    );
+    if (result == null ||
+        !_current(binding) ||
+        generation != _generation ||
+        !_editable ||
+        current == result.preset)
+      return;
+    _changeAppearance('scene_preset', result.preset);
   }
 
   Widget _select(
@@ -1470,6 +1545,7 @@ class _ContentState extends State<StorefrontContentSection> {
           _appearanceColor('button_text_color', 'appearanceButtonTextColor'),
           _appearanceFont(),
           _menuBackground(),
+          _scenePreset(),
           TextField(
             key: const Key('content-hero-headline'),
             controller: _headline,
