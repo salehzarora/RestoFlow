@@ -373,9 +373,14 @@ begin
  -- This helper returns only current, same-tenant authorized product selections.
  -- Old public readers retain their original item images and exact response shape.
  product_images:=app.storefront_product_images_v1(p.organization_id,p.restaurant_id,p.storefront_branch_id);
+ -- Intersect with the already bounded public catalogue; media availability
+ -- alone cannot introduce another item into the response.
+ select coalesce(jsonb_agg(variants.v order by variants.n),'[]'::jsonb) into product_images
+ from jsonb_array_elements(product_images) with ordinality variants(v,n)
+ where exists(select 1 from jsonb_array_elements(m->'items') item(v) where item.v->>'id'=variants.v->>'item_id');
  select coalesce(jsonb_agg(case when selected.v is null then item.v else jsonb_set(item.v,'{image_url}',selected.v->'w480_url') end order by item.n),'[]'::jsonb)
  into selected_items from jsonb_array_elements(m->'items') with ordinality item(v,n)
- left join lateral (select v from jsonb_array_elements(product_images) selected(v) where selected.v->>'item_id'=item.v->>'id') selected on true;
+ left join lateral (select variant_row.v from jsonb_array_elements(product_images) variant_row(v) where variant_row.v->>'item_id'=item.v->>'id') selected on true;
  return jsonb_set(m,'{items}',selected_items)||jsonb_build_object('content_v1',content,'product_images_v1',product_images);
 end; $$;
 
