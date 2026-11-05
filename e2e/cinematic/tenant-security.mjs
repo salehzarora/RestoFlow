@@ -85,6 +85,92 @@ try {
   const original = await request(fixture, a, originalPath);
   assert.equal(original.status, 200, 'Owner A must be able to read its actual private original');
   const originalHash = hash(original.bytes);
+  // This is the bootstrap Hero, independent of the Dashboard journey. Publishing
+  // its companion cannot select it as the menu background or change Hero/receipt.
+  const backgroundScope = { ...scope(fixture.ownerA), p_branch_id: fixture.branchId, p_base_media_id: fixture.heroMediaId };
+  const backgroundBody = { organization_id: fixture.ownerA.orgId, restaurant_id: fixture.ownerA.restaurantId,
+    branch_id: fixture.branchId, base_media_id: fixture.heroMediaId, slot: 'background', variant: 'bg2560', base_rung: 0, rung: 0 };
+  let backgroundStage, backgroundFinalize, backgroundPath, backgroundHash;
+  await check('owner publishes the independent bootstrap background and reads the registered public bytes', async () => {
+    const originalSource = await rpc(fixture, a, 'get_storefront_background_source_v1', backgroundScope);
+    assert.equal(originalSource.status, 200);
+    const source = originalSource.data;
+    assert.equal(source?.ok, true);
+    assert.equal(source.base_media_id, fixture.heroMediaId);
+    assert.equal(source.source_bucket, 'restaurant-logos');
+    assert.equal(source.source_key, fixture.heroSourceKey);
+    assert.equal(source.base_width, 960);
+    assert.equal(source.base_height, 720);
+    const base = await request(fixture, null, new URL(fixture.heroUrl).pathname);
+    assert.equal(base.status, 200);
+    assert.equal(hash(base.bytes), source.base_hash);
+    const published = await request(fixture, a, '/functions/v1/storefront-media-publish', {
+      method: 'POST', body: { ...backgroundBody, request_id: randomUUID() },
+    });
+    assert.equal(published.status, 200);
+    assert.equal(published.data?.status, 'published');
+    const media = published.data.media;
+    assert.equal(media.base_media_id, fixture.heroMediaId);
+    assert.equal(media.variant, 'bg2560');
+    assert.equal(media.recipe, 'storefront-background-b1');
+    assert.equal(media.state, 'published');
+    assert.equal(media.width, 1000);
+    assert.equal(media.height, 750);
+    assert.match(media.variant_id, /^[0-9a-f-]{36}$/);
+    assert.match(media.content_hash, /^[0-9a-f]{64}$/);
+    const prefix = hash(Buffer.from('storefront-menu-background-v1:' + fixture.ownerA.restaurantId)).slice(0, 32);
+    assert.equal(media.object_key, prefix + '/' + media.content_hash + '.webp');
+    backgroundPath = storagePath(media.object_key);
+    const high = await request(fixture, null, '/storage/v1/object/public/storefront-media/' + backgroundPath);
+    assert.equal(high.status, 200);
+    assert.equal(high.bytes.length, media.bytes);
+    backgroundHash = hash(high.bytes);
+    assert.equal(backgroundHash, media.content_hash);
+    assert.notEqual(backgroundHash, source.base_hash);
+    backgroundStage = { ...backgroundScope, p_source_snapshot: source.source_snapshot, p_expected_base_hash: source.base_hash,
+      p_content_hash: media.content_hash, p_width: media.width, p_height: media.height, p_bytes: media.bytes };
+    backgroundFinalize = { ...scope(fixture.ownerA), p_variant_id: media.variant_id };
+    for (const [name, parameters] of [['stage_storefront_background_variant_v1', backgroundStage],
+      ['finalize_storefront_background_variant_v1', backgroundFinalize]]) {
+      const confirmation = await rpc(fixture, a, name, { ...parameters, p_client_request_id: randomUUID() });
+      assert.equal(confirmation.status, 200);
+      assert.equal(confirmation.data?.ok, true);
+      assert.equal(confirmation.data.state, 'published');
+      assert.equal(confirmation.data.variant_id, media.variant_id);
+      assert.equal(confirmation.data.object_key, media.object_key);
+      assert.equal(confirmation.data.content_hash, media.content_hash);
+    }
+  });
+  await check('stale source proof and foreign base IDs cannot bind another background', async () => {
+    const stale = await rpc(fixture, a, 'stage_storefront_background_variant_v1', { ...backgroundStage,
+      p_client_request_id: randomUUID(), p_source_snapshot: { ...backgroundStage.p_source_snapshot, storage_object_id: randomUUID() } });
+    assert.equal(stale.status, 200);
+    assert.deepEqual(stale.data, { ok: false, error: 'source_stale' });
+    const other = { ...scope(fixture.ownerB), p_branch_id: fixture.ownerB.branchId };
+    for (const [name, params] of [['get_storefront_background_source_v1', { ...backgroundScope, ...other }],
+      ['stage_storefront_background_variant_v1', { ...backgroundStage, ...other, p_client_request_id: randomUUID() }],
+      ['finalize_storefront_background_variant_v1', { ...backgroundFinalize, ...scope(fixture.ownerB), p_client_request_id: randomUUID() }]]) {
+      const foreign = await rpc(fixture, b, name, params);
+      assert.equal(foreign.status, 200);
+      assert.deepEqual(foreign.data, { ok: false, error: 'not_found' });
+    }
+  });
+  await check('manager cannot overwrite or delete the immutable companion through real Storage', async () => {
+    const base = await request(fixture, null, new URL(fixture.heroUrl).pathname);
+    assert.equal(base.status, 200);
+    assert.notEqual(hash(base.bytes), backgroundHash);
+    assertDenied(await request(fixture, a, '/storage/v1/object/storefront-media/' + backgroundPath,
+      { method: 'PUT', bytes: base.bytes, contentType: 'image/webp' }), 'owner immutable background overwrite');
+    const removed = await request(fixture, a, '/storage/v1/object/storefront-media', {
+      method: 'DELETE', body: { prefixes: [backgroundPath] },
+    });
+    if (removed.status === 200) assert.deepEqual(removed.data, [], 'Storage bulk delete cannot remove any registered companion');
+    else assertDenied(removed, 'owner immutable background delete');
+    const after = await request(fixture, a, '/storage/v1/object/authenticated/storefront-media/' + backgroundPath);
+    assert.equal(after.status, 200);
+    assert.equal(hash(after.bytes), backgroundHash);
+  });
+
   let productA, productB;
   await check('both owners can publish and select their own complete product pairs with real Auth/Storage/Edge', async () => {
     productA = await productFixture(fixture.ownerA, a);
@@ -115,9 +201,28 @@ try {
     assert.equal(hash(read.bytes), hash(image));
     const overwrite = await request(fixture, b, `/storage/v1/object/restaurant-logos/${storagePath(key)}`, { method: 'PUT', bytes: image, contentType: 'image/jpeg' });
     assert.equal(overwrite.status, 200, 'Owner B positive control proves the overwrite endpoint exists');
+    const removed = await request(fixture, b, '/storage/v1/object/restaurant-logos', {
+      method: 'DELETE', body: { prefixes: [key] },
+    });
+    assert.equal(removed.status, 200, 'Owner B can use the bulk deletion endpoint on its own disposable upload');
+    assert.ok(Array.isArray(removed.data) && removed.data.some(row => row.name === key));
+    assertDenied(await request(fixture, b, `/storage/v1/object/authenticated/restaurant-logos/${storagePath(key)}`),
+      'The disposable positive-control object must be gone');
   });
 
   for (const [label, token] of [['owner B', b], ['unaffiliated authenticated user', outsider]]) {
+    await check(`${label}: every foreign private background RPC and its publisher slot are denied`, async () => {
+      for (const [name, parameters] of [['get_storefront_background_source_v1', backgroundScope],
+        ['stage_storefront_background_variant_v1', { ...backgroundStage, p_client_request_id: randomUUID() }],
+        ['finalize_storefront_background_variant_v1', { ...backgroundFinalize, p_client_request_id: randomUUID() }]]) {
+        assertRpcDenied(await rpc(fixture, token, name, parameters), `${label} ${name}`);
+      }
+      const denied = await request(fixture, token, '/functions/v1/storefront-media-publish', {
+        method: 'POST', body: { ...backgroundBody, request_id: randomUUID() },
+      });
+      assert.equal(denied.status, 403);
+      assert.deepEqual(denied.data, { ok: false, status: 'permission_denied' });
+    });
     await check(`${label}: all six new product RPCs reject A scope and real A identifiers`, async () => {
       const m = productA.media[0];
       const operations = [

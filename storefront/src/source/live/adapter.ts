@@ -39,7 +39,7 @@ import { fetchStorefrontMenu, liveConfig, type LiveConfig } from './client';
 import type { StorefrontMenuOk } from './decode';
 import type { StorefrontMenuV2Ok } from './decodeHomeContent';
 import type { StorefrontMenuV3Ok } from './decodeFeaturedItems';
-import { decodeStorefrontMenuV6, type StorefrontMenuV4Ok, type StorefrontMenuV6Ok } from './decodeContentV1';
+import type { StorefrontMenuV4Ok, StorefrontMenuV7Ok } from './decodeContentV1';
 import { iconPathFor } from './icons';
 import { liveOrderingEnabled, orderEndpointOrigin } from './ordering';
 
@@ -81,7 +81,7 @@ export function nextOpenParts(iso: string | null, timeZone: string): NextOpenAt 
   }
 }
 
-export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok | StorefrontMenuV4Ok | StorefrontMenuV6Ok, origin: string): StorefrontResolution {
+export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok | StorefrontMenuV4Ok | StorefrontMenuV7Ok, origin: string): StorefrontResolution {
   const r = envelope.restaurant;
   const home = 'home_content' in envelope ? envelope.home_content : null;
   const featured = new Set('featured_item_ids' in envelope ? envelope.featured_item_ids : []);
@@ -89,6 +89,7 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
   const categoryPresentation = new Map(content?.category_presentation.map(c => [c.category_id, c]) ?? []);
   const itemPresentation = new Map(content?.item_presentation.map(i => [i.item_id, i]) ?? []);
   const productImages = new Map(('product_images_v1' in envelope ? envelope.product_images_v1 ?? [] : []).map(row => [row.item_id, row]));
+  const backgroundImages = 'menu_background_images_v1' in envelope ? envelope.menu_background_images_v1 : undefined;
   const tenant: Tenant = {
     slug: r.slug,
     displayName: r.display_name,
@@ -116,6 +117,7 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
     },
     heroImage: mediaUrl(r.hero_url, origin),
     ...(content?.appearance?.menu_background_url === undefined ? {} : { menuBackgroundImage: mediaUrl(content.appearance.menu_background_url, origin) }),
+    ...(backgroundImages ? { menuBackgroundVariants: backgroundImages.variants.map(v => ({ ...v, url: mediaUrl(v.url, origin)! })) } : {}),
     ...(content?.appearance?.menu_background_dim === undefined ? {} : { menuBackgroundDim: content.appearance.menu_background_dim }),
     ...(content?.appearance?.scene_preset === undefined ? {} : { scenePreset: content.appearance.scene_preset }),
     currency: 'ILS',
@@ -248,7 +250,7 @@ export function liveStorefrontSource(config?: LiveConfig): StorefrontSource {
     async getStorefront(slug: string): Promise<StorefrontResolution | null> {
       if (!isValidSlug(slug)) return null;
       const cfg = config ?? liveConfig();
-      const envelope = decodeStorefrontMenuV6(await fetchStorefrontMenu(slug, cfg));
+      const envelope = await fetchStorefrontMenu(slug, cfg);
       if (!envelope.ok) {
         if (envelope.error === 'not_found') return null;
         throw new Error(`storefront_menu answered ${envelope.error}`);

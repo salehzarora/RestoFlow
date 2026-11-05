@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/src/branding/restaurant_logo_path.dart';
 import 'package:restoflow_dashboard/src/branding/restaurant_logo_storage.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_background_upload.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_background_publisher.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_content_models.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_content_repository.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_content_section.dart';
@@ -13,6 +14,8 @@ import 'package:restoflow_dashboard/src/storefront/storefront_media_publisher.da
 import 'package:restoflow_dashboard/src/storefront/storefront_models.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+
+import 'helpers/storefront_content_groups.dart';
 
 // Local adapter/widget checks with synthetic Storage and RPC responses.
 // Real Auth/Storage permissions and persisted Hero/logo pointer invariance
@@ -165,8 +168,47 @@ class _Invoker implements StorefrontFunctionInvoker {
   }
 }
 
+class _QualityInvoker implements StorefrontFunctionInvoker {
+  final calls = <Map<String, Object?>>[];
+  String outcome = 'published';
+  Completer<void>? pending;
+  @override
+  Future<StorefrontFunctionReply> invoke(Map<String, Object?> body) async {
+    calls.add(Map.of(body));
+    await pending?.future;
+    if (outcome == 'uncertain')
+      return const StorefrontFunctionReply.transportFailure();
+    if (outcome == 'unavailable')
+      return StorefrontFunctionReply.fromHttp(404, {
+        'ok': false,
+        'status': 'source_not_found',
+      });
+    return StorefrontFunctionReply.fromHttp(200, {
+      'ok': true,
+      'status': 'published',
+      'recipe': 'storefront-background-b1',
+      'rung': body['rung'],
+      'media': {
+        'variant_id': _request,
+        'base_media_id': body['base_media_id'],
+        'object_key': '${'a' * 32}/${'b' * 64}.webp',
+        'content_hash': 'b' * 64,
+        'width': 2560,
+        'height': 1706,
+        'bytes': 400000,
+        'variant': 'bg2560',
+        'recipe': 'storefront-background-b1',
+        'state': 'published',
+      },
+    });
+  }
+}
+
 class _Rig {
-  _Rig({Future<PickedMenuImage?> Function()? picker}) {
+  _Rig({
+    Future<PickedMenuImage?> Function()? picker,
+    bool highResolution = false,
+  }) {
     upload = StorefrontBackgroundUpload(
       storage: storage,
       organizationId: _org,
@@ -182,6 +224,13 @@ class _Rig {
       restaurantId: _restaurant,
       retryDelay: Duration.zero,
     );
+    if (highResolution) {
+      backgroundPublisher = StorefrontBackgroundPublisher(
+        invoker: qualityInvoker,
+        organizationId: _org,
+        restaurantId: _restaurant,
+      );
+    }
   }
   final repo = _Repo();
   final storage = _Storage();
@@ -189,6 +238,8 @@ class _Rig {
   late final StorefrontBackgroundUpload upload;
   late final _Invoker invoker;
   late final StorefrontMediaPublisher publisher;
+  final qualityInvoker = _QualityInvoker();
+  StorefrontBackgroundPublisher? backgroundPublisher;
   bool enabled = true, includeUpload = true, includePublisher = true;
   int refreshes = 0;
   final busyEvents = <bool>[];
@@ -224,6 +275,7 @@ Future<void Function(_Rig)> _mount(WidgetTester tester, _Rig rig) async {
                   backgroundUpload: binding.includeUpload
                       ? binding.upload
                       : null,
+                  backgroundPublisher: binding.backgroundPublisher,
                   onRefresh: () async {
                     binding.refreshes++;
                     update(() {});
@@ -245,6 +297,10 @@ Future<void Function(_Rig)> _mount(WidgetTester tester, _Rig rig) async {
     ),
   );
   await tester.pumpAndSettle();
+  if (rig.repo.status == StorefrontContentReadStatus.ok) {
+    await setContentGroup(tester, 'background');
+    await setContentGroup(tester, 'editorial');
+  }
   return (next) => update(() => current = next);
 }
 
@@ -265,6 +321,132 @@ Finder get _background => find.byWidgetPredicate(
 );
 
 void main() {
+  testWidgets(
+    'abandoned explicit old-background preparation releases parent busy',
+    (tester) async {
+      final pending = Completer<void>();
+      final old = _Rig(highResolution: true)..qualityInvoker.pending = pending;
+      old.repo.rows.add(
+        StorefrontContentMediaRow.fromJson(old.invoker.media(_source)),
+      );
+      old.repo.document = StorefrontContentDocument.fromJson(
+        old.repo.document.editableCopy()
+          ..['appearance'] = {
+            'text_color': null,
+            'button_text_color': null,
+            'menu_background_media_id': _media,
+          },
+      );
+      final replace = await _mount(tester, old);
+      await _tap(tester, 'content-background-quality-prepare');
+      expect(old.qualityInvoker.calls, hasLength(1));
+      expect(old.busyEvents.last, isTrue);
+      final next = _Rig(highResolution: true);
+      replace(next);
+      await tester.pumpAndSettle();
+      expect(next.busyEvents.last, isFalse);
+      pending.complete();
+      await tester.pumpAndSettle();
+      expect(old.qualityInvoker.calls, hasLength(1));
+      expect(next.qualityInvoker.calls, isEmpty);
+      expect(next.repo.writes, isEmpty);
+      expect(find.textContaining('2560×1706'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'new background prepares HD without saving and keeps both drafts through folding',
+    (tester) async {
+      final rig = _Rig(highResolution: true);
+      final hero = rig.repo.document.json['hero'];
+      await _mount(tester, rig);
+      await _tap(tester, 'content-menu-background-upload');
+      expect(rig.qualityInvoker.calls.single['base_media_id'], _media);
+      expect(rig.qualityInvoker.calls.single['base_rung'], 0);
+      expect(rig.repo.writes, isEmpty);
+      expect(find.textContaining('2560×1706'), findsOneWidget);
+      await setContentGroup(tester, 'background', expanded: false);
+      await setContentGroup(tester, 'background');
+      expect(rig.qualityInvoker.calls, hasLength(1));
+      expect(find.textContaining('2560×1706'), findsOneWidget);
+      await _tap(tester, 'content-save');
+      expect(
+        (rig.repo.document.json['appearance']
+            as Map)['menu_background_media_id'],
+        _media,
+      );
+      expect(rig.repo.document.json['hero'], hero);
+      expect(rig.repo.writes, hasLength(1));
+    },
+  );
+
+  testWidgets(
+    'optional HD failure keeps ordinary publication and explicit save usable',
+    (tester) async {
+      final rig = _Rig(highResolution: true)
+        ..qualityInvoker.outcome = 'unavailable';
+      await _mount(tester, rig);
+      await _tap(tester, 'content-menu-background-upload');
+      expect(find.textContaining('no saved selection changed'), findsOneWidget);
+      expect(rig.repo.writes, isEmpty);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('content-save')))
+            .onPressed,
+        isNotNull,
+      );
+      await _tap(tester, 'content-save');
+      expect(
+        (rig.repo.document.json['appearance']
+            as Map)['menu_background_media_id'],
+        _media,
+      );
+      expect(rig.storage.uploads, hasLength(1));
+      expect(rig.qualityInvoker.calls, hasLength(1));
+    },
+  );
+
+  testWidgets(
+    'explicit HD retry keeps request identity without another upload or save',
+    (tester) async {
+      final rig = _Rig(highResolution: true)
+        ..qualityInvoker.outcome = 'uncertain';
+      await _mount(tester, rig);
+      await _tap(tester, 'content-menu-background-upload');
+      await _tap(tester, 'content-save');
+      final requestId = rig.qualityInvoker.calls.first['request_id'];
+      rig.qualityInvoker.outcome = 'published';
+      await _tap(tester, 'content-background-quality-prepare');
+      expect(rig.qualityInvoker.calls, hasLength(3));
+      expect(rig.qualityInvoker.calls.map((c) => c['request_id']).toSet(), {
+        requestId,
+      });
+      expect(rig.storage.uploads, hasLength(1));
+      expect(rig.repo.writes, hasLength(1));
+      expect(find.textContaining('2560×1706'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'late HD result cannot select or report success on another binding',
+    (tester) async {
+      final pending = Completer<void>();
+      final old = _Rig(highResolution: true)..qualityInvoker.pending = pending;
+      final replace = await _mount(tester, old);
+      await _tap(tester, 'content-menu-background-upload');
+      expect(old.qualityInvoker.calls, hasLength(1));
+      final next = _Rig(highResolution: true);
+      replace(next);
+      await tester.pumpAndSettle();
+      pending.complete();
+      await tester.pumpAndSettle();
+      expect(next.repo.writes, isEmpty);
+      expect(next.refreshes, 0);
+      expect(next.qualityInvoker.calls, isEmpty);
+      expect(find.textContaining('2560×1706'), findsNothing);
+    },
+  );
+
   test(
     'private upload reuses scoped key and byte validation without receipt operations',
     () async {

@@ -9,6 +9,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'opening_hours_editor.dart';
 import 'storefront_background_upload.dart';
+import 'storefront_background_publisher.dart';
 import 'storefront_contrast.dart';
 import 'storefront_color_picker.dart';
 import 'storefront_content_models.dart';
@@ -23,6 +24,8 @@ import 'storefront_media_slot.dart';
 import 'storefront_models.dart';
 import 'storefront_profile_repository.dart';
 import 'storefront_sources.dart';
+import 'storefront_settings_group.dart';
+import 'storefront_settings_copy.dart';
 
 /// STOREFRONT-PUBLISH-001 — everything the Settings "Storefront" card talks
 /// to, built per membership in the dashboard shell (null = not wired: demo
@@ -39,6 +42,7 @@ class StorefrontEditorSeams {
     StorefrontContentCatalog? contentCatalog,
     this.publisher,
     this.backgroundUpload,
+    this.backgroundPublisher,
     this.publicUrlFor,
   }) : _contentRepository = contentRepository,
        _contentCatalog = contentCatalog;
@@ -74,6 +78,7 @@ class StorefrontEditorSeams {
   /// here; the media slots then show an honest note).
   final StorefrontMediaPublisher? publisher;
   final StorefrontBackgroundUpload? backgroundUpload;
+  final StorefrontBackgroundPublisher? backgroundPublisher;
 
   /// The public URL of a published derivative (preview only; null = none).
   final Uri Function(String objectKey)? publicUrlFor;
@@ -221,6 +226,7 @@ class StorefrontSection extends StatelessWidget {
   const StorefrontSection({
     required this.seams,
     this.isDemo = false,
+    this.embedded = false,
     this.defaultDisplayName,
     this.pickPauseUntil,
     this.pickTime,
@@ -231,6 +237,7 @@ class StorefrontSection extends StatelessWidget {
 
   final StorefrontEditorSeams? seams;
   final bool isDemo;
+  final bool embedded;
 
   /// Prefills the create form's display name (the restaurant name).
   final String? defaultDisplayName;
@@ -249,6 +256,7 @@ class StorefrontSection extends StatelessWidget {
     key: ValueKey<String>('storefront-editor|${seams?.scopeIdentity ?? '-'}'),
     seams: seams,
     isDemo: isDemo,
+    embedded: embedded,
     defaultDisplayName: defaultDisplayName,
     pickPauseUntil: pickPauseUntil,
     pickTime: pickTime,
@@ -261,6 +269,7 @@ class _StorefrontEditor extends StatefulWidget {
   const _StorefrontEditor({
     required this.seams,
     required this.isDemo,
+    required this.embedded,
     required this.defaultDisplayName,
     required this.pickPauseUntil,
     required this.pickTime,
@@ -271,6 +280,7 @@ class _StorefrontEditor extends StatefulWidget {
 
   final StorefrontEditorSeams? seams;
   final bool isDemo;
+  final bool embedded;
   final String? defaultDisplayName;
   final StorefrontInstantPicker? pickPauseUntil;
   final StorefrontTimePicker? pickTime;
@@ -392,6 +402,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         !identical(old?.contentRepository, current?.contentRepository) ||
         !identical(old?.contentCatalog, current?.contentCatalog) ||
         !identical(old?.publisher, current?.publisher) ||
+        !identical(old?.backgroundPublisher, current?.backgroundPublisher) ||
         !identical(old?.backgroundUpload, current?.backgroundUpload)) {
       final keepDraft =
           _patch().isNotEmpty ||
@@ -1433,25 +1444,27 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     super.build(context); // AutomaticKeepAliveClientMixin
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(l10n.storefrontSectionSubtitle, style: theme.textTheme.bodySmall),
+        const SizedBox(height: RestoflowSpacing.md),
+        ..._body(l10n, theme),
+      ],
+    );
+    if (widget.embedded) {
+      // Keep the card's separate accessibility nodes inside the Settings group.
+      return KeyedSubtree(
+        key: const Key('storefront-section'),
+        child: Semantics(explicitChildNodes: true, child: content),
+      );
+    }
     return AdminSectionCard(
       key: const Key('storefront-section'),
       title: l10n.storefrontSectionTitle,
       icon: Icons.storefront_outlined,
-      // This form is taller than the Settings viewport. A single merged Card
-      // semantics node clips later controls out of Flutter web's accessible
-      // tree even while they are painted. Keep each field/action explicit.
       semanticContainer: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.storefrontSectionSubtitle,
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: RestoflowSpacing.md),
-          ..._body(l10n, theme),
-        ],
-      ),
+      child: content,
     );
   }
 
@@ -1725,6 +1738,21 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     return derived.timezone;
   }
 
+  Widget _settingsGroup(
+    String id,
+    String title,
+    List<Widget> children, {
+    bool open = false,
+  }) => StorefrontSettingsGroup(
+    key: ValueKey('storefront-group-$id'),
+    title: title,
+    initiallyExpanded: open,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    ),
+  );
+
   List<Widget> _editor(
     AppLocalizations l10n,
     ThemeData theme,
@@ -1745,66 +1773,76 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         ? inspectStorefrontPrimary(primaryHex)
         : null;
     return [
-      // Identity: the slug is fixed after creation; the path is TEXT (no
-      // public origin yet — D8), never a link.
-      Text(l10n.storefrontSlugLabel, style: theme.textTheme.labelMedium),
-      Text(
-        profile.slug,
-        key: const Key('storefront-slug-readonly'),
-        textDirection: TextDirection.ltr,
-        style: theme.textTheme.bodyLarge,
+      _settingsGroup('details', storefrontSettingsCopy(l10n, 'details'), [
+        // Identity: the slug is fixed after creation; the path is TEXT (no
+        // public origin yet — D8), never a link.
+        Text(l10n.storefrontSlugLabel, style: theme.textTheme.labelMedium),
+        Text(
+          profile.slug,
+          key: const Key('storefront-slug-readonly'),
+          textDirection: TextDirection.ltr,
+          style: theme.textTheme.bodyLarge,
+        ),
+        Text(
+          l10n.storefrontSlugPermanentNote,
+          key: const Key('storefront-slug-permanent-note'),
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: RestoflowSpacing.sm),
+        Text(l10n.storefrontPathLabel, style: theme.textTheme.labelMedium),
+        Text(
+          path,
+          key: const Key('storefront-path'),
+          textDirection: TextDirection.ltr,
+          style: theme.textTheme.bodyLarge,
+        ),
+        Text(l10n.storefrontPathNote, style: theme.textTheme.bodySmall),
+        const SizedBox(height: RestoflowSpacing.md),
+        _grid([
+          _branchPicker(l10n, theme),
+          _textField(
+            key: const Key('storefront-display-name'),
+            controller: _displayName,
+            label: l10n.storefrontDisplayNameLabel,
+            error: _nameError(l10n),
+          ),
+          _textField(
+            key: const Key('storefront-tagline'),
+            controller: _tagline,
+            label: l10n.storefrontTaglineLabel,
+            error: _maxError(l10n, _tagline, 90),
+          ),
+          _textField(
+            key: const Key('storefront-city'),
+            controller: _city,
+            label: l10n.storefrontCityLabel,
+            error: _maxError(l10n, _city, 60),
+          ),
+          _textField(
+            key: const Key('storefront-address'),
+            controller: _address,
+            label: l10n.storefrontAddressLabel,
+            error: _maxError(l10n, _address, 80),
+          ),
+          _textField(
+            key: const Key('storefront-phone'),
+            controller: _phone,
+            label: l10n.storefrontPhoneLabel,
+            helper: l10n.storefrontPhoneHelp,
+            error: _phoneError(l10n),
+            ltr: true,
+          ),
+        ]),
+      ], open: true),
+      _settingsGroup(
+        'legacy-text',
+        storefrontSettingsCopy(l10n, 'legacyText'),
+        [
+          Text(storefrontSettingsCopy(l10n, 'legacyTextHelp')),
+          ..._homeContentEditor(l10n, theme, profile),
+        ],
+        open: widget.seams?.contentRepository == null,
       ),
-      Text(
-        l10n.storefrontSlugPermanentNote,
-        key: const Key('storefront-slug-permanent-note'),
-        style: theme.textTheme.bodySmall,
-      ),
-      const SizedBox(height: RestoflowSpacing.sm),
-      Text(l10n.storefrontPathLabel, style: theme.textTheme.labelMedium),
-      Text(
-        path,
-        key: const Key('storefront-path'),
-        textDirection: TextDirection.ltr,
-        style: theme.textTheme.bodyLarge,
-      ),
-      Text(l10n.storefrontPathNote, style: theme.textTheme.bodySmall),
-      const SizedBox(height: RestoflowSpacing.md),
-      _grid([
-        _branchPicker(l10n, theme),
-        _textField(
-          key: const Key('storefront-display-name'),
-          controller: _displayName,
-          label: l10n.storefrontDisplayNameLabel,
-          error: _nameError(l10n),
-        ),
-        _textField(
-          key: const Key('storefront-tagline'),
-          controller: _tagline,
-          label: l10n.storefrontTaglineLabel,
-          error: _maxError(l10n, _tagline, 90),
-        ),
-        _textField(
-          key: const Key('storefront-city'),
-          controller: _city,
-          label: l10n.storefrontCityLabel,
-          error: _maxError(l10n, _city, 60),
-        ),
-        _textField(
-          key: const Key('storefront-address'),
-          controller: _address,
-          label: l10n.storefrontAddressLabel,
-          error: _maxError(l10n, _address, 80),
-        ),
-        _textField(
-          key: const Key('storefront-phone'),
-          controller: _phone,
-          label: l10n.storefrontPhoneLabel,
-          helper: l10n.storefrontPhoneHelp,
-          error: _phoneError(l10n),
-          ltr: true,
-        ),
-      ]),
-      ..._homeContentEditor(l10n, theme, profile),
       if (widget.seams?.contentRepository
           case final StorefrontContentRepository repository)
         StorefrontContentSection(
@@ -1828,6 +1866,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               _featuredPending == null,
           publisher: widget.seams!.publisher,
           backgroundUpload: widget.seams!.backgroundUpload,
+          backgroundPublisher: widget.seams!.backgroundPublisher,
           sources: _sources,
           reloadSources: _reloadSources,
           publicUrlFor: widget.seams!.publicUrlFor,
@@ -1843,246 +1882,231 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               setState(() => _contentBusy = busy);
           },
         ),
-      ..._featuredEditor(l10n, theme, profile),
-      const Divider(height: RestoflowSpacing.xl),
-      Text(l10n.storefrontLookTitle, style: theme.textTheme.titleSmall),
-      const SizedBox(height: RestoflowSpacing.sm),
-      // Dirty notices are inserted before and after this grid. Preserve its
-      // input state/focus while those unkeyed sibling positions change.
-      _grid([
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _colorControl(
-              l10n,
-              'primary',
-              _primary,
-              StorefrontColorRole.background,
-              kStorefrontNeutralPrimary,
-            ),
-            if (primaryVerdict != null && !primaryVerdict.supported)
-              Padding(
-                padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
-                child: Text(
-                  storefrontContentCopy(l10n, 'colorContrastHelp'),
-                  key: const Key('storefront-primary-contrast-warning'),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: RestoflowTone.warning.styleOf(theme).accent,
+      _settingsGroup('featured', l10n.storefrontFeaturedItemsTitle, [
+        ..._featuredEditor(l10n, theme, profile),
+      ]),
+      _settingsGroup('appearance', l10n.storefrontLookTitle, [
+        const SizedBox(height: RestoflowSpacing.sm),
+        // Dirty notices are inserted before and after this grid. Preserve its
+        // input state/focus while those unkeyed sibling positions change.
+        _grid([
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _colorControl(
+                l10n,
+                'primary',
+                _primary,
+                StorefrontColorRole.background,
+                kStorefrontNeutralPrimary,
+              ),
+              if (primaryVerdict != null && !primaryVerdict.supported)
+                Padding(
+                  padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
+                  child: Text(
+                    storefrontContentCopy(l10n, 'colorContrastHelp'),
+                    key: const Key('storefront-primary-contrast-warning'),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: RestoflowTone.warning.styleOf(theme).accent,
+                    ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        _colorControl(
-          l10n,
-          'accent',
-          _accent,
-          StorefrontColorRole.accent,
-          '#e07b2c',
-        ),
-        _dropdown<StorefrontVisualPreset>(
-          key: const Key('storefront-visual-preset'),
-          label: l10n.storefrontVisualPresetLabel,
-          value: _preset,
-          items: [
-            (StorefrontVisualPreset.dark, l10n.storefrontVisualPresetDark),
-            (StorefrontVisualPreset.light, l10n.storefrontVisualPresetLight),
-          ],
-          onChanged: (v) => _preset = v,
-        ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _dropdown<StorefrontLocale>(
-              key: const Key('storefront-locale'),
-              label: l10n.storefrontLocaleLabel,
-              value: _locale,
-              items: [
-                (StorefrontLocale.ar, l10n.storefrontLocaleAr),
-                (StorefrontLocale.he, l10n.storefrontLocaleHe),
-                (StorefrontLocale.en, l10n.storefrontLocaleEn),
-              ],
-              onChanged: (v) => _locale = v,
+            ],
+          ),
+          _colorControl(
+            l10n,
+            'accent',
+            _accent,
+            StorefrontColorRole.accent,
+            '#e07b2c',
+          ),
+          _dropdown<StorefrontVisualPreset>(
+            key: const Key('storefront-visual-preset'),
+            label: l10n.storefrontVisualPresetLabel,
+            value: _preset,
+            items: [
+              (StorefrontVisualPreset.dark, l10n.storefrontVisualPresetDark),
+              (StorefrontVisualPreset.light, l10n.storefrontVisualPresetLight),
+            ],
+            onChanged: (v) => _preset = v,
+          ),
+          _dropdown<StorefrontCardMode>(
+            key: const Key('storefront-card-mode'),
+            label: l10n.storefrontCardModeLabel,
+            value: _cardMode,
+            items: [
+              (StorefrontCardMode.list, l10n.storefrontCardModeList),
+              (StorefrontCardMode.grid, l10n.storefrontCardModeGrid),
+            ],
+            onChanged: (v) => _cardMode = v,
+          ),
+          _dropdown<StorefrontMotion>(
+            key: const Key('storefront-motion'),
+            label: l10n.storefrontMotionLabel,
+            value: _motion,
+            items: [
+              (StorefrontMotion.calm, l10n.storefrontMotionCalm),
+              (StorefrontMotion.full, l10n.storefrontMotionFull),
+              (StorefrontMotion.lively, l10n.storefrontMotionLively),
+            ],
+            onChanged: (v) => _motion = v,
+          ),
+        ], key: const Key('storefront-appearance-grid')),
+        Text(storefrontSettingsCopy(l10n, 'appearanceHelp')),
+      ]),
+      _settingsGroup(
+        'availability',
+        storefrontSettingsCopy(l10n, 'availability'),
+        [
+          const SizedBox(height: RestoflowSpacing.sm),
+          SwitchListTile(
+            key: const Key('storefront-pickup'),
+            contentPadding: EdgeInsets.zero,
+            value: _pickup,
+            onChanged: _busy ? null : (v) => setState(() => _pickup = v),
+            title: Text(l10n.storefrontPickupLabel),
+            subtitle: Text(
+              l10n.storefrontPickupHelp,
+              key: const Key('storefront-pickup-help'),
             ),
+          ),
+          const Divider(height: RestoflowSpacing.xl),
+          Text(l10n.storefrontPauseTitle, style: theme.textTheme.titleSmall),
+          const SizedBox(height: RestoflowSpacing.xs),
+          Wrap(
+            spacing: RestoflowSpacing.sm,
+            runSpacing: RestoflowSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                pauseEnded
+                    ? l10n.storefrontPauseEndedLabel
+                    : l10n.storefrontPausedUntilLabel,
+                key: const Key('storefront-paused-until-label'),
+                style: theme.textTheme.labelMedium,
+              ),
+              Text(
+                pausedUntil == null
+                    ? l10n.storefrontNotPaused
+                    : _formatLocal(pausedUntil),
+                key: const Key('storefront-paused-until-value'),
+                textDirection: pausedUntil == null ? null : TextDirection.ltr,
+                style: theme.textTheme.bodyMedium,
+              ),
+              OutlinedButton.icon(
+                key: const Key('storefront-pause-set'),
+                onPressed: _busy ? null : _onPickPause,
+                icon: const Icon(Icons.pause_circle_outline),
+                label: Text(l10n.storefrontPauseSetAction),
+              ),
+              if (pausedUntil != null)
+                TextButton(
+                  key: const Key('storefront-pause-clear'),
+                  onPressed: _busy
+                      ? null
+                      : () => setState(() {
+                          _pausedUntil = null;
+                          _pausePickRefused = false;
+                        }),
+                  child: Text(l10n.storefrontPauseClearAction),
+                ),
+            ],
+          ),
+          if (_pausePickRefused || _pauseDraftPast)
             Padding(
               padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
               child: Text(
-                l10n.storefrontLocaleHelp,
-                key: const Key('storefront-locale-help'),
-                style: theme.textTheme.bodySmall,
+                l10n.storefrontPausePast,
+                key: const Key('storefront-pause-past'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
               ),
             ),
-          ],
-        ),
-        _dropdown<StorefrontCardMode>(
-          key: const Key('storefront-card-mode'),
-          label: l10n.storefrontCardModeLabel,
-          value: _cardMode,
-          items: [
-            (StorefrontCardMode.list, l10n.storefrontCardModeList),
-            (StorefrontCardMode.grid, l10n.storefrontCardModeGrid),
-          ],
-          onChanged: (v) => _cardMode = v,
-        ),
-        _dropdown<StorefrontMotion>(
-          key: const Key('storefront-motion'),
-          label: l10n.storefrontMotionLabel,
-          value: _motion,
-          items: [
-            (StorefrontMotion.calm, l10n.storefrontMotionCalm),
-            (StorefrontMotion.full, l10n.storefrontMotionFull),
-            (StorefrontMotion.lively, l10n.storefrontMotionLively),
-          ],
-          onChanged: (v) => _motion = v,
-        ),
-      ], key: const Key('storefront-appearance-grid')),
-      const SizedBox(height: RestoflowSpacing.sm),
-      SwitchListTile(
-        key: const Key('storefront-pickup'),
-        contentPadding: EdgeInsets.zero,
-        value: _pickup,
-        onChanged: _busy ? null : (v) => setState(() => _pickup = v),
-        title: Text(l10n.storefrontPickupLabel),
-        subtitle: Text(
-          l10n.storefrontPickupHelp,
-          key: const Key('storefront-pickup-help'),
-        ),
-      ),
-      const Divider(height: RestoflowSpacing.xl),
-      Text(l10n.storefrontPauseTitle, style: theme.textTheme.titleSmall),
-      const SizedBox(height: RestoflowSpacing.xs),
-      Wrap(
-        spacing: RestoflowSpacing.sm,
-        runSpacing: RestoflowSpacing.xs,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
           Text(
-            pauseEnded
-                ? l10n.storefrontPauseEndedLabel
-                : l10n.storefrontPausedUntilLabel,
-            key: const Key('storefront-paused-until-label'),
-            style: theme.textTheme.labelMedium,
+            l10n.storefrontPauseDeviceZone(_offsetText(zone)),
+            key: const Key('storefront-pause-zone'),
+            style: theme.textTheme.bodySmall,
           ),
-          Text(
-            pausedUntil == null
-                ? l10n.storefrontNotPaused
-                : _formatLocal(pausedUntil),
-            key: const Key('storefront-paused-until-value'),
-            textDirection: pausedUntil == null ? null : TextDirection.ltr,
-            style: theme.textTheme.bodyMedium,
+          const SizedBox(height: RestoflowSpacing.sm),
+          _textField(
+            key: const Key('storefront-pause-reason'),
+            controller: _pauseReason,
+            label: l10n.storefrontPauseReasonLabel,
+            error: _maxError(l10n, _pauseReason, 120),
           ),
-          OutlinedButton.icon(
-            key: const Key('storefront-pause-set'),
-            onPressed: _busy ? null : _onPickPause,
-            icon: const Icon(Icons.pause_circle_outline),
-            label: Text(l10n.storefrontPauseSetAction),
+          Padding(
+            padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
+            child: Text(
+              l10n.storefrontPauseHelp,
+              key: const Key('storefront-pause-help'),
+              style: theme.textTheme.bodySmall,
+            ),
           ),
-          if (pausedUntil != null)
-            TextButton(
-              key: const Key('storefront-pause-clear'),
-              onPressed: _busy
-                  ? null
-                  : () => setState(() {
-                      _pausedUntil = null;
-                      _pausePickRefused = false;
-                    }),
-              child: Text(l10n.storefrontPauseClearAction),
+          const Divider(height: RestoflowSpacing.xl),
+          Text(l10n.storefrontHoursTitle, style: theme.textTheme.titleSmall),
+          const SizedBox(height: RestoflowSpacing.xs),
+          if (profile.openingHours.hasUnreadableEntries) ...[
+            // C10 (OQ-1): the AUTHORITATIVE saved hours hold entries this editor
+            // cannot read. An explicit error; the stored value is kept verbatim
+            // (the editor below is locked, so no other edit can silently replace
+            // it with the readable subset or with defaults) and Publish is
+            // disabled, until the manager explicitly repairs AND saves.
+            Text(
+              l10n.storefrontHoursUnreadable,
+              key: const Key('storefront-hours-unreadable'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+            if (_hours.hasUnreadableEntries)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton(
+                  key: const Key('storefront-hours-repair'),
+                  // The same entries, unflagged: the draft is now dirty, the
+                  // editor unlocks, and the next save writes exactly what is
+                  // shown.
+                  onPressed: _busy
+                      ? null
+                      : () => setState(
+                          () => _hours = OpeningHours(
+                            weekly: _hours.weekly,
+                            exceptions: _hours.exceptions,
+                          ),
+                        ),
+                  child: Text(l10n.storefrontHoursRepairAction),
+                ),
+              )
+            else
+              Text(
+                l10n.storefrontHoursRepairPending,
+                key: const Key('storefront-hours-repair-pending'),
+                style: theme.textTheme.bodySmall,
+              ),
+            const SizedBox(height: RestoflowSpacing.xs),
+          ],
+          OpeningHoursEditor(
+            key: const Key('storefront-hours'),
+            value: _hours,
+            timezone: _hoursTimezone(profile, derived),
+            // Locked while the draft still IS the unreadable stored value: only
+            // the explicit repair above may replace it.
+            enabled: !_busy && !_hours.hasUnreadableEntries,
+            pickTime: widget.pickTime,
+            pickDate: widget.pickDate,
+            onChanged: (h) => setState(() => _hours = h),
+          ),
+          if (!_hours.isValid)
+            Text(
+              l10n.storefrontHoursInvalid,
+              key: const Key('storefront-hours-invalid'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
             ),
         ],
       ),
-      if (_pausePickRefused || _pauseDraftPast)
-        Padding(
-          padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
-          child: Text(
-            l10n.storefrontPausePast,
-            key: const Key('storefront-pause-past'),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.error,
-            ),
-          ),
-        ),
-      Text(
-        l10n.storefrontPauseDeviceZone(_offsetText(zone)),
-        key: const Key('storefront-pause-zone'),
-        style: theme.textTheme.bodySmall,
-      ),
-      const SizedBox(height: RestoflowSpacing.sm),
-      _textField(
-        key: const Key('storefront-pause-reason'),
-        controller: _pauseReason,
-        label: l10n.storefrontPauseReasonLabel,
-        error: _maxError(l10n, _pauseReason, 120),
-      ),
-      Padding(
-        padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
-        child: Text(
-          l10n.storefrontPauseHelp,
-          key: const Key('storefront-pause-help'),
-          style: theme.textTheme.bodySmall,
-        ),
-      ),
-      const Divider(height: RestoflowSpacing.xl),
-      Text(l10n.storefrontHoursTitle, style: theme.textTheme.titleSmall),
-      const SizedBox(height: RestoflowSpacing.xs),
-      if (profile.openingHours.hasUnreadableEntries) ...[
-        // C10 (OQ-1): the AUTHORITATIVE saved hours hold entries this editor
-        // cannot read. An explicit error; the stored value is kept verbatim
-        // (the editor below is locked, so no other edit can silently replace
-        // it with the readable subset or with defaults) and Publish is
-        // disabled, until the manager explicitly repairs AND saves.
-        Text(
-          l10n.storefrontHoursUnreadable,
-          key: const Key('storefront-hours-unreadable'),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.error,
-          ),
-        ),
-        if (_hours.hasUnreadableEntries)
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton(
-              key: const Key('storefront-hours-repair'),
-              // The same entries, unflagged: the draft is now dirty, the
-              // editor unlocks, and the next save writes exactly what is
-              // shown.
-              onPressed: _busy
-                  ? null
-                  : () => setState(
-                      () => _hours = OpeningHours(
-                        weekly: _hours.weekly,
-                        exceptions: _hours.exceptions,
-                      ),
-                    ),
-              child: Text(l10n.storefrontHoursRepairAction),
-            ),
-          )
-        else
-          Text(
-            l10n.storefrontHoursRepairPending,
-            key: const Key('storefront-hours-repair-pending'),
-            style: theme.textTheme.bodySmall,
-          ),
-        const SizedBox(height: RestoflowSpacing.xs),
-      ],
-      OpeningHoursEditor(
-        key: const Key('storefront-hours'),
-        value: _hours,
-        timezone: _hoursTimezone(profile, derived),
-        // Locked while the draft still IS the unreadable stored value: only
-        // the explicit repair above may replace it.
-        enabled: !_busy && !_hours.hasUnreadableEntries,
-        pickTime: widget.pickTime,
-        pickDate: widget.pickDate,
-        onChanged: (h) => setState(() => _hours = h),
-      ),
-      if (!_hours.isValid)
-        Text(
-          l10n.storefrontHoursInvalid,
-          key: const Key('storefront-hours-invalid'),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.error,
-          ),
-        ),
       const Divider(height: RestoflowSpacing.xl),
       // Save row.
       Wrap(
@@ -2132,13 +2156,14 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         derived,
         dirty || _homeDirty || _featuredDirty,
       ),
-      const Divider(height: RestoflowSpacing.xl),
-      ..._mediaArea(
-        l10n,
-        theme,
-        profile,
-        dirty || _homeDirty || _featuredDirty,
-      ),
+      _settingsGroup('media', l10n.storefrontMediaTitle, [
+        ..._mediaArea(
+          l10n,
+          theme,
+          profile,
+          dirty || _homeDirty || _featuredDirty,
+        ),
+      ]),
     ];
   }
 
@@ -2155,10 +2180,6 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     final editable = !_busy && !_dirty && !_homeDirty && !_featuredLoading;
     return [
       const Divider(height: RestoflowSpacing.xl),
-      Text(
-        l10n.storefrontFeaturedItemsTitle,
-        style: theme.textTheme.titleSmall,
-      ),
       const SizedBox(height: RestoflowSpacing.xs),
       if (!_featuredSupported)
         Text(
@@ -2810,7 +2831,6 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     final seams = widget.seams!;
     final publisher = seams.publisher;
     return [
-      Text(l10n.storefrontMediaTitle, style: theme.textTheme.titleSmall),
       const SizedBox(height: RestoflowSpacing.xs),
       if (publisher == null)
         Text(

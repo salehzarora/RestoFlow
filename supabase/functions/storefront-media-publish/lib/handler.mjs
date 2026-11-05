@@ -31,11 +31,13 @@
 //     the profile (authoritative state) and may retry with the same request_id.
 // No storefront-media object is ever deleted by this function.
 
-import { DerivationError, RECIPE } from './recipe.mjs';
+import { DerivationError, RECIPE, sourceMaxBytes } from './recipe.mjs';
 import { SourceRejected } from './sniff.mjs';
 import { hasDuplicateTopLevelKey, validateRequest } from './validate.mjs';
 import { createCallerClient, isPublisherPrincipal, readCapped, UpstreamError } from './caller.mjs';
 import { derivedRequestId } from './ids.mjs';
+import { BACKGROUND_RECIPE } from './background-bilinear.mjs';
+import { backgroundObjectKey, checkBackgroundBase, matchesBackgroundRegistration, validBackgroundSource } from './background.mjs';
 
 export const MAX_BODY_BYTES = 4096;
 const MAX_TOKEN_CHARS = 8192;
@@ -140,6 +142,8 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       const v = validateRequest(body);
       if (!v.ok) return fail(400, 'invalid_request', { field: v.field, reason: v.reason });
       const r = v.value;
+      const background = r.slot === 'background';
+      const scope = { p_organization_id: r.organizationId, p_restaurant_id: r.restaurantId };
 
       // (4) authority preflight: a caller who cannot manage this restaurant's storefront
       //     never makes the function download or decode anything
@@ -155,6 +159,25 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       // not attach old derived bytes to the new source generation. This snapshot
       // comes only from the manager-scoped RPC, never from the request body.
       let sourceSnapshot;
+      let backgroundSource;
+      let sourceBucket = r.sourceBucket, sourceKey = r.sourceKey, sourceLimit = r.sourceMaxBytes;
+      if (background) {
+        try {
+          backgroundSource = await caller.rpc('get_storefront_background_source_v1', {
+            ...scope, p_branch_id:r.branchId, p_base_media_id:r.baseMediaId,
+          });
+        } catch (e) {
+          return upstreamFailure(e, false);
+        }
+        if (backgroundSource.ok !== true) return backgroundRefusal(backgroundSource, false);
+        if (!validSourceSnapshot(backgroundSource.source_snapshot) || !validBackgroundSource(backgroundSource, r)) {
+          return fail(500, 'internal_error', { retryable:true, uncertain:false });
+        }
+        sourceSnapshot = backgroundSource.source_snapshot;
+        sourceBucket = backgroundSource.source_bucket;
+        sourceKey = backgroundSource.source_key;
+        sourceLimit = sourceMaxBytes(sourceBucket);
+      }
       if (r.slot === 'item' || r.slot === 'product') {
         let current;
         try {
@@ -177,7 +200,7 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       // (5) the PRIVATE original, as the caller, never buffered beyond its bucket cap
       let source;
       try {
-        source = await caller.downloadPrivate(r.sourceBucket, r.sourceKey, r.sourceMaxBytes);
+        source = await caller.downloadPrivate(sourceBucket, sourceKey, sourceLimit);
       } catch (e) {
         return upstreamFailure(e, false);
       }
@@ -194,7 +217,14 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       }
       let d;
       try {
-        d = await deriver.derive(source.bytes, { variant: r.variant, source: r.sourceBucket, rung: r.rung });
+        if (background) {
+          const proof = await checkBackgroundBase(deriver, source.bytes, backgroundSource, r.baseRung);
+          if (proof === 'base_mismatch') return fail(422, 'refused', { code:proof });
+          if (proof === 'not_needed') return reply(200, { ok:true, status:proof });
+          d = await deriver.deriveBackground(source.bytes, { source:sourceBucket, rung:r.rung });
+        } else {
+          d = await deriver.derive(source.bytes, { variant:r.variant, source:sourceBucket, rung:r.rung });
+        }
       } catch (e) {
         if (e instanceof DerivationError && e.code === 'engine_unavailable') {
           poisoned = true;
@@ -223,39 +253,61 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
         return fail(422, 'refused', { code: 'self_check_failed' });
       }
 
+      if (background && (d.width <= backgroundSource.base_width || d.height < backgroundSource.base_height)) {
+        if (d.width === backgroundSource.base_width && d.height === backgroundSource.base_height) {
+          return reply(200, { ok:true, status:'not_needed' });
+        }
+        return fail(422, 'refused', { code:'self_check_failed' });
+      }
+
       // (7) stage (idempotent under the derived key)
-      const stageId = await derivedRequestId(r.requestId, 'stage');
-      const finalizeId = await derivedRequestId(r.requestId, 'finalize');
+      const stageId = await derivedRequestId(r.requestId, background ? 'background-stage' : 'stage');
+      const finalizeId = await derivedRequestId(r.requestId, background ? 'background-finalize' : 'finalize');
       let staged;
       effects = true;
       try {
-        staged = await caller.rpc(r.slot === 'product' ? 'stage_storefront_product_media_v1' : 'stage_storefront_media', {
-          p_client_request_id: stageId, p_organization_id: r.organizationId, p_restaurant_id: r.restaurantId,
-          ...(r.slot === 'product' ? { p_derivative_id: r.productDerivativeId } : { p_source_bucket: r.sourceBucket }),
-          p_source_key: r.sourceKey, p_variant: r.variant,
-          p_content_hash: d.sha256, p_width: d.width, p_height: d.height, p_bytes: d.byteLength,
-          ...(r.slot === 'item' || r.slot === 'product' ? { p_source_snapshot: sourceSnapshot } : {}),
-        });
+        if (background) {
+          staged = await caller.rpc('stage_storefront_background_variant_v1', {
+            ...scope, p_client_request_id:stageId, p_branch_id:r.branchId, p_base_media_id:r.baseMediaId,
+            p_source_snapshot:sourceSnapshot, p_expected_base_hash:backgroundSource.base_hash,
+            p_content_hash:d.sha256, p_width:d.width, p_height:d.height, p_bytes:d.byteLength,
+          });
+        } else {
+          staged = await caller.rpc(r.slot === 'product' ? 'stage_storefront_product_media_v1' : 'stage_storefront_media', {
+            p_client_request_id: stageId, p_organization_id: r.organizationId, p_restaurant_id: r.restaurantId,
+            ...(r.slot === 'product' ? { p_derivative_id: r.productDerivativeId } : { p_source_bucket: r.sourceBucket }),
+            p_source_key: r.sourceKey, p_variant: r.variant,
+            p_content_hash: d.sha256, p_width: d.width, p_height: d.height, p_bytes: d.byteLength,
+            ...(r.slot === 'item' || r.slot === 'product' ? { p_source_snapshot: sourceSnapshot } : {}),
+          });
+        }
       } catch (e) {
         return upstreamFailure(e, true);
       }
-      if (staged.ok !== true) return stageRefusal(staged);
+      if (staged.ok !== true) return background ? backgroundRefusal(staged, true) : stageRefusal(staged);
       const objectKey = staged.object_key;
-      // the registered key must be exactly <restaurant prefix>/<this content address>.webp
-      if (typeof objectKey !== 'string' || !OBJECT_KEY_RE.test(objectKey) || objectKey.slice(33, 97) !== d.sha256 || typeof staged.media_id !== 'string'
-          || typeof staged.source_bucket !== 'string' || typeof staged.source_key !== 'string' || typeof staged.variant !== 'string') {
-        return fail(500, 'internal_error', { retryable: true, uncertain: true });
-      }
-      // Identical bytes can belong to another source association. Finalizing that
-      // row can republish/repoint its original Hero, including when a published
-      // stage response races with retraction. Require our exact association for
-      // every slot and state BEFORE any public Storage operation or finalize.
-      if (staged.source_bucket !== r.sourceBucket
-          || staged.source_key !== r.sourceKey || staged.variant !== r.variant
-          || staged.source_mismatch !== false) {
-        return r.slot === 'item' || r.slot === 'product'
-          ? fail(500, 'internal_error', { retryable: true, uncertain: true })
-          : fail(409, 'object_conflict');
+      const expectedBackgroundKey = background ? await backgroundObjectKey(r.restaurantId, d.sha256) : null;
+      if (background) {
+        if (!matchesBackgroundRegistration(staged, r.baseMediaId, d, expectedBackgroundKey)) {
+          return fail(500, 'internal_error', { retryable:true, uncertain:true });
+        }
+      } else {
+        // the registered key must be exactly <restaurant prefix>/<this content address>.webp
+        if (typeof objectKey !== 'string' || !OBJECT_KEY_RE.test(objectKey) || objectKey.slice(33, 97) !== d.sha256 || typeof staged.media_id !== 'string'
+            || typeof staged.source_bucket !== 'string' || typeof staged.source_key !== 'string' || typeof staged.variant !== 'string') {
+          return fail(500, 'internal_error', { retryable: true, uncertain: true });
+        }
+        // Identical bytes can belong to another source association. Finalizing that
+        // row can republish/repoint its original Hero, including when a published
+        // stage response races with retraction. Require our exact association for
+        // every slot and state BEFORE any public Storage operation or finalize.
+        if (staged.source_bucket !== r.sourceBucket
+            || staged.source_key !== r.sourceKey || staged.variant !== r.variant
+            || staged.source_mismatch !== false) {
+          return r.slot === 'item' || r.slot === 'product'
+            ? fail(500, 'internal_error', { retryable: true, uncertain: true })
+            : fail(409, 'object_conflict');
+        }
       }
 
       // (8) the derivative into the PUBLIC bucket, as the caller, never overwriting. Done for
@@ -301,12 +353,29 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       // (9) finalize: the server proves the object and publishes (idempotent under the derived key)
       let fin;
       try {
-        fin = await caller.rpc(r.slot === 'product' ? 'finalize_storefront_product_media_v1' : 'finalize_storefront_media', {
-          p_client_request_id: finalizeId, p_organization_id: r.organizationId, p_restaurant_id: r.restaurantId,
-          p_media_id: staged.media_id,
-        });
+        if (background) {
+          fin = await caller.rpc('finalize_storefront_background_variant_v1', {
+            ...scope, p_client_request_id:finalizeId, p_variant_id:staged.variant_id,
+          });
+        } else {
+          fin = await caller.rpc(r.slot === 'product' ? 'finalize_storefront_product_media_v1' : 'finalize_storefront_media', {
+            p_client_request_id: finalizeId, p_organization_id: r.organizationId, p_restaurant_id: r.restaurantId,
+            p_media_id: staged.media_id,
+          });
+        }
       } catch (e) {
         return upstreamFailure(e, true);
+      }
+      if (background) {
+        if (fin.ok !== true) return backgroundRefusal(fin, true);
+        if (!matchesBackgroundRegistration(fin, r.baseMediaId, d, expectedBackgroundKey)
+            || fin.variant_id !== staged.variant_id || fin.state !== 'published') {
+          return fail(500, 'internal_error', { retryable:true, uncertain:true });
+        }
+        return reply(200, { ok:true, status:'published', recipe:BACKGROUND_RECIPE.id, rung:d.rung,
+          media:{ variant_id:fin.variant_id, base_media_id:r.baseMediaId, object_key:expectedBackgroundKey,
+            content_hash:d.sha256, width:d.width, height:d.height, bytes:d.byteLength,
+            variant:r.variant, recipe:BACKGROUND_RECIPE.id, state:'published' } });
       }
       if (fin.ok !== true) {
         switch (fin.error) {
@@ -362,5 +431,16 @@ function stageRefusal(staged, uncertain = true) {
     case 'stale_request': return fail(409, 'restart_required');
     case 'invalid': return fail(422, 'refused', { code: typeof staged.reason === 'string' ? staged.reason : 'invalid' });
     default: return fail(500, 'internal_error', { retryable: true, uncertain });
+  }
+}
+
+
+function backgroundRefusal(row, uncertain) {
+  switch (row.error) {
+    case 'not_found': return fail(404, 'source_not_found');
+    case 'object_conflict':
+    case 'object_mismatch': return fail(409, 'object_conflict');
+    case 'object_missing': return fail(503, 'upstream_unavailable', { retryable:true, uncertain:true });
+    default: return stageRefusal(row, uncertain);
   }
 }

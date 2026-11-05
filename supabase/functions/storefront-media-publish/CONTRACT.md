@@ -82,3 +82,35 @@ static-guard suites remain regression checks. F36–F36c cover editorial duplica
 refusal in every state, a retraction race, and exact-source recovery. The service
 double is not a database isolation proof; the migration's pgTAP tests verify
 those invariants.
+
+## Optional menu background companion
+
+An authenticated restaurant-level manager can prepare one `bg2560` companion for an eligible published `w960` editorial image. The Dashboard sends exactly nine fields to this function.
+
+```json
+{
+  "request_id": "<uuid>",
+  "organization_id": "<uuid>",
+  "restaurant_id": "<uuid>",
+  "branch_id": "<uuid>",
+  "base_media_id": "<published w960 media UUID>",
+  "slot": "background",
+  "variant": "bg2560",
+  "base_rung": 0,
+  "rung": 0
+}
+```
+
+Both rungs must be integers from 0 through 4. After authenticating the caller and verifying management scope, the function obtains the private bucket, key, source generation, and recorded base dimensions and hash through `get_storefront_background_source_v1`. It validates the exact source scope before downloading the original with the caller JWT and existing bucket size limit.
+
+The function derives c4 `w960` at `base_rung` directly from those bytes. A candidate proceeds only when the resulting dimensions and hash match the registered base. This comparison proves that the current source reproduces the base. The function releases that output before deriving the higher-resolution image from the same private bytes.
+
+`storefront-background-b1` uses the existing pinned codecs, source limits, orientation, integer box reduction, metadata removal, WebP settings, quality ladder and 512 KiB output cap. Its larger resize uses fixed-point, pixel-centered bilinear sampling with premultiplied alpha and clamped edges. It fits inside 2560 × 2560, preserves aspect ratio, and never enlarges the original. Legacy `w480` and `w960` continue to use their c4 triangle resize.
+
+The authenticated stage and finalize RPCs recheck the base, source generation and branch. The function verifies the returned association and complete immutable content address before storing the bytes and after finalization. The background namespace is the first 32 hex characters of SHA256 over UTF-8 `storefront-menu-background-v1:` followed by the canonical restaurant UUID. Its public key is `<namespace>/<content-sha256>.webp`. An existing object must match the derived bytes. Uploads use `x-upsert:false` and one-year caching. A retry reuses the request ID and stage/finalize keys. Background publication creates only the companion and leaves selection to the content editor.
+
+- HTTP 200 with `{ok:true,status:"published",recipe:"storefront-background-b1",rung,media}` confirms a published companion. The media fields are `variant_id`, `base_media_id`, `object_key`, `content_hash`, `width`, `height`, `bytes`, `variant`, `recipe`, and `state`.
+- HTTP 200 with `{ok:true,status:"not_needed"}` means the verified base already covers the available source detail.
+- HTTP 202 with `{ok:false,status:"ladder_next",next_rung}` advances the high-resolution ladder by one rung.
+- HTTP 422 with `{ok:false,status:"refused",code:"base_mismatch"}` means the supplied base rung did not reproduce the base. This occurs before any stage or public upload. For a legacy image with unknown rung, an explicit republish can try the next base rung. A confirmed matching rung stays fixed while the high ladder advances.
+- Missing sources, stale generations, immutable conflicts, oversized output and uncertain runtime failures retain their existing typed outcomes. The editor can continue using the published base.

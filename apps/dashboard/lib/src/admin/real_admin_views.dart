@@ -15,6 +15,7 @@ import '../online_orders/online_order_settings_section.dart';
 import '../quick_notes/quick_notes_repository.dart';
 import '../quick_notes/quick_notes_section.dart';
 import '../storefront/storefront_section.dart';
+import '../storefront/storefront_settings_group.dart';
 import '../storefront/seo_consent_repository.dart';
 import '../storefront/seo_consent_section.dart';
 import '../storefront/seo_consent_operations.dart';
@@ -718,11 +719,18 @@ class _RealSettingsViewState extends State<RealSettingsView> {
         // literal role name. An unbuilt repo/storage renders an honest note.
         if (_hasRestaurant && membership.restaurantId != null) ...[
           const SizedBox(height: RestoflowSpacing.md),
-          RestaurantLogoSection(
-            repository: widget.brandingRepository,
-            storage: widget.brandingStorage,
-            organizationId: membership.organizationId,
-            restaurantId: membership.restaurantId!,
+          StorefrontSettingsGroup(
+            key: ValueKey(
+              'settings-receipt-logo-${membership.organizationId}-${membership.restaurantId}',
+            ),
+            title: l10n.brandingSectionTitle,
+            child: RestaurantLogoSection(
+              embedded: true,
+              repository: widget.brandingRepository,
+              storage: widget.brandingStorage,
+              organizationId: membership.organizationId,
+              restaurantId: membership.restaurantId!,
+            ),
           ),
         ],
         // STOREFRONT-PUBLISH-001: the public storefront editor, restaurant-
@@ -734,9 +742,17 @@ class _RealSettingsViewState extends State<RealSettingsView> {
             membership.restaurantId != null &&
             widget.storefrontSeams != null) ...[
           const SizedBox(height: RestoflowSpacing.md),
-          StorefrontSection(
-            seams: widget.storefrontSeams,
-            defaultDisplayName: membership.restaurantName,
+          StorefrontSettingsGroup(
+            key: ValueKey(
+              'settings-storefront-${membership.organizationId}-${membership.restaurantId}',
+            ),
+            title: l10n.storefrontSectionTitle,
+            initiallyExpanded: true,
+            child: StorefrontSection(
+              embedded: true,
+              seams: widget.storefrontSeams,
+              defaultDisplayName: membership.restaurantName,
+            ),
           ),
         ],
         if (membership.restaurantId != null &&

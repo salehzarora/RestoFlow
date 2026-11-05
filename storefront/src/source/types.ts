@@ -79,6 +79,12 @@ export interface TenantService {
   readonly orderingEnabled: boolean;
 }
 
+export interface ImageVariant {
+  readonly url: string;
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface Tenant {
   readonly slug: string;
   readonly displayName: string;
@@ -97,6 +103,8 @@ export interface Tenant {
   readonly heroImage: string | null;
   /** Optional menu-only media; missing/null retains the existing hero backdrop. */
   readonly menuBackgroundImage?: string | null;
+  /** Published copies for the same selected menu photo, ordered by actual pixel width. */
+  readonly menuBackgroundVariants?: readonly ImageVariant[];
   /** Darkening percentage for the independent menu image, 0–80; null uses 15. */
   readonly menuBackgroundDim?: number | null;
   /** Explicit scene opt-in; omitted/null retains the existing merchant look. */
@@ -207,7 +215,7 @@ export interface MenuItem {
   readonly priceMinor: Minor;
   readonly image: string | null;
   /** Authorized, immutable product variants; legacy catalogues omit them. */
-  readonly imageVariants?: readonly { readonly url:string; readonly width:number; readonly height:number }[];
+  readonly imageVariants?: readonly ImageVariant[];
   /** Featured items render as the large card at the top of their section. */
   readonly featured: boolean;
   /** Signature items are the ones eligible for the popular rail. */

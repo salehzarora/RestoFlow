@@ -1722,3 +1722,19 @@ The owner-authorized `BIZBOT-STOREFRONT-VISUAL-PARITY-001-API` follow-up adds ve
 - Entities/fields: [DOMAIN_MODEL](DOMAIN_MODEL.md).
 - System structure: [ARCHITECTURE](ARCHITECTURE.md).
 - Scope: [MVP_SCOPE](MVP_SCOPE.md). Plan/workflow: [PROJECT_PLAN](PROJECT_PLAN.md).
+
+## Background companion publication
+
+`BIZBOT-STOREFRONT-BACKGROUND-CLARITY-001-API` adds one optional `storefront-background-b1 / bg2560` WebP per restaurant, active branch, eligible published non-product w960 parent and original Storage object generation. The existing editorial selection continues to point at that w960 media ID. Only an explicit publication or republish prepares a companion. The ordinary w960 publication remains usable independently.
+
+The three private RPCs require a restaurant-wide publisher (manager or higher) and use the caller JWT. Each returns `{ok:false,error}` for a domain refusal; a caller lacking the required authority receives SQLSTATE 42501. The writer validates the private Storage object ID, version and modification timestamp against the present base both before a new operation and before replay. Publishing alone leaves the selected background, Hero, content, profile version and ordinary media registry unchanged.
+
+| RPC | Ordered named arguments (all prefixed with `p_`) | Successful fields |
+| --- | --- | --- |
+| `get_storefront_background_source_v1` | organization_id, restaurant_id, branch_id, base_media_id | ok, base_media_id, source_bucket, source_key, source_snapshot, base_hash, base_width, base_height |
+| `stage_storefront_background_variant_v1` | client_request_id, organization_id, restaurant_id, branch_id, base_media_id, source_snapshot, expected_base_hash, content_hash, width, height, bytes | ok, variant_id, base_media_id, object_key, content_hash, width, height, bytes, variant, recipe, state |
+| `finalize_storefront_background_variant_v1` | client_request_id, organization_id, restaurant_id, variant_id | Same fields as stage, with state `published` |
+
+The publisher verifies that the current private image reproduces the recorded c4 base at its declared rung. It bounds the companion to a 2560-pixel long edge and 524,288 bytes and verifies uploaded content by SHA-256. The private registry grants scoped SELECT/INSERT for a registered immutable object in its own opaque namespace. Finalization requires a live public object with the declared size and WebP MIME type.
+
+`public.storefront_menu_v7(p_slug text)` delegates to v6. A selected, eligible pair adds one top-level field, `menu_background_images_v1`, with `{base_url,variants:[{url,width,height},{url,width,height}]}`. The first entry matches the selected v6 menu background URL and the second is its larger companion. Both widths/heights are encoded dimensions. With no eligible pair (including inherited, cleared, changed, stale or missing media) the result equals v6 in full. Versions 1–6 retain their existing contracts. The public response exposes no private source identity, scope or original object path.

@@ -1,6 +1,6 @@
 /** v4, v5 and v6 are separate strict wire boundaries. Server drift normalization is NOT
  * decoder repair. No network, environment, v3 endpoint retry or fixture path. */
-import type { HeroFormat, ImageFit, CardLayout, FontFamily } from '../types';
+import type { HeroFormat, ImageFit, CardLayout, FontFamily, ImageVariant } from '../types';
 import { contentTextValid, heroFormatValid } from '../../content/unicode';
 import { EnvelopeError, type StorefrontMenuFailure } from './decode';
 import { decodeStorefrontMenuV3, type StorefrontMenuV3Ok } from './decodeFeaturedItems';
@@ -106,6 +106,45 @@ export function decodeStorefrontMenuV6(raw:unknown):StorefrontMenuV6Envelope{
   });
   return {...decoded,product_images_v1:rows};
 }
+export interface WireMenuBackgroundImages {
+  readonly base_url: string;
+  readonly variants: readonly ImageVariant[];
+}
+
+export interface StorefrontMenuV7Ok extends StorefrontMenuV6Ok {
+  readonly menu_background_images_v1?: WireMenuBackgroundImages;
+}
+export type StorefrontMenuV7Envelope = StorefrontMenuV7Ok | StorefrontMenuFailure;
+
+/** v7 adds only an optional manifest for the selected editorial background. */
+export function decodeStorefrontMenuV7(raw: unknown): StorefrontMenuV7Envelope {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return reject('envelope');
+  const field = 'menu_background_images_v1';
+  if (!Object.hasOwn(raw, field)) return decodeStorefrontMenuV6(raw);
+  const { menu_background_images_v1, ...rest } = raw as Record<string, unknown>;
+  const decoded = decodeStorefrontMenuV6(rest);
+  if (!decoded.ok) return reject(field);
+  const manifest = record(menu_background_images_v1, ['base_url', 'variants'], field);
+  const baseUrl = image(manifest.base_url, field)!;
+  if (baseUrl !== decoded.content_v1.appearance?.menu_background_url) return reject(field);
+  const variants = array(manifest.variants, 2, field).map((value, index) => {
+    const row = record(value, ['url', 'width', 'height'], field);
+    const width = integer(row.width, field), height = integer(row.height, field);
+    const limit = index === 0 ? 960 : 2560;
+    if (width < 1 || height < 1 || width > limit || height > limit) return reject(field);
+    return { url: image(row.url, field)!, width, height };
+  });
+  const [base, high] = variants;
+  if (!base || base.url !== baseUrl) return reject(field);
+  if (high) {
+    // Both copies fit the same source. Allow integer rounding of the shorter edge.
+    const aspectError = Math.abs(high.width * base.height - high.height * base.width);
+    if (high.url === baseUrl || high.width <= base.width || high.height < base.height ||
+        aspectError > Math.max(high.width, high.height)) return reject(field);
+  }
+  return { ...decoded, menu_background_images_v1: { base_url: baseUrl, variants } };
+}
+
 function decodeContent(raw:unknown,allowAppearance:boolean,allowScene=false):StorefrontMenuV5Envelope{
   if(typeof raw!=='object'||raw===null||Array.isArray(raw))return reject('envelope');
   const e=raw as Record<string,unknown>;

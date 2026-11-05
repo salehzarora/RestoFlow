@@ -133,8 +133,8 @@ export function requireEphemeralCi(env) {
 
 // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-CINEMATIC-PROOF-001: the exact reviewed
 // migration sequence. The #379 target must follow its exact predecessor and the
-// exact 183-migration prefix of main 0df86dcb, then 001D and exactly the two
-// reviewed PR380 migrations (product helpers before scene). Anything else is refused
+// exact 183-migration prefix of main 0df86dcb, then 001D, the reviewed PR380 product and scene migrations, and the background
+// clarity contract, in that order. Anything else is refused
 // until a reviewed change extends this pin: it is not a generic mechanism.
 export const predecessorName = '20261102015942_bizbot_storefront_seo_discovery_001.sql';
 export const predecessorVersion = '20261102015942';
@@ -148,6 +148,8 @@ export const followupMigrations = Object.freeze([
     sha256: 'a901a709970b4629b22357743831aab687c2882fe066776dd7913b82c29c77d5' }),
   Object.freeze({ name: '20261105025604_bizbot_storefront_visual_parity_scene.sql',
     sha256: '7bfac52a707b20fdf9b67a466d84290a7565fe574850ce1e992c093d5f19b520' }),
+  Object.freeze({ name: '20261105141815_bizbot_storefront_background_clarity_001_api.sql',
+    sha256: 'e5cf4b2840837facc5699cecb154689a7439383ac4d6650f13746d5e68bd8504' }),
 ]);
 
 
@@ -201,7 +203,7 @@ export function proveMigrationSequence(sources) {
     assert.ok(!later.includes(followUpName), 'Interleaved migration between the #379 target and the 001D follow-up');
     assert.fail('Unknown migration after the #379 target');
   }
-  assert.deepEqual(later, [followUpName, ...followupMigrations.map(item => item.name)], 'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+  assert.deepEqual(later, [followUpName, ...followupMigrations.map(item => item.name)], 'Only the pinned 001D, product, scene and background migrations may follow the #379 target');
   const bytes = new Map(sources);
   proveFinalMigration(bytes.get(migrationName).toString('utf8'));
   const followUp = proveFollowUpMigration(bytes.get(followUpName));

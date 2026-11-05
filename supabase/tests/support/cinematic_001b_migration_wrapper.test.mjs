@@ -91,9 +91,9 @@ const crlf = (bytes) => Buffer.from(bytes.toString('latin1').replaceAll('\n', '\
 const failsWith = (message) => (error) => error.message.split('\n')[0] === message;
 const refuses = (list, message) => assert.throws(() => proveMigrationSequence(list), failsWith(message));
 
-test('the reconciled #380 sequence pins #379, payment 001D, product helpers and scene', () => {
+test('the sequence pins #379, payment 001D, product helpers, scene and background clarity', () => {
   assert.deepEqual(proveMigrationSequence(sources).summary, {
-    migrations: 187, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name)],
+    migrations: 188, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name)],
     prefix_names_sha256: prefixNamesFingerprint, follow_up_sha256: followUpFingerprint, follow_up_statements: 125,
     follow_up_no_embedded_transaction: true,
     visual_followups: followupMigrations.map(pin => ({ ...pin, version: pin.name.slice(0, 14), statements: statements(bytesOf(pin.name).toString('utf8')).length, no_embedded_transaction: true })),
@@ -195,11 +195,11 @@ test('top-level transaction control in the 001D follow-up fails; dollar-quoted P
 });
 
 test('a second later migration fails, including any future follow-up not yet pinned', () => {
-  refuses(adding(['20261104150000_second_later.sql', sql('select 1;\n')]), 'Only the reviewed 001D then product and scene migrations may follow the #379 target');
-  const future = ['20261105025700_future_follow_up.sql', '20261105025800_future_follow_up.sql'];
+  refuses(adding(['20261104150000_second_later.sql', sql('select 1;\n')]), 'Only the pinned 001D, product, scene and background migrations may follow the #379 target');
+  const future = ['20261106122400_future_follow_up.sql', '20261106122500_future_follow_up.sql'];
   assert.ok(future.every(name => name.slice(0, 14) > followupMigrations.at(-1).name.slice(0, 14)));
   refuses(adding([future[0], sql('select 1;\n')], [future[1], sql('select 2;\n')]),
-    'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+    'Only the pinned 001D, product, scene and background migrations may follow the #379 target');
 });
 
 test('non-conforming migration names and sources fail', () => {
@@ -229,9 +229,9 @@ test('the exact #379 and 001D hashes and the reviewed sequence are pinned', () =
   assert.deepEqual(created.sort(), [...targetFunctions].sort());
 });
 
-test('both visual migrations fail closed on missing, swapped, changed, CRLF or copied bytes', () => {
+test('all visual migrations fail closed on missing, swapped, changed, CRLF or copied bytes', () => {
   for (const pin of followupMigrations) {
-    refuses(without(sources, pin.name), 'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+    refuses(without(sources, pin.name), 'Only the pinned 001D, product, scene and background migrations may follow the #379 target');
     const original = bytesOf(pin.name);
     for (const changed of [Buffer.concat([original, sql('-- changed\n')]), crlf(original), original.subarray(0, -1)]) {
       refuses(replacing(pin.name, changed), 'Unreviewed visual follow-up bytes');
@@ -246,7 +246,7 @@ test('both visual migrations fail closed on missing, swapped, changed, CRLF or c
   const between = '20261105025500_between_product_and_scene.sql';
   assert.ok(product.slice(0, 14) < between.slice(0, 14) && between.slice(0, 14) < scene.slice(0, 14));
   refuses(adding([between, sql('select 1;\n')]),
-    'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+    'Only the pinned 001D, product, scene and background migrations may follow the #379 target');
 });
 
 test('production-shaped proof omits only pending payment after validating the complete reviewed checkout', () => {

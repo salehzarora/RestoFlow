@@ -100,8 +100,12 @@ void main() {
 
   for (final dim in [0, 15, 80]) {
     testWidgets(
-      'same image at dim $dim compares bright brand and neutral glass',
+      'phone preview uses proportional cover in both scenes at dim $dim',
       (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 844);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
         final uri = Uri.parse('https://example.invalid/same-owned-scene.webp');
         await _open(tester, dim: dim, uri: uri, onResult: (_) {});
         final reference = tester.widget<Image>(
@@ -117,6 +121,7 @@ void main() {
         );
         expect((reference.image as NetworkImage).url, uri.toString());
         expect(reference.fit, BoxFit.cover);
+        expect(legacy.fit, BoxFit.cover);
         expect(
           tester
               .widget<ColoredBox>(find.byKey(const Key('scene-reference-dim')))

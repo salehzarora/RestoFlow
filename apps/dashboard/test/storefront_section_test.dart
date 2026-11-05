@@ -12,6 +12,7 @@ import 'package:restoflow_dashboard/src/admin/supabase_settings_repository.dart'
 import 'package:restoflow_dashboard/src/admin/timezone_catalog.dart';
 import 'package:restoflow_dashboard/src/storefront/opening_hours_editor.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_copy.dart';
+import 'helpers/storefront_settings_groups.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_color_picker.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_featured_items.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_repository.dart';
@@ -437,6 +438,7 @@ Future<void> _pump(
   Widget section, {
   String locale = 'en',
   bool settle = true,
+  bool openGroups = true,
 }) async {
   tester.view.physicalSize = const Size(1200, 4000);
   tester.view.devicePixelRatio = 1.0;
@@ -460,9 +462,11 @@ Future<void> _pump(
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 20));
   }
+  if (openGroups) await openStorefrontSettingsGroups(tester);
 }
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
+  await openStorefrontSettingsGroups(tester);
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
   await tester.tap(finder);
@@ -518,6 +522,60 @@ void _expectPublishedWithNote(
 }
 
 void main() {
+  testWidgets('folding profile details preserves the draft and stored locale', (
+    tester,
+  ) async {
+    final repo = _FakeProfileRepo(
+      profile: {..._profileJson(), 'locale_default': 'he'},
+    );
+    await _pump(
+      tester,
+      StorefrontSection(seams: _seams(repo)),
+      openGroups: false,
+    );
+    expect(
+      find.byKey(const ValueKey('storefront-primary-color-control')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('storefront-primary-color-control'),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('storefront-locale'), skipOffstage: false),
+      findsNothing,
+    );
+    final field = find.byKey(const Key('storefront-tagline'));
+    await tester.enterText(field, 'Preserved draft');
+    await tester.pumpAndSettle();
+    final reads = repo.reads;
+    final header = find
+        .descendant(
+          of: find.byKey(const ValueKey('storefront-group-details')),
+          matching: find.byType(ListTile),
+        )
+        .first;
+    await tester.ensureVisible(header);
+    await tester.tap(header);
+    await tester.pumpAndSettle();
+    expect(field, findsNothing);
+    expect(repo.saves, isEmpty);
+    await tester.tap(header);
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).controller!.text, 'Preserved draft');
+    expect(repo.reads, reads);
+    final save = find.byKey(const Key('storefront-save'));
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(repo.saves, hasLength(1));
+    expect(repo.saves.single.patch, containsPair('tagline', 'Preserved draft'));
+    expect(repo.saves.single.patch.containsKey('locale_default'), isFalse);
+    expect(repo.profile!['locale_default'], 'he');
+  });
   for (final role in ['primary', 'accent']) {
     testWidgets(
       '$role visual picker Cancel is clean; Apply waits for Save and reread',
@@ -1743,22 +1801,24 @@ void main() {
       expect(find.byKey(const Key('storefront-slug')), findsNothing);
     });
 
-    testWidgets('help texts: default language, pickup and pause (truthful)', (
-      tester,
-    ) async {
-      final l10n = await _l10n();
-      await _pump(
-        tester,
-        StorefrontSection(
-          seams: _seams(_FakeProfileRepo(profile: _profileJson())),
-        ),
-      );
-      expect(find.text(l10n.storefrontLocaleHelp), findsOneWidget);
-      expect(find.text(l10n.storefrontPickupHelp), findsOneWidget);
-      expect(find.text(l10n.storefrontPauseHelp), findsOneWidget);
-      expect(find.byKey(const Key('storefront-pause-zone')), findsOneWidget);
-      expect(find.text(l10n.storefrontBlockersSavedNote), findsOneWidget);
-    });
+    testWidgets(
+      'stored-only locale is hidden; pickup and pause help stay truthful',
+      (tester) async {
+        final l10n = await _l10n();
+        await _pump(
+          tester,
+          StorefrontSection(
+            seams: _seams(_FakeProfileRepo(profile: _profileJson())),
+          ),
+        );
+        expect(find.byKey(const Key('storefront-locale')), findsNothing);
+        expect(find.text(l10n.storefrontLocaleHelp), findsNothing);
+        expect(find.text(l10n.storefrontPickupHelp), findsOneWidget);
+        expect(find.text(l10n.storefrontPauseHelp), findsOneWidget);
+        expect(find.byKey(const Key('storefront-pause-zone')), findsOneWidget);
+        expect(find.text(l10n.storefrontBlockersSavedNote), findsOneWidget);
+      },
+    );
 
     testWidgets('no ordering / delivery control anywhere', (tester) async {
       await _pump(
@@ -2555,6 +2615,7 @@ void main() {
             fail('The real Settings control never entered the viewport.');
           }
 
+          await openStorefrontSettingsGroups(tester);
           final color = find.byKey(
             const Key('content-appearance.text_color-1'),
           );

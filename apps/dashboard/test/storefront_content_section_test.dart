@@ -9,6 +9,8 @@ import 'package:restoflow_dashboard/src/storefront/storefront_sources.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_scene_preset_dialog.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'helpers/storefront_content_groups.dart';
+
 const restaurant = '22222222-2222-4222-8222-222222222222';
 const branch = '33333333-3333-4333-8333-333333333333';
 const item = '44444444-4444-4444-8444-444444444444';
@@ -127,6 +129,7 @@ Future<void> mount(
   double width = 1024,
   double textScale = 1,
   Uri Function(String)? publicUrlFor,
+  bool openGroups = true,
 }) async {
   await tester.binding.setSurfaceSize(Size(width, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -190,6 +193,12 @@ Future<void> mount(
     ),
   );
   await tester.pumpAndSettle();
+  if (openGroups &&
+      find.byKey(const Key('content-group-appearance')).evaluate().isNotEmpty) {
+    for (final group in ['appearance', 'background', 'editorial', 'media']) {
+      await setContentGroup(tester, group);
+    }
+  }
 }
 
 Future<void> edit(WidgetTester tester, String key, String text) async {
@@ -200,6 +209,133 @@ Future<void> edit(WidgetTester tester, String key, String text) async {
 }
 
 void main() {
+  testWidgets('folding content keeps drafts and the original retry identity', (
+    tester,
+  ) async {
+    final repo = ContentRepo();
+    final saved = repo.doc.editableCopy()
+      ..['announcement_text'] = 'Existing announcement'
+      ..['announcement_segments'] = ['Friday', 'Special']
+      ..['appearance'] = {
+        'text_color': '#fafafa',
+        'button_text_color': '#222222',
+        'scene_preset': 'reference_dark',
+        'menu_background_dim': 0,
+      };
+    repo.doc = StorefrontContentDocument.fromJson(saved);
+    final publisher = PublisherInvoker();
+    await mount(tester, repo, invoker: publisher, openGroups: false);
+    for (final name in ['appearance', 'background', 'editorial', 'media']) {
+      expect(find.byKey(Key('content-group-$name')), findsOneWidget);
+    }
+    final headline = find.byKey(const Key('content-hero-headline'));
+    expect(headline, findsNothing);
+    await setContentGroup(tester, 'editorial');
+    await edit(tester, 'content-hero-headline', 'Changed draft');
+    final focus = tester
+        .widget<EditableText>(
+          find.descendant(of: headline, matching: find.byType(EditableText)),
+        )
+        .focusNode;
+    expect(focus.hasFocus, isTrue);
+    await setContentGroup(tester, 'editorial', expanded: false);
+    expect(headline, findsNothing);
+    expect(
+      focus.hasFocus,
+      isFalse,
+      reason: 'A folded field must not continue receiving keyboard input',
+    );
+    expect(repo.calls, isEmpty);
+    expect(publisher.calls, isEmpty);
+    await setContentGroup(tester, 'editorial');
+    expect(
+      tester.widget<TextField>(headline).controller!.text,
+      'Changed draft',
+    );
+    await setContentGroup(tester, 'editorial', expanded: false);
+    repo.status = StorefrontContentWriteStatus.uncertain;
+    final save = find.byKey(const Key('content-save'));
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(repo.calls, hasLength(1));
+    final attempt = repo.calls.single;
+    expect(attempt.document.json, {...saved, 'hero_headline': 'Changed draft'});
+    await setContentGroup(tester, 'editorial');
+    await setContentGroup(tester, 'editorial', expanded: false);
+    expect(repo.calls, hasLength(1));
+    final retry = find.byKey(const Key('content-retry-save'));
+    expect(tester.widget<OutlinedButton>(retry).onPressed, isNotNull);
+    repo.status = StorefrontContentWriteStatus.ok;
+    await tester.ensureVisible(retry);
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    expect(repo.calls, hasLength(2));
+    expect(identical(repo.calls.last, attempt), isTrue);
+    expect(repo.doc.json, attempt.document.json);
+    expect(publisher.calls, isEmpty);
+  });
+
+  testWidgets(
+    'published image cards show measured dimensions and known usage on demand',
+    (tester) async {
+      final repo = ContentRepo();
+      for (var index = 1; index <= 7; index++) {
+        repo.mediaRows.add(
+          StorefrontContentMediaRow.fromJson({
+            'id': '66666666-6666-4666-8666-66666666666$index',
+            'source_bucket': 'restaurant-logos',
+            'source_key': 'synthetic/private.png',
+            'variant': 'w960',
+            'object_key': 'synthetic/public-$index.webp',
+            'content_hash': 'a' * 64,
+            'width': 480,
+            'height': 320,
+            'bytes': 100,
+            'state': 'published',
+            'published_at': '2026-10-22T00:00:00Z',
+            'unpublished_at': null,
+            'created_at': '2026-10-22T00:00:00Z',
+            'in_use': index == 1 ? ['hero'] : [],
+            'content_in_use': index == 2
+                ? [
+                    {'kind': 'menu_background'},
+                  ]
+                : [],
+          }),
+        );
+      }
+      final requested = <String>[];
+      await mount(
+        tester,
+        repo,
+        width: 390,
+        textScale: 1.6,
+        openGroups: false,
+        publicUrlFor: (key) {
+          requested.add(key);
+          return Uri.https('example.invalid', key);
+        },
+      );
+      expect(requested, isEmpty);
+      await setContentGroup(tester, 'media');
+      expect(requested.toSet(), {
+        for (var index = 1; index <= 6; index++) 'synthetic/public-$index.webp',
+      });
+      expect(find.text('Welcome image'), findsOneWidget);
+      expect(find.text('Menu background'), findsOneWidget);
+      expect(find.textContaining('480×320'), findsNWidgets(6));
+      expect(find.textContaining('synthetic/private.png'), findsNothing);
+      final more = find.text('Show more images');
+      await tester.ensureVisible(more);
+      await tester.tap(more);
+      await tester.pumpAndSettle();
+      expect(requested.toSet(), contains('synthetic/public-7.webp'));
+      expect(repo.calls, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final dim in [0, 15, 80]) {
     testWidgets(
       'scene Apply/Cancel/save/reread preserves dim $dim and independent images/colors',

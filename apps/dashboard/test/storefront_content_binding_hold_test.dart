@@ -7,6 +7,8 @@ import 'package:restoflow_dashboard/src/storefront/storefront_content_repository
 import 'package:restoflow_dashboard/src/storefront/storefront_content_section.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'helpers/storefront_content_groups.dart';
+
 import 'storefront_content_section_test.dart' as fixture;
 
 class _NoNetwork extends HttpOverrides {
@@ -95,6 +97,7 @@ void main() {
     );
     await tester.tap(find.text('Reload saved content'));
     await tester.pumpAndSettle();
+    await setContentGroup(tester, 'editorial');
     expect(
       tester
           .widget<TextField>(find.byKey(const Key('content-hero-headline')))
@@ -148,6 +151,7 @@ void main() {
         );
         await tester.pumpWidget(app(first));
         await tester.pumpAndSettle();
+        await setContentGroup(tester, 'editorial');
         await tester.enterText(
           find.byKey(const Key('content-hero-headline')),
           'Original uncertain intent',

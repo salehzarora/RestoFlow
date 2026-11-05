@@ -96,6 +96,66 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
     'announcement': ['Announcement text', 'نص الإعلان', 'טקסט הודעה'],
     'hero': ['Hero', 'الواجهة الرئيسية', 'אזור ראשי'],
     'appearance': ['Text appearance', 'مظهر النصوص', 'עיצוב טקסט'],
+    'backgroundAndScene': [
+      'Menu background and scene',
+      'خلفية المنيو والمشهد',
+      'רקע התפריט והמראה',
+    ],
+    'editorialSettings': [
+      'Headlines, announcements and editorial content',
+      'العناوين والإعلانات والمحتوى التحريري',
+      'כותרות, הודעות ותוכן מערכתי',
+    ],
+    'publishedImages': ['Published images', 'الصور المنشورة', 'תמונות שפורסמו'],
+    'publishedImage': ['Published image', 'صورة منشورة', 'תמונה שפורסמה'],
+    'welcomeImage': ['Welcome image', 'صورة البداية', 'תמונת הפתיחה'],
+    'storefrontLogo': ['Storefront logo', 'شعار المتجر', 'לוגו החנות'],
+    'moreImages': ['Show more images', 'عرض صور إضافية', 'הצגת תמונות נוספות'],
+    'publishedDimensions': [
+      'Published size: {size} pixels',
+      'أبعاد النسخة المنشورة: {size} بكسل',
+      'מידות התמונה שפורסמה: {size} פיקסלים',
+    ],
+    'backgroundResolutionHelp': [
+      'This preview shows the compatibility image. New uploads also prepare a larger background when the retained original permits it. Previous backgrounds need explicit preparation; the original must still exist.',
+      'تعرض المعاينة نسخة التوافق. يجهّز الرفع الجديد خلفية أكبر عندما يسمح الأصل المحفوظ بذلك. تحتاج الخلفيات السابقة إعادة تحضير صريحة مع بقاء الأصل.',
+      'התצוגה המקדימה מציגה את תמונת התאימות. העלאה חדשה מכינה גם רקע גדול יותר כשהמקור השמור מאפשר זאת. לרקעים קודמים נדרשת הכנה מפורשת והמקור חייב להישמר.',
+    ],
+    'backgroundQualityPrepare': [
+      'Prepare and publish higher resolution from original',
+      'تحضير ونشر دقة أعلى من الأصل',
+      'הכנה ופרסום רזולוציה גבוהה מהמקור',
+    ],
+    'backgroundQualityRetry': [
+      'Retry the same preparation',
+      'إعادة محاولة التحضير نفسه',
+      'ניסיון חוזר של אותה הכנה',
+    ],
+    'backgroundQualityWorking': [
+      'Preparing background resolution…',
+      'جارٍ تحضير دقة الخلفية…',
+      'מכין רזולוציית רקע…',
+    ],
+    'backgroundQualityReady': [
+      'Larger background ready: {size} pixels, {bytes} bytes. When this background is selected and saved, visitors receive a suitable published size.',
+      'الخلفية الأعلى دقة جاهزة: {size} بكسل، {bytes} بايت. عند اختيار هذه الخلفية وحفظها تُختار للزائر نسخة منشورة مناسبة.',
+      'הרקע הגדול מוכן: {size} פיקסלים, {bytes} בתים. כשהרקע נבחר ונשמר, נבחרת למבקר תמונה שפורסמה בגודל מתאים.',
+    ],
+    'backgroundQualityNative': [
+      'The original provides no larger image. The compatibility image is retained.',
+      'لا يتيح الأصل نسخة أكبر. تبقى نسخة التوافق.',
+      'המקור אינו מאפשר תמונה גדולה יותר. תמונת התאימות נשמרת.',
+    ],
+    'backgroundQualityUncertain': [
+      'Higher-resolution preparation was not confirmed. The compatibility image remains available; retry uses the same request.',
+      'لم يُؤكد تحضير الدقة الأعلى. تبقى نسخة التوافق متاحة؛ تعيد المحاولة الطلب نفسه.',
+      'הכנת הרזולוציה הגבוהה לא אושרה. תמונת התאימות זמינה; הניסיון החוזר משתמש באותה בקשה.',
+    ],
+    'backgroundQualityUnavailable': [
+      'A larger background could not be prepared or its original verified. The compatibility image is retained; no saved selection changed.',
+      'تعذّر تحضير خلفية أكبر أو التحقق من أصلها. تبقى نسخة التوافق، ولم يتغير الاختيار المحفوظ.',
+      'לא ניתן להכין רקע גדול יותר או לאמת את המקור. תמונת התאימות נשמרת והבחירה השמורה לא השתנתה.',
+    ],
     'primaryColor': [
       'Background / primary color',
       'لون الخلفية / اللون الأساسي',

@@ -169,9 +169,7 @@ class _SceneDialogState extends State<StorefrontScenePresetDialog> {
         key: Key('scene-$key-photo'),
         width: double.infinity,
         height: double.infinity,
-        fit: reference || fallback || MediaQuery.sizeOf(context).width > 650
-            ? BoxFit.cover
-            : BoxFit.fill,
+        fit: BoxFit.cover,
         errorBuilder: (_, _, _) => ColoredBox(
           color: primary,
           child: Center(

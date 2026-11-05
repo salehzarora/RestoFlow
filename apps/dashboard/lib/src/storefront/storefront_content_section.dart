@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'storefront_background_upload.dart';
+import 'storefront_background_publisher.dart';
 import 'storefront_content_models.dart';
 import 'storefront_content_repository.dart';
 import 'storefront_content_unicode.dart' as unicode;
@@ -13,6 +14,7 @@ import 'storefront_media_publisher.dart';
 import 'storefront_models.dart';
 import 'storefront_sources.dart';
 import 'storefront_scene_preset_dialog.dart';
+import 'storefront_settings_group.dart';
 
 /// A read acknowledgment from the actual parent editor. A completed Future is
 /// not evidence that the profile and its media were both refreshed.
@@ -50,6 +52,7 @@ class StorefrontContentSection extends StatefulWidget {
     this.colorSample = const StorefrontColorSample(),
     this.publisher,
     this.backgroundUpload,
+    this.backgroundPublisher,
     this.sources,
     this.reloadSources,
     this.publicUrlFor,
@@ -65,6 +68,7 @@ class StorefrontContentSection extends StatefulWidget {
   final StorefrontColorSample colorSample;
   final StorefrontMediaPublisher? publisher;
   final StorefrontBackgroundUpload? backgroundUpload;
+  final StorefrontBackgroundPublisher? backgroundPublisher;
   final StorefrontSourceOptions? sources;
   final Future<StorefrontSourceOptions> Function()? reloadSources;
   final Uri Function(String)? publicUrlFor;
@@ -84,6 +88,16 @@ class _ContentState extends State<StorefrontContentSection> {
   final _appearanceColors = <String, TextEditingController>{};
   bool _busy = false, _dirty = false, _stale = false;
   bool _uploadingBackground = false;
+  bool _preparingBackgroundQuality = false;
+  ({
+    String mediaId,
+    String requestId,
+    int? baseRung,
+    StorefrontBackgroundCursor? cursor,
+    StorefrontBackgroundResult? result,
+  })?
+  _backgroundQuality;
+  int _visibleMediaCount = 6;
   int _generation = 0;
   int _bindingGeneration = 0;
   bool _ownsRefresh = false, _bindingHold = false, _branchHold = false;
@@ -140,10 +154,14 @@ class _ContentState extends State<StorefrontContentSection> {
     if (!identical(old.repository, widget.repository) ||
         !identical(old.catalog, widget.catalog) ||
         !identical(old.publisher, widget.publisher) ||
+        !identical(old.backgroundPublisher, widget.backgroundPublisher) ||
         !identical(old.backgroundUpload, widget.backgroundUpload) ||
         old.savedBranchId != widget.savedBranchId) {
       final abandonedUpload = _uploadingBackground;
+      final abandonedQuality = _preparingBackgroundQuality;
       _uploadingBackground = false;
+      _preparingBackgroundQuality = false;
+      _backgroundQuality = null;
       _bindingGeneration++;
       _generation++;
       _ownsRefresh = false;
@@ -169,7 +187,7 @@ class _ContentState extends State<StorefrontContentSection> {
         });
       } else {
         _load();
-        if (abandonedUpload) {
+        if (abandonedUpload || abandonedQuality) {
           final binding = _bindingGeneration;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_current(binding)) widget.onBusyChanged(false);
@@ -550,6 +568,7 @@ class _ContentState extends State<StorefrontContentSection> {
 
   void _changeAppearance(String field, Object? value) {
     if (!mounted || !_editable) return;
+    if (field == 'menu_background_media_id') _backgroundQuality = null;
     final controller = _appearanceColors[field];
     if (controller != null && controller.text != (value ?? '')) {
       controller.text = value as String? ?? '';
@@ -617,13 +636,57 @@ class _ContentState extends State<StorefrontContentSection> {
                 : null,
           ),
         ),
-        if (media != null && widget.publicUrlFor != null)
-          Image.network(
-            widget.publicUrlFor!(media.media.objectKey).toString(),
-            height: 100,
-            fit: BoxFit.contain,
-            errorBuilder: (_, _, _) => const SizedBox.shrink(),
-          ),
+        if (media != null) ...[
+          if (widget.publicUrlFor != null)
+            Builder(
+              builder: (context) => TickerMode.valuesOf(context).enabled
+                  ? Image.network(
+                      widget.publicUrlFor!(media.media.objectKey).toString(),
+                      height: 100,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          Text(_mediaDimensions(media.media)),
+          Text(c('backgroundResolutionHelp')),
+          if (widget.backgroundPublisher != null) ...[
+            if (_backgroundQuality?.mediaId == mediaId)
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _backgroundQualityText(),
+                  key: const Key('content-background-quality-status'),
+                ),
+              ),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                key: const Key('content-background-quality-prepare'),
+                onPressed:
+                    _editable &&
+                        !_dirty &&
+                        !(_backgroundQuality?.mediaId == mediaId &&
+                            [
+                              StorefrontBackgroundStatus.published,
+                              StorefrontBackgroundStatus.notNeeded,
+                            ].contains(_backgroundQuality?.result?.status))
+                    ? () => _prepareExistingBackground(media.media)
+                    : null,
+                icon: const Icon(Icons.high_quality_outlined),
+                label: Text(
+                  c(
+                    _backgroundQuality?.mediaId == mediaId &&
+                            _backgroundQuality?.result?.status ==
+                                StorefrontBackgroundStatus.uncertain
+                        ? 'backgroundQualityRetry'
+                        : 'backgroundQualityPrepare',
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
         Text(c('menuBackgroundDim').replaceAll('{percent}', '${dim ?? 15}')),
         Slider(
           key: const Key('content-appearance.menu_background_dim'),
@@ -1307,6 +1370,99 @@ class _ContentState extends State<StorefrontContentSection> {
         source: StorefrontMediaSource.menuImage(image.imageKey),
       ),
   ];
+  String _backgroundQualityText() {
+    final result = _backgroundQuality?.result;
+    if (result == null) return c('backgroundQualityWorking');
+    return switch (result.status) {
+      StorefrontBackgroundStatus.published =>
+        c('backgroundQualityReady')
+            .replaceAll(
+              '{size}',
+              '\u2066${result.width}×${result.height}\u2069',
+            )
+            .replaceAll('{bytes}', '${result.byteLength}'),
+      StorefrontBackgroundStatus.notNeeded => c('backgroundQualityNative'),
+      StorefrontBackgroundStatus.uncertain => c('backgroundQualityUncertain'),
+      _ => c('backgroundQualityUnavailable'),
+    };
+  }
+
+  Future<void> _prepareExistingBackground(StorefrontMediaRow media) async {
+    if (!_editable || _dirty || widget.backgroundPublisher == null) return;
+    final binding = _bindingGeneration;
+    _preparingBackgroundQuality = true;
+    _setBusy(true);
+    await _prepareBackgroundQuality(
+      mediaId: media.id,
+      width: media.width,
+      height: media.height,
+    );
+    if (_current(binding)) {
+      _preparingBackgroundQuality = false;
+      _setBusy(false);
+    }
+  }
+
+  Future<void> _prepareBackgroundQuality({
+    required String mediaId,
+    required int width,
+    required int height,
+    int? baseRung,
+  }) async {
+    final publisher = widget.backgroundPublisher;
+    if (publisher == null) return;
+    final binding = _bindingGeneration;
+    final previous = _backgroundQuality;
+    final retry =
+        previous?.mediaId == mediaId &&
+        previous?.result?.status == StorefrontBackgroundStatus.uncertain;
+    final requestId = retry
+        ? previous!.requestId
+        : storefrontRequestId('pbl:background:hd:', [
+            widget.savedBranchId,
+            mediaId,
+          ], DateTime.now().microsecondsSinceEpoch);
+    final proofRung = baseRung ?? (retry ? previous?.baseRung : null);
+    setState(
+      () => _backgroundQuality = (
+        mediaId: mediaId,
+        requestId: requestId,
+        baseRung: proofRung,
+        cursor: retry ? previous?.cursor : null,
+        result: null,
+      ),
+    );
+    StorefrontBackgroundResult result;
+    try {
+      result = await publisher.publish(
+        requestId: requestId,
+        branchId: widget.savedBranchId,
+        baseMediaId: mediaId,
+        baseWidth: width,
+        baseHeight: height,
+        baseRung: proofRung,
+        cursor: retry ? previous?.cursor : null,
+        isCurrent: () => _current(binding),
+      );
+    } catch (_) {
+      result = const StorefrontBackgroundResult(
+        StorefrontBackgroundStatus.uncertain,
+      );
+    }
+    if (!_current(binding)) return;
+    setState(
+      () => _backgroundQuality = (
+        mediaId: mediaId,
+        requestId: requestId,
+        baseRung: result.baseRung ?? proofRung,
+        cursor: result.cursor,
+        result: result,
+      ),
+    );
+    // Optional companion publication never selects, saves, or re-points an
+    // image. The existing base and whole-document CAS remain usable.
+  }
+
   Future<void> _uploadMenuBackground() async {
     final upload = widget.backgroundUpload;
     if (!_editable || _dirty || upload == null || widget.publisher == null)
@@ -1415,6 +1571,16 @@ class _ContentState extends State<StorefrontContentSection> {
       return;
     }
     if (result.isPublished) {
+      if (background && widget.backgroundPublisher != null) {
+        final media = result.media!;
+        await _prepareBackgroundQuality(
+          mediaId: media.id,
+          width: media.width,
+          height: media.height,
+          baseRung: result.rung,
+        );
+        if (!_current(binding)) return;
+      }
       // No slot/profile write here. The owner selects a content media reference
       // and saves the whole document through the same global profile CAS.
       _pendingPublish = null;
@@ -1446,30 +1612,107 @@ class _ContentState extends State<StorefrontContentSection> {
     }
   }
 
+  String _mediaDimensions(StorefrontMediaRow media) => c(
+    'publishedDimensions',
+  ).replaceAll('{size}', '\u2066${media.width}×${media.height}\u2069');
+
+  Widget _publishedImages() {
+    final rows = _media?.rows.where((row) => row.media.isLive).toList() ?? [];
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // ExpansionTile retains its stateful body offstage. Resolve public
+        // thumbnails only while the library is being shown.
+        if (!TickerMode.valuesOf(context).enabled)
+          return const SizedBox.shrink();
+        final columns = constraints.maxWidth >= 780
+            ? 3
+            : constraints.maxWidth >= 500
+            ? 2
+            : 1;
+        final width = (constraints.maxWidth - 8 * (columns - 1)) / columns;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final row in rows.take(_visibleMediaCount))
+                  SizedBox(width: width, child: _mediaCard(row)),
+              ],
+            ),
+            if (rows.length > _visibleMediaCount)
+              TextButton(
+                onPressed: () => setState(() => _visibleMediaCount += 6),
+                child: Text(c('moreImages')),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _mediaCard(StorefrontContentMediaRow row) {
+    // This list projects editorial derivatives and their actual uses. It does
+    // not identify whether a product uses an Original or a prepared cutout.
+    final labels = {
+      for (final slot in row.media.inUse)
+        c(slot == StorefrontSlot.logo ? 'storefrontLogo' : 'welcomeImage'),
+      for (final use in row.contentInUse) c(use['kind']!),
+    };
+    return Card(
+      key: ValueKey('content-published-image-${row.media.id}'),
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Row(
+          children: [
+            if (widget.publicUrlFor != null) ...[
+              SizedBox(
+                width: 64,
+                height: 60,
+                child: Image.network(
+                  widget.publicUrlFor!(row.media.objectKey).toString(),
+                  fit: BoxFit.contain,
+                  excludeFromSemantics: true,
+                  errorBuilder: (_, _, _) => const Icon(Icons.image_outlined),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    labels.isEmpty ? c('publishedImage') : labels.join(' · '),
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  Text(
+                    _mediaDimensions(row.media),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    row.media.id.substring(0, 8),
+                    textDirection: TextDirection.ltr,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _publication() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _title('media'),
       Text(c('publishHelp')),
       if (_media == null) Text(c('mediaUnavailable')),
-      for (final row in _media?.rows ?? <StorefrontContentMediaRow>[])
-        if (row.media.isLive)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (widget.publicUrlFor != null)
-                Image.network(
-                  widget.publicUrlFor!(row.media.objectKey).toString(),
-                  width: 100,
-                  height: 70,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                ),
-              Text(
-                '${row.media.id.substring(0, 8)} · ${c('mediaUsage')}: ${[...row.media.inUse.map((slot) => slot.wire), ...row.contentInUse.map((use) => c(use['kind']!))].join(', ')}',
-              ),
-            ],
-          ),
+      _publishedImages(),
       if (widget.publisher != null) ...[
         DropdownButtonFormField<String>(
           key: ValueKey('content-source-$_generation'),
@@ -1489,14 +1732,6 @@ class _ContentState extends State<StorefrontContentSection> {
               : null,
           child: Text(c('publish')),
         ),
-        if (_pendingPublish != null)
-          TextButton(
-            key: const Key('content-retry-publish'),
-            onPressed: _busy || _bindingHold
-                ? null
-                : () => _publish(replay: true),
-            child: Text(c('retry')),
-          ),
       ],
     ],
   );
@@ -1547,45 +1782,79 @@ class _ContentState extends State<StorefrontContentSection> {
             maintainState: true,
             child: Text(c('otherEdits')),
           ),
-          _title('appearance'),
-          Text(c('appearanceHelp')),
-          _appearanceColor('text_color', 'appearanceTextColor'),
-          _appearanceColor('button_text_color', 'appearanceButtonTextColor'),
-          _appearanceFont(),
-          _menuBackground(),
-          _scenePreset(),
-          TextField(
-            key: const Key('content-hero-headline'),
-            controller: _headline,
-            enabled: _editable,
-            decoration: InputDecoration(labelText: c('headline')),
-            onChanged: (value) {
-              if (!mounted || !_editable) return;
-              _change('hero_headline', value);
-              _put('hero.format', null);
-              _selection.clear();
-            },
+          StorefrontSettingsGroup(
+            key: const Key('content-group-appearance'),
+            title: c('appearance'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(c('appearanceHelp')),
+                _appearanceColor('text_color', 'appearanceTextColor'),
+                _appearanceColor(
+                  'button_text_color',
+                  'appearanceButtonTextColor',
+                ),
+                _appearanceFont(),
+              ],
+            ),
           ),
-          _text('hero_subline', 'subline', lines: 2),
-          _text('announcement_text', 'announcement', lines: 2),
-          _title('hero'),
-          _select(
-            'hero.mode',
-            'hero',
-            _enum(['editorial', 'item']),
-            nullable: false,
+          StorefrontSettingsGroup(
+            key: const Key('content-group-background'),
+            title: c('backgroundAndScene'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [_menuBackground(), _scenePreset()],
+            ),
           ),
-          _select('hero.item_id', 'item', _options(_catalog?.items ?? [])),
-          _text('hero.eyebrow', 'eyebrow'),
-          _text('hero.stamp', 'stamp'),
-          _text('hero.footnote', 'footnote'),
-          _formatEditor(),
-          _stringList('announcement_segments', 'segments', 6),
-          _module('promo'),
-          _module('story'),
-          _presentations(true),
-          _presentations(false),
-          _publication(),
+          StorefrontSettingsGroup(
+            key: const Key('content-group-editorial'),
+            title: c('editorialSettings'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  key: const Key('content-hero-headline'),
+                  controller: _headline,
+                  enabled: _editable,
+                  decoration: InputDecoration(labelText: c('headline')),
+                  onChanged: (value) {
+                    if (!mounted || !_editable) return;
+                    _change('hero_headline', value);
+                    _put('hero.format', null);
+                    _selection.clear();
+                  },
+                ),
+                _text('hero_subline', 'subline', lines: 2),
+                _text('announcement_text', 'announcement', lines: 2),
+                _title('hero'),
+                _select(
+                  'hero.mode',
+                  'hero',
+                  _enum(['editorial', 'item']),
+                  nullable: false,
+                ),
+                _select(
+                  'hero.item_id',
+                  'item',
+                  _options(_catalog?.items ?? []),
+                ),
+                _text('hero.eyebrow', 'eyebrow'),
+                _text('hero.stamp', 'stamp'),
+                _text('hero.footnote', 'footnote'),
+                _formatEditor(),
+                _stringList('announcement_segments', 'segments', 6),
+                _module('promo'),
+                _module('story'),
+                _presentations(true),
+                _presentations(false),
+              ],
+            ),
+          ),
+          StorefrontSettingsGroup(
+            key: const Key('content-group-media'),
+            title: c('publishedImages'),
+            child: _publication(),
+          ),
           Wrap(
             spacing: 8,
             children: [
@@ -1600,6 +1869,14 @@ class _ContentState extends State<StorefrontContentSection> {
                   onPressed: _busy || _bindingHold
                       ? null
                       : () => _save(replay: true),
+                  child: Text(c('retry')),
+                ),
+              if (_pendingPublish != null)
+                TextButton(
+                  key: const Key('content-retry-publish'),
+                  onPressed: _busy || _bindingHold
+                      ? null
+                      : () => _publish(replay: true),
                   child: Text(c('retry')),
                 ),
               if (_confirmedSave != null || _confirmedPublish != null)

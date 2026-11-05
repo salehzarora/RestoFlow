@@ -10,6 +10,8 @@ import 'package:restoflow_dashboard/src/storefront/storefront_section.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_sources.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'helpers/storefront_settings_groups.dart';
+
 /// STOREFRONT-PUBLISH-001 — the logo / hero media slots, driven through the
 /// section so the whole chain runs: the Edge Function publish (identifiers
 /// only; one request id across rungs and retries) -> the CAS slot assignment
@@ -432,6 +434,7 @@ Future<void> _pump(WidgetTester tester, _Rig rig, {int nonce = 7}) async {
     ),
   );
   await tester.pumpAndSettle();
+  await openStorefrontSettingsGroups(tester);
 }
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
@@ -1730,6 +1733,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await openStorefrontSettingsGroups(tester);
     final image = tester.widget<Image>(
       find.byKey(const Key('storefront-slot-logo-preview')),
     );

@@ -1,3 +1,4 @@
+import 'helpers/storefront_settings_groups.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_publisher.dart';
@@ -246,6 +247,7 @@ Future<void> _pump(
     ),
   );
   await tester.pumpAndSettle();
+  await openStorefrontSettingsGroups(tester);
 }
 
 /// Scrolls the whole list, painting every part of the card.
@@ -429,7 +431,8 @@ void main() {
       final section = find.byKey(const Key('storefront-section'));
       expect(Directionality.of(tester.element(section)), direction);
       expect(find.text(l10n.storefrontSectionTitle), findsOneWidget);
-      expect(find.text(l10n.storefrontLocaleHelp), findsOneWidget);
+      expect(find.byKey(const Key('storefront-locale')), findsNothing);
+      expect(find.text(l10n.storefrontLocaleHelp), findsNothing);
       expect(find.text(l10n.storefrontPauseHelp), findsOneWidget);
       expect(find.text(l10n.storefrontBlockerNoLiveItem), findsOneWidget);
       // Slug, path and times are LTR islands in every locale.

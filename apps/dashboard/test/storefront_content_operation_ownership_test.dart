@@ -13,8 +13,12 @@ import 'package:restoflow_dashboard/src/storefront/storefront_media_repository.d
 import 'package:restoflow_dashboard/src/storefront/storefront_models.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_profile_repository.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_section.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_settings_group.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_sources.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+
+import 'helpers/storefront_content_groups.dart';
+import 'helpers/storefront_settings_groups.dart';
 
 // Real StorefrontSection -> real StorefrontContentSection composition. Only
 // repositories/function I/O are synthetic; there is no fake parent callback.
@@ -318,14 +322,28 @@ class _Invoker implements StorefrontFunctionInvoker {
   }
 }
 
-Widget _application(_Scenario scenario, {String locale = 'en'}) => MaterialApp(
+Widget _application(
+  _Scenario scenario, {
+  String locale = 'en',
+  bool embedded = false,
+}) => MaterialApp(
   locale: Locale(locale),
   localizationsDelegates: restoflowLocalizationsDelegates,
   supportedLocales: kSupportedLocales,
   home: Scaffold(
-    body: SingleChildScrollView(
-      child: StorefrontSection(seams: scenario.seams),
-    ),
+    body: embedded
+        ? ListView(
+            children: [
+              StorefrontSettingsGroup(
+                title: 'واجهة المتجر',
+                initiallyExpanded: true,
+                child: StorefrontSection(seams: scenario.seams, embedded: true),
+              ),
+            ],
+          )
+        : SingleChildScrollView(
+            child: StorefrontSection(seams: scenario.seams),
+          ),
   ),
 );
 Future<void> _mount(WidgetTester tester, _Scenario scenario) async {
@@ -334,6 +352,7 @@ Future<void> _mount(WidgetTester tester, _Scenario scenario) async {
   addTearDown(tester.view.reset);
   await tester.pumpWidget(_application(scenario));
   await tester.pumpAndSettle();
+  await openStorefrontSettingsGroups(tester);
 }
 
 Future<void> _tick(WidgetTester tester) async {
@@ -411,6 +430,52 @@ void main() {
     HttpOverrides.global = null;
   });
 
+  testWidgets(
+    'embedded Settings exposes the confirmed save as a live status',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final semantics = tester.ensureSemantics();
+      try {
+        final scenario = _Scenario();
+        await tester.pumpWidget(
+          _application(scenario, locale: 'ar', embedded: true),
+        );
+        await tester.pumpAndSettle();
+        await setContentGroup(tester, 'editorial');
+        await tester.ensureVisible(
+          find.byKey(const Key('content-hero-headline')),
+        );
+        await _edit(tester);
+        final reads = scenario.content.readCount;
+        final mediaReads = scenario.content.mediaReadCount;
+        await tester.ensureVisible(find.byKey(const Key('content-save')));
+        await tester.pumpAndSettle();
+        await _save(tester);
+        await tester.pumpAndSettle();
+        expect(scenario.content.writes, hasLength(1));
+        expect(scenario.version, 4);
+        expect(
+          scenario.document.json['hero_headline'],
+          'Confirmed content edit',
+        );
+        expect(scenario.content.readCount, greaterThan(reads));
+        expect(scenario.content.mediaReadCount, greaterThan(mediaReads));
+
+        final message = find.byKey(const Key('content-message'));
+        await tester.ensureVisible(message);
+        await tester.pumpAndSettle();
+        final saved = find.bySemanticsLabel('حُفظ المحتوى وأُعيدت قراءته.');
+        expect(saved, findsOneWidget);
+        expect(tester.getSemantics(saved).flagsCollection.isLiveRegion, isTrue);
+      } finally {
+        semantics.dispose();
+      }
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
+
   for (final layout in [
     (size: const Size(1440, 1000), locale: 'en'),
     (size: const Size(390, 844), locale: 'ar'),
@@ -428,6 +493,7 @@ void main() {
             _application(scenario, locale: layout.locale),
           );
           await tester.pumpAndSettle();
+          await openStorefrontSettingsGroups(tester);
           final l10n = await AppLocalizations.delegate.load(
             Locale(layout.locale),
           );
