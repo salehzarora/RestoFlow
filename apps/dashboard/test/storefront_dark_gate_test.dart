@@ -426,7 +426,7 @@ void main() {
     });
   }
 
-  test('the production web build passes the gate to the Dashboard only, '
+  test('the production web build passes both gates to the Dashboard only, '
       'true only in a Vercel Production build with the exact value', () {
     final script = _repoFile(
       'tools/vercel_build_web.sh',
@@ -436,6 +436,10 @@ void main() {
         .where((l) => l.contains('--dart-define=RESTOFLOW_STOREFRONT_EDITOR='))
         .toList();
     expect(flagged, hasLength(1));
+    final cutoutFlagged = lines
+        .where((l) => l.contains('--dart-define=SF_PRODUCT_CUTOUT_REVIEW='))
+        .toList();
+    expect(cutoutFlagged, [flagged.single]);
     expect(
       flagged.single,
       startsWith(r'(cd apps/dashboard && "$FLUTTER" build web '),
@@ -443,9 +447,20 @@ void main() {
     expect(
       flagged.single,
       endsWith(
-        r'--dart-define=RESTOFLOW_STOREFRONT_EDITOR="$STOREFRONT_EDITOR")',
+        r'--dart-define=RESTOFLOW_STOREFRONT_EDITOR="$STOREFRONT_EDITOR" '
+        r'--dart-define=SF_PRODUCT_CUTOUT_REVIEW="$STOREFRONT_EDITOR")',
       ),
     );
+    for (final gate in const [
+      'RESTOFLOW_STOREFRONT_EDITOR',
+      'SF_PRODUCT_CUTOUT_REVIEW',
+    ]) {
+      expect(
+        RegExp('--dart-define=$gate=').allMatches(flagged.single),
+        hasLength(1),
+        reason: gate,
+      );
+    }
     for (final app in const ['pos', 'kds', 'kiosk']) {
       final build = lines.singleWhere(
         (l) => l.startsWith('(cd apps/$app && "\$FLUTTER" build web '),
@@ -455,6 +470,7 @@ void main() {
         isNot(contains('RESTOFLOW_STOREFRONT_EDITOR')),
         reason: app,
       );
+      expect(build, isNot(contains('SF_PRODUCT_CUTOUT_REVIEW')), reason: app);
     }
     // Closed by default; open ONLY on the exact value in a Production build.
     final setters = lines
