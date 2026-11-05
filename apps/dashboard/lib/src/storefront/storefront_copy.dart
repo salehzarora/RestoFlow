@@ -96,6 +96,31 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
     'announcement': ['Announcement text', 'نص الإعلان', 'טקסט הודעה'],
     'hero': ['Hero', 'الواجهة الرئيسية', 'אזור ראשי'],
     'appearance': ['Text appearance', 'مظهر النصوص', 'עיצוב טקסט'],
+    'backgroundAndScene': [
+      'Menu background and scene',
+      'خلفية المنيو والمشهد',
+      'רקע התפריט והמראה',
+    ],
+    'editorialSettings': [
+      'Headlines, announcements and editorial content',
+      'العناوين والإعلانات والمحتوى التحريري',
+      'כותרות, הודעות ותוכן מערכתי',
+    ],
+    'publishedImages': ['Published images', 'الصور المنشورة', 'תמונות שפורסמו'],
+    'publishedImage': ['Published image', 'صورة منشورة', 'תמונה שפורסמה'],
+    'welcomeImage': ['Welcome image', 'صورة البداية', 'תמונת הפתיחה'],
+    'storefrontLogo': ['Storefront logo', 'شعار المتجر', 'לוגו החנות'],
+    'moreImages': ['Show more images', 'عرض صور إضافية', 'הצגת תמונות נוספות'],
+    'publishedDimensions': [
+      'Published size: {size} pixels',
+      'أبعاد النسخة المنشورة: {size} بكسل',
+      'מידות התמונה שפורסמה: {size} פיקסלים',
+    ],
+    'backgroundResolutionHelp': [
+      'A wide screen can show this photo larger than its published pixels. A small photo may look soft; dimming does not add detail.',
+      'قد تعرض الشاشة الواسعة الصورة بحجم أكبر من دقتها المنشورة. قد تبدو الصورة الصغيرة أقل حدة، ولا يضيف التعتيم تفاصيل.',
+      'מסך רחב עשוי להציג את התמונה מעבר לרזולוציה שפורסמה. תמונה קטנה עשויה להיראות רכה, והכהיה אינה מוסיפה פרטים.',
+    ],
     'primaryColor': [
       'Background / primary color',
       'لون الخلفية / اللون الأساسي',

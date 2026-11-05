@@ -16,6 +16,8 @@ import 'package:restoflow_dashboard/src/storefront/storefront_section.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_sources.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'helpers/storefront_content_groups.dart';
+
 // Real StorefrontSection -> real StorefrontContentSection composition. Only
 // repositories/function I/O are synthetic; there is no fake parent callback.
 const _restaurant = '22222222-2222-4222-8222-222222222222';
@@ -334,6 +336,8 @@ Future<void> _mount(WidgetTester tester, _Scenario scenario) async {
   addTearDown(tester.view.reset);
   await tester.pumpWidget(_application(scenario));
   await tester.pumpAndSettle();
+  await setContentGroup(tester, 'editorial');
+  await setContentGroup(tester, 'media');
 }
 
 Future<void> _tick(WidgetTester tester) async {

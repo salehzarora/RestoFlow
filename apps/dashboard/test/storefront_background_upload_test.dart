@@ -14,6 +14,8 @@ import 'package:restoflow_dashboard/src/storefront/storefront_models.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'helpers/storefront_content_groups.dart';
+
 // Local adapter/widget checks with synthetic Storage and RPC responses.
 // Real Auth/Storage permissions and persisted Hero/logo pointer invariance
 // require the separate isolated end-to-end run; these tests do not prove them.
@@ -245,6 +247,10 @@ Future<void Function(_Rig)> _mount(WidgetTester tester, _Rig rig) async {
     ),
   );
   await tester.pumpAndSettle();
+  if (rig.repo.status == StorefrontContentReadStatus.ok) {
+    await setContentGroup(tester, 'background');
+    await setContentGroup(tester, 'editorial');
+  }
   return (next) => update(() => current = next);
 }
 
