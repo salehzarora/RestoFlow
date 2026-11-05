@@ -2,6 +2,8 @@
 
 Owner instruction: improve the post-PR380 Dashboard appearance/media organization and custom menu background, deliver an isolated Draft PR. No merge, production deployment or hosted operations in this task. Base: ad8c3caf1542770c2581630c7074f901bcd579dc.
 
+Owner continuation after reviewed bfc0b0c2: preserve the completed UX and finish background clarity through measured original-to-publication-to-browser resolution. The dedicated additive publication/API scope and gates are recorded in [BIZBOT-STOREFRONT-BACKGROUND-CLARITY-001-API](BIZBOT-STOREFRONT-BACKGROUND-CLARITY-001-API.md). Earlier no-backend findings describe the completed geometry/organization phase, not this subsequently authorized background-resolution correction.
+
 Read-only report delivered before edits: selected backgrounds use published w960 with no upscaling. Current CSS paints them over the full menu document and changes to object-fit:fill on mobile. Fix the display geometry, not invented source detail. Existing small images remain resolution-limited. No schema, RPC, publisher, image recipe, dependency, public-cap or model change is required.
 
 Acceptance: custom background keeps its ratio and viewport geometry at desktop/mobile sizes and after scroll; intro/inherited background, scene and dim0/15/80 remain compatible. Compact published-media previews show truthful dimensions and current use. Large settings fold without losing drafts, pending request IDs, source/tenant invalidation or focus isolation. Save/publication remain explicit and use the existing actions. Four pickers and Original/cutout workflow remain intact.

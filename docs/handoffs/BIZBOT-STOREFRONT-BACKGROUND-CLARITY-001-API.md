@@ -1,0 +1,29 @@
+# BIZBOT-STOREFRONT-BACKGROUND-CLARITY-001-API
+
+Owner authorization: the PR382 completion instruction requests a measured, background-specific publication and responsive-resource correction, including a larger explicit variant if necessary, while preserving strict legacy contracts and tenant permissions. This is the dedicated API work item supporting the existing BIZBOT-STOREFRONT-APPEARANCE-UX-002 branch/PR. Reviewed baseline: bfc0b0c2d5fa3f43516435c59d641e71909eab19. Keep PR382 Draft. No merge, hosted migration, deployment, production backfill or merchant settings/media writes.
+
+The accepted accordions, gallery, independent saves, draft ownership and proportional viewport background are preserved. This continuation addresses original-to-published resolution and native browser selection only. No payment, order, POS alert, printing, SEO, model, catalogue-wide processing, upload-cap or global product recipe changes.
+
+## Evidence and dependency
+
+The independent background upload retains its picked bytes in private restaurant-logos under the existing 2 MiB contract. The current editorial publisher uses c4 w960: a 960-by-960 enclosing box, no upscale/crop, one WebP encode per rung, at most 512 KiB. Public v6 exposes one URL; MenuBackdrop has no responsive candidates. The observed public 538-by-951 file does not establish the private original's dimensions or whether that original is retained. No privileged merchant-original retrieval is authorized.
+
+An authorized CC0 camera photo is available at 2816 by 2112. A documented one-time JPEG test copy preserves all pixels and fits the background upload contract. Both Chromium and actual WebKit choose real width-descriptor candidates; cover-aware resource sizing must account for viewport height and photo aspect before DPR. The exploratory 2560 result improves visible detail but the unchanged full-raster WASM resize exceeds the existing 256 MiB Edge envelope. The production correction remains gated on an independently measured bounded background-only recipe. No larger recipe is accepted merely because it fits the byte cap or succeeds on Node.
+
+## Bounded additive contract
+
+- Keep selected w960 media ID, all c4 outputs, legacy media rows/lists, and public v1-v6 responses unchanged.
+- Prepare at most one optional higher-resolution companion at explicit owner publication/republish time. No visitor-triggered processing or automatic old-background migration. Maximum proposed long edge is 2560, conditional on the unchanged Edge CPU/memory gate; final recipe parameters and goldens must be fixed before review.
+- Store the companion in a separately scoped private registry tied to the exact eligible non-product w960 parent, current branch and Storage source generation. Use a distinct opaque background namespace for immutable content-addressed public keys, the existing public WebP bucket and its 512 KiB cap. Separate exact registered-key SELECT/INSERT policies; no companion UPDATE/DELETE permission or widening of old media permissions.
+- Authenticated manager-only source, stage and finalize RPCs validate the same organization/restaurant authority as existing publishers, the active saved branch, exact parent, current source generation, output shape/bounds and actual Storage metadata. Stale scope/source is checked before replay. No profile, Hero or content pointer is changed by companion publication.
+- The publisher uses the caller JWT only. Before higher-resolution derivation it verifies that the current private bytes reproduce the recorded c4 base at an explicitly bounded base rung. This proves derivative compatibility, not historical private-byte identity. Stage/finalize/read independently bind the current generation. An unavailable/mismatched original leaves the legacy selection intact with an explicit outcome.
+- Add a strict storefront_menu_v7 wrapper over one exact v6 result. An optional menu_background_images_v1 object contains only base_url and variants [{url,width,height}], at most the actual base plus one larger eligible companion, tied to the selected base URL. Missing, cleared, replaced, stale or unsupported data uses the existing w960 response; no fabricated URLs, private identities or original bytes reach visitors.
+- The renderer uses actual encoded width descriptors and proportional cover-aware sizes. Ordinary image upload and the original w960 path remain usable if optional higher-resolution preparation is unavailable. Do not add separate mobile/desktop upload settings.
+
+## Acceptance and validation
+
+Measure genuine source -> c4 -> background recipe -> currentSrc -> decoded dimensions/transfer bytes -> rendered cover size/DPR on the same photo before/after. Include mobile/desktop, both scene presets, dimming and top/middle/footer; actual local WebKit is distinct from physical iPhone acceptance. Check one resource per request, appropriate native selection, no low-resolution enlargement presented as recovered detail, ordinary caching and repeated-file reuse.
+
+Require pinned codec/license/golden parity for unchanged c4; focused new recipe alpha/orientation/input/resource tests; publisher source/rung/failure/idempotency tests; scoped SQL/RLS/immutable storage/generation/replay/legacy equivalence tests; Dashboard optional publication and explicit republish ownership tests; strict v7 decoder/provider/rendering tests; the full required CI and real-service lifecycle on the final candidate. Reuse the accepted UX evidence where its source is unchanged. Only local disposable database migrations are permitted. Independently review the final migration/recipe and source-bound artifact before delivery.
+
+Parallel implementation uses separate worktrees: API migration/SQL tests, publisher/recipe tests, browser/renderer, and root Dashboard/integration. Contributors cross-review code they did not author. No routine approval request is needed for this owner-authorized scope.
