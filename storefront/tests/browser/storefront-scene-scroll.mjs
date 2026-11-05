@@ -59,11 +59,12 @@ try {
     const {locale,scene,source,width,height}=spec;
     const name=[engine.name(),locale,scene,source,width].join('-'),row={name,...spec,frames:[],viewportTransitions:[],flags:{}};
     rows.push(row);
-    const ctx=await browser.newContext({viewport:{width,height},isMobile:width<=390,hasTouch:width<=390,
-      deviceScaleFactor:1,locale,reducedMotion:'reduce',serviceWorkers:'block'});
+    const contextOptions={viewport:{width,height},isMobile:width<=390,hasTouch:width<=390,
+      deviceScaleFactor:1,locale,reducedMotion:'reduce',serviceWorkers:'block'};
+    const ctx=await browser.newContext(contextOptions);
     try {
       const violations=[], errors=[]; let photoRequests=0;
-      await ctx.route('**/*',route=>{
+      const fixtureRoute=route=>{
         const req=route.request(), url=new URL(req.url());
         if(req.method()==='GET' && url.origin===origin)return route.continue();
         const match=/^\/storage\/v1\/object\/public\/storefront-media\/0{32}\/([abc])\1{63}\.webp$/.exec(url.pathname);
@@ -72,7 +73,8 @@ try {
           return route.fulfill({contentType:'image/webp',body:images.get(match[1])});
         }
         violations.push('unexpected-network-request');return route.abort();
-      });
+      };
+      await ctx.route('**/*',fixtureRoute);
       const page=await ctx.newPage();page.on('pageerror',e=>errors.push(e.name));
       const slug=suffix=>'scene-'+[locale,scene,source,suffix].join('-');
       const go=async(suffix,screen='menu')=>{
@@ -216,6 +218,29 @@ try {
       await page.reload({waitUntil:'networkidle'});assert.equal(await ann.count(),0);
       await go('panel-b');await ann.waitFor();
       await go('none-b');assert.equal(await ann.count(),0);row.flags.scopedDismissalAndAbsence=true;
+      if(locale==='ar' && width===390){
+        // With page scripts disabled, only the HTML theme and its linked CSS can paint the scene.
+        const first=await browser.newContext({...contextOptions,javaScriptEnabled:false});
+        try {
+          await first.route('**/*',fixtureRoute);
+          const initial=await first.newPage();
+          const response=await initial.goto(origin+'/'+locale+'/s/'+slug('panel-a')+'/menu',{waitUntil:'networkidle'});
+          assert.equal(response.status(),200);
+          const panel=initial.locator('[data-sf-module="announce"]');await panel.waitFor();
+          row.firstPaint=await panel.evaluate(el=>{
+            const layer=el.closest('main').querySelector('[data-sf-menu-background]');
+            const panelStyle=getComputedStyle(el),sceneStyle=getComputedStyle(layer);
+            return {panelColor:panelStyle.backgroundColor,panelGradient:panelStyle.backgroundImage,
+              ink:getComputedStyle(el.querySelector(':scope > span[dir]')).color,
+              sceneColor:sceneStyle.backgroundColor,sceneGradient:sceneStyle.backgroundImage};
+          });
+          const painted=s=>!['transparent','rgba(0, 0, 0, 0)'].includes(s);
+          check(painted(row.firstPaint.panelColor) && row.firstPaint.panelGradient!=='none','SSR announcement paints before hydration',row);
+          check(painted(row.firstPaint.sceneColor) && row.firstPaint.sceneGradient!=='none','SSR scene paints before hydration',row);
+          check(row.firstPaint.ink===row.announcement.ink,'SSR announcement ink matches hydrated ink',row);
+          if(out)await initial.screenshot({path:join(out,name+'-first-paint.png')});
+        } finally {await first.close();}
+      }
       assert.deepEqual(violations,[]);assert.deepEqual(errors,[]);
       console.log(name, 'geometry/visibility checks:', failures.filter(f=>f.case===name).length, 'failures');
     } finally {await ctx.close();}
