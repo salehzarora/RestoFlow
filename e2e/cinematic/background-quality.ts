@@ -238,6 +238,12 @@ export class BackgroundQuality {
                 const paintWidth = Math.max(top.width, top.height * encodedWidth / encodedHeight);
                 // The receipt includes only the verified public Storage path and measured photo rectangle.
                 const publicPath = new URL(localMediaTarget(top.currentSrc)).pathname;
+                const resourceTiming = await page.evaluate(src => {
+                    const entry = performance.getEntriesByName(src, 'resource').at(-1) as PerformanceResourceTiming | undefined;
+                    // A mapped cross-origin response can expose zero sizes without Timing-Allow-Origin.
+                    return entry ? { encodedBodySize: entry.encodedBodySize, transferSize: entry.transferSize } : null;
+                }, top.currentSrc);
+                const sizes = await res.request().sizes();
                 this.views.push({
                     scene, viewport: name, width, height, dpr: top.dpr,
                     selected: useHigh ? 'bg2560' : 'w960', currentSrcPath: publicPath,
@@ -246,7 +252,8 @@ export class BackgroundQuality {
                     rect: { x: top.x, y: top.y, width: top.width, height: top.height },
                     paintWidth, paintHeight: paintWidth * encodedHeight / encodedWidth,
                     requiredPhysicalWidth: paintWidth * top.dpr, topMiddleFooterMatch: true,
-                    backgroundRequests: selectedResponses.length,
+                    backgroundRequests: selectedResponses.length, resourceTiming,
+                    playwrightResponseSizes: { bodyBytes: sizes.responseBodySize, headerBytes: sizes.responseHeadersSize },
                 });
                 this.record('responsive-scene-view');
                 await network.check();
