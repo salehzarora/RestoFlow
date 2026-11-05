@@ -1,6 +1,6 @@
 # Storefront visual parity contract
 
-Work ID: `BIZBOT-STOREFRONT-VISUAL-PARITY-001-API`. This is the narrow compatibility extension explicitly authorized by the owner's visual parity request, tracked in the execution packet. It adds no order, payment, POS, device or printing authority. The visual review phase permits isolated integration only; applying hosted SQL and deploying Production remain outside scope.
+Work ID: `BIZBOT-STOREFRONT-VISUAL-PARITY-001-API`. This is the narrow compatibility extension explicitly authorized by the owner's visual parity request, tracked in the execution packet. It adds no order, payment, POS, device or printing authority. The subsequent PR380 owner acceptance authorizes the scoped migrations, reviewed publisher, protected merge and verified Production release after final-source checks. Cutout limitations are accepted for optional, explicitly prepared and reviewed per-product use; Original remains the default. Historical quality evidence is unchanged.
 
 ## Scene selection
 

@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import {
   migrationName, migrationVersion, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration,
   requireEphemeralCi, sha256, predecessorVersion, followUpName, followUpVersion, targetFunctions, proveMigrationSequence,
-  targetPrefixSources,
+  targetPrefixSources, visualReleaseSources,
 } from './cinematic_001b_migration_contract.mjs';
 
 requireEphemeralCi(process.env); // Must precede subprocesses, including Docker.
@@ -258,6 +258,37 @@ end;\n$cinematic_late_failure$;\n`;
   receipt.successful_followup_application = 'PASS';
   receipt.after_schema_sha256 = sha256(schemaSnapshot());
   receipt.after_history_sha256 = sha256(sql(historyQuery));
+
+  // Hosted #381 source is merged, but its unrelated payment migration is not
+  // applied. Prove that exact rollout shape afresh without changing payment.
+  // The separate full db-tests job still runs every payment suite/concurrency
+  // assertion against all migrations; the real UI lifecycle below uses this
+  // production-shaped stack. Both are identified separately in the receipt.
+  phase = 'prove_scoped_visual_release_without_pending_payment';
+  checked('supabase', ['db', 'reset', '--local', '--version', migrationVersion, '--no-seed', '--yes']);
+  assert.deepEqual(JSON.parse(sql(historyVersionsQuery)), versionsOf(sequence.target_prefix));
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), noFollowupReadiness);
+  const releaseBaselineHistory = JSON.parse(sql(historyQuery));
+  const releaseWorkdir = await mkdtemp(join(process.env.RUNNER_TEMP, 'cinematic-scoped-visual-release-'));
+  temporaries.push(releaseWorkdir);
+  await mkdir(join(releaseWorkdir, 'supabase/migrations'), { recursive: true });
+  await writeFile(join(releaseWorkdir, 'supabase/config.toml'), config);
+  const releasePlan = visualReleaseSources(sources);
+  for (const [name, bytes] of releasePlan) await writeFile(join(releaseWorkdir, 'supabase/migrations', name), bytes);
+  const releaseWritten = await readMigrationSources(join(releaseWorkdir, 'supabase/migrations'));
+  assert.deepEqual(releaseWritten.map(([name]) => name), [...sequence.target_prefix, ...sequence.visual_followups.map(item => item.name)]);
+  assert.ok(releaseWritten.every(([name, bytes]) => bytes.equals(sourceBytes.get(name))), 'Scoped release workdir must retain exact reviewed bytes');
+  checked('supabase', ['migration', 'up', '--local', '--workdir', releaseWorkdir]);
+  const releaseHistory = JSON.parse(sql(historyQuery));
+  assert.deepEqual(releaseHistory.map(row => row.version), versionsOf(releasePlan.map(([name]) => name)));
+  assert.deepEqual(releaseHistory.filter(row => row.version <= migrationVersion), releaseBaselineHistory);
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), followupReadiness);
+  assert.equal(sql("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname in ('card_provider_attempts','card_provider_private_events','card_payments_pilot_revisions','payment_terminals','card_attempt_identity_tombstones');"), '0',
+    'The unrelated pending payment schema must remain absent');
+  receipt.scoped_visual_release = { status: 'PASS', migration_versions: releaseHistory.map(row => row.version),
+    pending_payment_omitted: followUpName, pending_payment_schema_absent: true,
+    prior_history_unchanged: true, ready_for_real_service_lifecycle: true,
+    schema_sha256: sha256(schemaSnapshot()), history_sha256: sha256(sql(historyQuery)) };
   const finalSources = await readMigrationSources(migrationsDirectory);
   assert.ok(finalSources.length === sources.length && finalSources.every(([name, bytes], index) =>
     name === sources[index][0] && bytes.equals(sources[index][1])), 'Every tracked migration source must remain byte-identical');

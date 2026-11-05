@@ -237,3 +237,12 @@ export function targetPrefixSources(sources, targetBytes) {
   const bytes = new Map(sources);
   return prefix.map((name) => [name, name === migrationName ? targetBytes : bytes.get(name)]);
 }
+
+// PR380's scoped hosted baseline has #379 but no payment 001D history/schema.
+// Validate the complete reconciled checkout first, then omit exactly that one
+// unrelated migration for a separate production-shaped disposable-stack proof.
+// This never edits a tracked file or authorizes a hosted history repair.
+export function visualReleaseSources(sources) {
+  proveMigrationSequence(sources);
+  return sources.filter(([name]) => name !== followUpName);
+}

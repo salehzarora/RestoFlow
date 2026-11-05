@@ -8,7 +8,7 @@ import {
   migrationName, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration, requireEphemeralCi,
   statements, withoutOuterTransaction, finalFingerprint, sha256, predecessorName, predecessorVersion, prefixNamesFingerprint,
   followUpName, followUpVersion, followUpFingerprint, targetFunctions, topLevelTransactionControl, proveFollowUpMigration,
-  proveMigrationSequence, targetPrefixSources, followupMigrations,
+  proveMigrationSequence, targetPrefixSources, followupMigrations, visualReleaseSources,
 } from './cinematic_001b_migration_contract.mjs';
 
 test('historical migration removed exactly two outer statement lines', () => {
@@ -243,4 +243,18 @@ test('both visual migrations fail closed on missing, swapped, changed, CRLF or c
     'Unreviewed visual follow-up bytes');
   refuses(adding(['20261104154500_between_product_and_scene.sql', sql('select 1;\n')]),
     'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+});
+
+test('production-shaped proof omits only pending payment after validating the complete reviewed checkout', () => {
+  const plan = visualReleaseSources(sources);
+  assert.deepEqual(plan.map(([name]) => name), [
+    ...proveMigrationSequence(sources).target_prefix, ...followupMigrations.map(item => item.name),
+  ]);
+  assert.ok(plan.every(([name, bytes]) => bytes === bytesOf(name)), 'Exact bytes are retained');
+  assert.ok(!plan.some(([name]) => name === followUpName));
+  for (const pin of [followUpName, ...followupMigrations.map(item => item.name)]) {
+    assert.throws(() => visualReleaseSources(without(sources, pin)));
+    assert.throws(() => visualReleaseSources(replacing(pin, Buffer.concat([bytesOf(pin), sql('-- changed\n')]))));
+  }
+  assert.throws(() => visualReleaseSources(adding(['20261104160000_unreviewed.sql', sql('select 1;\n')])));
 });
