@@ -90,6 +90,50 @@ const Map<String, AuditActionSpec> kAuditActionRegistry = {
   'payment.recorded': AuditActionSpec(category: 'payments', hasTitle: true),
   'payment.denied': AuditActionSpec(category: 'payments'),
   'receipt_number.assigned': AuditActionSpec(category: 'payments'),
+  // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D (API §4.33): the twelve LIVE card-present
+  // attempt actions — all classify under 'payments' (the server's
+  // card_attempt.% rule) and carry specific titles. The private operator.* /
+  // test.* / security.* events never reach the Activity log and are
+  // deliberately NOT registered here.
+  'card_attempt.started': AuditActionSpec(category: 'payments', hasTitle: true),
+  'card_attempt.approved': AuditActionSpec(
+    category: 'payments',
+    hasTitle: true,
+  ),
+  'card_attempt.declined': AuditActionSpec(
+    category: 'payments',
+    hasTitle: true,
+  ),
+  'card_attempt.unknown': AuditActionSpec(category: 'payments', hasTitle: true),
+  'card_attempt.released': AuditActionSpec(
+    category: 'payments',
+    hasTitle: true,
+  ),
+  'card_attempt.provider_anomaly': AuditActionSpec(
+    category: 'payments',
+    hasTitle: true,
+  ),
+  'card_attempt.release_requested': AuditActionSpec(
+    category: 'payments',
+    hasTitle: true,
+  ),
+  'card_attempt.release_failed': AuditActionSpec(
+    category: 'payments',
+    hasTitle: true,
+  ),
+  'card_attempt.recording_refused': AuditActionSpec(
+    category: 'payments',
+    hasTitle: true,
+  ),
+  'card_attempt.order_freed': AuditActionSpec(
+    category: 'payments',
+    hasTitle: true,
+  ),
+  'card_attempt.recording_resume_requested': AuditActionSpec(
+    category: 'payments',
+    hasTitle: true,
+  ),
+  'card_attempt.denied': AuditActionSpec(category: 'payments', hasTitle: true),
   // --- shifts / cash --------------------------------------------------------
   'shift.opened': AuditActionSpec(category: 'shifts', hasTitle: true),
   'shift.open_denied': AuditActionSpec(category: 'shifts'),

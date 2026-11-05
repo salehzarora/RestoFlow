@@ -12,38 +12,6 @@ export const originalCommit = 'e71ab13dc258b5bc036b29a054e3744cb824d63e';
 export const originalFingerprint = 'b68c7d6a74dd91179042e65f038e2b1a85c58cc6efbc0e8713871f6d34669038';
 export const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 
-// BIZBOT-STOREFRONT-VISUAL-PARITY-001: this bounded extension does not make the
-// historical atomicity proof a generic migration runner. Pins are exact Git LF
-// bytes; another migration or any changed byte requires another review.
-export const predecessorMigrationName = '20261102015942_bizbot_storefront_seo_discovery_001.sql';
-export const followupMigrations = Object.freeze([
-  Object.freeze({ name: '20261104154000_bizbot_storefront_visual_parity_product_media.sql',
-    sha256: 'a901a709970b4629b22357743831aab687c2882fe066776dd7913b82c29c77d5' }),
-  Object.freeze({ name: '20261104155000_bizbot_storefront_visual_parity_scene.sql',
-    sha256: '7bfac52a707b20fdf9b67a466d84290a7565fe574850ce1e992c093d5f19b520' }),
-]);
-
-export function proveMigrationSequence(names, sourceByName) {
-  assert.ok(Array.isArray(names) && names.every(name => /^\d{14}_[a-z0-9_]+\.sql$/.test(name)), 'Invalid migration identity');
-  assert.deepEqual(names, [...names].sort(), 'Migration sequence must be ordered');
-  assert.equal(new Set(names.map(name => name.split('_')[0])).size, names.length, 'Duplicate migration version');
-  const targetIndex = names.indexOf(migrationName);
-  assert.ok(targetIndex > 0, 'Pinned target and predecessor must exist');
-  assert.equal(names[targetIndex - 1], predecessorMigrationName, 'Unreviewed target predecessor');
-  assert.deepEqual(names.slice(targetIndex + 1), followupMigrations.map(item => item.name), 'Unreviewed followup migration sequence');
-  const followups = followupMigrations.map(pin => {
-    const sql = sourceByName.get(pin.name);
-    assert.equal(typeof sql, 'string', 'Followup migration bytes missing');
-    assert.equal(sha256(sql), pin.sha256, 'Unreviewed followup migration bytes');
-    const all = statements(sql);
-    assert.ok(all.length > 0 && all.every(item => !/^(?:begin|start\s+transaction|commit|end|rollback|abort|savepoint|release\s+savepoint|prepare\s+transaction)\b/i.test(item.text)), 'Unexpected followup transaction control');
-    return { name: pin.name, version: pin.name.split('_')[0], sha256: pin.sha256,
-      statements: all.length, no_embedded_transaction: true };
-  });
-  return { prefixNames: names.slice(0, targetIndex + 1),
-    previousVersion: names[targetIndex - 1].split('_')[0], followups };
-}
-
 // PostgreSQL's semicolons inside strings, quoted identifiers, nested comments
 // and dollar-quoted bodies do not end top-level statements. In particular,
 // PL/pgSQL BEGIN/END inside a dollar quote is never a transaction wrapper.
@@ -161,4 +129,111 @@ export function requireEphemeralCi(env) {
     'SUPABASE_SERVICES_HOSTNAME', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'PGHOST', 'PGSERVICE', 'PGSERVICEFILE']) {
     assert.ok(!env[name], `Unexpected endpoint/credential override: ${name}`);
   }
+}
+
+// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-CINEMATIC-PROOF-001: the exact reviewed
+// migration sequence. The #379 target must follow its exact predecessor and the
+// exact 183-migration prefix of main 0df86dcb, then 001D and exactly the two
+// reviewed PR380 migrations (product helpers before scene). Anything else is refused
+// until a reviewed change extends this pin: it is not a generic mechanism.
+export const predecessorName = '20261102015942_bizbot_storefront_seo_discovery_001.sql';
+export const predecessorVersion = '20261102015942';
+export const prefixNamesFingerprint = '6ee60a7fc86607ebbcd69492f551f673622336c4476823ee8a2c014106f15643';
+export const followUpName = '20261104141959_bizbot_zcredit_001d_server_ledger.sql';
+export const followUpVersion = '20261104141959';
+export const followUpFingerprint = '468768f89029a0fb131869f754d5374127930b8bf05b48cd8de19d645546352e';
+// Every function the reviewed #379 target creates or replaces.
+export const followupMigrations = Object.freeze([
+  Object.freeze({ name: '20261104154000_bizbot_storefront_visual_parity_product_media.sql',
+    sha256: 'a901a709970b4629b22357743831aab687c2882fe066776dd7913b82c29c77d5' }),
+  Object.freeze({ name: '20261104155000_bizbot_storefront_visual_parity_scene.sql',
+    sha256: '7bfac52a707b20fdf9b67a466d84290a7565fe574850ce1e992c093d5f19b520' }),
+]);
+
+
+export const targetFunctions = [
+  'app.get_restaurant_storefront_content_v2', 'app.list_storefront_content_media_v2', 'app.set_restaurant_storefront_content_v1',
+  'app.storefront_content_document_shape_v1', 'app.storefront_content_media_in_use_v1', 'app.storefront_content_read_v2',
+  'app.storefront_content_repoint_media_v1', 'public.get_restaurant_storefront_content_v2',
+  'public.list_storefront_content_media_v2', 'public.storefront_menu_v5',
+];
+const migrationFileName = /^\d{14}_[a-z0-9][a-z0-9_]*\.sql$/;
+// The supported runner applies each file atomically; top-level transaction
+// control would split that apply. Dollar-quoted PL/pgSQL BEGIN/END never matches.
+const transactionControl = /^(?:begin|start\s+transaction|commit|end|rollback|abort|savepoint|release|prepare\s+transaction)\b/i;
+
+export function topLevelTransactionControl(sql) {
+  return statements(sql).filter((item) => transactionControl.test(item.text)).map((item) => item.text);
+}
+
+export function proveFollowUpMigration(bytes) {
+  assert.ok(Buffer.isBuffer(bytes), 'Migration sources must be raw bytes');
+  // Structure first, then the reviewed bytes, so that each refusal names its cause.
+  const sql = bytes.toString('utf8');
+  assert.ok(topLevelTransactionControl(sql).length === 0, 'Unexpected top-level transaction control in the 001D follow-up');
+  assert.equal(sha256(bytes), followUpFingerprint, 'Unreviewed 001D follow-up bytes');
+  return { follow_up_sha256: sha256(bytes), follow_up_statements: statements(sql).length, follow_up_no_embedded_transaction: true };
+}
+
+// `sources` is the migration directory as [name, raw bytes] pairs in the order
+// the supported CLI applies them (byte-wise file-name order). Nothing is sorted
+// or filtered here: the caller's exact listing and exact bytes are proved.
+export function proveMigrationSequence(sources) {
+  assert.ok(Array.isArray(sources) && sources.length > 0, 'Expected the migration directory listing');
+  assert.ok(sources.every((entry) => Array.isArray(entry) && entry.length === 2 && Buffer.isBuffer(entry[1])),
+    'Migration sources must be raw bytes');
+  const names = sources.map(([name]) => name);
+  for (const name of names) {
+    assert.match(String(name), migrationFileName, 'Migration file names must be a 14-digit version, a lower-case name and .sql');
+  }
+  const versions = names.map((name) => name.slice(0, 14));
+  assert.equal(new Set(versions).size, versions.length, 'Duplicate migration version');
+  assert.ok(versions.every((version, index) => index === 0 || version > versions[index - 1]),
+    'Migration versions must be strictly ascending');
+  const index = names.indexOf(migrationName);
+  assert.ok(index >= 0, 'Missing the exact #379 target migration');
+  assert.equal(names[index - 1], predecessorName, 'The #379 target must directly follow its exact predecessor');
+  const prefixNames = sha256(names.slice(0, index).join('\n'));
+  assert.equal(prefixNames, prefixNamesFingerprint, 'Unreviewed migration sequence before the #379 target');
+  const later = names.slice(index + 1);
+  assert.ok(later.includes(followUpName), 'Missing the reviewed 001D follow-up migration');
+  if (later[0] !== followUpName) {
+    assert.ok(!later.includes(followUpName), 'Interleaved migration between the #379 target and the 001D follow-up');
+    assert.fail('Unknown migration after the #379 target');
+  }
+  assert.deepEqual(later, [followUpName, ...followupMigrations.map(item => item.name)], 'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+  const bytes = new Map(sources);
+  proveFinalMigration(bytes.get(migrationName).toString('utf8'));
+  const followUp = proveFollowUpMigration(bytes.get(followUpName));
+  const visualFollowups = followupMigrations.map(pin => {
+    const bytes = new Map(sources).get(pin.name);
+    assert.ok(Buffer.isBuffer(bytes), 'Visual follow-up migration sources must be raw bytes');
+    assert.equal(topLevelTransactionControl(bytes.toString('utf8')).length, 0, 'Unexpected transaction control in a visual follow-up');
+    assert.equal(sha256(bytes), pin.sha256, 'Unreviewed visual follow-up bytes');
+    return { name: pin.name, version: pin.name.slice(0, 14), sha256: pin.sha256,
+      statements: statements(bytes.toString('utf8')).length, no_embedded_transaction: true };
+  });
+  // A renamed or copied migration cannot carry the reviewed bytes elsewhere.
+  for (const [name, value] of sources) {
+    const digest = sha256(value);
+    for (const pin of followupMigrations) assert.ok(name === pin.name || digest !== pin.sha256, 'Reviewed visual bytes may appear only under their pinned name');
+    assert.ok(name === migrationName || digest !== finalFingerprint, 'The reviewed #379 target bytes may appear only under its pinned name');
+    assert.ok(name === followUpName || digest !== followUpFingerprint, 'The reviewed 001D bytes may appear only under their pinned name');
+  }
+  return {
+    target_prefix: names.slice(0, index + 1),
+    visual_followups: visualFollowups,
+    summary: { migrations: names.length, before_target: index, predecessor: predecessorName, target: migrationName,
+      later_than_target: later, prefix_names_sha256: prefixNames, ...followUp, visual_followups: visualFollowups },
+  };
+}
+
+// The disposable workdir of the late-failure and target-only phases: the exact
+// sources before the #379 target, then the given target bytes (the broken copy,
+// or the tracked bytes). The 001D follow-up is never part of it.
+export function targetPrefixSources(sources, targetBytes) {
+  assert.ok(Buffer.isBuffer(targetBytes), 'Migration sources must be raw bytes');
+  const { target_prefix: prefix } = proveMigrationSequence(sources);
+  const bytes = new Map(sources);
+  return prefix.map((name) => [name, name === migrationName ? targetBytes : bytes.get(name)]);
 }

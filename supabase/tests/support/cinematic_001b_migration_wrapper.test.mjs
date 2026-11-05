@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   migrationName, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration, requireEphemeralCi,
-  statements, withoutOuterTransaction, proveMigrationSequence, predecessorMigrationName, followupMigrations,
+  statements, withoutOuterTransaction, finalFingerprint, sha256, predecessorName, predecessorVersion, prefixNamesFingerprint,
+  followUpName, followUpVersion, followUpFingerprint, targetFunctions, topLevelTransactionControl, proveFollowUpMigration,
+  proveMigrationSequence, targetPrefixSources, followupMigrations,
 } from './cinematic_001b_migration_contract.mjs';
 
 test('historical migration removed exactly two outer statement lines', () => {
@@ -21,65 +25,6 @@ test('final authorized compatibility migration is pinned, atomic and preserves l
   assert.equal(proof.legacy_readers_unchanged, true);
   assert.throws(() => proveFinalMigration(sql + '\ncommit;\n'));
   assert.throws(() => proveFinalMigration(sql.replace('storefront_menu_v5', 'storefront_menu_v4')));
-});
-
-const migrationDirectory = new URL('../../migrations/', import.meta.url);
-const currentNames = readdirSync(migrationDirectory).filter(name => /^\d+_.+\.sql$/.test(name)).sort();
-// Runtime uses unmodified Linux checkout bytes. Normalize Windows checkout line
-// endings only for these cross-platform unit fixtures, never inside the proof.
-const followupSources = () => new Map(followupMigrations.map(item => [item.name,
-  readFileSync(new URL(item.name, migrationDirectory), 'utf8').replaceAll('\r\n', '\n')]));
-
-test('target prefix ends at the old target and uses its immediate predecessor', () => {
-  const plan = proveMigrationSequence(currentNames, followupSources());
-  assert.equal(plan.previousVersion, '20261102015942');
-  assert.equal(plan.prefixNames.at(-2), predecessorMigrationName);
-  assert.equal(plan.prefixNames.at(-1), migrationName);
-  assert.deepEqual(plan.prefixNames, currentNames.slice(0, currentNames.indexOf(migrationName) + 1));
-  assert.ok(plan.prefixNames.length > 100, 'Every earlier real migration is retained');
-  assert.ok(plan.followups.every(item => !plan.prefixNames.includes(item.name)));
-  assert.deepEqual(plan.followups.map(item => item.version), ['20261104154000', '20261104155000']);
-  assert.ok(plan.followups.every(item => item.no_embedded_transaction && item.statements > 0));
-});
-
-test('unknown later or interleaved migration fails the bounded followup proof', () => {
-  for (const name of ['20261104160000_unreviewed.sql', '20261104154500_unreviewed.sql']) {
-    assert.throws(() => proveMigrationSequence([...currentNames, name].sort(), followupSources()), /Unreviewed followup migration sequence/);
-  }
-  assert.throws(() => proveMigrationSequence([...currentNames, '20261104130000_new_predecessor.sql'].sort(), followupSources()), /Unreviewed target predecessor/);
-});
-
-test('missing target, predecessor or either followup fails closed', () => {
-  for (const name of [migrationName, predecessorMigrationName, ...followupMigrations.map(item => item.name)]) {
-    assert.throws(() => proveMigrationSequence(currentNames.filter(value => value !== name), followupSources()));
-  }
-});
-
-test('reordered names and same-version alternate identities cannot change the prefix', () => {
-  const reordered = [...currentNames];
-  [reordered[reordered.length - 2], reordered[reordered.length - 1]] = [reordered.at(-1), reordered.at(-2)];
-  assert.throws(() => proveMigrationSequence(reordered, followupSources()), /Migration sequence must be ordered/);
-  assert.throws(() => proveMigrationSequence([...currentNames, '20261104154000_duplicate.sql'].sort(), followupSources()), /Duplicate migration version/);
-});
-
-test('missing, changed and CRLF followup bytes all fail exact LF hash pins', () => {
-  for (const { name } of followupMigrations) {
-    const missing = followupSources(); missing.delete(name);
-    assert.throws(() => proveMigrationSequence(currentNames, missing), /Followup migration bytes missing/);
-    for (const mutate of [sql => sql + '\n-- changed\n', sql => sql.replaceAll('\n', '\r\n'), sql => sql + '\ncommit;\n']) {
-      const changed = followupSources(); changed.set(name, mutate(changed.get(name)));
-      assert.throws(() => proveMigrationSequence(currentNames, changed), /Unreviewed followup migration bytes/);
-    }
-  }
-});
-
-test('followup names cannot be swapped while preserving their old content', () => {
-  const swapped = followupSources();
-  const [first, second] = followupMigrations.map(item => item.name);
-  const firstSql = swapped.get(first);
-  swapped.set(first, swapped.get(second));
-  swapped.set(second, firstSql);
-  assert.throws(() => proveMigrationSequence(currentNames, swapped), /Unreviewed followup migration bytes/);
 });
 
 const wrapped = `-- do not remove this begin;\nbegin;\n\n/* outer /* inner ; */ comment */\ncreate function f() returns void language plpgsql as $body$\nbegin perform ';'; /* commit; */ end;\n$body$;\nselect E'quote\\\';inside', 'doubled'';', "quoted;";\n\ncommit;\n-- keep the tail\n`;
@@ -119,4 +64,183 @@ test('ephemeral lane rejects remote endpoint and credential overrides', () => {
   for (const name of ['SUPABASE_ACCESS_TOKEN', 'SUPABASE_DB_PASSWORD', 'SUPABASE_DB_URL', 'SUPABASE_WORKDIR', 'SUPABASE_SERVICES_HOSTNAME', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'PGHOST', 'PGSERVICE', 'PGSERVICEFILE']) {
     assert.throws(() => requireEphemeralCi({ ...env, [name]: 'unexpected' }));
   }
+});
+
+// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-CINEMATIC-PROOF-001: the exact reviewed sequence.
+const root = fileURLToPath(new URL('../../../', import.meta.url));
+const migrationsDirectory = join(root, 'supabase/migrations');
+// A Windows checkout with core.autocrlf writes the LF blobs as CRLF in the
+// working tree. Only a file Git reports as `i/lf w/crlf` is converted back;
+// every other byte, including a committed CRLF, reaches the contract as is.
+const checkoutConverted = new Set(execFileSync('git', ['ls-files', '--eol', '--', 'supabase/migrations'], { cwd: root, encoding: 'utf8' })
+  .split('\n').filter((line) => /^i\/lf\s+w\/crlf\s/.test(line)).map((line) => line.slice(line.indexOf('\t') + 1)));
+const checkoutBytes = (name) => {
+  const bytes = readFileSync(join(migrationsDirectory, name));
+  return checkoutConverted.has(`supabase/migrations/${name}`) ? Buffer.from(bytes.toString('latin1').replaceAll('\r\n', '\n'), 'latin1') : bytes;
+};
+const sources = readdirSync(migrationsDirectory).sort().map((name) => [name, checkoutBytes(name)]);
+const bytesOf = (name) => sources.find(([item]) => item === name)[1];
+const byName = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0);
+const adding = (...entries) => [...sources, ...entries].sort(byName);
+const without = (list, name) => list.filter(([item]) => item !== name);
+const replacing = (name, bytes) => sources.map(([item, value]) => [item, item === name ? bytes : value]);
+const sql = (text) => Buffer.from(text);
+const crlf = (bytes) => Buffer.from(bytes.toString('latin1').replaceAll('\n', '\r\n'), 'latin1');
+// Strict assert appends its diff to a custom message; the runner's receipt keeps
+// only the first line, so the refusal is identified by that line.
+const failsWith = (message) => (error) => error.message.split('\n')[0] === message;
+const refuses = (list, message) => assert.throws(() => proveMigrationSequence(list), failsWith(message));
+
+test('the reconciled #380 sequence pins #379, payment 001D, product helpers and scene', () => {
+  assert.deepEqual(proveMigrationSequence(sources).summary, {
+    migrations: 187, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name)],
+    prefix_names_sha256: prefixNamesFingerprint, follow_up_sha256: followUpFingerprint, follow_up_statements: 125,
+    follow_up_no_embedded_transaction: true,
+    visual_followups: followupMigrations.map(pin => ({ ...pin, version: pin.name.slice(0, 14), statements: statements(bytesOf(pin.name).toString('utf8')).length, no_embedded_transaction: true })),
+  });
+});
+
+test('the target prefix ends at #379 and excludes 001D, which is applied only as the reviewed follow-up', () => {
+  const { target_prefix: prefix } = proveMigrationSequence(sources);
+  assert.equal(prefix.length, 184);
+  assert.deepEqual(prefix.slice(-2), [predecessorName, migrationName]);
+  assert.ok(!prefix.includes(followUpName));
+  assert.deepEqual(sources.map(([name]) => name), [...prefix, followUpName, ...followupMigrations.map(item => item.name)]);
+  const broken = sql('select 1;\n');
+  const plan = targetPrefixSources(sources, broken);
+  assert.deepEqual(plan.map(([name]) => name), prefix);
+  assert.ok(plan.at(-1)[1] === broken, 'The plan must carry the given target bytes');
+  assert.ok(plan.slice(0, -1).every(([name, bytes]) => bytes === bytesOf(name)));
+  assert.equal(sha256(targetPrefixSources(sources, bytesOf(migrationName)).at(-1)[1]), finalFingerprint);
+  assert.throws(() => targetPrefixSources(without(sources, followUpName), broken), failsWith('Missing the reviewed 001D follow-up migration'));
+  assert.throws(() => targetPrefixSources(sources, 'select 1;\n'), failsWith('Migration sources must be raw bytes'));
+});
+
+test('unknown later and interleaved migrations fail', () => {
+  const extra = sql('select 1;\n');
+  refuses([...without(sources, followUpName), ['20261104150000_unknown_later.sql', extra]].sort(byName), 'Missing the reviewed 001D follow-up migration');
+  refuses(adding(['20261104140000_interleaved.sql', extra]), 'Interleaved migration between the #379 target and the 001D follow-up');
+  refuses(adding(['20261103000000_interleaved.sql', extra]), 'The #379 target must directly follow its exact predecessor');
+  refuses(adding(['20261020000000_interleaved.sql', extra]), 'Unreviewed migration sequence before the #379 target');
+  refuses(adding(['20250101000000_older_than_every_migration.sql', extra]), 'Unreviewed migration sequence before the #379 target');
+  const [firstName, firstBytes] = sources[0];
+  refuses(without(sources, firstName), 'Unreviewed migration sequence before the #379 target');
+  refuses([[`${firstName.slice(0, 15)}renamed.sql`, firstBytes], ...sources.slice(1)], 'Unreviewed migration sequence before the #379 target');
+});
+
+test('a missing target, predecessor or 001D follow-up fails', () => {
+  refuses(without(sources, migrationName), 'Missing the exact #379 target migration');
+  refuses(without(sources, predecessorName), 'The #379 target must directly follow its exact predecessor');
+  refuses(without(sources, followUpName), 'Missing the reviewed 001D follow-up migration');
+});
+
+test('reordered and duplicate versions fail', () => {
+  const swapped = [...sources];
+  [swapped[183], swapped[184]] = [swapped[184], swapped[183]];
+  refuses(swapped, 'Migration versions must be strictly ascending');
+  refuses([...sources].reverse(), 'Migration versions must be strictly ascending');
+  refuses(adding([`${followUpVersion}_duplicate_version.sql`, sql('select 1;\n')]), 'Duplicate migration version');
+  refuses(adding([`${predecessorVersion}_duplicate_version.sql`, sql('select 1;\n')]), 'Duplicate migration version');
+  // 001D moved before the #379 target by version, with its name suffix and bytes.
+  refuses([...without(sources, followUpName), ['20261104120000_bizbot_zcredit_001d_server_ledger.sql', bytesOf(followUpName)]].sort(byName),
+    'The #379 target must directly follow its exact predecessor');
+});
+
+test('changed, CRLF-converted or renamed 001D bytes fail', () => {
+  const original = bytesOf(followUpName);
+  refuses(replacing(followUpName, Buffer.concat([original, sql('-- changed\n')])), 'Unreviewed 001D follow-up bytes');
+  refuses(replacing(followUpName, crlf(original)), 'Unreviewed 001D follow-up bytes');
+  refuses(replacing(followUpName, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), original])), 'Unreviewed 001D follow-up bytes');
+  // Changes at the end of the file only: no end-of-file normalization may precede the hash.
+  assert.equal(original.at(-1), 0x0a);
+  for (const tail of ['\n', '\r\n', '   \n', '\n\n']) {
+    refuses(replacing(followUpName, Buffer.concat([original, sql(tail)])), 'Unreviewed 001D follow-up bytes');
+  }
+  refuses(replacing(followUpName, original.subarray(0, -1)), 'Unreviewed 001D follow-up bytes');
+  refuses(replacing(followUpName, Buffer.concat([original.subarray(0, -1), sql('\r\n')])), 'Unreviewed 001D follow-up bytes');
+  // Renamed with the same contents: another name, or another version.
+  refuses([...without(sources, followUpName), ['20261104141959_bizbot_zcredit_001d_renamed.sql', original]].sort(byName), 'Missing the reviewed 001D follow-up migration');
+  refuses([...without(sources, followUpName), ['20261104142000_bizbot_zcredit_001d_server_ledger.sql', original]].sort(byName), 'Missing the reviewed 001D follow-up migration');
+  // The reviewed bytes copied under another name.
+  refuses(replacing(sources[0][0], original), 'The reviewed 001D bytes may appear only under their pinned name');
+  refuses(replacing(sources[0][0], bytesOf(migrationName)), 'The reviewed #379 target bytes may appear only under its pinned name');
+  // The #379 target stays pinned by #379's own final-migration proof.
+  refuses(replacing(migrationName, crlf(bytesOf(migrationName))), 'Unreviewed final migration bytes');
+});
+
+test('top-level transaction control in the 001D follow-up fails; dollar-quoted PL/pgSQL does not', () => {
+  const original = bytesOf(followUpName);
+  const message = 'Unexpected top-level transaction control in the 001D follow-up';
+  for (const control of ['begin;', 'BEGIN WORK;', 'begin isolation level serializable;', 'start transaction;', 'commit;',
+    "commit prepared 'x';", 'end;', 'rollback;', 'rollback to savepoint s;', 'abort;', 'savepoint s;', 'release savepoint s;',
+    "prepare transaction 'x';", 'start\ntransaction;', 'START\tTRANSACTION;', 'start  transaction;', "prepare\ntransaction 'x';"]) {
+    refuses(replacing(followUpName, Buffer.concat([original, sql(`${control}\n`)])), message);
+    refuses(replacing(followUpName, Buffer.concat([sql(`-- leading\n${control}\n`), original])), message);
+  }
+  // Between two top-level statements as well. Offsets are positions in the decoded text (the 001D holds non-ASCII
+  // characters), so the control is inserted there and the text re-encoded.
+  const text = original.toString('utf8');
+  const all = statements(text);
+  for (const index of [1, Math.floor(all.length / 2), all.length - 2]) {
+    for (const control of ['commit;', 'begin;', 'start\ntransaction;', "prepare  transaction 'x';"]) {
+      const at = all[index].end;
+      refuses(replacing(followUpName, Buffer.from(`${text.slice(0, at)}\n${control}${text.slice(at)}`)), message);
+    }
+  }
+  assert.deepEqual(topLevelTransactionControl(original.toString('utf8')), []);
+  assert.deepEqual(topLevelTransactionControl(
+    "do $$ begin perform 1; end $$;\ncreate function f() returns void language plpgsql as $f$ begin return; end; $f$;\n" +
+    "prepare q as select 1;\nselect 'commit;';\nbegin_audit();\nending();\n"), []);
+  assert.throws(() => proveFollowUpMigration(original.toString('utf8')), failsWith('Migration sources must be raw bytes'));
+});
+
+test('a second later migration fails, including any future follow-up not yet pinned', () => {
+  refuses(adding(['20261104150000_second_later.sql', sql('select 1;\n')]), 'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+  refuses(adding(['20261104156000_future_follow_up.sql', sql('select 1;\n')], ['20261104157000_future_follow_up.sql', sql('select 2;\n')]),
+    'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+});
+
+test('non-conforming migration names and sources fail', () => {
+  for (const name of ['2026110415001_short_version.sql', '202611041500001_long_version.sql', '20261104150000_Upper.sql',
+    '20261104150000-dash.sql', '20261104150000_x.SQL', '20261104150000_x.sql.bak', '20261104150000_.sql', 'README.md']) {
+    refuses(adding([name, sql('select 1;\n')]), 'Migration file names must be a 14-digit version, a lower-case name and .sql');
+  }
+  refuses([], 'Expected the migration directory listing');
+  refuses(replacing(followUpName, bytesOf(followUpName).toString('utf8')), 'Migration sources must be raw bytes');
+  refuses(replacing(sources[0][0], bytesOf(sources[0][0]).toString('latin1')), 'Migration sources must be raw bytes');
+});
+
+test('the exact #379 and 001D hashes and the reviewed sequence are pinned', () => {
+  assert.equal(migrationName, '20261104131256_bizbot_storefront_cinematic_001b_appearance.sql');
+  assert.equal(finalFingerprint, 'a276aef4fdd30b35272939e51d649bff3dfeb70b6c806ecb7c2edee94ceb263b');
+  assert.equal(followUpName, '20261104141959_bizbot_zcredit_001d_server_ledger.sql');
+  assert.equal(followUpFingerprint, '468768f89029a0fb131869f754d5374127930b8bf05b48cd8de19d645546352e');
+  assert.equal(predecessorName, '20261102015942_bizbot_storefront_seo_discovery_001.sql');
+  assert.equal(prefixNamesFingerprint, '6ee60a7fc86607ebbcd69492f551f673622336c4476823ee8a2c014106f15643');
+  assert.equal(predecessorVersion, predecessorName.slice(0, 14));
+  assert.equal(followUpVersion, followUpName.slice(0, 14));
+  assert.equal(sha256(bytesOf(migrationName)), finalFingerprint);
+  assert.equal(sha256(bytesOf(followUpName)), followUpFingerprint);
+  const created = statements(bytesOf(migrationName).toString('utf8'))
+    .map((item) => item.text.match(/^create\s+(?:or\s+replace\s+)?function\s+([a-z_]+\.[a-z0-9_]+)\s*\(/i)?.[1])
+    .filter(Boolean);
+  assert.deepEqual(created.sort(), [...targetFunctions].sort());
+});
+
+test('both visual migrations fail closed on missing, swapped, changed, CRLF or copied bytes', () => {
+  for (const pin of followupMigrations) {
+    refuses(without(sources, pin.name), 'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+    const original = bytesOf(pin.name);
+    for (const changed of [Buffer.concat([original, sql('-- changed\n')]), crlf(original), original.subarray(0, -1)]) {
+      refuses(replacing(pin.name, changed), 'Unreviewed visual follow-up bytes');
+    }
+    refuses(replacing(pin.name, Buffer.concat([original, sql('commit;\n')])), 'Unexpected transaction control in a visual follow-up');
+    refuses(replacing(sources[0][0], original), 'Reviewed visual bytes may appear only under their pinned name');
+    refuses(adding([pin.name.slice(0, 15) + 'duplicate.sql', sql('select 1;\n')]), 'Duplicate migration version');
+  }
+  const [product, scene] = followupMigrations.map(pin => pin.name);
+  refuses(sources.map(([name, bytes]) => [name, name === product ? bytesOf(scene) : name === scene ? bytesOf(product) : bytes]),
+    'Unreviewed visual follow-up bytes');
+  refuses(adding(['20261104154500_between_product_and_scene.sql', sql('select 1;\n')]),
+    'Only the reviewed 001D then product and scene migrations may follow the #379 target');
 });
