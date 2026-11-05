@@ -165,8 +165,11 @@ async function enterLoginPassword(page: Page, password: string): Promise<void> {
   }).toBe(true);
 }
 async function targetGeometry(page: Page, target: Locator) {
-  if (!(await target.count())) return null;
-  return target.first().evaluate(el => {
+  // Expansion can replace a semantics node between Playwright calls.
+  // Observe presence and geometry in one sample of the current nodes.
+  return target.evaluateAll(matches => {
+    if (matches.length !== 1) return null;
+    const el = matches[0];
     const r = el.getBoundingClientRect();
     const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
     const pointerEvents = getComputedStyle(el).pointerEvents;
@@ -197,8 +200,9 @@ async function scrollScope(page: Page, target: Locator): Promise<ScrollScope> {
   const anchors = [target, page.getByRole('button', { name: L.upload, exact: true }),
     page.getByRole('textbox', { name: L.textColor }), page.getByRole('button', { name: L.saveProfile, exact: true })];
   for (let index = 0; index < anchors.length; index++) {
-    if (!(await anchors[index].count())) continue;
-    const box = await anchors[index].first().evaluate(el => {
+    const box = await anchors[index].evaluateAll(matches => {
+      if (matches.length !== 1) return null;
+      const el = matches[0];
       const own = el.getBoundingClientRect();
       if (own.width <= 0 || own.height <= 0 || own.bottom <= 96 || own.top >= innerHeight - 64) return null;
       const view = el.closest('flutter-view');
@@ -549,13 +553,13 @@ async function openEditor(page: Page, reload = false, colours?: 'profile' | 'con
 }
 async function captureMediaLibrary(page: Page, mediaId: string, path: string): Promise<void> {
   const header = page.getByRole('button', { name: L.mediaLibrary, exact: true });
-  await reveal(page, header, 'other', page.getByRole('button', { name: L.mediaLibrary, exact: true, includeHidden: true }));
-  await tapRevealedControl(page, header);
-  // Expanded tile semantics also include its introductory copy. Each card
-  // combines the usage, dimensions and short public media ID into one label.
-  const library = page.getByRole('group', { name: new RegExp(`^${L.mediaLibrary}(?:\\s|$)`) });
+  // The full editor merges a published card's dimensions and ID into one
+  // text node. The background dropdown does not expose that card label.
   const id = mediaId.slice(0, 8);
-  const row = library.getByText(new RegExp(`\\b${id}\\b`));
+  const row = page.getByText(new RegExp(`أبعاد النسخة المنشورة:[\\s\\u2066]*\\d+×\\d+[\\s\\u2069]*بكسل[\\s\\u202a\\u2066]*${id}\\b`));
+  await reveal(page, header, 'other', page.getByRole('button', { name: L.mediaLibrary, exact: true, includeHidden: true }));
+  await expect(row, 'The folded library excludes the published card').toHaveCount(0);
+  await tapRevealedControl(page, header);
   await reveal(page, row, 'content-status');
   await expect(row, 'The gallery displays the published synthetic background').toHaveCount(1);
   await settleScroll(page, await scrollScope(page, row), true);
