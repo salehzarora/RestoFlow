@@ -905,9 +905,9 @@ async function verifyMenuGeometry(page: Page): Promise<void> {
   expect(layer!.y).toBeLessThanOrEqual(first!.y);
   expect(layer!.y + layer!.height).toBeGreaterThanOrEqual(last!.y + last!.height);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal viewport overflow').toBe(true);
-  await expect(photo).toHaveCSS('position', 'fixed');
+  await expect(photo).toHaveCSS('position', 'absolute');
   await expect(photo).toHaveCSS('object-fit', 'cover');
-  await expect(photo).toHaveCSS('object-position', '50% 50%');
+  await expect(photo).toHaveCSS('object-position', '50% 0%');
   const viewport = await page.evaluate(() => ({ width: document.documentElement.clientWidth, height: innerHeight }));
   for (const position of ['top', 'last category'] as const) {
     if (position === 'last category') {
@@ -917,8 +917,9 @@ async function verifyMenuGeometry(page: Page): Promise<void> {
     }
     const rect = await photo.boundingBox();
     expect(rect, `The menu photo remains visible at ${position}`).not.toBeNull();
-    expect(Math.abs(rect!.x), 'Photo stays at the viewport left edge').toBeLessThanOrEqual(1);
-    expect(Math.abs(rect!.y), 'Photo stays at the viewport top edge').toBeLessThanOrEqual(1);
+    const scrollY = await page.evaluate(() => window.scrollY);
+    expect(Math.abs(rect!.x), 'Photo stays at the document left edge').toBeLessThanOrEqual(1);
+    expect(Math.abs(rect!.y + scrollY), 'Photo stays at the document top').toBeLessThanOrEqual(1);
     expect(Math.abs(rect!.width - viewport.width), 'Photo covers the viewport width').toBeLessThanOrEqual(1);
     expect(Math.abs(rect!.height - viewport.height), 'Photo covers the viewport height').toBeLessThanOrEqual(1);
   }
@@ -938,7 +939,7 @@ async function verifyReferenceScene(page: Page, dim: number): Promise<void> {
       category: { colour: category.backgroundColor, blur: category.backdropFilter }, footer: panel.backgroundColor,
       fits: document.documentElement.scrollWidth <= innerWidth };
   });
-  expect(result.image).toEqual({ fit: 'cover', filter: 'none', position: 'fixed', opacity: '1' });
+  expect(result.image).toEqual({ fit: 'cover', filter: 'none', position: 'absolute', opacity: '1' });
   expect(result.overlay).toEqual({ colour: 'rgb(0, 0, 0)', opacity: dim / 100 });
   expect(result.header).toEqual({ colour: 'rgba(21, 21, 21, 0.76)', blur: 'none' });
   expect(result.category).toEqual({ colour: 'rgba(21, 21, 21, 0.76)', blur: 'none' });
