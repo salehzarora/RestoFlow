@@ -181,7 +181,7 @@ class _QualityInvoker implements StorefrontFunctionInvoker {
     if (outcome == 'unavailable')
       return StorefrontFunctionReply.fromHttp(404, {
         'ok': false,
-        'error': 'source_not_found',
+        'status': 'source_not_found',
       });
     return StorefrontFunctionReply.fromHttp(200, {
       'ok': true,
@@ -321,6 +321,39 @@ Finder get _background => find.byWidgetPredicate(
 );
 
 void main() {
+  testWidgets(
+    'abandoned explicit old-background preparation releases parent busy',
+    (tester) async {
+      final pending = Completer<void>();
+      final old = _Rig(highResolution: true)..qualityInvoker.pending = pending;
+      old.repo.rows.add(
+        StorefrontContentMediaRow.fromJson(old.invoker.media(_source)),
+      );
+      old.repo.document = StorefrontContentDocument.fromJson(
+        old.repo.document.editableCopy()
+          ..['appearance'] = {
+            'text_color': null,
+            'button_text_color': null,
+            'menu_background_media_id': _media,
+          },
+      );
+      final replace = await _mount(tester, old);
+      await _tap(tester, 'content-background-quality-prepare');
+      expect(old.qualityInvoker.calls, hasLength(1));
+      expect(old.busyEvents.last, isTrue);
+      final next = _Rig(highResolution: true);
+      replace(next);
+      await tester.pumpAndSettle();
+      expect(next.busyEvents.last, isFalse);
+      pending.complete();
+      await tester.pumpAndSettle();
+      expect(old.qualityInvoker.calls, hasLength(1));
+      expect(next.qualityInvoker.calls, isEmpty);
+      expect(next.repo.writes, isEmpty);
+      expect(find.textContaining('2560×1706'), findsNothing);
+    },
+  );
+
   testWidgets(
     'new background prepares HD without saving and keeps both drafts through folding',
     (tester) async {

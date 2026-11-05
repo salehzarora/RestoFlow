@@ -18,11 +18,25 @@ class StorefrontBackgroundResult {
     this.byteLength,
     this.code,
     this.calls = 0,
+    this.cursor,
   });
   final StorefrontBackgroundStatus status;
   final int? baseRung, width, height, byteLength;
   final String? code;
   final int calls;
+  final StorefrontBackgroundCursor? cursor;
+}
+
+/// Resume the exact uncertain request, distinguishing a probe from a proven
+/// base. This cursor belongs to the enclosing request ID and editor binding.
+class StorefrontBackgroundCursor {
+  const StorefrontBackgroundCursor({
+    required this.baseRung,
+    required this.rung,
+    required this.baseVerified,
+  });
+  final int baseRung, rung;
+  final bool baseVerified;
 }
 
 /// Optional background-only companion. The existing w960 publication and
@@ -49,6 +63,8 @@ class StorefrontBackgroundPublisher {
     required int baseWidth,
     required int baseHeight,
     int? baseRung,
+    StorefrontBackgroundCursor? cursor,
+    bool Function()? isCurrent,
   }) async {
     if (![
           organizationId,
@@ -61,14 +77,22 @@ class StorefrontBackgroundPublisher {
         baseHeight < 1 ||
         baseWidth > 960 ||
         baseHeight > 960 ||
-        (baseRung != null && (baseRung < 0 || baseRung > 4))) {
+        (baseRung != null && (baseRung < 0 || baseRung > 4)) ||
+        (cursor != null &&
+            (cursor.baseRung < 0 ||
+                cursor.baseRung > 4 ||
+                cursor.rung < 0 ||
+                cursor.rung > 4 ||
+                (!cursor.baseVerified && cursor.rung != 0) ||
+                (baseRung != null && cursor.baseRung != baseRung)))) {
       return const StorefrontBackgroundResult(
         StorefrontBackgroundStatus.refused,
         code: 'invalid_request',
       );
     }
-    var candidate = baseRung ?? 0;
-    var rung = 0;
+    var candidate = cursor?.baseRung ?? baseRung ?? 0;
+    var rung = cursor?.rung ?? 0;
+    var verified = cursor?.baseVerified ?? (baseRung != null);
     var calls = 0;
     // An existing selection may not have its original quality rung locally.
     // At most five no-effect base probes, then at most four higher rungs.
@@ -88,12 +112,26 @@ class StorefrontBackgroundPublisher {
       // A single same-body retry for a missing/untyped answer. Retrying the
       // public registration keeps the same request identity and never saves.
       for (var attempt = 0; attempt < 2; attempt++) {
+        if (isCurrent?.call() == false) {
+          return StorefrontBackgroundResult(
+            StorefrontBackgroundStatus.unavailable,
+            calls: calls,
+            code: 'binding_changed',
+          );
+        }
         try {
           reply = await _invoker.invoke(body);
         } catch (_) {
           reply = const StorefrontFunctionReply.transportFailure();
         }
         calls++;
+        if (isCurrent?.call() == false) {
+          return StorefrontBackgroundResult(
+            StorefrontBackgroundStatus.unavailable,
+            calls: calls,
+            code: 'binding_changed',
+          );
+        }
         if (reply.json != null && !reply.transportFailed) break;
       }
       final json = reply?.json;
@@ -102,17 +140,24 @@ class StorefrontBackgroundPublisher {
         String? code,
       }) => StorefrontBackgroundResult(
         status,
-        baseRung: candidate,
+        baseRung: verified ? candidate : null,
         calls: calls,
         code: code,
+        cursor: StorefrontBackgroundCursor(
+          baseRung: candidate,
+          rung: rung,
+          baseVerified: verified,
+        ),
       );
       if (json == null || reply!.transportFailed) {
         return result(StorefrontBackgroundStatus.uncertain);
       }
       if (reply.httpStatus == 422 &&
+          _keys(json, ['ok', 'status', 'code']) &&
+          json['ok'] == false &&
           json['status'] == 'refused' &&
           json['code'] == 'base_mismatch' &&
-          baseRung == null &&
+          !verified &&
           rung == 0 &&
           candidate < 4) {
         candidate++;
@@ -124,6 +169,7 @@ class StorefrontBackgroundPublisher {
           json['status'] == 'ladder_next') {
         final next = json['next_rung'];
         if (next is int && next == rung + 1 && next <= 4) {
+          verified = true;
           rung = next;
           continue;
         }
@@ -133,6 +179,7 @@ class StorefrontBackgroundPublisher {
           _keys(json, ['ok', 'status']) &&
           json['ok'] == true &&
           json['status'] == 'not_needed') {
+        verified = true;
         return result(StorefrontBackgroundStatus.notNeeded);
       }
       if (reply.httpStatus == 200 &&
@@ -171,6 +218,8 @@ class StorefrontBackgroundPublisher {
               height >= baseHeight &&
               width <= 2560 &&
               height <= 2560 &&
+              (width * baseHeight - height * baseWidth).abs() <=
+                  (width > height ? width : height) &&
               bytes > 0 &&
               bytes <= 524288 &&
               hash is String &&
@@ -185,6 +234,11 @@ class StorefrontBackgroundPublisher {
               height: height,
               byteLength: bytes,
               calls: calls,
+              cursor: StorefrontBackgroundCursor(
+                baseRung: candidate,
+                rung: rung,
+                baseVerified: true,
+              ),
             );
           }
         }
@@ -199,7 +253,7 @@ class StorefrontBackgroundPublisher {
       if ([400, 401, 403, 404, 409].contains(reply.httpStatus)) {
         return result(
           StorefrontBackgroundStatus.unavailable,
-          code: json['error'] is String ? json['error'] as String : null,
+          code: json['status'] is String ? json['status'] as String : null,
         );
       }
       if (reply.httpStatus == 503 &&
@@ -211,8 +265,13 @@ class StorefrontBackgroundPublisher {
     }
     return StorefrontBackgroundResult(
       StorefrontBackgroundStatus.uncertain,
-      baseRung: candidate,
+      baseRung: verified ? candidate : null,
       calls: calls,
+      cursor: StorefrontBackgroundCursor(
+        baseRung: candidate,
+        rung: rung,
+        baseVerified: verified,
+      ),
     );
   }
 

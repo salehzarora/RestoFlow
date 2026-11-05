@@ -38,7 +38,12 @@ class Invoker implements StorefrontFunctionInvoker {
   }
 }
 
-Future<StorefrontBackgroundResult> publish(Invoker invoker, {int? baseRung}) =>
+Future<StorefrontBackgroundResult> publish(
+  Invoker invoker, {
+  int? baseRung,
+  StorefrontBackgroundCursor? cursor,
+  bool Function()? isCurrent,
+}) =>
     StorefrontBackgroundPublisher(
       invoker: invoker,
       organizationId: org,
@@ -50,9 +55,107 @@ Future<StorefrontBackgroundResult> publish(Invoker invoker, {int? baseRung}) =>
       baseWidth: 720,
       baseHeight: 960,
       baseRung: baseRung,
+      cursor: cursor,
+      isCurrent: isCurrent,
     );
 
 void main() {
+  test(
+    'lost unproven probe resumes exact body then finds the actual base rung',
+    () async {
+      final absent = Invoker(
+        (_, _) => const StorefrontFunctionReply.transportFailure(),
+      );
+      final unknown = await publish(absent);
+      expect(unknown.baseRung, isNull);
+      expect(unknown.cursor!.baseVerified, isFalse);
+      final retry = Invoker(
+        (body, _) => body['base_rung'] == 2
+            ? StorefrontFunctionReply.fromHttp(200, published())
+            : StorefrontFunctionReply.fromHttp(422, {
+                'ok': false,
+                'status': 'refused',
+                'code': 'base_mismatch',
+              }),
+      );
+      final result = await publish(retry, cursor: unknown.cursor);
+      expect(result.status, StorefrontBackgroundStatus.published);
+      expect(result.baseRung, 2);
+      expect(retry.calls.first, absent.calls.last);
+      expect(retry.calls.map((b) => b['base_rung']), [0, 1, 2]);
+    },
+  );
+
+  test(
+    'lost high rung resumes that exact rung instead of restarting',
+    () async {
+      final absent = Invoker(
+        (_, call) => call == 1
+            ? StorefrontFunctionReply.fromHttp(202, {
+                'ok': false,
+                'status': 'ladder_next',
+                'next_rung': 1,
+              })
+            : const StorefrontFunctionReply.transportFailure(),
+      );
+      final unknown = await publish(absent);
+      expect(unknown.cursor!.baseVerified, isTrue);
+      expect(unknown.cursor!.rung, 1);
+      final retry = Invoker(
+        (_, _) => StorefrontFunctionReply.fromHttp(200, published(rung: 1)),
+      );
+      final result = await publish(
+        retry,
+        baseRung: unknown.baseRung,
+        cursor: unknown.cursor,
+      );
+      expect(result.status, StorefrontBackgroundStatus.published);
+      expect(retry.calls.single, absent.calls.last);
+    },
+  );
+
+  test(
+    'retired binding sends neither transport retry nor another rung',
+    () async {
+      var current = true;
+      final invoker = Invoker((_, _) {
+        current = false;
+        return const StorefrontFunctionReply.transportFailure();
+      });
+      expect(
+        (await publish(invoker, isCurrent: () => current)).code,
+        'binding_changed',
+      );
+      expect(invoker.calls, hasLength(1));
+      expect(
+        (await publish(invoker, isCurrent: () => false)).code,
+        'binding_changed',
+      );
+      expect(invoker.calls, hasLength(1));
+    },
+  );
+
+  test('only a typed refused base mismatch can advance the probe', () async {
+    for (final body in [
+      {'ok': true, 'status': 'refused', 'code': 'base_mismatch'},
+      {
+        'ok': false,
+        'status': 'refused',
+        'code': 'base_mismatch',
+        'extra': true,
+      },
+    ]) {
+      final invoker = Invoker(
+        (_, _) => StorefrontFunctionReply.fromHttp(422, body),
+      );
+      expect(
+        (await publish(invoker)).status,
+        StorefrontBackgroundStatus.refused,
+      );
+      expect(invoker.calls, hasLength(1));
+    }
+  });
+
   test(
     'only bounded identities are sent; exact companion is decoded',
     () async {
@@ -170,7 +273,7 @@ void main() {
       final denied = Invoker(
         (_, _) => StorefrontFunctionReply.fromHttp(403, {
           'ok': false,
-          'error': 'permission_denied',
+          'status': 'permission_denied',
         }),
       );
       expect(
@@ -188,6 +291,7 @@ void main() {
         (m) => m['base_media_id'] = restaurant,
         (m) => m['width'] = 2561,
         (m) => m['height'] = 800,
+        (m) => m['height'] = 960,
         (m) => m['width'] = 720,
         (m) => m['bytes'] = 524289,
         (m) => m['variant'] = 'w960',

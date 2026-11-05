@@ -122,9 +122,9 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
       'התצוגה המקדימה מציגה את תמונת התאימות. העלאה חדשה מכינה גם רקע גדול יותר כשהמקור השמור מאפשר זאת. לרקעים קודמים נדרשת הכנה מפורשת והמקור חייב להישמר.',
     ],
     'backgroundQualityPrepare': [
-      'Prepare higher resolution from original',
-      'إعادة تحضير دقة أعلى من الأصل',
-      'הכנת רזולוציה גבוהה מהמקור',
+      'Prepare and publish higher resolution from original',
+      'تحضير ونشر دقة أعلى من الأصل',
+      'הכנה ופרסום רזולוציה גבוהה מהמקור',
     ],
     'backgroundQualityRetry': [
       'Retry the same preparation',
@@ -137,9 +137,9 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
       'מכין רזולוציית רקע…',
     ],
     'backgroundQualityReady': [
-      'Larger background ready: {size} pixels, {bytes} bytes. Visitors receive a suitable published size.',
-      'الخلفية الأعلى دقة جاهزة: {size} بكسل، {bytes} بايت. تُختار للزائر نسخة منشورة مناسبة.',
-      'הרקע הגדול מוכן: {size} פיקסלים, {bytes} בתים. נבחרת למבקר תמונה שפורסמה בגודל מתאים.',
+      'Larger background ready: {size} pixels, {bytes} bytes. When this background is selected and saved, visitors receive a suitable published size.',
+      'الخلفية الأعلى دقة جاهزة: {size} بكسل، {bytes} بايت. عند اختيار هذه الخلفية وحفظها تُختار للزائر نسخة منشورة مناسبة.',
+      'הרקע הגדול מוכן: {size} פיקסלים, {bytes} בתים. כשהרקע נבחר ונשמר, נבחרת למבקר תמונה שפורסמה בגודל מתאים.',
     ],
     'backgroundQualityNative': [
       'The original provides no larger image. The compatibility image is retained.',

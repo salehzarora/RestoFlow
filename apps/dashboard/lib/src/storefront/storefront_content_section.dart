@@ -88,10 +88,12 @@ class _ContentState extends State<StorefrontContentSection> {
   final _appearanceColors = <String, TextEditingController>{};
   bool _busy = false, _dirty = false, _stale = false;
   bool _uploadingBackground = false;
+  bool _preparingBackgroundQuality = false;
   ({
     String mediaId,
     String requestId,
     int? baseRung,
+    StorefrontBackgroundCursor? cursor,
     StorefrontBackgroundResult? result,
   })?
   _backgroundQuality;
@@ -156,7 +158,9 @@ class _ContentState extends State<StorefrontContentSection> {
         !identical(old.backgroundUpload, widget.backgroundUpload) ||
         old.savedBranchId != widget.savedBranchId) {
       final abandonedUpload = _uploadingBackground;
+      final abandonedQuality = _preparingBackgroundQuality;
       _uploadingBackground = false;
+      _preparingBackgroundQuality = false;
       _backgroundQuality = null;
       _bindingGeneration++;
       _generation++;
@@ -183,7 +187,7 @@ class _ContentState extends State<StorefrontContentSection> {
         });
       } else {
         _load();
-        if (abandonedUpload) {
+        if (abandonedUpload || abandonedQuality) {
           final binding = _bindingGeneration;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_current(binding)) widget.onBusyChanged(false);
@@ -1386,13 +1390,17 @@ class _ContentState extends State<StorefrontContentSection> {
   Future<void> _prepareExistingBackground(StorefrontMediaRow media) async {
     if (!_editable || _dirty || widget.backgroundPublisher == null) return;
     final binding = _bindingGeneration;
+    _preparingBackgroundQuality = true;
     _setBusy(true);
     await _prepareBackgroundQuality(
       mediaId: media.id,
       width: media.width,
       height: media.height,
     );
-    if (_current(binding)) _setBusy(false);
+    if (_current(binding)) {
+      _preparingBackgroundQuality = false;
+      _setBusy(false);
+    }
   }
 
   Future<void> _prepareBackgroundQuality({
@@ -1420,6 +1428,7 @@ class _ContentState extends State<StorefrontContentSection> {
         mediaId: mediaId,
         requestId: requestId,
         baseRung: proofRung,
+        cursor: retry ? previous?.cursor : null,
         result: null,
       ),
     );
@@ -1432,6 +1441,8 @@ class _ContentState extends State<StorefrontContentSection> {
         baseWidth: width,
         baseHeight: height,
         baseRung: proofRung,
+        cursor: retry ? previous?.cursor : null,
+        isCurrent: () => _current(binding),
       );
     } catch (_) {
       result = const StorefrontBackgroundResult(
@@ -1444,6 +1455,7 @@ class _ContentState extends State<StorefrontContentSection> {
         mediaId: mediaId,
         requestId: requestId,
         baseRung: result.baseRung ?? proofRung,
+        cursor: result.cursor,
         result: result,
       ),
     );
