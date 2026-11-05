@@ -4,27 +4,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { createServer } from 'node:http';
-import { registerHooks } from 'node:module';
 import { chromium } from '@playwright/test';
-import ts from 'typescript';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-await import('../support/ts-resolver.mjs');
-
-// Load actual TSX/CSS-module imports for server rendering in this test process.
-// No application loader, build rule or runtime source is modified.
-registerHooks({ load(url, context, next) {
-  if (url.endsWith('.module.css')) {
-    const css = readFileSync(new URL(url), 'utf8');
-    const names = [...css.matchAll(/\.([a-zA-Z_][\w-]*)/g)].map(match => match[1]);
-    return { format: 'module', shortCircuit: true, source: `export default ${JSON.stringify(Object.fromEntries(names.map(name => [name, name])))}` };
-  }
-  if (url.endsWith('.tsx')) return { format: 'module', shortCircuit: true, source: ts.transpileModule(readFileSync(new URL(url), 'utf8'), {
-    compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext }, fileName: new URL(url).pathname,
-  }).outputText };
-  return next(url, context);
-} });
+await import('./helpers/ssr-components.mjs');
 const { ProductCarousel } = await import('../../src/ui/storefront/home/ProductCarousel.tsx');
 const { storefrontMessages } = await import('../../src/i18n/storefront.ts');
 const homeCss = readFileSync(new URL('../../src/ui/storefront/home/home.module.css', import.meta.url), 'utf8');

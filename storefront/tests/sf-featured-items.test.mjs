@@ -78,7 +78,7 @@ test('independent tenant reads do not share mutable featured state', () => {
   assert.ok(b.view.items.every(item => !item.featured));
 });
 
-test('live source requires v5 once, retaining featured selection with no old-reader fallback', async () => {
+test('live source requires v7 once and retains featured selection on the successful read', async () => {
   const previous = globalThis.fetch;
   const calls = [];
   const source = liveStorefrontSource({ url: ORIGIN, anonKey: 'sb_publishable_SYNTHETIC_not_real_00000' });
@@ -87,7 +87,7 @@ test('live source requires v5 once, retaining featured selection with no old-rea
     const result = await source.getStorefront('sf-synth-a');
     assert.equal(result.view.items.find(item => item.id === SYNTH_IDS.burger).featured, true);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v6`);
+    assert.equal(calls[0].url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v7`);
     assert.equal(calls[0].init.body, JSON.stringify({ p_slug: 'sf-synth-a' }));
     globalThis.fetch = async () => { calls.push('legacy'); return { ok: true, json: async () => v2() }; };
     await assert.rejects(source.getStorefront('sf-synth-a'), EnvelopeError);
