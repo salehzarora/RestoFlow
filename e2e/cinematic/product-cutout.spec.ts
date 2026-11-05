@@ -217,6 +217,8 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
   expect(modelReads, 'No model is loaded for login or ordinary Dashboard navigation').toBe(0);
   const evidence: Record<string, unknown>[] = [];
   const qualityEvidence: Record<string, unknown>[] = [];
+  let restoredBurger: { itemId: string; sourceKey: string; sourceSnapshot: unknown;
+    derivativeId: string; selectionVersion: number } | undefined;
   for (const sample of samples) {
     const beforeChoose = { fileChoosers, originalUploads, itemSaves };
     advance('open-product', sample.name);
@@ -270,8 +272,30 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     expect(before.data.ok).toBe(true);
     advance('original-source-key');
     expect(before.data.source_key).toBe(originalKey);
-    advance('original-selection-default');
-    expect(before.data.selected_derivative_id).toBeNull();
+    if (sample.name === 'burger-highres') {
+      advance('replacement-selection-proof');
+      // Replacement invalidates the old generation without deleting selection
+      // history. Match the exact earlier Original choice, not any non-null ID.
+      expect(restoredBurger).toBeDefined();
+      expect(itemId).toBe(restoredBurger!.itemId);
+      expect(originalKey).not.toBe(restoredBurger!.sourceKey);
+      expect(before.data.source_snapshot).not.toEqual(restoredBurger!.sourceSnapshot);
+      expect(before.data.selected_derivative_id).toBe(restoredBurger!.derivativeId);
+      expect(before.data.selection_version).toBe(restoredBurger!.selectionVersion);
+      const stale = await rpc(fixture, token, 'get_storefront_product_source_v1', {
+        ...scope(fixture.ownerA), p_derivative_id: restoredBurger!.derivativeId,
+      });
+      expect(stale.status).toBe(200);
+      expect(stale.data).toEqual({ ok: false, error: 'source_stale' });
+      const replacedMenu = await rpc(fixture, null, 'storefront_menu_v6', { p_slug: fixture.ownerA.slug });
+      expect(replacedMenu.status).toBe(200); expect(replacedMenu.data.ok).toBe(true);
+      expect(replacedMenu.data.product_images_v1.some((row: { item_id: string }) => row.item_id === itemId),
+        'The stale selected pair is absent until explicit publication for the new source').toBe(false);
+    } else {
+      advance('original-selection-default');
+      expect(before.data.selected_derivative_id).toBeNull();
+      expect(before.data.selection_version).toBe(0);
+    }
     const downloadOriginal = () => request(fixture, token,
       `/storage/v1/object/authenticated/menu-images/${storagePath(originalKey)}`);
     advance('private-original-status');
@@ -472,6 +496,12 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       const privateRestored = await downloadOriginal();
       expect(privateRestored.status).toBe(200);
       expect(sha(privateRestored.bytes)).toBe(sha(source));
+      if (sample.name === 'burger') {
+        expect(restored.data.selected_derivative_id).toEqual(expect.any(String));
+        restoredBurger = { itemId, sourceKey: restored.data.source_key,
+          sourceSnapshot: restored.data.source_snapshot, derivativeId: restored.data.selected_derivative_id,
+          selectionVersion: restored.data.selection_version };
+      }
       if (sample.name === 'burger-highres') {
         advance('highres-original-render');
         const originalMenu = await rpc(fixture, null, 'storefront_menu_v6', { p_slug: fixture.ownerA.slug });
@@ -511,6 +541,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       privateBeforeSha256: sha(privateBefore.bytes), privateAfterSha256: sha(privateAfter.bytes),
       cancelAndFailedFetchRetainedOriginal: sample.name === 'burger', publishedImages,
       existingOriginalPreparedWithoutUpload: sample.name === 'fries-cup',
+      replacementPreservedHistoryAndSuppressedStaleMedia: sample.name === 'burger-highres',
       explicitPublication: true, ...dimensions });
     advance('close-product');
     await tapButton(page, 'إلغاء'); // close the item editor; already saved source/presentation remain

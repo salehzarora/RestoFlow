@@ -117,6 +117,9 @@ test('a high-res rendering failure cannot be mistaken for the preceding successf
   const progress = createProductProgress();
   progress.advance('close-product', 'drink');
   progress.advance('highres-source-metadata', 'burger-highres');
+  progress.advance('replacement-selection-proof');
+  assert.equal(progress.snapshot().failedStage, 'replacement-selection-proof');
+  assert.equal(progress.snapshot().sample, 'burger-highres');
   progress.advance('highres-cutout-render');
   progress.advance('highres-original-render');
   const receipt = progress.snapshot();

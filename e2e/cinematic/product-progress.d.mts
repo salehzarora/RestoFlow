@@ -17,6 +17,7 @@ export type ProductStage =
   | 'original-read-result'
   | 'original-source-key'
   | 'original-selection-default'
+  | 'replacement-selection-proof'
   | 'private-original-status'
   | 'private-original-bytes'
   | 'existing-await-auto'
