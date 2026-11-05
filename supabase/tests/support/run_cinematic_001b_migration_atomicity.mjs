@@ -4,7 +4,7 @@
 // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-CINEMATIC-PROOF-001: the late failure and
 // the target-only apply run in disposable workdirs that hold exactly the prefix
 // ending at the #379 target; the one reviewed follow-up (001D) is then applied
-// alone from an exact disposable prefix, then PR380 product helpers and scene.
+// alone from an exact disposable prefix, then the pinned product, scene and background follow-ups.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
@@ -73,6 +73,11 @@ const readinessQuery = `select json_build_object(
 const followupReadinessQuery = `select json_build_object(
   'content_v3', to_regprocedure('public.get_restaurant_storefront_content_v3(uuid,uuid)') is not null,
   'menu_v6', to_regprocedure('public.storefront_menu_v6(text)') is not null,
+  'menu_v7', to_regprocedure('public.storefront_menu_v7(text)') is not null,
+  'background', to_regclass('app.storefront_background_variants') is not null,
+  'background_source', to_regprocedure('public.get_storefront_background_source_v1(uuid,uuid,uuid,uuid)') is not null,
+  'background_stage', to_regprocedure('public.stage_storefront_background_variant_v1(uuid,uuid,uuid,uuid,uuid,jsonb,text,text,integer,integer,integer)') is not null,
+  'background_finalize', to_regprocedure('public.finalize_storefront_background_variant_v1(uuid,uuid,uuid,uuid)') is not null,
   'derivatives', to_regclass('app.storefront_product_derivatives') is not null,
   'selections', to_regclass('app.storefront_product_selections') is not null,
   'original', to_regprocedure('public.get_storefront_product_original_v1(uuid,uuid,uuid)') is not null,
@@ -82,6 +87,7 @@ const followupReadinessQuery = `select json_build_object(
   'finalize', to_regprocedure('public.finalize_storefront_product_media_v1(uuid,uuid,uuid,uuid)') is not null,
   'select', to_regprocedure('public.select_storefront_product_derivative_v1(uuid,uuid,uuid,uuid)') is not null)::text;`;
 const followupReadiness = Object.fromEntries(['content_v3', 'menu_v6', 'derivatives', 'selections',
+  'menu_v7', 'background', 'background_source', 'background_stage', 'background_finalize',
   'original', 'register', 'source', 'stage', 'finalize', 'select'].map(name => [name, true]));
 const noFollowupReadiness = Object.fromEntries(Object.keys(followupReadiness).map(name => [name, false]));
 const historyVersionsQuery = "select coalesce(jsonb_agg(version order by version),'[]'::jsonb)::text from supabase_migrations.schema_migrations;";
@@ -252,7 +258,7 @@ end;\n$cinematic_late_failure$;\n`;
     'Payment and all earlier history rows must remain unchanged');
   assert.deepEqual(finalHistory.map(row => row.version), versionsOf(sources.map(([name]) => name)),
     'Each pinned migration must have exactly one history row and no others');
-  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), followupReadiness, 'Reviewed v3/v6 and complete product RPC surface must be ready');
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), followupReadiness, 'Reviewed content, menu, product and background RPCs must be ready');
   receipt.followup_history_once = 'PASS';
   receipt.followup_readiness = followupReadiness;
   receipt.successful_followup_application = 'PASS';
