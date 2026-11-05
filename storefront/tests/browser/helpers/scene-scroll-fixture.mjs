@@ -23,11 +23,12 @@ globalThis.fetch = async (input, init) => {
   if (!match) return Response.json({ ok:false, error:'not_found', entity:'storefront_menu' });
   const [, locale, scene, source, announce] = match;
   const data = syntheticV4Envelope();
-  Object.assign(data.restaurant, { slug, display_name:'Scene test', primary_color:'#33312c', accent_color:'#f3ad60',
+  const brightBrand = locale === 'en' && scene === 'brand';
+  Object.assign(data.restaurant, { slug, display_name:'Scene test', primary_color:brightBrand ? '#f8f4ef' : '#33312c', accent_color:'#f3ad60',
     motion:'calm', hero_url:image(source === 'shared' || source === 'inherited' ? 'b' : 'c') });
   const word = {ar:'الموسم',he:'עונתי',en:'seasonal'}[locale].repeat(10);
   data.home_content.announcement_text = announce === 'panel' ? copy[locale].trim() + ' ' + word : null;
-  data.content_v1.appearance = { text_color:null, button_text_color:null, scene_preset:scene === 'reference' ? 'reference_dark' : null,
+  data.content_v1.appearance = { text_color:brightBrand ? '#000000' : null, button_text_color:null, scene_preset:scene === 'reference' ? 'reference_dark' : null,
     menu_background_url:source === 'inherited' ? null : image('b'), menu_background_dim:15 };
   data.categories = Array.from({length:5}, (_, i) => ({...data.categories[0], id:id(100+i), name:'Category '+(i+1), display_order:i}));
   data.items = data.categories.flatMap((cat,i)=>Array.from({length:3}, (_, n) => ({...data.items[0], id:id(1000+i*3+n),

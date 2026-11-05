@@ -184,6 +184,7 @@ try {
           lines,left:rect.left,right:innerWidth-rect.right,textInside:t.left>=rect.left&&t.right<=rect.right,
           closeSeparate:t.right<=b.left+1||b.right<=t.left+1,overflow:n.scrollWidth>n.clientWidth,
           radius:parseFloat(css.borderRadius),border:parseFloat(css.borderTopWidth),background:css.backgroundColor,backgroundImage:css.backgroundImage,
+          themeText:css.getPropertyValue('--tx').trim(),themeBackground:css.getPropertyValue('--bg').trim(),
           ink:getComputedStyle(text).color,samples:[[rect.left+8,rect.top+8],[rect.right-8,rect.top+8],[rect.left+8,rect.bottom-8]]};
       });
       check(panel.role==='status'&&Boolean(panel.closeName)&&panel.stars===2,'announcement content semantics',row);
@@ -204,6 +205,11 @@ try {
         return pixels.map(rgb=>{const a=luminance(fg),b=luminance(rgb);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);});
       },{png,ink:panel.ink,samples:panel.samples});
       check(contrasts.every(ratio=>ratio>=4.5),'announcement text contrast on photographed surface',row);
+      if(locale==='en' && scene==='brand'){
+        assert.equal(panel.themeBackground.toLowerCase(),'#f8f4ef');
+        assert.equal(panel.themeText.toLowerCase(),'#000000');
+        check(panel.ink!=='rgb(0, 0, 0)','dark panel ink stays readable with explicit black menu text',row);
+      }
       row.announcement={...panel,framing,contrastRatios:contrasts};
       if(out)await page.screenshot({path:join(out,name+'-announcement.png')});
       await ann.getByRole('button').click();await ann.waitFor({state:'detached'});
