@@ -57,7 +57,7 @@
 .imageCover{width:100%;height:100%;object-fit:cover}
 .promoImg{composes:imageCover}
 .heroImg{composes:imageCover;transform-origin:50% 123%}
-.announce{composes:flexRow;position:relative;width:min(1240px,calc(100% - 80px));margin:12px auto 0;min-height:49px;justify-content:center;gap:24px;background:linear-gradient(var(--scrim),var(--scrim)),var(--scrim);color:var(--promoWarm);border:1px solid color-mix(in srgb,var(--acc) 30%,var(--hair));border-radius:var(--r-control);padding:10px 60px;font:500 12px/1.8 var(--font)}
+.announce{composes:flexRow;position:relative;width:min(1240px,calc(100% - 80px));margin:12px auto 0;min-height:49px;justify-content:center;gap:24px;background:linear-gradient(var(--scrim,rgba(6,8,7,.66)),var(--scrim,rgba(6,8,7,.66))),var(--scrim,rgba(6,8,7,.66));color:var(--promoWarm,#f3e6d2);border:1px solid color-mix(in srgb,var(--acc) 30%,var(--hair));border-radius:var(--r-control);padding:10px 60px;font:500 12px/1.8 var(--font)}
 .announce>span[dir]{min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;text-align:center}.announce>span[aria-hidden]{flex:none;font-size:22px}
 .announceClose{composes:gridCenter;width:28px;height:28px;position:absolute;inset-inline-end:18px;inset-block-start:calc(50% - 14px);background:none;border:0;color:inherit;cursor:pointer}
 .announceClose::after{content:'';position:absolute;inset:-8px}
@@ -225,7 +225,7 @@
 /* Stable artwork scrolls once with the document. The scene covers short and
    long menus, blending below the photo without enlarging or repeating it. */
 .menuBackdrop{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--bg)}
-.menuBackdrop,.page[data-sf-screen="home"] .sceneBackdrop{background:radial-gradient(ellipse at 20% 0%,var(--hair),transparent 65%),linear-gradient(var(--scrim),var(--scrim)),var(--bg)}
+.menuBackdrop,.page[data-sf-screen="home"] .sceneBackdrop{background:radial-gradient(ellipse at 20% 0%,var(--hair),transparent 65%),linear-gradient(var(--scrim,rgba(6,8,7,.66)),var(--scrim,rgba(6,8,7,.66))),var(--bg)}
 .menuBackdrop img{position:absolute;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center top;filter:none}
 .menuBackdrop img,.page[data-sf-screen="home"] .sceneBackdrop img{mask-image:linear-gradient(#000 70%,transparent)}
 .page[data-sf-screen="home"] .sceneBackdrop img{position:absolute;object-position:center top;transform-origin:center top}
