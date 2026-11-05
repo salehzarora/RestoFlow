@@ -40,18 +40,50 @@ void main() {
         expect(r.dest, '/kiosk/index.html', reason: r.source);
       }
 
-      // Ordering: every app-specific rewrite precedes the final catch-all, and
-      // the catch-all is LAST (otherwise it shadows every subtree).
-      expect(sources.last, '/(.*)');
+      // The final Dashboard fallback leaves processor paths to static serving
+      // (including a real 404 for absent assets), after all device-app routes.
+      const dashboardFallback = r'/((?!product-cutout(?:/|$)).*)';
+      expect(sources.last, dashboardFallback);
+      expect(rewrites.last.dest, '/index.html');
       expect(
         sources.indexOf('/kiosk/(.*)'),
         lessThan(sources.indexOf('/kiosk')),
         reason: 'deep-link rewrite must precede the exact match',
       );
-      expect(sources.indexOf('/kiosk'), lessThan(sources.indexOf('/(.*)')));
+      expect(
+        sources.indexOf('/kiosk'),
+        lessThan(sources.indexOf(dashboardFallback)),
+      );
 
       // The existing three-app surface is preserved untouched.
       expect(sources, containsAll(['/pos', '/pos/(.*)', '/kds', '/kds/(.*)']));
+      for (final app in ['kiosk', 'pos', 'kds']) {
+        for (final path in ['/$app', '/$app/', '/$app/orders/123']) {
+          final route = rewrites.firstWhere(
+            (r) => RegExp('^${r.source}\$').hasMatch(path),
+          );
+          expect(route.dest, '/$app/index.html', reason: path);
+        }
+      }
+
+      final fallback = RegExp('^${sources.last}\$');
+      for (final path in [
+        '/product-cutout',
+        '/product-cutout/',
+        '/product-cutout/worker.mjs',
+        '/product-cutout/assets/${'a' * 64}/u2net-00.bin',
+        '/product-cutout/missing.mjs',
+      ]) {
+        expect(fallback.hasMatch(path), isFalse, reason: path);
+      }
+      for (final path in [
+        '/',
+        '/settings',
+        '/products/123',
+        '/product-cutout-help',
+      ]) {
+        expect(fallback.hasMatch(path), isTrue, reason: path);
+      }
       expect(config['outputDirectory'], 'apps/dashboard/build/web');
     },
   );
