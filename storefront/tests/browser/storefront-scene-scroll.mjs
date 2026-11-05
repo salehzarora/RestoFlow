@@ -165,7 +165,16 @@ try {
       assert.equal(await sections.count(),1);const filtered=await scroll(1);coverage(filtered,'filtered short menu');
       assert.ok(filtered.mainHeight<top.mainHeight);
       await search.fill('');assert.equal(await sections.count(),5);row.flags={sticky:true,category:true,slider:true,product:true,cart:true,filter:true};
-      const ann=page.locator('[data-sf-module="announce"]');await ann.scrollIntoViewIfNeeded();
+      // The sticky header can cover an element that is technically in view after a cart or category scroll.
+      // Return to the actual menu top before measuring or photographing the complete announcement.
+      await scroll(0);
+      const ann=page.locator('[data-sf-module="announce"]');
+      const framing=await ann.evaluate(n=>{
+        const r=n.getBoundingClientRect(),header=n.closest('main').querySelector('header').getBoundingClientRect();
+        return {top:r.top,bottom:r.bottom,headerBottom:header.bottom,viewport:innerHeight};
+      });
+      assert.ok(framing.top>=framing.headerBottom-1 && framing.bottom<=framing.viewport+1,'Complete announcement is clear of sticky header');
+
       const panel=await ann.evaluate(n=>{
         const text=n.querySelector(':scope > span[dir]'),button=n.querySelector('button'),rect=n.getBoundingClientRect(),
           t=text.getBoundingClientRect(),b=button.getBoundingClientRect(), css=getComputedStyle(n);
@@ -195,7 +204,7 @@ try {
         return pixels.map(rgb=>{const a=luminance(fg),b=luminance(rgb);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);});
       },{png,ink:panel.ink,samples:panel.samples});
       check(contrasts.every(ratio=>ratio>=4.5),'announcement text contrast on photographed surface',row);
-      row.announcement={...panel,contrastRatios:contrasts};
+      row.announcement={...panel,framing,contrastRatios:contrasts};
       if(out)await page.screenshot({path:join(out,name+'-announcement.png')});
       await ann.getByRole('button').click();await ann.waitFor({state:'detached'});
       await page.reload({waitUntil:'networkidle'});assert.equal(await ann.count(),0);
