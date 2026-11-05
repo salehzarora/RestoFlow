@@ -139,7 +139,46 @@ function privateLogTail(path) {
   return buffer.toString('utf8');
 }
 
+const startupPatterns = Object.freeze({
+  image_pull_failed: /failed to pull|error pulling|pull access denied|manifest unknown/i,
+  registry_rate_limited: /toomanyrequests|rate limit.*(?:registry|pull)|429 Too Many Requests/i,
+  network_timeout: /i\/o timeout|TLS handshake timeout|context deadline exceeded|ETIMEDOUT/i,
+  network_resolution: /no such host|temporary failure in name resolution|ENOTFOUND/i,
+  disk_full: /no space left on device|disk quota exceeded/i,
+  docker_unavailable: /cannot connect to the Docker daemon|docker daemon is not running/i,
+  port_conflict: /port is already allocated|address already in use/i,
+  container_unhealthy: /container.*(?:unhealthy|not healthy)|failed to start.*container/i,
+  health_timeout: /health check.*(?:fail|timeout)|timed out.*health/i,
+  sql_syntax: /SQLSTATE 42601/,
+  sql_missing_relation: /SQLSTATE 42P01/,
+  sql_missing_function: /SQLSTATE 42883/,
+  sql_permission: /SQLSTATE 42501/,
+  sql_constraint: /SQLSTATE 23(?:502|503|505|514)/,
+  database_started: /Starting database/i,
+  migrations_started: /Applying migration/i,
+  containers_started: /Starting containers/i,
+  health_checks_started: /Waiting for health checks/i,
+  stack_started: /Started supabase local development setup/i,
+});
+
+export function summarizeStartupLog(text) {
+  // Export fixed enum counts only. Even startup errors can embed local keys,
+  // database URLs, environment values or SQL data; never retain raw lines.
+  const lines = String(text).split('\n');
+  return { classifications: Object.fromEntries(Object.entries(startupPatterns).map(([name, pattern]) =>
+    [name, Math.min(9999, lines.filter(line => pattern.test(line)).length)])) };
+}
+
 export function capturePublisherRuntime(privateDir, publicDir) {
+  const startupPath = resolve(privateDir, 'start.log');
+  if (existsSync(startupPath)) {
+    writeFileSync(resolve(publicDir, 'stack-startup.json'), `${JSON.stringify({
+      source: 'private_start_log', bounded: true,
+      localStatusFilePresent: existsSync(resolve(privateDir, 'status.json')),
+      correlation: 'startup classifications only; counts do not establish cause or service acceptance',
+      ...summarizeStartupLog(privateLogTail(startupPath)),
+    }, null, 2)}\n`);
+  }
   const requestsPath = resolve(publicDir, 'publisher-requests.json');
   if (!existsSync(requestsPath)) return; // Never mask a failure before fixtures.
   const requests = JSON.parse(readFileSync(requestsPath, 'utf8'));

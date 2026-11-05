@@ -23,6 +23,7 @@ const storefrontAppearanceOptionalKeys = {
   'font_family',
   'menu_background_media_id',
   'menu_background_dim',
+  'scene_preset',
 };
 const storefrontFontFamilies = {'rubik', 'alexandria', 'system'};
 final storefrontAppearanceHex = RegExp(r'^#[0-9A-Fa-f]{6}$');
@@ -87,6 +88,7 @@ bool contentFieldPath(Object? value) => const {
   'appearance.font_family',
   'appearance.menu_background_media_id',
   'appearance.menu_background_dim',
+  'appearance.scene_preset',
 }.contains(value);
 
 Object? _freeze(Object? value) => switch (value) {
@@ -149,6 +151,13 @@ class StorefrontContentDocument {
       if (dim != null && (dim is! int || dim < 0 || dim > 80)) {
         throw const StorefrontDecodeException(
           'appearance.menu_background_dim',
+          'presentation_invalid',
+        );
+      }
+      final scene = appearance['scene_preset'];
+      if (scene != null && scene != 'reference_dark') {
+        throw const StorefrontDecodeException(
+          'appearance.scene_preset',
           'presentation_invalid',
         );
       }

@@ -5,6 +5,20 @@
   "buildCommand": "bash tools/vercel_build_web.sh",
   "outputDirectory": "apps/dashboard/build/web",
   "ignoreCommand": "if node tools/vercel/ignore-build.mjs product; then exit 0; else exit 1; fi",
+  "headers": [
+    { "source": "/product-cutout/(.*)", "headers": [
+      { "key": "X-Content-Type-Options", "value": "nosniff" }
+    ] },
+    { "source": "/product-cutout/((?!assets/).*)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+    { "source": "/product-cutout/assets/:revision([0-9a-f]{64})/:file", "headers": [
+      { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+    ] },
+    { "source": "/product-cutout/(.*).mjs", "headers": [{ "key": "Content-Type", "value": "application/javascript; charset=utf-8" }] },
+    { "source": "/product-cutout/(.*).wasm", "headers": [{ "key": "Content-Type", "value": "application/wasm" }] },
+    { "source": "/product-cutout/(.*).bin", "headers": [{ "key": "Content-Type", "value": "application/octet-stream" }] },
+    { "source": "/product-cutout/(.*).json", "headers": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }] },
+    { "source": "/product-cutout/(.*).txt", "headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }] }
+  ],
   "rewrites": [
     { "source": "/pos/(.*)", "destination": "/pos/index.html" },
     { "source": "/pos", "destination": "/pos/index.html" },
@@ -12,6 +26,6 @@
     { "source": "/kds", "destination": "/kds/index.html" },
     { "source": "/kiosk/(.*)", "destination": "/kiosk/index.html" },
     { "source": "/kiosk", "destination": "/kiosk/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!product-cutout(?:/|$)).*)", "destination": "/index.html" }
   ]
 }

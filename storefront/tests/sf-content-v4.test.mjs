@@ -69,7 +69,7 @@ test('adapter resolves presentation without mutating canonical identity, order o
 test('live composition requests v5 exactly once and never downgrades on old/malformed/error responses',async()=>{
   const old=globalThis.fetch,calls=[];const source=liveStorefrontSource({url:ORIGIN,anonKey:'SYNTHETIC_PUBLIC_KEY_NOT_A_REAL_SECRET'});
   try {
-    globalThis.fetch=async(url,init)=>{calls.push(url);assert.equal(url,ORIGIN+'/rest/v1/rpc/storefront_menu_v5');assert.equal(init.body,JSON.stringify({p_slug:'sf-synth-a'}));return {ok:true,json:async()=>menu()};};
+    globalThis.fetch=async(url,init)=>{calls.push(url);assert.equal(url,ORIGIN+'/rest/v1/rpc/storefront_menu_v6');assert.equal(init.body,JSON.stringify({p_slug:'sf-synth-a'}));return {ok:true,json:async()=>menu()};};
     assert.equal((await source.getStorefront('sf-synth-a')).view.tenant.slug,'sf-synth-a');assert.equal(calls.length,1);
     const {content_v1,...legacy}=menu();
     for(const body of [legacy,menu({schema:99}),{ok:false,error:'temporary',entity:'storefront_menu'}]){globalThis.fetch=async()=>{calls.push('only');return {ok:true,json:async()=>body};};await assert.rejects(()=>source.getStorefront('sf-synth-a'));}
@@ -90,7 +90,7 @@ test('new public reader never retries an older contract on missing, denied or tr
       };
       const source = liveStorefrontSource({ url: ORIGIN, anonKey: 'synthetic-publishable-key-only' });
       await assert.rejects(() => source.getStorefront('sf-synth-a'));
-      assert.deepEqual(calls, [ORIGIN + '/rest/v1/rpc/storefront_menu_v5']);
+      assert.deepEqual(calls, [ORIGIN + '/rest/v1/rpc/storefront_menu_v6']);
     }
   } finally { globalThis.fetch = original; }
 });

@@ -141,19 +141,19 @@ select is(
   (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public.', ''))
      from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
       and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)', 'storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)', 'storefront_menu_v5(text)', 'storefront_seo_page_v1(text)', 'storefront_seo_discovery_v1(text,integer,integer)']) v),
-  'A7. the anon-executable public set is EXACTLY the seven approved storefront readers');
+  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)', 'storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)', 'storefront_menu_v5(text)', 'storefront_menu_v6(text)', 'storefront_seo_page_v1(text)', 'storefront_seo_discovery_v1(text,integer,integer)']) v),
+  'A7. the anon-executable public set is EXACTLY the eight approved storefront readers');
 select is(
   (select string_agg(regexp_replace(p.oid::regprocedure::text, '^public.', ''), ', ' order by regexp_replace(p.oid::regprocedure::text, '^public.', ''))
      from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p') and p.prosecdef),
-  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)', 'storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)', 'storefront_menu_v5(text)', 'storefront_seo_page_v1(text)', 'storefront_seo_discovery_v1(text,integer,integer)']) v),
-  'A8. the public SECURITY DEFINER set is EXACTLY the seven approved storefront readers');
+  (select string_agg(v, ', ' order by v) from unnest(array['storefront_menu(text)', 'storefront_menu_v2(text)', 'storefront_menu_v3(text)', 'storefront_menu_v4(text)', 'storefront_menu_v5(text)', 'storefront_menu_v6(text)', 'storefront_seo_page_v1(text)', 'storefront_seo_discovery_v1(text,integer,integer)']) v),
+  'A8. the public SECURITY DEFINER set is EXACTLY the eight approved storefront readers');
 select ok(not has_schema_privilege('anon', 'app', 'USAGE'), 'A9. anon still has no USAGE on schema app');
 select is((select provolatile::text from pg_proc where oid = 'app.list_storefront_media(uuid,uuid)'::regprocedure), 's',
   'A10. list is STABLE (read-only)');
 select ok((select indexdef from pg_indexes where schemaname = 'public' and indexname = 'storefront_media_live_source_idx')
-            ~ 'UNIQUE INDEX .* WHERE \(\(published_at IS NOT NULL\) AND \(unpublished_at IS NULL\)\)',
-  'A11. the live-source unique index is LIVE-only (published and not retracted)');
+            ~ 'UNIQUE INDEX .* WHERE \(\(product_derivative_id IS NULL\) AND \(published_at IS NOT NULL\) AND \(unpublished_at IS NULL\)\)',
+  'A11. the legacy live-source unique index excludes product associations and remains LIVE-only');
 select ok(not has_table_privilege('authenticated', 'public.storefront_media', 'SELECT')
       and not has_table_privilege('authenticated', 'public.storefront_media', 'INSERT'),
   'A12. storefront_media is still RPC-only for authenticated (no table grant)');

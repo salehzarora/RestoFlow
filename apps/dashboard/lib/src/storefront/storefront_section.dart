@@ -10,6 +10,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'opening_hours_editor.dart';
 import 'storefront_background_upload.dart';
 import 'storefront_contrast.dart';
+import 'storefront_color_picker.dart';
 import 'storefront_content_models.dart';
 import 'storefront_content_repository.dart';
 import 'storefront_content_section.dart';
@@ -1812,6 +1813,10 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           catalog: widget.seams!.contentCatalog,
           profileVersion: profile.version,
           savedBranchId: profile.storefrontBranchId,
+          colorSample: StorefrontColorSample(
+            background: _primary.text,
+            accent: _accent.text,
+          ),
           enabled:
               !_saving &&
               !_mediaBusy &&
@@ -1848,14 +1853,12 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _textField(
-              key: const Key('storefront-primary-color'),
-              controller: _primary,
-              label: storefrontContentCopy(l10n, 'primaryColor'),
-              helper: l10n.storefrontColorHelp,
-              error: _colorError(l10n, _primary),
-              ltr: true,
-              prefix: _swatch(_primary.text),
+            _colorControl(
+              l10n,
+              'primary',
+              _primary,
+              StorefrontColorRole.background,
+              kStorefrontNeutralPrimary,
             ),
             if (primaryVerdict != null && !primaryVerdict.supported)
               Padding(
@@ -1870,14 +1873,12 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               ),
           ],
         ),
-        _textField(
-          key: const Key('storefront-accent-color'),
-          controller: _accent,
-          label: storefrontContentCopy(l10n, 'accentColor'),
-          helper: l10n.storefrontColorHelp,
-          error: _colorError(l10n, _accent),
-          ltr: true,
-          prefix: _swatch(_accent.text),
+        _colorControl(
+          l10n,
+          'accent',
+          _accent,
+          StorefrontColorRole.accent,
+          '#e07b2c',
         ),
         _dropdown<StorefrontVisualPreset>(
           key: const Key('storefront-visual-preset'),
@@ -2265,11 +2266,18 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               ),
           ],
         ),
-        if (_dirty || _homeDirty)
-          Text(
+        // Keep the appearance fields stationary when their first edit reveals
+        // this notice; Flutter web can briefly retain their old hit geometry.
+        Visibility(
+          visible: _dirty || _homeDirty,
+          maintainSize: true,
+          maintainAnimation: true,
+          maintainState: true,
+          child: Text(
             l10n.storefrontFeaturedItemsSeparateEdits,
             key: const Key('storefront-featured-separate-edits'),
           ),
+        ),
       ],
     ];
   }
@@ -2420,6 +2428,44 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         ),
       ],
     ];
+  }
+
+  Widget _colorControl(
+    AppLocalizations l10n,
+    String field,
+    TextEditingController controller,
+    StorefrontColorRole role,
+    String reset,
+  ) {
+    final binding = _bindingGeneration;
+    final label = storefrontContentCopy(l10n, '${field}Color');
+    return StorefrontColorControl(
+      key: ValueKey('storefront-$field-color-control'),
+      id: 'storefront-$field-color',
+      label: label,
+      value: controller.text,
+      role: role,
+      sample: StorefrontColorSample(
+        background: _primary.text,
+        accent: _accent.text,
+      ),
+      enabled: !_busy,
+      resetHex: reset,
+      onChanged: (value) {
+        if (_currentBinding(binding) && !_busy && value != null) {
+          controller.text = value;
+        }
+      },
+      advancedField: _textField(
+        key: Key('storefront-$field-color'),
+        controller: controller,
+        label: label,
+        helper: l10n.storefrontColorHelp,
+        error: _colorError(l10n, controller),
+        ltr: true,
+        prefix: _swatch(controller.text),
+      ),
+    );
   }
 
   Widget? _swatch(String text) {

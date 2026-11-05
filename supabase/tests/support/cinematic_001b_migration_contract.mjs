@@ -133,8 +133,8 @@ export function requireEphemeralCi(env) {
 
 // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-CINEMATIC-PROOF-001: the exact reviewed
 // migration sequence. The #379 target must follow its exact predecessor and the
-// exact 183-migration prefix of main 0df86dcb, and exactly one reviewed
-// follow-up (001D) may follow it. Any other migration, anywhere, is refused
+// exact 183-migration prefix of main 0df86dcb, then 001D and exactly the two
+// reviewed PR380 migrations (product helpers before scene). Anything else is refused
 // until a reviewed change extends this pin: it is not a generic mechanism.
 export const predecessorName = '20261102015942_bizbot_storefront_seo_discovery_001.sql';
 export const predecessorVersion = '20261102015942';
@@ -143,6 +143,14 @@ export const followUpName = '20261104141959_bizbot_zcredit_001d_server_ledger.sq
 export const followUpVersion = '20261104141959';
 export const followUpFingerprint = '468768f89029a0fb131869f754d5374127930b8bf05b48cd8de19d645546352e';
 // Every function the reviewed #379 target creates or replaces.
+export const followupMigrations = Object.freeze([
+  Object.freeze({ name: '20261105025413_bizbot_storefront_visual_parity_product_media.sql',
+    sha256: 'a901a709970b4629b22357743831aab687c2882fe066776dd7913b82c29c77d5' }),
+  Object.freeze({ name: '20261105025604_bizbot_storefront_visual_parity_scene.sql',
+    sha256: '7bfac52a707b20fdf9b67a466d84290a7565fe574850ce1e992c093d5f19b520' }),
+]);
+
+
 export const targetFunctions = [
   'app.get_restaurant_storefront_content_v2', 'app.list_storefront_content_media_v2', 'app.set_restaurant_storefront_content_v1',
   'app.storefront_content_document_shape_v1', 'app.storefront_content_media_in_use_v1', 'app.storefront_content_read_v2',
@@ -188,25 +196,35 @@ export function proveMigrationSequence(sources) {
   const prefixNames = sha256(names.slice(0, index).join('\n'));
   assert.equal(prefixNames, prefixNamesFingerprint, 'Unreviewed migration sequence before the #379 target');
   const later = names.slice(index + 1);
-  assert.ok(later.length > 0, 'Missing the reviewed 001D follow-up migration');
+  assert.ok(later.includes(followUpName), 'Missing the reviewed 001D follow-up migration');
   if (later[0] !== followUpName) {
     assert.ok(!later.includes(followUpName), 'Interleaved migration between the #379 target and the 001D follow-up');
     assert.fail('Unknown migration after the #379 target');
   }
-  assert.equal(later.length, 1, 'Only the reviewed 001D follow-up may follow the #379 target');
+  assert.deepEqual(later, [followUpName, ...followupMigrations.map(item => item.name)], 'Only the reviewed 001D then product and scene migrations may follow the #379 target');
   const bytes = new Map(sources);
   proveFinalMigration(bytes.get(migrationName).toString('utf8'));
   const followUp = proveFollowUpMigration(bytes.get(followUpName));
+  const visualFollowups = followupMigrations.map(pin => {
+    const bytes = new Map(sources).get(pin.name);
+    assert.ok(Buffer.isBuffer(bytes), 'Visual follow-up migration sources must be raw bytes');
+    assert.equal(topLevelTransactionControl(bytes.toString('utf8')).length, 0, 'Unexpected transaction control in a visual follow-up');
+    assert.equal(sha256(bytes), pin.sha256, 'Unreviewed visual follow-up bytes');
+    return { name: pin.name, version: pin.name.slice(0, 14), sha256: pin.sha256,
+      statements: statements(bytes.toString('utf8')).length, no_embedded_transaction: true };
+  });
   // A renamed or copied migration cannot carry the reviewed bytes elsewhere.
   for (const [name, value] of sources) {
     const digest = sha256(value);
+    for (const pin of followupMigrations) assert.ok(name === pin.name || digest !== pin.sha256, 'Reviewed visual bytes may appear only under their pinned name');
     assert.ok(name === migrationName || digest !== finalFingerprint, 'The reviewed #379 target bytes may appear only under its pinned name');
     assert.ok(name === followUpName || digest !== followUpFingerprint, 'The reviewed 001D bytes may appear only under their pinned name');
   }
   return {
     target_prefix: names.slice(0, index + 1),
+    visual_followups: visualFollowups,
     summary: { migrations: names.length, before_target: index, predecessor: predecessorName, target: migrationName,
-      later_than_target: later, prefix_names_sha256: prefixNames, ...followUp },
+      later_than_target: later, prefix_names_sha256: prefixNames, ...followUp, visual_followups: visualFollowups },
   };
 }
 
@@ -218,4 +236,13 @@ export function targetPrefixSources(sources, targetBytes) {
   const { target_prefix: prefix } = proveMigrationSequence(sources);
   const bytes = new Map(sources);
   return prefix.map((name) => [name, name === migrationName ? targetBytes : bytes.get(name)]);
+}
+
+// PR380's scoped hosted baseline has #379 but no payment 001D history/schema.
+// Validate the complete reconciled checkout first, then omit exactly that one
+// unrelated migration for a separate production-shaped disposable-stack proof.
+// This never edits a tracked file or authorizes a hosted history repair.
+export function visualReleaseSources(sources) {
+  proveMigrationSequence(sources);
+  return sources.filter(([name]) => name !== followUpName);
 }

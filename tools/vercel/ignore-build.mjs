@@ -10,7 +10,17 @@ import { fileURLToPath } from 'node:url';
 // Absolute end assertion: JavaScript's $ alone also accepts a final newline.
 const SHA = /^[a-f0-9]{40}(?![\s\S])/i;
 const ENGINE = 'tools/vercel/ignore-build.mjs';
-const BUILD_SCRIPT_HASH = '1d97571824055f524ebde17288d37eebff4a9813e6117c6fb7b62fab06d94904';
+const BUILD_SCRIPT_HASH = 'bae4a30b7212cfaf53b23ed82eeef937f16dbcb58f4f969683fed13cbf528b3a';
+// VISUAL-PARITY-001: the conditional Dashboard prepare step reads only its
+// cutout/web trees and these two copied publisher utilities. Pin its entrypoints
+// as well as the outer builder so later inputs require another graph review.
+const CUTOUT_PREPARE_HASH = '29132205c66e2d1e16220361eef8615919c953f661cf27c94d60b5ac26af1150';
+const CUTOUT_MANIFEST_HASH = '27cc8a4536eaf2dbc6f0793231f7f4b1dab9ee54a97bfaf2979901bfabbdfeb3';
+const CUTOUT_LIMITS_HASH = '50bf64be65f0208f30671e654855176f1cf3f11f01017890f88b4df444fb0342';
+const CUTOUT_COPIED_INPUTS = [
+  'supabase/functions/storefront-media-publish/lib/sniff.mjs',
+  'supabase/functions/storefront-media-publish/lib/pngbound.mjs',
+];
 const SITE_BUILDER_HASH = 'fb6cb2b72d9f889f29787fa64b84a931786324e79c8497c707d6c5d995f0d15e';
 // Exported so storefront/tests/config-hash.test.mjs can pin the file it
 // describes without exposing hash(). A changed next.config always BUILDs
@@ -367,7 +377,7 @@ export function inspectGraph(repoRoot, revision = 'HEAD') {
   const controls = git(repoRoot, ['ls-tree', '-r', '-z', '--name-only', resolved]).text.split('\0');
   if (controls.some((file) => unsupportedEntrypoint(file, '', true))) fail('unsupported_build_contract');
   if (controls.some((file) => file === '.vercelignore' || file === 'pubspec_overrides.yaml' || members.some((member) => file === `${member}/pubspec_overrides.yaml` || file === `${member}/build.yaml` || below(file, `${member}/hook`) || below(file, `${member}/hooks`)))) fail('unsupported_build_contract');
-  const files = readBatch(repoRoot, resolved, [...members.map((member) => `${member}/pubspec.yaml`), 'tools/vercel_build_web.sh', 'vercel.json']);
+  const files = readBatch(repoRoot, resolved, [...members.map((member) => `${member}/pubspec.yaml`), 'tools/vercel_build_web.sh', 'apps/dashboard/cutout/prepare.mjs', 'apps/dashboard/cutout/package.json', 'apps/dashboard/web/product-cutout/limits.mjs', 'vercel.json']);
   for (const member of members) {
     const parsed = parseManifest(files.get(`${member}/pubspec.yaml`));
     if (Object.keys(parsed).some((key) => !['name', 'description', 'publish_to', 'version', 'environment', 'resolution', 'dependencies', 'dev_dependencies', 'flutter'].includes(key))) fail('unsupported_graph');
@@ -395,6 +405,9 @@ export function inspectGraph(repoRoot, revision = 'HEAD') {
   // This contract guard must be reviewed with changes to the build pipeline.
   // A changed builder always builds until its new input graph is understood.
   if (hash(script) !== BUILD_SCRIPT_HASH) fail('unsupported_build_contract');
+  if (hash(files.get('apps/dashboard/cutout/prepare.mjs')) !== CUTOUT_PREPARE_HASH) fail('unsupported_build_contract');
+  if (hash(files.get('apps/dashboard/cutout/package.json')) !== CUTOUT_MANIFEST_HASH) fail('unsupported_build_contract');
+  if (hash(files.get('apps/dashboard/web/product-cutout/limits.mjs')) !== CUTOUT_LIMITS_HASH) fail('unsupported_build_contract');
   const actualApps = [...script.matchAll(/^\(cd (apps\/[a-z0-9_]+) && "\$FLUTTER" build web /gm)].map((m) => m[1]);
   if (JSON.stringify(actualApps) !== JSON.stringify(APPS)) fail('unsupported_build_contract');
   const config = JSON.parse(files.get('vercel.json'));
@@ -749,6 +762,7 @@ function category(file, selector, graphs) {
   if (file === ENGINE) return { relevant: true, name: 'shared_engine' };
   if (file === '.gitattributes' || file === '.vercelignore') return { relevant: true, name: 'checkout_config' };
   if (selector === 'product') {
+    if (CUTOUT_COPIED_INPUTS.includes(file)) return { relevant: true, name: 'dashboard_cutout_input' };
     if (graphs.some((g) => g.assets.some((a) => file === a.path || (a.directory && below(file, a.path))))) return { relevant: true, name: 'declared_asset' };
     if (['pubspec.yaml', 'pubspec.lock', 'vercel.json', 'tools/vercel_build_web.sh', 'pubspec_overrides.yaml', '.vercelignore'].includes(file) || /^(?:apps|packages)\/[^/]+\/pubspec(?:_overrides)?\.yaml$/.test(file)) return { relevant: true, name: 'product_config' };
     const runtime = new Set(graphs.flatMap((g) => g.reachableMembers));

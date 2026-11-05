@@ -4,7 +4,7 @@
 // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-CINEMATIC-PROOF-001: the late failure and
 // the target-only apply run in disposable workdirs that hold exactly the prefix
 // ending at the #379 target; the one reviewed follow-up (001D) is then applied
-// by itself from the repository.
+// alone from an exact disposable prefix, then PR380 product helpers and scene.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import {
   migrationName, migrationVersion, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration,
   requireEphemeralCi, sha256, predecessorVersion, followUpName, followUpVersion, targetFunctions, proveMigrationSequence,
-  targetPrefixSources,
+  targetPrefixSources, visualReleaseSources,
 } from './cinematic_001b_migration_contract.mjs';
 
 requireEphemeralCi(process.env); // Must precede subprocesses, including Docker.
@@ -70,6 +70,20 @@ const readinessQuery = `select json_build_object(
   'media_rpc', to_regprocedure('public.list_storefront_content_media_v2(uuid,uuid)') is not null,
   'menu_rpc', to_regprocedure('public.storefront_menu_v5(text)') is not null,
   'history', (select count(*) from supabase_migrations.schema_migrations where version='${migrationVersion}'))::text;`;
+const followupReadinessQuery = `select json_build_object(
+  'content_v3', to_regprocedure('public.get_restaurant_storefront_content_v3(uuid,uuid)') is not null,
+  'menu_v6', to_regprocedure('public.storefront_menu_v6(text)') is not null,
+  'derivatives', to_regclass('app.storefront_product_derivatives') is not null,
+  'selections', to_regclass('app.storefront_product_selections') is not null,
+  'original', to_regprocedure('public.get_storefront_product_original_v1(uuid,uuid,uuid)') is not null,
+  'register', to_regprocedure('public.register_storefront_product_derivative_v1(uuid,uuid,uuid,uuid,text,jsonb,text,text,bigint)') is not null,
+  'source', to_regprocedure('public.get_storefront_product_source_v1(uuid,uuid,uuid)') is not null,
+  'stage', to_regprocedure('public.stage_storefront_product_media_v1(uuid,uuid,uuid,uuid,text,jsonb,text,text,integer,integer,integer)') is not null,
+  'finalize', to_regprocedure('public.finalize_storefront_product_media_v1(uuid,uuid,uuid,uuid)') is not null,
+  'select', to_regprocedure('public.select_storefront_product_derivative_v1(uuid,uuid,uuid,uuid)') is not null)::text;`;
+const followupReadiness = Object.fromEntries(['content_v3', 'menu_v6', 'derivatives', 'selections',
+  'original', 'register', 'source', 'stage', 'finalize', 'select'].map(name => [name, true]));
+const noFollowupReadiness = Object.fromEntries(Object.keys(followupReadiness).map(name => [name, false]));
 const historyVersionsQuery = "select coalesce(jsonb_agg(version order by version),'[]'::jsonb)::text from supabase_migrations.schema_migrations;";
 const historyThroughTargetQuery = `select coalesce(jsonb_agg(to_jsonb(h) order by version),'[]'::jsonb)::text
   from supabase_migrations.schema_migrations h where version <= '${migrationVersion}';`;
@@ -206,8 +220,15 @@ end;\n$cinematic_late_failure$;\n`;
   receipt.target_only_history_sha256 = sha256(targetOnlyHistory);
   receipt.target_surfaces_sha256 = sha256(targetSurfaces);
 
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), noFollowupReadiness, 'Target-only application must not install PR380 surfaces');
   phase = 'apply_reviewed_follow_up';
-  checked('supabase', ['migration', 'up', '--local']);
+  // Apply payment alone before any visual migration can replace target readers.
+  const paymentWorkdir = await prefixWorkdir('cinematic-migration-payment-', sourceBytes.get(migrationName));
+  await writeFile(join(paymentWorkdir, 'supabase/migrations', followUpName), sourceBytes.get(followUpName));
+  const paymentSources = await readMigrationSources(join(paymentWorkdir, 'supabase/migrations'));
+  assert.deepEqual(paymentSources.map(([name]) => name), [...sequence.target_prefix, followUpName]);
+  assert.ok(paymentSources.every(([name, bytes]) => bytes.equals(sourceBytes.get(name))), 'Payment workdir must retain exact reviewed bytes');
+  checked('supabase', ['migration', 'up', '--local', '--workdir', paymentWorkdir]);
   const appliedVersions = JSON.parse(sql(historyVersionsQuery));
   assert.deepEqual(appliedVersions, versionsOf([...sequence.target_prefix, followUpName]),
     'Exactly one 001D history row and no other migration later than #379');
@@ -218,13 +239,60 @@ end;\n$cinematic_late_failure$;\n`;
   assert.ok(sql(legacyReadersQuery) === beforeLegacyReaders, 'Legacy reader definitions, ACLs and owners must remain byte-identical');
   assert.ok(sql(targetSurfacesQuery) === targetSurfaces, 'The #379 target surfaces must remain unchanged');
   receipt.target_and_legacy_readers_unchanged = 'PASS';
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), noFollowupReadiness, 'Payment alone must not install PR380 surfaces');
+  receipt.follow_up_application = 'PASS';
+  receipt.follow_up_schema_sha256 = sha256(schemaSnapshot());
+  const paymentHistory = sql(historyQuery);
+  receipt.follow_up_history_sha256 = sha256(paymentHistory);
+
+  phase = 'apply_reviewed_visual_followups';
+  checked('supabase', ['migration', 'up', '--local']);
+  const finalHistory = JSON.parse(sql(historyQuery));
+  assert.deepEqual(finalHistory.filter(row => row.version <= followUpVersion), JSON.parse(paymentHistory),
+    'Payment and all earlier history rows must remain unchanged');
+  assert.deepEqual(finalHistory.map(row => row.version), versionsOf(sources.map(([name]) => name)),
+    'Each pinned migration must have exactly one history row and no others');
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), followupReadiness, 'Reviewed v3/v6 and complete product RPC surface must be ready');
+  receipt.followup_history_once = 'PASS';
+  receipt.followup_readiness = followupReadiness;
+  receipt.successful_followup_application = 'PASS';
+  receipt.after_schema_sha256 = sha256(schemaSnapshot());
+  receipt.after_history_sha256 = sha256(sql(historyQuery));
+
+  // Hosted #381 source is merged, but its unrelated payment migration is not
+  // applied. Prove that exact rollout shape afresh without changing payment.
+  // The separate full db-tests job still runs every payment suite/concurrency
+  // assertion against all migrations; the real UI lifecycle below uses this
+  // production-shaped stack. Both are identified separately in the receipt.
+  phase = 'prove_scoped_visual_release_without_pending_payment';
+  checked('supabase', ['db', 'reset', '--local', '--version', migrationVersion, '--no-seed', '--yes']);
+  assert.deepEqual(JSON.parse(sql(historyVersionsQuery)), versionsOf(sequence.target_prefix));
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), noFollowupReadiness);
+  const releaseBaselineHistory = JSON.parse(sql(historyQuery));
+  const releaseWorkdir = await mkdtemp(join(process.env.RUNNER_TEMP, 'cinematic-scoped-visual-release-'));
+  temporaries.push(releaseWorkdir);
+  await mkdir(join(releaseWorkdir, 'supabase/migrations'), { recursive: true });
+  await writeFile(join(releaseWorkdir, 'supabase/config.toml'), config);
+  const releasePlan = visualReleaseSources(sources);
+  for (const [name, bytes] of releasePlan) await writeFile(join(releaseWorkdir, 'supabase/migrations', name), bytes);
+  const releaseWritten = await readMigrationSources(join(releaseWorkdir, 'supabase/migrations'));
+  assert.deepEqual(releaseWritten.map(([name]) => name), [...sequence.target_prefix, ...sequence.visual_followups.map(item => item.name)]);
+  assert.ok(releaseWritten.every(([name, bytes]) => bytes.equals(sourceBytes.get(name))), 'Scoped release workdir must retain exact reviewed bytes');
+  checked('supabase', ['migration', 'up', '--local', '--workdir', releaseWorkdir]);
+  const releaseHistory = JSON.parse(sql(historyQuery));
+  assert.deepEqual(releaseHistory.map(row => row.version), versionsOf(releasePlan.map(([name]) => name)));
+  assert.deepEqual(releaseHistory.filter(row => row.version <= migrationVersion), releaseBaselineHistory);
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), followupReadiness);
+  assert.equal(sql("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname in ('card_provider_attempts','card_provider_private_events','card_payments_pilot_revisions','payment_terminals','card_attempt_identity_tombstones');"), '0',
+    'The unrelated pending payment schema must remain absent');
+  receipt.scoped_visual_release = { status: 'PASS', migration_versions: releaseHistory.map(row => row.version),
+    pending_payment_omitted: followUpName, pending_payment_schema_absent: true,
+    prior_history_unchanged: true, ready_for_real_service_lifecycle: true,
+    schema_sha256: sha256(schemaSnapshot()), history_sha256: sha256(sql(historyQuery)) };
   const finalSources = await readMigrationSources(migrationsDirectory);
   assert.ok(finalSources.length === sources.length && finalSources.every(([name, bytes], index) =>
     name === sources[index][0] && bytes.equals(sources[index][1])), 'Every tracked migration source must remain byte-identical');
   receipt.tracked_migration_sources_unchanged = 'PASS';
-  receipt.follow_up_application = 'PASS';
-  receipt.follow_up_schema_sha256 = sha256(schemaSnapshot());
-  receipt.follow_up_history_sha256 = sha256(sql(historyQuery));
   receipt.status = 'PASS';
   phase = 'complete';
 } catch (error) {

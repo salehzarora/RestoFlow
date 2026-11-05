@@ -1,5 +1,11 @@
 # Cinematic Preview image inventory
 
+Historical inventory below. On 2026-11-04 the 20 product files were preserved
+unchanged in [the PR379 reference archive](visual-references/PR379-cinematic-preview/README.md).
+The current visual-parity review profile uses byte-identical copies of the
+recorded public source photographs instead; cover, logo and texture stay in
+their original application paths. See [current Preview provenance](STOREFRONT_VISUAL_PARITY_PREVIEW.md).
+
 Public source snapshot: 2026-11-03. Original URLs are retained in the preview catalog/runtime snapshot. Prepared images are derivatives only; no hosted menu image was replaced.
 
 | Product | Asset | Treatment |

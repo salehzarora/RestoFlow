@@ -25,8 +25,12 @@ function appearanceColour(value: string | null | undefined): Hex | null {
  */
 export function buildCinematicTheme(
   brand: Pick<TenantBrand, 'primary' | 'accent' | 'text' | 'buttonText' | 'fontFamily'>,
+  scenePreset?: 'reference_dark' | null,
 ): ThemeTokens {
-  const primary = brandColour(brand.primary, BG);
+  // Scene selection is explicit. A merchant's stored palette is never an
+  // implicit switch, and legacy callers retain the original derivation.
+  const reference = scenePreset === 'reference_dark';
+  const primary = reference ? '#151515' : brandColour(brand.primary, BG);
   const accent = brandColour(brand.accent, ACCENT);
   const base = buildTheme('dark', { primary, accent, fontFamily: brand.fontFamily });
   const automaticInk = contrast('#ffffff', primary) >= contrast('#000000', primary) ? '#ffffff' : '#000000';
@@ -72,5 +76,12 @@ export function buildCinematicTheme(
     cta: accent, ctaSh: 'none', glow: 'none', heroGlow: 'none',
     glass: rgba(primary, 0.9), glassDock: rgba(primary, 0.96), onDock2: tx2,
     glassLine: rgba(tx, 0.14),
+    ...(reference ? {
+      // These surfaces remain neutral even for bright primary/accent brands.
+      // The selected photograph stays visible; no backdrop blur is needed.
+      sceneGlass: rgba('#151515', 0.76),
+      sceneGlassSoft: rgba('#252525', 0.8),
+      sceneLine: rgba(tx, 0.18),
+    } : {}),
   };
 }

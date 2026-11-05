@@ -68,8 +68,11 @@ for (const person of [a.person, b.person]) {
     const categoryId = randomUUID();
     statements.push(`insert into public.menu_categories(id,organization_id,restaurant_id,name,display_order,is_active) values
       (${quote(categoryId)},${quote(person.orgId)},${quote(person.restaurantId)},${quote(name)},${index},true);`);
-    statements.push(`insert into public.menu_items(id,organization_id,restaurant_id,menu_category_id,name,base_price_minor,currency_code,is_active) values
-      (${quote(randomUUID())},${quote(person.orgId)},${quote(person.restaurantId)},${quote(categoryId)},${quote(`TEST ${index + 1}`)},1000,'ILS',true);`);
+    // Dashboard resolves this org-owner to its sole branch. Existing item scope
+    // is immutable, so a global fixture cannot be saved by that branch editor.
+    // The global category is valid for a branch item (RF-109 parent reuse).
+    statements.push(`insert into public.menu_items(id,organization_id,restaurant_id,branch_id,menu_category_id,name,base_price_minor,currency_code,is_active) values
+      (${quote(randomUUID())},${quote(person.orgId)},${quote(person.restaurantId)},${quote(person.branchId)},${quote(categoryId)},${quote(`TEST ${index + 1}`)},1000,'ILS',true);`);
   }
   statements.push(`update public.branches set tax_enabled=false,tax_mode='exclusive' where id=${quote(person.branchId)} and organization_id=${quote(person.orgId)};`);
   statements.push(`insert into public.restaurant_storefront_profiles(restaurant_id,organization_id,storefront_branch_id,slug,display_name,tagline,public_city,public_phone,primary_color,accent_color,visual_preset,locale_default,card_mode,motion,pickup_enabled,opening_hours,is_published,version,hero_headline,hero_subline)
@@ -81,6 +84,24 @@ const seeded = spawnSync('docker', ['exec', '-i', 'supabase_db_RestoFlow', 'psql
   input: statements.join('\n'), encoding: 'utf8', timeout: 30_000,
 });
 assert.equal(seeded.status, 0, 'Synthetic catalogue/profile bootstrap failed (SQL output withheld)');
+
+// Verify the actual owner-visible rows, not just the SQL text. A global or
+// foreign-branch fixture must fail setup before an unrelated uploader journey.
+for (const account of [a, b]) {
+  const menu = await rpc(fixture, account.token, 'list_menu', {
+    ...scope(account.person), p_branch_id: account.person.branchId,
+  });
+  assert.equal(menu.status, 200, 'Owner must read the seeded UI catalogue');
+  assert.equal(menu.data?.ok, true, 'Owner must receive the real menu envelope');
+  const items = menu.data.items;
+  assert.ok(Array.isArray(items) && items.length === 4
+    && new Set(items.map(item => item.name)).size === 4
+    && items.every(item => /^TEST [1-4]$/.test(item.name)
+      && item.organization_id === account.person.orgId
+      && item.restaurant_id === account.person.restaurantId
+      && item.branch_id === account.person.branchId),
+  'All four UI items must match the owner Dashboard branch scope');
+}
 
 const sourceKey = `${a.person.orgId}/${a.person.restaurantId}/logo/${randomUUID()}.jpg`;
 const image = readFileSync(resolve(repo, 'supabase/functions/storefront-media-publish/test/fixtures/gray_prog_1000x750.jpg'));

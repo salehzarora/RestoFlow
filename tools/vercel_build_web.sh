@@ -60,7 +60,15 @@ if [ "${RESTOFLOW_STOREFRONT_EDITOR:-}" = "true" ] && [ "${VERCEL_ENV:-}" = "pro
 echo "dashboard storefront editor gate: $STOREFRONT_EDITOR (VERCEL_ENV=${VERCEL_ENV:-unset})"
 
 # 1. Dashboard (root, base-href /) — the output directory Vercel serves.
-(cd apps/dashboard && "$FLUTTER" build web --release --base-href=/ "${DEFINES[@]}" --dart-define=RESTOFLOW_STOREFRONT_EDITOR="$STOREFRONT_EDITOR")
+# The local product editor loads the model only on demand. Build from the
+# hash-pinned manifest here; no model or inference dependency enters Storefront.
+if [ "$STOREFRONT_EDITOR" = "true" ]; then
+  (cd apps/dashboard/cutout && npm ci --ignore-scripts && npm run prepare)
+else
+  # A reused build checkout must not retain the previous enabled build's model.
+  node apps/dashboard/cutout/prepare.mjs --clean
+fi
+(cd apps/dashboard && "$FLUTTER" build web --release --base-href=/ "${DEFINES[@]}" --dart-define=RESTOFLOW_STOREFRONT_EDITOR="$STOREFRONT_EDITOR" --dart-define=SF_PRODUCT_CUTOUT_REVIEW="$STOREFRONT_EDITOR")
 
 # 2. POS (base-href /pos/).
 (cd apps/pos && "$FLUTTER" build web --release --base-href=/pos/ "${DEFINES[@]}")
@@ -79,5 +87,6 @@ rm -rf apps/dashboard/build/web/pos apps/dashboard/build/web/kds apps/dashboard/
 cp -r apps/pos/build/web apps/dashboard/build/web/pos
 cp -r apps/kds/build/web apps/dashboard/build/web/kds
 cp -r apps/kiosk/build/web apps/dashboard/build/web/kiosk
+node apps/dashboard/cutout/prepare.mjs --verify-build "$STOREFRONT_EDITOR"
 
 echo "web build assembled: / (dashboard), /pos (POS), /kds (KDS), /kiosk (Kiosk)"

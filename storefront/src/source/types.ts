@@ -99,6 +99,8 @@ export interface Tenant {
   readonly menuBackgroundImage?: string | null;
   /** Darkening percentage for the independent menu image, 0–80; null uses 15. */
   readonly menuBackgroundDim?: number | null;
+  /** Explicit scene opt-in; omitted/null retains the existing merchant look. */
+  readonly scenePreset?: 'reference_dark' | null;
   readonly currency: 'ILS';
 }
 
@@ -204,6 +206,8 @@ export interface MenuItem {
   readonly description: string;
   readonly priceMinor: Minor;
   readonly image: string | null;
+  /** Authorized, immutable product variants; legacy catalogues omit them. */
+  readonly imageVariants?: readonly { readonly url:string; readonly width:number; readonly height:number }[];
   /** Featured items render as the large card at the top of their section. */
   readonly featured: boolean;
   /** Signature items are the ones eligible for the popular rail. */

@@ -26,6 +26,9 @@ const L = {
   fontAlexandria: 'الإسكندرية', fontRubik: 'روبيك', fontSystem: 'خط الجهاز',
   primary: 'لون الخلفية / اللون الأساسي', accent: 'لون الأزرار / اللون المميز',
   saveProfile: 'حفظ واجهة المتجر',
+  advanced: 'متقدم', apply: 'تطبيق على المسودة', cancel: 'إلغاء',
+  saturation: 'التشبع / السطوع', hue: 'درجة اللون',
+  scenePreview: 'معاينة مظهر المشهد', sceneReference: 'مرجع داكن محايد', sceneLegacy: 'استخدام مشهد العلامة',
 };
 type Obj = Record<string, any>;
 type Fixture = {
@@ -181,6 +184,7 @@ type ScrollScope = { x: number; y: number; width: number; height: number; source
 type RevealSample = { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>>; hiddenGeometry: Awaited<ReturnType<typeof targetGeometry>>; normalMatches: number; hiddenMatches: number; labelEvidence: { exact: number; normalized: number; button: number; hidden: number; textExact: number; textNormalized: number; textButton: number } | null; progressed: boolean | null; visibleNodes: number; surface: ScrollScope; direction: number; reversed: boolean };
 type RevealTrace = { purpose: RevealPurpose; result: 'ready' | 'stalled' | 'ambiguous' | 'iteration-limit' | 'disabled'; wheelSteps: number; samples: RevealSample[] };
 const revealTraces = new WeakMap<Page, RevealTrace[]>();
+const clickTraces = new WeakMap<Page, { modal: boolean; method: 'physical' | 'locator'; geometry: Awaited<ReturnType<typeof targetGeometry>> }[]>();
 const scrollScopes = new WeakMap<Page, ScrollScope>();
 class ControlRevealError extends Error {
   constructor(readonly purpose: RevealPurpose, readonly samples: RevealSample[]) {
@@ -241,7 +245,7 @@ async function renderedProgress(page: Page, scope: ScrollScope): Promise<{ signa
     return { signature: parts.join('|'), visibleNodes: parts.length };
   }, scope);
 }
-async function settleScroll(page: Page, scope: ScrollScope): Promise<{ signature: string; visibleNodes: number }> {
+async function settleScroll(page: Page, scope: ScrollScope, requireStable = false): Promise<{ signature: string; visibleNodes: number }> {
   let previous = await renderedProgress(page, scope), stable = 0;
   // Observe several settled rendered samples rather than outrunning Flutter's
   // semantics updates with a fixed series of large wheel movements.
@@ -252,6 +256,7 @@ async function settleScroll(page: Page, scope: ScrollScope): Promise<{ signature
     previous = current;
     if (stable >= 3) return current;
   }
+  if (requireStable) throw new Error('Dashboard geometry did not settle after the modal returned.');
   return previous;
 }
 async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'other', hiddenTarget = target): Promise<void> {
@@ -331,19 +336,32 @@ async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'oth
   }
   throw new ControlRevealError(purpose, samples);
 }
-async function tapRevealedControl(page: Page, target: Locator): Promise<void> {
+async function tapRevealedControl(page: Page, target: Locator, modal = false): Promise<void> {
   await expect(target, 'The actual Flutter control is enabled').toBeEnabled();
   const box = await targetGeometry(page, target);
-  expect(controlGeometry(box, page.viewportSize()!, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false).ready,
+  const viewport = page.viewportSize()!;
+  // Modal footer buttons occupy the real viewport's bottom edge; the editor's
+  // reserved header/footer insets apply only to controls behind the modal.
+  const ready = modal
+    ? box !== null && box.width > 0 && box.height > 0 && box.x >= 0 && box.y >= 0 &&
+      box.x + box.width <= viewport.width && box.y + box.height <= viewport.height &&
+      (box.centerHit || box.flutterSurfaceHit)
+    : controlGeometry(box, viewport, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false).ready;
+  expect(ready,
     'The control is in the viewport with an unobstructed same-view Flutter input surface').toBe(true);
+  // This is pre-click geometry. It determines the physical click coordinates;
+  // locator.click can auto-wait/recompute them. No label, value or credential.
+  const clicks = clickTraces.get(page) ?? [];
+  if (clicks.length < 160) clicks.push({ modal, method: box!.centerHit ? 'locator' : 'physical', geometry: box });
+  clickTraces.set(page, clicks);
   if (box!.centerHit) return target.click();
   // Send an ordinary physical pointer click through the actual Flutter input
   // surface. No force click, DOM event dispatch, or application callback.
   // The chooser/Storage/publisher/save assertions still prove the action.
   await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
 }
-async function tapRevealedButton(page: Page, name: string): Promise<void> {
-  await tapRevealedControl(page, page.getByRole('button', { name, exact: true }));
+async function tapRevealedButton(page: Page, name: string, modal = false): Promise<void> {
+  await tapRevealedControl(page, page.getByRole('button', { name, exact: true }), modal);
 }
 async function selectRevealedDropdown(page: Page, current: string | RegExp, option: string): Promise<void> {
   await tapRevealedControl(page, page.getByRole('button', { name: current, exact: false }));
@@ -354,6 +372,7 @@ async function revealButton(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('button', { name, exact: true }), 'Actual revealed control is enabled').toBeEnabled();
 }
 async function fill(page: Page, name: string, value: string, { blur = false }: { blur?: boolean } = {}): Promise<void> {
+  await revealColorAdvanced(page, name);
   const field = page.getByRole('textbox', { name, exact: true });
   await reveal(page, field, 'field', page.getByRole('textbox', { name, exact: true, includeHidden: true }));
   // Ordinary Tab from the preceding field may already have focused this one.
@@ -370,6 +389,119 @@ async function fill(page: Page, name: string, value: string, { blur = false }: {
     await expect(field, 'Ordinary Tab leaves the edited field').not.toBeFocused();
     await expect(field, 'Complete field value remains after blur').toHaveValue(value);
   }
+}
+async function revealColorAdvanced(page: Page, name: string): Promise<void> {
+  if (![L.primary, L.accent, L.textColor, L.buttonText].includes(name)) return;
+  if (await page.getByRole('textbox', { name, exact: true, includeHidden: true }).count()) return;
+  const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const advancedName = new RegExp(`${escape(name)}.*${L.advanced}`);
+  const advanced = page.getByRole('button', { name: advancedName });
+  await reveal(page, advanced, 'field', page.getByRole('button', { name: advancedName, includeHidden: true }));
+  // Revealing the control can also restore its already-expanded field after
+  // scrolling or a modal transition. Reobserve before toggling it closed.
+  if (await page.getByRole('textbox', { name, exact: true, includeHidden: true }).count()) return;
+  await tapRevealedControl(page, advanced);
+}
+async function readColorDraft(page: Page, name: string, expected: string): Promise<string> {
+  await revealColorAdvanced(page, name);
+  const field = page.getByRole('textbox', { name, exact: true });
+  await reveal(page, field, 'field', page.getByRole('textbox', { name, exact: true, includeHidden: true }));
+  await tapRevealedControl(page, field);
+  await expect(field).toBeFocused();
+  // Focus can precede Flutter installing the DOM editing value. The caller
+  // supplies the authoritative original or the actual visible picker draft;
+  // an empty inherited content color is valid only when explicitly expected.
+  await expect(field, 'Focused Flutter control installs the expected draft value')
+    .toHaveValue(expected);
+  const value = await field.inputValue();
+  await page.keyboard.press('Tab');
+  return value.toLowerCase();
+}
+async function useVisualColorPicker(page: Page, name: string, apply: boolean, capture?: string): Promise<string> {
+  await revealButton(page, name);
+  await tapRevealedButton(page, name);
+  // Flutter's incrementable semantics puts the name on the parent surface,
+  // and a native range input inside it. Pointer mode disables that input so
+  // Flutter, rather than the browser range, handles the actual gesture.
+  const svSurface = page.getByLabel(L.saturation, { exact: true });
+  const hueSurface = page.getByLabel(L.hue, { exact: true });
+  const sv = svSurface.getByRole('slider');
+  const hue = hueSurface.getByRole('slider');
+  await expect(svSurface, 'The SV surface has its accessible label').toHaveCount(1);
+  await expect(hueSurface, 'The hue surface has its accessible label').toHaveCount(1);
+  await expect(sv, 'The labeled SV surface exposes one slider').toHaveCount(1);
+  await expect(hue, 'The labeled hue surface exposes one slider').toHaveCount(1);
+  const swatches = page.getByText(/^#[0-9a-f]{6}$/, { exact: true });
+  await expect(swatches, 'The sheet shows current and new HEX swatches').toHaveCount(2);
+  const current = await swatches.nth(0).innerText();
+  const beforeKeys = await swatches.nth(1).innerText();
+  // A modifier enters keyboard mode without changing a draft or focus. Wait
+  // for the native controls to be enabled before ordinary Tab traversal.
+  await page.keyboard.press('Shift');
+  await expect(sv, 'Keyboard mode enables the SV semantics input').toBeEnabled();
+  await page.keyboard.press('Tab');
+  await expect(sv, 'Tab reaches the SV field').toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowRight');
+  await expect(swatches.nth(1), 'SV arrow keys change the visible draft').not.toHaveText(beforeKeys);
+  await page.keyboard.press('Tab');
+  await expect(hue, 'Tab reaches the hue rail').toBeFocused();
+  // Flutter initializes aria-valuetext on the first change, not first focus.
+  // Exercise both directions so initialization cannot masquerade as a change.
+  // RGB-derived initial hue is below 360. Start upward so an inherited white
+  // color at hue zero changes instead of clamping and leaving it uninitialized.
+  await page.keyboard.press('ArrowUp');
+  await expect(hue, 'Hue input reports an angle').toHaveAttribute('aria-valuetext', /^\d+°$/);
+  const beforeHueKey = await hue.getAttribute('aria-valuetext');
+  await page.keyboard.press('ArrowDown');
+  await expect(hue, 'Hue arrow input reports the changed angle').toHaveAttribute('aria-valuetext', /^\d+°$/);
+  await expect(hue, 'The opposite hue key changes its actual angle').not.toHaveAttribute('aria-valuetext', beforeHueKey!);
+  // Physical pointer input targets each labeled Flutter surface, never the
+  // disabled native range. The visible swatch is authoritative in pointer mode.
+  const beforePointer = await swatches.nth(1).innerText();
+  await tapRevealedControl(page, svSurface);
+  await expect(swatches.nth(1), 'SV pointer selection changes the visible draft').not.toHaveText(beforePointer);
+  const beforeHuePointer = await swatches.nth(1).innerText();
+  await tapRevealedControl(page, hueSurface);
+  await expect(swatches.nth(1), 'Hue pointer selection changes the visible draft').not.toHaveText(beforeHuePointer);
+  await expect(swatches.nth(0), 'Visual gestures preserve the current swatch').toHaveText(current);
+  const previewed = (await swatches.nth(1).innerText()).toLowerCase();
+  expect(previewed, 'The visible picker draft is a complete HEX color').toMatch(/^#[0-9a-f]{6}$/);
+  if (capture) await screenshot(page, capture);
+  await tapRevealedButton(page, apply ? L.apply : L.cancel, true);
+  await expect(sv, 'Apply or Cancel closes the visual picker').toHaveCount(0);
+  // Flutter removes the modal slider inputs before restoring the editor's
+  // semantics. Absence of sliders alone does not mean Advanced is collapsed.
+  const returnedField = page.getByRole('textbox', { name, exact: true });
+  await expect(returnedField,
+    'Returning from the picker restores the still-expanded draft field').toHaveCount(1);
+  await settleScroll(page, await scrollScope(page, returnedField), true);
+  return previewed;
+}
+async function saveProfile(page: Page): Promise<void> {
+  await revealButton(page, L.saveProfile);
+  const saved = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_profile')));
+  const response = await responseAfterAction(saved, () => tapRevealedButton(page, L.saveProfile));
+  expect(response.status(), 'Profile writer HTTP result').toBe(200);
+  expect((await response.json()).ok).toBe(true);
+}
+async function sceneDialog(page: Page, apply: boolean, legacy = false, capture?: string): Promise<void> {
+  await revealButton(page, L.scenePreview);
+  await tapRevealedButton(page, L.scenePreview);
+  await expect(page.getByRole('button', { name: L.apply, exact: true })).toHaveCount(1);
+  if (legacy) {
+    // Flutter exposes ChoiceChip as a checkbox, including its selected state.
+    const choice = page.getByRole('checkbox', { name: L.sceneLegacy, exact: true });
+    const reference = page.getByRole('checkbox', { name: L.sceneReference, exact: true });
+    await expect(reference).toBeChecked();
+    await expect(choice).not.toBeChecked();
+    await tapRevealedControl(page, choice, true);
+    await expect(choice, 'The ordinary scene choice selects the brand preset').toBeChecked();
+    await expect(reference, 'Scene choices remain mutually exclusive').not.toBeChecked();
+  }
+  if (capture) await screenshot(page, capture);
+  await tapRevealedButton(page, apply ? L.apply : L.cancel, true);
+  await expect(page.getByRole('button', { name: L.apply, exact: true })).toHaveCount(0);
 }
 async function semantics(page: Page): Promise<void> {
   await waitForFlutterBoot(page);
@@ -594,9 +726,10 @@ async function backgroundUrl(f: Fixture, token: string, mediaId: string): Promis
 async function verifyReadCompatibility(f: Fixture, token: string): Promise<void> {
   // Read-only calls use the owner session captured from the actual UI login.
   // All fixture mutations remain the real Dashboard journey above/below.
-  const [legacy, current, legacyMedia, currentMedia] = await Promise.all([
+  const [legacy, previous, current, legacyMedia, currentMedia] = await Promise.all([
     rpc(f, token, 'get_restaurant_storefront_content_v1'),
     rpc(f, token, 'get_restaurant_storefront_content_v2'),
+    rpc(f, token, 'get_restaurant_storefront_content_v3'),
     rpc(f, token, 'list_storefront_content_media_v1'),
     rpc(f, token, 'list_storefront_content_media_v2'),
   ]);
@@ -604,6 +737,9 @@ async function verifyReadCompatibility(f: Fixture, token: string): Promise<void>
   delete legacyDocument.appearance;
   expect(legacy.document, 'An old strict reader retains exactly its content document').toEqual(legacyDocument);
   expect(legacy.version).toBe(current.version);
+  const previousDocument = structuredClone(current.document);
+  if (previousDocument.appearance) delete previousDocument.appearance.scene_preset;
+  expect(previous.document, 'Strict v2 omits only the scene extension').toEqual(previousDocument);
   const projectedMedia = structuredClone(currentMedia);
   const rows = projectedMedia.media ?? projectedMedia.rows;
   expect(Array.isArray(rows)).toBe(true);
@@ -620,20 +756,24 @@ async function verifyReadCompatibility(f: Fixture, token: string): Promise<void>
     expect(response.status, 'Anonymous versioned public menu read succeeds').toBe(200);
     return response.json() as Promise<Obj>;
   };
-  const [oldMenu, newMenu] = await Promise.all([publicRead('storefront_menu_v4'), publicRead('storefront_menu_v5')]);
+  const [oldMenu, newMenu, referenceMenu] = await Promise.all([publicRead('storefront_menu_v4'), publicRead('storefront_menu_v5'), publicRead('storefront_menu_v6')]);
   // Separate HTTP snapshots have distinct timestamps; every other old field
   // must remain identical, including prices, modifiers and ordering controls.
   expect(typeof oldMenu.server_ts).toBe('string');
   expect(typeof newMenu.server_ts).toBe('string');
   delete oldMenu.server_ts;
   delete newMenu.server_ts;
+  delete referenceMenu.server_ts;
+  delete referenceMenu.product_images_v1;
+  if (referenceMenu.content_v1.appearance) delete referenceMenu.content_v1.appearance.scene_preset;
+  expect(referenceMenu, 'No product selections in this journey: v6 projects exactly to v5').toEqual(newMenu);
   delete newMenu.content_v1.appearance;
   expect(oldMenu, 'Old public readers retain their exact menu projection').toEqual(newMenu);
 }
 type MenuRenderSample = { ms: number; httpStatus: number | null; roots: number; backgrounds: number; hydrationReady: boolean; imageMatches: boolean; dim: number | null; text: string | null; button: string | null; primary: string | null; accent: string | null; font: 'alexandria' | 'rubik' | 'system' | 'other'; renderedFontMatches: boolean; expectedFontMatches: boolean; coloursMatch: boolean; ready: boolean };
 type MenuRenderTrace = { result: 'pending' | 'ready' | 'failed'; navigations: number; samples: MenuRenderSample[] };
 const menuRenderTraces = new WeakMap<BrowserContext, MenuRenderTrace[]>();
-async function renderMenu(page: Page, f: Fixture, image: string, dim: number | null, colours?: Obj): Promise<void> {
+async function renderMenu(page: Page, f: Fixture, image: string, dim: number | null, colours?: Obj, scene: 'reference_dark' | null = null): Promise<void> {
   const expectedLogicalImage = logicalMediaUrl(image);
   const route = `${STOREFRONT}/s/${f.ownerA.slug}/menu`;
   localUrl(route);
@@ -657,11 +797,9 @@ async function renderMenu(page: Page, f: Fixture, image: string, dim: number | n
         hydrated = false;
         reloadAt = Date.now() + 5000;
       }
-      const observation = await page.evaluate(({ expectedImage, expectedDim, expectedColours }) => {
+      const observation = await page.evaluate(({ expectedImage, expectedDim, expectedColours, expectedScene }) => {
         const roots = document.querySelectorAll<HTMLElement>('[data-sf-root]');
-        const backgrounds = document.querySelectorAll<HTMLImageElement>(expectedDim === null
-          ? 'main[data-sf-screen="home"] > div[aria-hidden="true"] img'
-          : '[data-sf-menu-background="custom"] > img');
+        const backgrounds = document.querySelectorAll<HTMLImageElement>('main[data-sf-screen="home"] > div[aria-hidden="true"] img');
         const root = roots.length === 1 ? roots[0] : null;
         const style = root ? getComputedStyle(root) : null;
         const value = (name: string) => style?.getPropertyValue(name).trim() ?? '';
@@ -673,6 +811,7 @@ async function renderMenu(page: Page, f: Fixture, image: string, dim: number | n
         const expectedFontMatches = !expectedColours || font.includes(expectedColours.font);
         const coloursMatch = !expectedColours || (tx === expectedColours.text && onacc === expectedColours.button && bg === expectedColours.primary && acc === expectedColours.accent);
         const hydrationReady = Boolean(root?.style.getPropertyValue('--bg') && font);
+        const sceneMatches = (root?.getAttribute('data-sf-scene') ?? null) === expectedScene;
         const imageMatches = (expectedDim === null ? backgrounds.length > 0 : backgrounds.length === 1) && backgrounds[0].getAttribute('src') === expectedImage;
         const dimMatches = expectedDim === null || (numericDim !== null && numericDim === expectedDim / 100);
         const colour = (value: string) => /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
@@ -683,8 +822,8 @@ async function renderMenu(page: Page, f: Fixture, image: string, dim: number | n
           text: colour(tx), button: colour(onacc), primary: colour(bg), accent: colour(acc),
           font: font.includes('SF Alexandria') ? 'alexandria' as const : font.includes('sf-font-latin') ? 'rubik' as const : font.includes('system-ui') ? 'system' as const : 'other' as const,
           renderedFontMatches, expectedFontMatches, coloursMatch,
-          ready: hydrationReady && imageMatches && dimMatches && (!expectedColours || (renderedFontMatches && expectedFontMatches && coloursMatch)) };
-      }, { expectedImage: expectedLogicalImage, expectedDim: dim, expectedColours: colours ?? null });
+          ready: hydrationReady && sceneMatches && imageMatches && dimMatches && (!expectedColours || (renderedFontMatches && expectedFontMatches && coloursMatch)) };
+      }, { expectedImage: expectedLogicalImage, expectedDim: dim, expectedColours: colours ?? null, expectedScene: scene });
       hydrated = observation.hydrationReady;
       const sample = { ms: Date.now() - started, httpStatus, ...observation };
       if (trace.samples.length < 120) trace.samples.push(sample);
@@ -708,6 +847,28 @@ async function verifyMenuGeometry(page: Page): Promise<void> {
   expect(layer!.y).toBeLessThanOrEqual(first!.y);
   expect(layer!.y + layer!.height).toBeGreaterThanOrEqual(last!.y + last!.height);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal viewport overflow').toBe(true);
+}
+async function verifyReferenceScene(page: Page, dim: number): Promise<void> {
+  const result = await page.evaluate(() => {
+    const home = document.querySelector('main[data-sf-screen="home"]')!;
+    const layer = home.querySelector('div[aria-hidden="true"]')!;
+    const image = layer.querySelector('img')!;
+    const photo = getComputedStyle(image), overlay = getComputedStyle(layer, '::after');
+    const header = getComputedStyle(home.querySelector('header')!);
+    const category = getComputedStyle(home.querySelector('[data-sf-module="categories"]')!.parentElement!);
+    const panel = getComputedStyle(home.querySelector('[data-sf-module="footer"] [data-sf-module="service"] > div')!);
+    return { image: { fit: photo.objectFit, filter: photo.filter, position: photo.position, opacity: photo.opacity },
+      overlay: { colour: overlay.backgroundColor, opacity: Number(overlay.opacity) },
+      header: { colour: header.backgroundColor, blur: header.backdropFilter },
+      category: { colour: category.backgroundColor, blur: category.backdropFilter }, footer: panel.backgroundColor,
+      fits: document.documentElement.scrollWidth <= innerWidth };
+  });
+  expect(result.image).toEqual({ fit: 'cover', filter: 'none', position: 'fixed', opacity: '1' });
+  expect(result.overlay).toEqual({ colour: 'rgb(0, 0, 0)', opacity: dim / 100 });
+  expect(result.header).toEqual({ colour: 'rgba(21, 21, 21, 0.76)', blur: 'none' });
+  expect(result.category).toEqual({ colour: 'rgba(21, 21, 21, 0.76)', blur: 'none' });
+  expect(result.footer).toBe('rgba(37, 37, 37, 0.8)');
+  expect(result.fits, 'Reference scene fits the viewport').toBe(true);
 }
 async function screenshot(page: Page, path: string): Promise<void> {
   // Load every section and lazy image before a full-page capture.
@@ -740,6 +901,12 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
   } = { fieldsBeforeSubmit: null, request: null, response: null };
   const uploadDiagnostics: UploadDiagnostics[] = [];
   const nextUpload = () => { const diagnostics = new UploadDiagnostics(); uploadDiagnostics.push(diagnostics); return diagnostics; };
+  let draftWrites = 0;
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.origin === API && request.method() === 'POST' &&
+        ['/rest/v1/rpc/set_restaurant_storefront_profile', '/rest/v1/rpc/set_restaurant_storefront_content_v1'].includes(url.pathname)) draftWrites++;
+  });
   try {
     await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' });
     await semantics(page);
@@ -791,7 +958,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await saveContent(page);
     stages.push(stage);
     stage = 'read-first-background';
-    const first = (await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id as string;
+    const first = (await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance.menu_background_media_id as string;
     expect(first).not.toBe(f.heroMediaId);
     const firstUrl = await backgroundUrl(f, token, first);
     await verifyReadCompatibility(f, token);
@@ -802,19 +969,60 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await renderMenu(menu, f, firstUrl, 15);
     stages.push(stage);
 
+    // Both profile and content pickers use the actual sheet, draft, writer and
+    // reread path. Preview and Cancel never issue a persistence request.
+    for (const [scope, roles] of [
+      ['profile', [[L.primary, 'primary_color'], [L.accent, 'accent_color']]],
+      ['content', [[L.textColor, 'text_color'], [L.buttonText, 'button_text_color']]],
+    ] as const) {
+      stage = `visual-picker-${scope}`;
+      const chosen = new Map<string, string>();
+      const writesBefore = draftWrites;
+      const before = await rpc(f, token, scope === 'profile' ? 'get_restaurant_storefront_profile' : 'get_restaurant_storefront_content_v3');
+      for (const [name, key] of roles) {
+        stage = `visual-picker-${scope}-${key}-original`;
+        const authoritativeOriginal = scope === 'profile'
+          ? before.profile[key] : (before.document.appearance?.[key] ?? '');
+        expect(authoritativeOriginal, 'The initial draft has a valid authoritative color or explicit inheritance')
+          .toMatch(scope === 'profile' ? /^#[0-9a-f]{6}$/ : /^(?:#[0-9a-f]{6})?$/);
+        const original = await readColorDraft(page, name, authoritativeOriginal);
+        stage = `visual-picker-${scope}-${key}-cancel`;
+        await useVisualColorPicker(page, name, false);
+        stage = `visual-picker-${scope}-${key}-cancel-readback`;
+        expect(await readColorDraft(page, name, original), 'Cancel preserves the actual draft field').toBe(original);
+        stage = `visual-picker-${scope}-${key}-apply`;
+        const previewed = await useVisualColorPicker(page, name, true, resolve(out, `picker-${key}-test-data.png`));
+        stage = `visual-picker-${scope}-${key}-apply-readback`;
+        const selected = await readColorDraft(page, name, previewed);
+        expect(selected, 'Visual selection produces a complete color without HEX entry').toMatch(/^#[0-9a-f]{6}$/);
+        expect(selected, 'Apply changes the actual draft').not.toBe(original);
+        chosen.set(key, selected);
+      }
+      expect(draftWrites, 'Picker preview, Cancel and Apply do not persist').toBe(writesBefore);
+      const pending = await rpc(f, token, scope === 'profile' ? 'get_restaurant_storefront_profile' : 'get_restaurant_storefront_content_v3');
+      expect(scope === 'profile' ? pending.profile : pending.document, 'Authoritative data stays unchanged before Save')
+        .toEqual(scope === 'profile' ? before.profile : before.document);
+      stage = `visual-picker-${scope}-save-reload`;
+      if (scope === 'profile') await saveProfile(page); else await saveContent(page);
+      const persisted = await rpc(f, token, scope === 'profile' ? 'get_restaurant_storefront_profile' : 'get_restaurant_storefront_content_v3');
+      await openEditor(page, true);
+      for (const [name, key] of roles) {
+        expect((scope === 'profile' ? persisted.profile : persisted.document.appearance)[key]).toBe(chosen.get(key));
+        expect(await readColorDraft(page, name, chosen.get(key)!), 'Authoritative save survives Dashboard reload').toBe(chosen.get(key));
+      }
+      stages.push(stage);
+    }
+
     stage = 'profile-colours';
     await fill(page, L.primary, '#211A16', { blur: true });
     await fill(page, L.accent, '#EAB082', { blur: true });
-    await revealButton(page, L.saveProfile);
-    const profileSaved = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_profile')));
-    const profileResponse = await responseAfterAction(profileSaved, () => tapRevealedButton(page, L.saveProfile));
-    expect(profileResponse.status(), 'Profile writer HTTP result').toBe(200);
-    expect((await profileResponse.json()).ok).toBe(true);
+    await saveProfile(page);
     const savedProfile = await rpc(f, token, 'get_restaurant_storefront_profile');
     expect(savedProfile.profile.primary_color, 'Authoritative saved primary HEX').toBe('#211a16');
     expect(savedProfile.profile.accent_color, 'Authoritative saved accent HEX').toBe('#eab082');
     await openEditor(page, true);
     for (const [name, value] of [[L.primary, '#211a16'], [L.accent, '#eab082']]) {
+      await revealColorAdvanced(page, name);
       const field = page.getByRole('textbox', { name, exact: true });
       await reveal(page, field, 'field', page.getByRole('textbox', { name, exact: true, includeHidden: true }));
       // Flutter initializes an unfocused semantic input's DOM value lazily.
@@ -841,7 +1049,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       await setDim(page, dim);
       await saveContent(page);
       await openEditor(page, true);
-      const a = (await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance;
+      const a = (await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance;
       expect(a.menu_background_dim, 'Explicit dimming survives save and reread').toBe(dim);
       expect(a.text_color).toBe('#fff1da');
       expect(a.button_text_color).toBe('#20140c');
@@ -858,10 +1066,86 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       stages.push(stage);
     }
 
+    stage = 'scene-bright-brand-before';
+    await fill(page, L.primary, '#00FF00', { blur: true });
+    await fill(page, L.accent, '#FF00FF', { blur: true });
+    await saveProfile(page);
+    await setDim(page, 15);
+    await saveContent(page);
+    const referenceColours = { text: '#fff1da', button: '#20140c', primary: '#151515', accent: '#ff00ff', font: 'system-ui' };
+    const legacyColours = { ...referenceColours, primary: '#00ff00' };
+    await renderMenu(menu, f, firstUrl, 15, legacyColours);
+    await screenshot(menu, resolve(out, 'scene-same-source-legacy-desktop-test-data.png'));
+    await menu.setViewportSize({ width: 390, height: 844 });
+    await screenshot(menu, resolve(out, 'scene-same-source-legacy-mobile-test-data.png'));
+    await menu.setViewportSize({ width: 1440, height: 1000 });
+    stages.push(stage);
+
+    stage = 'scene-cancel-apply-save-reload';
+    const sceneBefore = await rpc(f, token, 'get_restaurant_storefront_content_v3');
+    const sceneWrites = draftWrites;
+    await sceneDialog(page, false);
+    expect(draftWrites, 'Cancelling scene preview does not persist').toBe(sceneWrites);
+    const contentSave = page.getByRole('button', { name: L.save, exact: true });
+    // Read this disabled control as status; the action reveal path correctly
+    // requires enabled controls and must not be weakened for this assertion.
+    await reveal(page, contentSave, 'content-status', page.getByRole('button', { name: L.save, exact: true, includeHidden: true }));
+    expect(await contentSave.isEnabled(), 'Scene Cancel leaves the clean draft unchanged').toBe(false);
+    const cancelled = await rpc(f, token, 'get_restaurant_storefront_content_v3');
+    expect(cancelled.document, 'Scene Cancel retains the complete prior draft').toEqual(sceneBefore.document);
+    await sceneDialog(page, true, false, resolve(out, 'scene-preview-test-data.png'));
+    expect(draftWrites, 'Scene Apply only changes the draft').toBe(sceneWrites);
+    const applied = await rpc(f, token, 'get_restaurant_storefront_content_v3');
+    expect(applied.document, 'Scene Apply waits for content Save').toEqual(sceneBefore.document);
+    await saveContent(page);
+    await openEditor(page, true);
+    expect((await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance.scene_preset).toBe('reference_dark');
+    await verifyReadCompatibility(f, token);
+    const unchangedBrand = (await rpc(f, token, 'get_restaurant_storefront_profile')).profile;
+    expect(unchangedBrand.primary_color).toBe('#00ff00');
+    expect(unchangedBrand.accent_color).toBe('#ff00ff');
+    stages.push(stage);
+
+    for (const dim of [0, 15, 80]) {
+      stage = `scene-reference-${dim}`;
+      await setDim(page, dim);
+      await saveContent(page);
+      await openEditor(page, true);
+      const appearance = (await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance;
+      expect(appearance.scene_preset).toBe('reference_dark');
+      expect(appearance.menu_background_dim).toBe(dim);
+      expect(appearance.menu_background_media_id).toBe(first);
+      await renderMenu(menu, f, firstUrl, dim, referenceColours, 'reference_dark');
+      await verifyReferenceScene(menu, dim);
+      if (dim === 15) {
+        await screenshot(menu, resolve(out, 'scene-same-source-reference-desktop-test-data.png'));
+        await menu.setViewportSize({ width: 390, height: 844 });
+        await verifyReferenceScene(menu, dim);
+        await screenshot(menu, resolve(out, 'scene-same-source-reference-mobile-test-data.png'));
+        await menu.setViewportSize({ width: 1440, height: 1000 });
+      }
+      await invariants(f, token);
+      stages.push(stage);
+    }
+    // A fresh tab has its own unvisited Intro session. Inspect real served
+    // Welcome imagery, without changing local/session storage or the route.
+    stage = 'independent-welcome';
+    const welcome = await context.newPage();
+    await welcome.goto(`${STOREFRONT}/s/${f.ownerA.slug}`, { waitUntil: 'domcontentloaded' });
+    await expect(welcome.locator('[data-sf-screen="intro"] [data-sf-hero-mode="editorial"]')).toHaveCount(1);
+    await expect(welcome.locator('[data-sf-screen="intro"] [data-sf-module="hero"] img')).toHaveAttribute('src', logicalMediaUrl(f.heroUrl));
+    await welcome.close();
+    await sceneDialog(page, true, true);
+    await saveContent(page);
+    await openEditor(page, true);
+    expect((await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance.scene_preset).toBeNull();
+    await renderMenu(menu, f, firstUrl, 80, legacyColours);
+    stages.push(stage);
+
     stage = 'replace-background';
     await upload(page, 'base_444_1200x900.jpg', nextUpload());
     await saveContent(page);
-    const second = (await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id as string;
+    const second = (await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance.menu_background_media_id as string;
     expect(second).not.toBe(first);
     const secondUrl = await backgroundUrl(f, token, second);
     await verifyReadCompatibility(f, token);
@@ -872,7 +1156,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
 
     stage = 'duplicate-source-rejected';
     await upload(page, 'base_420_900x450.jpg', nextUpload(), 409);
-    expect((await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id).toBe(second);
+    expect((await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance.menu_background_media_id).toBe(second);
     await invariants(f, token);
     await openEditor(page, true);
     stages.push(stage);
@@ -896,7 +1180,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await selectRevealedDropdown(page, new RegExp(second.slice(0, 8)), L.inherit);
     await saveContent(page);
     await openEditor(page, true);
-    expect((await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id).toBeNull();
+    expect((await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance.menu_background_media_id).toBeNull();
     await verifyReadCompatibility(f, token);
     await invariants(f, token);
     await backgroundUrl(f, token, first);
@@ -908,19 +1192,19 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await reveal(page, page.getByRole('button', { name: new RegExp(L.inherit) }), 'other', page.getByRole('button', { name: new RegExp(L.inherit), includeHidden: true }));
     await selectRevealedDropdown(page, new RegExp(L.inherit), f.heroMediaId.slice(0, 8));
     await saveContent(page);
-    expect((await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id).toBe(f.heroMediaId);
+    expect((await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance.menu_background_media_id).toBe(f.heroMediaId);
     await invariants(f, token);
     await reveal(page, page.getByRole('button', { name: new RegExp(f.heroMediaId.slice(0, 8)) }), 'other', page.getByRole('button', { name: new RegExp(f.heroMediaId.slice(0, 8)), includeHidden: true }));
     await selectRevealedDropdown(page, new RegExp(f.heroMediaId.slice(0, 8)), L.inherit);
     await saveContent(page);
     await openEditor(page, true);
-    expect((await rpc(f, token, 'get_restaurant_storefront_content_v2')).document.appearance.menu_background_media_id).toBeNull();
+    expect((await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance.menu_background_media_id).toBeNull();
     await invariants(f, token);
     await backgroundUrl(f, token, f.heroMediaId);
     await renderMenu(menu, f, f.heroUrl, null);
     stages.push(stage);
     await network.check();
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlReveals: revealTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
+    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
   } catch (error) {
     const statuses = stages.includes('login') ? await editorStatus(page).catch(() => ['unreadable']) : [];
     const failureCapture = stages.includes('login')
@@ -928,7 +1212,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
       login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
       controlReveal: error instanceof ControlRevealError ? error.samples : null,
-      controlReveals: revealTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
+      controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
   }
 });

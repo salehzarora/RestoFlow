@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { responseEvidence, summarizePrivateLog, correlateLogWindows, isAuthenticatedReadiness, waitForAuthenticatedPublisher } from './publisher-diagnostics.mjs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { responseEvidence, summarizePrivateLog, summarizeStartupLog, capturePublisherRuntime, correlateLogWindows, isAuthenticatedReadiness, waitForAuthenticatedPublisher } from './publisher-diagnostics.mjs';
 import { createHandler } from '../../supabase/functions/storefront-media-publish/lib/handler.mjs';
 
 test('response sanitizer exports only fixed classifications, primitives and known content types', () => {
@@ -27,6 +30,37 @@ test('raw CLI/runtime/gateway lines reduce to enum counts even when synthetic se
   assert.equal(result.classifications.handler_internal_error, 1);
   assert.equal(Object.values(result.classifications).every(Number.isInteger), true);
   for (const secret of secrets) assert.equal(JSON.stringify(result).includes(secret), false);
+});
+
+test('startup classification never exports raw credentials, SQL or arbitrary error text', () => {
+  const secrets = ['SYNTHETIC_PRIVATE_PASSWORD', 'eyJabcdefghijk.eyJ1234567890.signature',
+    'postgresql://private:secret@localhost/db', 'private-table secret-object.jpg'];
+  const result = summarizeStartupLog(`Starting database\nApplying migration ${secrets[3]}\nERROR ${secrets.join(' ')} (SQLSTATE 42601)\ncontainer is not healthy\nno space left on device\nfailed to pull image\n${secrets.join('\n')}`);
+  for (const name of ['database_started', 'migrations_started', 'sql_syntax', 'container_unhealthy', 'disk_full', 'image_pull_failed']) {
+    assert.equal(result.classifications[name], 1);
+  }
+  assert.equal(result.classifications.stack_started, 0);
+  assert.ok(Object.values(result.classifications).every(Number.isInteger));
+  for (const secret of secrets) assert.equal(JSON.stringify(result).includes(secret), false);
+  assert.ok(Object.values(summarizeStartupLog('unknown secret failure').classifications).every(value => value === 0));
+  assert.equal(summarizeStartupLog('failed to pull\n'.repeat(10001)).classifications.image_pull_failed, 9999);
+});
+
+test('startup failure evidence survives absence of fixture and publisher receipts', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cinematic-startup-diagnostics-'));
+  const privateDir = join(dir, 'private'); const publicDir = join(dir, 'public');
+  try {
+    mkdirSync(privateDir); mkdirSync(publicDir);
+    writeFileSync(join(privateDir, 'start.log'), 'Starting database\nTLS handshake timeout private-secret');
+    capturePublisherRuntime(privateDir, publicDir);
+    assert.deepEqual(readdirSync(publicDir), ['stack-startup.json']);
+    const text = readFileSync(join(publicDir, 'stack-startup.json'), 'utf8');
+    const evidence = JSON.parse(text);
+    assert.equal(evidence.localStatusFilePresent, false);
+    assert.equal(evidence.classifications.network_timeout, 1);
+    assert.equal(text.includes('private-secret'), false);
+    assert.equal(evidence.bounded, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('authenticated readiness exact response cannot accept gateway401, typed503, or body lookalikes', () => {

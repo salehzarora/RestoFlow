@@ -8,7 +8,7 @@ import {
   migrationName, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration, requireEphemeralCi,
   statements, withoutOuterTransaction, finalFingerprint, sha256, predecessorName, predecessorVersion, prefixNamesFingerprint,
   followUpName, followUpVersion, followUpFingerprint, targetFunctions, topLevelTransactionControl, proveFollowUpMigration,
-  proveMigrationSequence, targetPrefixSources,
+  proveMigrationSequence, targetPrefixSources, followupMigrations, visualReleaseSources,
 } from './cinematic_001b_migration_contract.mjs';
 
 test('historical migration removed exactly two outer statement lines', () => {
@@ -91,11 +91,12 @@ const crlf = (bytes) => Buffer.from(bytes.toString('latin1').replaceAll('\n', '\
 const failsWith = (message) => (error) => error.message.split('\n')[0] === message;
 const refuses = (list, message) => assert.throws(() => proveMigrationSequence(list), failsWith(message));
 
-test('the current #381 sequence passes: the exact prefix, the #379 target, then only the reviewed 001D follow-up', () => {
+test('the reconciled #380 sequence pins #379, payment 001D, product helpers and scene', () => {
   assert.deepEqual(proveMigrationSequence(sources).summary, {
-    migrations: 185, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName],
+    migrations: 187, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name)],
     prefix_names_sha256: prefixNamesFingerprint, follow_up_sha256: followUpFingerprint, follow_up_statements: 125,
     follow_up_no_embedded_transaction: true,
+    visual_followups: followupMigrations.map(pin => ({ ...pin, version: pin.name.slice(0, 14), statements: statements(bytesOf(pin.name).toString('utf8')).length, no_embedded_transaction: true })),
   });
 });
 
@@ -104,7 +105,7 @@ test('the target prefix ends at #379 and excludes 001D, which is applied only as
   assert.equal(prefix.length, 184);
   assert.deepEqual(prefix.slice(-2), [predecessorName, migrationName]);
   assert.ok(!prefix.includes(followUpName));
-  assert.deepEqual(sources.map(([name]) => name), [...prefix, followUpName]);
+  assert.deepEqual(sources.map(([name]) => name), [...prefix, followUpName, ...followupMigrations.map(item => item.name)]);
   const broken = sql('select 1;\n');
   const plan = targetPrefixSources(sources, broken);
   assert.deepEqual(plan.map(([name]) => name), prefix);
@@ -117,7 +118,7 @@ test('the target prefix ends at #379 and excludes 001D, which is applied only as
 
 test('unknown later and interleaved migrations fail', () => {
   const extra = sql('select 1;\n');
-  refuses([...without(sources, followUpName), ['20261104150000_unknown_later.sql', extra]], 'Unknown migration after the #379 target');
+  refuses([...without(sources, followUpName), ['20261104150000_unknown_later.sql', extra]].sort(byName), 'Missing the reviewed 001D follow-up migration');
   refuses(adding(['20261104140000_interleaved.sql', extra]), 'Interleaved migration between the #379 target and the 001D follow-up');
   refuses(adding(['20261103000000_interleaved.sql', extra]), 'The #379 target must directly follow its exact predecessor');
   refuses(adding(['20261020000000_interleaved.sql', extra]), 'Unreviewed migration sequence before the #379 target');
@@ -158,8 +159,8 @@ test('changed, CRLF-converted or renamed 001D bytes fail', () => {
   refuses(replacing(followUpName, original.subarray(0, -1)), 'Unreviewed 001D follow-up bytes');
   refuses(replacing(followUpName, Buffer.concat([original.subarray(0, -1), sql('\r\n')])), 'Unreviewed 001D follow-up bytes');
   // Renamed with the same contents: another name, or another version.
-  refuses([...without(sources, followUpName), ['20261104141959_bizbot_zcredit_001d_renamed.sql', original]], 'Unknown migration after the #379 target');
-  refuses([...without(sources, followUpName), ['20261104142000_bizbot_zcredit_001d_server_ledger.sql', original]], 'Unknown migration after the #379 target');
+  refuses([...without(sources, followUpName), ['20261104141959_bizbot_zcredit_001d_renamed.sql', original]].sort(byName), 'Missing the reviewed 001D follow-up migration');
+  refuses([...without(sources, followUpName), ['20261104142000_bizbot_zcredit_001d_server_ledger.sql', original]].sort(byName), 'Missing the reviewed 001D follow-up migration');
   // The reviewed bytes copied under another name.
   refuses(replacing(sources[0][0], original), 'The reviewed 001D bytes may appear only under their pinned name');
   refuses(replacing(sources[0][0], bytesOf(migrationName)), 'The reviewed #379 target bytes may appear only under its pinned name');
@@ -194,9 +195,11 @@ test('top-level transaction control in the 001D follow-up fails; dollar-quoted P
 });
 
 test('a second later migration fails, including any future follow-up not yet pinned', () => {
-  refuses(adding(['20261104150000_second_later.sql', sql('select 1;\n')]), 'Only the reviewed 001D follow-up may follow the #379 target');
-  refuses(adding(['20261104154000_future_follow_up.sql', sql('select 1;\n')], ['20261104155000_future_follow_up.sql', sql('select 2;\n')]),
-    'Only the reviewed 001D follow-up may follow the #379 target');
+  refuses(adding(['20261104150000_second_later.sql', sql('select 1;\n')]), 'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+  const future = ['20261105025700_future_follow_up.sql', '20261105025800_future_follow_up.sql'];
+  assert.ok(future.every(name => name.slice(0, 14) > followupMigrations.at(-1).name.slice(0, 14)));
+  refuses(adding([future[0], sql('select 1;\n')], [future[1], sql('select 2;\n')]),
+    'Only the reviewed 001D then product and scene migrations may follow the #379 target');
 });
 
 test('non-conforming migration names and sources fail', () => {
@@ -224,4 +227,38 @@ test('the exact #379 and 001D hashes and the reviewed sequence are pinned', () =
     .map((item) => item.text.match(/^create\s+(?:or\s+replace\s+)?function\s+([a-z_]+\.[a-z0-9_]+)\s*\(/i)?.[1])
     .filter(Boolean);
   assert.deepEqual(created.sort(), [...targetFunctions].sort());
+});
+
+test('both visual migrations fail closed on missing, swapped, changed, CRLF or copied bytes', () => {
+  for (const pin of followupMigrations) {
+    refuses(without(sources, pin.name), 'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+    const original = bytesOf(pin.name);
+    for (const changed of [Buffer.concat([original, sql('-- changed\n')]), crlf(original), original.subarray(0, -1)]) {
+      refuses(replacing(pin.name, changed), 'Unreviewed visual follow-up bytes');
+    }
+    refuses(replacing(pin.name, Buffer.concat([original, sql('commit;\n')])), 'Unexpected transaction control in a visual follow-up');
+    refuses(replacing(sources[0][0], original), 'Reviewed visual bytes may appear only under their pinned name');
+    refuses(adding([pin.name.slice(0, 15) + 'duplicate.sql', sql('select 1;\n')]), 'Duplicate migration version');
+  }
+  const [product, scene] = followupMigrations.map(pin => pin.name);
+  refuses(sources.map(([name, bytes]) => [name, name === product ? bytesOf(scene) : name === scene ? bytesOf(product) : bytes]),
+    'Unreviewed visual follow-up bytes');
+  const between = '20261105025500_between_product_and_scene.sql';
+  assert.ok(product.slice(0, 14) < between.slice(0, 14) && between.slice(0, 14) < scene.slice(0, 14));
+  refuses(adding([between, sql('select 1;\n')]),
+    'Only the reviewed 001D then product and scene migrations may follow the #379 target');
+});
+
+test('production-shaped proof omits only pending payment after validating the complete reviewed checkout', () => {
+  const plan = visualReleaseSources(sources);
+  assert.deepEqual(plan.map(([name]) => name), [
+    ...proveMigrationSequence(sources).target_prefix, ...followupMigrations.map(item => item.name),
+  ]);
+  assert.ok(plan.every(([name, bytes]) => bytes === bytesOf(name)), 'Exact bytes are retained');
+  assert.ok(!plan.some(([name]) => name === followUpName));
+  for (const pin of [followUpName, ...followupMigrations.map(item => item.name)]) {
+    assert.throws(() => visualReleaseSources(without(sources, pin)));
+    assert.throws(() => visualReleaseSources(replacing(pin, Buffer.concat([bytesOf(pin), sql('-- changed\n')]))));
+  }
+  assert.throws(() => visualReleaseSources(adding(['20261104160000_unreviewed.sql', sql('select 1;\n')])));
 });

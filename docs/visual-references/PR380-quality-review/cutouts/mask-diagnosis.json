@@ -1,0 +1,840 @@
+{
+  "model": {
+    "revision": "rembg-v0.0.0-u2net",
+    "bytes": 175997641,
+    "sha256": "8d10d2f3bb75ae3b6d527c77944fc5e7dcd94b29809d47a739a7a728a912b491",
+    "buildSource": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx",
+    "partBytes": 16777216,
+    "parts": [
+      "13a46bb203e4a251b113043429bb89f8a57a9a7619dea953f46db4cddef8c4d5",
+      "8f3319e1fd85e0fcb411bab548e2151bf501e3591332e2402daf43306f37d244",
+      "bc356d5416d679a19ca2256f9c7a06be38e5fd17c7a7e1b43583332957e21a1c",
+      "535f58237bde236208d854811219015a6b740bfa28eaef016e2547f0e28a530f",
+      "4007be3b9ede86cc8841a815c596bbfdb57664d9ad863deec1e149aecf4317fa",
+      "ed7297b7dfb54459204ff4f00c789fb7e3182382747c9873ff3b6f8378455cb7",
+      "8d7c6c6b6c64f05026db67cea4c675a0c5e6a1911b65750c5a227f919bd7d622",
+      "41b4d80f5500372fa2d2626b43b7fe095d30495d4b773dc2bfd55d43f72f4c39",
+      "bcbd235a5a3e9ceb80b0de6e558778154f669c97f91c577c5c9655bd36893865",
+      "55fa240f69de6ec546ae779b85afc63a3b7fa408d1df3e82e1a5322fa5bc87e5",
+      "fcc71a5a83209d32e190213898c4cd3e3a438cb323c50f66d9b96a1d10d108ca"
+    ]
+  },
+  "shippedWorkerSha256": "69d448731c643262ffc059141c2eb11ecebccaa91bc0c1e0e767938aa1668399",
+  "diagnosticWorkerSha256": "b91beb2895d42750766b42a3231d9fcf4f35600a1e02571979f9d2f585334ef6",
+  "browserChannel": "chrome",
+  "browser": "156.0.8078.80",
+  "cases": [
+    {
+      "sample": "burger",
+      "sourceKind": "Existing published c4/w480 copy, not private original",
+      "sourceBytes": 27156,
+      "sourceSha256": "5bcfca1884ff3d0cb5dea89a4553664a4f2c205c65081781918e2e75b8ead994",
+      "candidateBytes": 158503,
+      "candidateSha256": "007ed4eb086befded897c5fc6f0a5a3c211ad9b9fd4c7d8fffe42babf1275263",
+      "rawDimensions": [
+        1,
+        1,
+        320,
+        320
+      ],
+      "rawFloat32Sha256": "a4aa3d0c56ab031f84b086738d74ef1f12906e90c36029d6253ecaa92eccc205",
+      "rawStats": {
+        "count": 102400,
+        "min": 0,
+        "p10": 0,
+        "median": 2.682209014892578e-7,
+        "p90": 0.9999998807907104,
+        "max": 1
+      },
+      "regionBoxes": {
+        "plateLeft": [
+          15,
+          260,
+          45,
+          60
+        ],
+        "food": [
+          140,
+          240,
+          85,
+          100
+        ],
+        "background": [
+          300,
+          400,
+          35,
+          45
+        ]
+      },
+      "rawRegions": {
+        "plateLeft": {
+          "count": 1681,
+          "min": 0,
+          "p10": 1.7881393432617188e-7,
+          "median": 0.0000017881393432617188,
+          "p90": 0.000005781650543212891,
+          "max": 0.00003501772880554199
+        },
+        "food": {
+          "count": 5092,
+          "min": 0.9999963045120239,
+          "p10": 0.9999998211860657,
+          "median": 1,
+          "p90": 1,
+          "max": 1
+        },
+        "background": {
+          "count": 992,
+          "min": 0,
+          "p10": 0,
+          "median": 1.4901161193847656e-7,
+          "p90": 0.00000903010368347168,
+          "max": 0.9914017915725708
+        }
+      },
+      "metrics": {
+        "normalized": {
+          "width": 320,
+          "height": 320,
+          "sha256": "e6c6ea41a23465f2c3ea662608128e4a32d41dda38d710edb8aa726100012df5",
+          "transparent": 70171,
+          "partial": 3901,
+          "opaque": 28328,
+          "regions": {
+            "plateLeft": {
+              "count": 1681,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "food": {
+              "count": 5092,
+              "min": 255,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "background": {
+              "count": 992,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 253
+            }
+          }
+        },
+        "resized": {
+          "width": 360,
+          "height": 480,
+          "sha256": "dd8169027577275079663474f2d674a3f6de55f86e5508f0926f1ff6d8524ca9",
+          "transparent": 118076,
+          "partial": 6945,
+          "opaque": 47779,
+          "regions": {
+            "plateLeft": {
+              "count": 2700,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "food": {
+              "count": 8500,
+              "min": 255,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "background": {
+              "count": 1575,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 238
+            }
+          }
+        },
+        "final": {
+          "width": 360,
+          "height": 480,
+          "sha256": "dd8169027577275079663474f2d674a3f6de55f86e5508f0926f1ff6d8524ca9",
+          "transparent": 118076,
+          "partial": 6945,
+          "opaque": 47779,
+          "regions": {
+            "plateLeft": {
+              "count": 2700,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "food": {
+              "count": 8500,
+              "min": 255,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "background": {
+              "count": 1575,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 238
+            }
+          }
+        },
+        "published": {
+          "width": 360,
+          "height": 480,
+          "sha256": "dd8169027577275079663474f2d674a3f6de55f86e5508f0926f1ff6d8524ca9",
+          "transparent": 118076,
+          "partial": 6945,
+          "opaque": 47779,
+          "regions": {
+            "plateLeft": {
+              "count": 2700,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 0
+            },
+            "food": {
+              "count": 8500,
+              "min": 255,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "background": {
+              "count": 1575,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 238
+            }
+          }
+        }
+      },
+      "resizedFinalDifferences": 0,
+      "finalPublishedDifferences": 0,
+      "rawUnitScaleVsNormalized": {
+        "count": 102400,
+        "min": 0,
+        "p10": 0,
+        "median": 0,
+        "p90": 0,
+        "max": 0
+      },
+      "sourceWidth": 360,
+      "sourceHeight": 480,
+      "publications": [
+        {
+          "variant": "w480",
+          "sha256": "67eed691f152e275242690f1a597b0ac10364c9437a512595cc78ba75578673f",
+          "width": 360,
+          "height": 480,
+          "bytes": 24228,
+          "actualCISha256": "56e1186c87aeb8d5719a24fcb54d4452f110fffc3ef03b4b143e4f2cdd7f07f1",
+          "matchesActualCI": false
+        },
+        {
+          "variant": "w960",
+          "sha256": "67eed691f152e275242690f1a597b0ac10364c9437a512595cc78ba75578673f",
+          "width": 360,
+          "height": 480,
+          "bytes": 24228,
+          "actualCISha256": "56e1186c87aeb8d5719a24fcb54d4452f110fffc3ef03b4b143e4f2cdd7f07f1",
+          "matchesActualCI": false
+        }
+      ],
+      "finalAlphaMatchesActualCI": false
+    },
+    {
+      "sample": "fries-cup",
+      "sourceKind": "Existing published c4/w480 copy, not private original",
+      "sourceBytes": 46612,
+      "sourceSha256": "698cee5bb2f9281e3be57d78adbc100685b1a8d04969f8248fe6ebe12609106e",
+      "candidateBytes": 373221,
+      "candidateSha256": "c1b68b283d7827231207bea50ba38fa3660c6884baf3b965833c2ec5c66962d8",
+      "rawDimensions": [
+        1,
+        1,
+        320,
+        320
+      ],
+      "rawFloat32Sha256": "cf7c75d1734013e383da99e7e64ffcef058535204bc4b93a824512be45ea522c",
+      "rawStats": {
+        "count": 102400,
+        "min": 7.152557373046875e-7,
+        "p10": 0.00010919570922851562,
+        "median": 0.4085789620876312,
+        "p90": 0.9993351101875305,
+        "max": 0.999998152256012
+      },
+      "regionBoxes": {
+        "cup": [
+          225,
+          360,
+          75,
+          90
+        ],
+        "plate": [
+          110,
+          410,
+          65,
+          45
+        ],
+        "food": [
+          220,
+          275,
+          60,
+          40
+        ],
+        "bottle": [
+          380,
+          100,
+          60,
+          150
+        ],
+        "background": [
+          440,
+          350,
+          30,
+          80
+        ]
+      },
+      "rawRegions": {
+        "cup": {
+          "count": 3000,
+          "min": 0.15659105777740479,
+          "p10": 0.2644937038421631,
+          "median": 0.4017011821269989,
+          "p90": 0.5464649200439453,
+          "max": 0.7082271575927734
+        },
+        "plate": {
+          "count": 1364,
+          "min": 0.36148929595947266,
+          "p10": 0.38712018728256226,
+          "median": 0.47789379954338074,
+          "p90": 0.5120139718055725,
+          "max": 0.5810014605522156
+        },
+        "food": {
+          "count": 1107,
+          "min": 0.49199676513671875,
+          "p10": 0.6183779239654541,
+          "median": 0.7740222215652466,
+          "p90": 0.8375619649887085,
+          "max": 0.8863993883132935
+        },
+        "bottle": {
+          "count": 4141,
+          "min": 0.995120644569397,
+          "p10": 0.9982903003692627,
+          "median": 0.9994059801101685,
+          "p90": 0.9999399781227112,
+          "max": 0.9999902248382568
+        },
+        "background": {
+          "count": 1134,
+          "min": 0.000033289194107055664,
+          "p10": 0.000045359134674072266,
+          "median": 0.00009199976921081543,
+          "p90": 0.00035116076469421387,
+          "max": 0.0013018548488616943
+        }
+      },
+      "metrics": {
+        "normalized": {
+          "width": 320,
+          "height": 320,
+          "sha256": "72fb901c6cc976c7e7fb8f461dd350d12a2bb04ca9589247b7759fe897e737a5",
+          "transparent": 31228,
+          "partial": 54259,
+          "opaque": 16913,
+          "regions": {
+            "cup": {
+              "count": 3000,
+              "min": 40,
+              "p10": 67,
+              "median": 102,
+              "p90": 139,
+              "max": 181
+            },
+            "plate": {
+              "count": 1364,
+              "min": 92,
+              "p10": 99,
+              "median": 122,
+              "p90": 131,
+              "max": 148
+            },
+            "food": {
+              "count": 1107,
+              "min": 125,
+              "p10": 158,
+              "median": 197,
+              "p90": 214,
+              "max": 226
+            },
+            "bottle": {
+              "count": 4141,
+              "min": 254,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "background": {
+              "count": 1134,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 0
+            }
+          }
+        },
+        "resized": {
+          "width": 480,
+          "height": 480,
+          "sha256": "0ec443e0ea39083b4da928ff2ce48d56f955cbb997472e460130f004d1124e47",
+          "transparent": 69747,
+          "partial": 122281,
+          "opaque": 38372,
+          "regions": {
+            "cup": {
+              "count": 6750,
+              "min": 41,
+              "p10": 68,
+              "median": 103,
+              "p90": 139,
+              "max": 178
+            },
+            "plate": {
+              "count": 2925,
+              "min": 92,
+              "p10": 99,
+              "median": 122,
+              "p90": 131,
+              "max": 148
+            },
+            "food": {
+              "count": 2400,
+              "min": 127,
+              "p10": 160,
+              "median": 198,
+              "p90": 213,
+              "max": 224
+            },
+            "bottle": {
+              "count": 9000,
+              "min": 254,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "background": {
+              "count": 2400,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 0
+            }
+          }
+        },
+        "final": {
+          "width": 480,
+          "height": 480,
+          "sha256": "0ec443e0ea39083b4da928ff2ce48d56f955cbb997472e460130f004d1124e47",
+          "transparent": 69747,
+          "partial": 122281,
+          "opaque": 38372,
+          "regions": {
+            "cup": {
+              "count": 6750,
+              "min": 41,
+              "p10": 68,
+              "median": 103,
+              "p90": 139,
+              "max": 178
+            },
+            "plate": {
+              "count": 2925,
+              "min": 92,
+              "p10": 99,
+              "median": 122,
+              "p90": 131,
+              "max": 148
+            },
+            "food": {
+              "count": 2400,
+              "min": 127,
+              "p10": 160,
+              "median": 198,
+              "p90": 213,
+              "max": 224
+            },
+            "bottle": {
+              "count": 9000,
+              "min": 254,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "background": {
+              "count": 2400,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 0
+            }
+          }
+        },
+        "published": {
+          "width": 480,
+          "height": 480,
+          "sha256": "0ec443e0ea39083b4da928ff2ce48d56f955cbb997472e460130f004d1124e47",
+          "transparent": 69747,
+          "partial": 122281,
+          "opaque": 38372,
+          "regions": {
+            "cup": {
+              "count": 6750,
+              "min": 41,
+              "p10": 68,
+              "median": 103,
+              "p90": 139,
+              "max": 178
+            },
+            "plate": {
+              "count": 2925,
+              "min": 92,
+              "p10": 99,
+              "median": 122,
+              "p90": 131,
+              "max": 148
+            },
+            "food": {
+              "count": 2400,
+              "min": 127,
+              "p10": 160,
+              "median": 198,
+              "p90": 213,
+              "max": 224
+            },
+            "bottle": {
+              "count": 9000,
+              "min": 254,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "background": {
+              "count": 2400,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 0
+            }
+          }
+        }
+      },
+      "resizedFinalDifferences": 0,
+      "finalPublishedDifferences": 0,
+      "rawUnitScaleVsNormalized": {
+        "count": 102400,
+        "min": 0,
+        "p10": 0,
+        "median": 0,
+        "p90": 0,
+        "max": 1
+      },
+      "sourceWidth": 480,
+      "sourceHeight": 480,
+      "publications": [
+        {
+          "variant": "w480",
+          "sha256": "7439978f83881b693c0f4cd06e83401a3bb75f72a89c6c283f325310f32f944b",
+          "width": 480,
+          "height": 480,
+          "bytes": 84126,
+          "actualCISha256": "1083ab138beb6011d0e9299359744d90c5c72ab60293580fc035535000670409",
+          "matchesActualCI": false
+        },
+        {
+          "variant": "w960",
+          "sha256": "7439978f83881b693c0f4cd06e83401a3bb75f72a89c6c283f325310f32f944b",
+          "width": 480,
+          "height": 480,
+          "bytes": 84126,
+          "actualCISha256": "1083ab138beb6011d0e9299359744d90c5c72ab60293580fc035535000670409",
+          "matchesActualCI": false
+        }
+      ],
+      "finalAlphaMatchesActualCI": false
+    },
+    {
+      "sample": "platter",
+      "sourceKind": "Existing published c4/w480 copy, not private original",
+      "sourceBytes": 33756,
+      "sourceSha256": "f3bb4d896712f0acb9dc1359495e5c2aa3ca0025afff4b39e7fa8bc0118ad2b6",
+      "candidateBytes": 303190,
+      "candidateSha256": "902828c20d70c28bd05b3e4ee36e93ee6268c209313e932c601574d629c2a7e8",
+      "rawDimensions": [
+        1,
+        1,
+        320,
+        320
+      ],
+      "rawFloat32Sha256": "3b7d6d6ef53777a95c860a33ba5fd73940fadbfbd0f6d4d7a069e6a139eafc36",
+      "rawStats": {
+        "count": 102400,
+        "min": 0,
+        "p10": 6.854534149169922e-7,
+        "median": 0.8641815185546875,
+        "p90": 0.9999995827674866,
+        "max": 1
+      },
+      "regionBoxes": {
+        "food": [
+          100,
+          270,
+          120,
+          120
+        ],
+        "bottle": [
+          135,
+          70,
+          50,
+          100
+        ],
+        "background": [
+          300,
+          400,
+          30,
+          45
+        ]
+      },
+      "rawRegions": {
+        "food": {
+          "count": 8640,
+          "min": 0.9999842643737793,
+          "p10": 0.999998927116394,
+          "median": 0.9999998807907104,
+          "p90": 1,
+          "max": 1
+        },
+        "bottle": {
+          "count": 3060,
+          "min": 0.0021918416023254395,
+          "p10": 0.5839000940322876,
+          "median": 0.9126161336898804,
+          "p90": 0.9514825940132141,
+          "max": 0.9724398851394653
+        },
+        "background": {
+          "count": 868,
+          "min": 0,
+          "p10": 2.086162567138672e-7,
+          "median": 0.0000022649765014648438,
+          "p90": 0.0011686980724334717,
+          "max": 0.9992648363113403
+        }
+      },
+      "metrics": {
+        "normalized": {
+          "width": 320,
+          "height": 320,
+          "sha256": "564fa878843882d2d7b33e0b609458ddc1045ebedacbeff4578affa523c6c53d",
+          "transparent": 37402,
+          "partial": 38599,
+          "opaque": 26399,
+          "regions": {
+            "food": {
+              "count": 8640,
+              "min": 255,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "bottle": {
+              "count": 3060,
+              "min": 1,
+              "p10": 149,
+              "median": 233,
+              "p90": 243,
+              "max": 248
+            },
+            "background": {
+              "count": 868,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 255
+            }
+          }
+        },
+        "resized": {
+          "width": 360,
+          "height": 480,
+          "sha256": "09f55aa60dd0d376dc9a752c8a9879e53115a53dbd3def759ec87dd0d29659aa",
+          "transparent": 62784,
+          "partial": 65465,
+          "opaque": 44551,
+          "regions": {
+            "food": {
+              "count": 14400,
+              "min": 255,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "bottle": {
+              "count": 5000,
+              "min": 1,
+              "p10": 150,
+              "median": 233,
+              "p90": 243,
+              "max": 248
+            },
+            "background": {
+              "count": 1350,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 255
+            }
+          }
+        },
+        "final": {
+          "width": 360,
+          "height": 480,
+          "sha256": "09f55aa60dd0d376dc9a752c8a9879e53115a53dbd3def759ec87dd0d29659aa",
+          "transparent": 62784,
+          "partial": 65465,
+          "opaque": 44551,
+          "regions": {
+            "food": {
+              "count": 14400,
+              "min": 255,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "bottle": {
+              "count": 5000,
+              "min": 1,
+              "p10": 150,
+              "median": 233,
+              "p90": 243,
+              "max": 248
+            },
+            "background": {
+              "count": 1350,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 255
+            }
+          }
+        },
+        "published": {
+          "width": 360,
+          "height": 480,
+          "sha256": "09f55aa60dd0d376dc9a752c8a9879e53115a53dbd3def759ec87dd0d29659aa",
+          "transparent": 62784,
+          "partial": 65465,
+          "opaque": 44551,
+          "regions": {
+            "food": {
+              "count": 14400,
+              "min": 255,
+              "p10": 255,
+              "median": 255,
+              "p90": 255,
+              "max": 255
+            },
+            "bottle": {
+              "count": 5000,
+              "min": 1,
+              "p10": 150,
+              "median": 233,
+              "p90": 243,
+              "max": 248
+            },
+            "background": {
+              "count": 1350,
+              "min": 0,
+              "p10": 0,
+              "median": 0,
+              "p90": 0,
+              "max": 255
+            }
+          }
+        }
+      },
+      "resizedFinalDifferences": 0,
+      "finalPublishedDifferences": 0,
+      "rawUnitScaleVsNormalized": {
+        "count": 102400,
+        "min": 0,
+        "p10": 0,
+        "median": 0,
+        "p90": 0,
+        "max": 0
+      },
+      "sourceWidth": 360,
+      "sourceHeight": 480,
+      "publications": [
+        {
+          "variant": "w480",
+          "sha256": "a8f565695144b9b19c71306ee1bd92063562831c359c168ccb0d00b6e2493613",
+          "width": 360,
+          "height": 480,
+          "bytes": 56658,
+          "actualCISha256": "b41d1daf6d08fddd8db8abbadb5cedbf50c6ea391bb0b1d428e117f15cab37d9",
+          "matchesActualCI": false
+        },
+        {
+          "variant": "w960",
+          "sha256": "a8f565695144b9b19c71306ee1bd92063562831c359c168ccb0d00b6e2493613",
+          "width": 360,
+          "height": 480,
+          "bytes": 56658,
+          "actualCISha256": "b41d1daf6d08fddd8db8abbadb5cedbf50c6ea391bb0b1d428e117f15cab37d9",
+          "matchesActualCI": false
+        }
+      ],
+      "finalAlphaMatchesActualCI": false
+    }
+  ]
+}

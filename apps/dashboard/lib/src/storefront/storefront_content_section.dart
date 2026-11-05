@@ -8,9 +8,11 @@ import 'storefront_content_models.dart';
 import 'storefront_content_repository.dart';
 import 'storefront_content_unicode.dart' as unicode;
 import 'storefront_copy.dart';
+import 'storefront_color_picker.dart';
 import 'storefront_media_publisher.dart';
 import 'storefront_models.dart';
 import 'storefront_sources.dart';
+import 'storefront_scene_preset_dialog.dart';
 
 /// A read acknowledgment from the actual parent editor. A completed Future is
 /// not evidence that the profile and its media were both refreshed.
@@ -45,6 +47,7 @@ class StorefrontContentSection extends StatefulWidget {
     required this.onDraftChanged,
     required this.onBusyChanged,
     this.enabled = true,
+    this.colorSample = const StorefrontColorSample(),
     this.publisher,
     this.backgroundUpload,
     this.sources,
@@ -59,6 +62,7 @@ class StorefrontContentSection extends StatefulWidget {
   final Future<StorefrontContentRefresh> Function() onRefresh;
   final ValueChanged<bool> onDraftChanged, onBusyChanged;
   final bool enabled;
+  final StorefrontColorSample colorSample;
   final StorefrontMediaPublisher? publisher;
   final StorefrontBackgroundUpload? backgroundUpload;
   final StorefrontSourceOptions? sources;
@@ -77,6 +81,7 @@ class _ContentState extends State<StorefrontContentSection> {
   StorefrontContentAttempt? _confirmedSave;
   final _headline = TextEditingController(),
       _selection = TextEditingController();
+  final _appearanceColors = <String, TextEditingController>{};
   bool _busy = false, _dirty = false, _stale = false;
   bool _uploadingBackground = false;
   int _generation = 0;
@@ -123,6 +128,9 @@ class _ContentState extends State<StorefrontContentSection> {
     _generation++;
     _headline.dispose();
     _selection.dispose();
+    for (final controller in _appearanceColors.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -275,6 +283,10 @@ class _ContentState extends State<StorefrontContentSection> {
         _message = null; // The typed failure view owns its reload message.
       if (verified) {
         _draft = snapshot.document.editableCopy();
+        final appearance = _draft!['appearance'] as Map?;
+        for (final entry in _appearanceColors.entries) {
+          entry.value.text = appearance?[entry.key] as String? ?? '';
+        }
         _headline.text = _draft!['hero_headline'] as String? ?? '';
         _selection.text = _headline.text;
         _notifyDraft(false);
@@ -456,30 +468,59 @@ class _ContentState extends State<StorefrontContentSection> {
   Widget _appearanceColor(String field, String label) {
     final appearance = _draft?['appearance'] as Map?;
     final value = appearance?[field] as String? ?? '';
+    final controller = _appearanceColors.putIfAbsent(
+      field,
+      () => TextEditingController(text: value),
+    );
     final valid =
         value.isEmpty ||
         (value.length == 7 && storefrontAppearanceHex.hasMatch(value));
+    final binding = _bindingGeneration;
+    final generation = _generation;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: TextFormField(
-        key: ValueKey('content-appearance.$field-$_generation'),
-        initialValue: value,
-        enabled: _editable,
-        textDirection: TextDirection.ltr,
-        autocorrect: false,
-        decoration: InputDecoration(
-          labelText: c(label),
-          helperText: c('appearanceHexHelp'),
-          errorText: valid ? null : c('appearanceHexInvalid'),
-          prefixIcon: value.isNotEmpty && valid
-              ? Icon(
-                  Icons.circle,
-                  color: Color(int.parse('ff${value.substring(1)}', radix: 16)),
-                )
-              : const Icon(Icons.palette_outlined),
+      child: StorefrontColorControl(
+        key: ValueKey('content-appearance.$field-control-$_generation'),
+        id: 'content-appearance.$field',
+        label: c(label),
+        value: value.isEmpty ? null : value,
+        role: field == 'text_color'
+            ? StorefrontColorRole.text
+            : StorefrontColorRole.buttonText,
+        sample: StorefrontColorSample(
+          background: widget.colorSample.background,
+          accent: widget.colorSample.accent,
+          text: appearance?['text_color'] as String?,
+          buttonText: appearance?['button_text_color'] as String?,
         ),
-        onChanged: (text) =>
-            _changeAppearance(field, text.isEmpty ? null : text),
+        enabled: _editable,
+        onChanged: (hex) {
+          if (_current(binding) && generation == _generation) {
+            _changeAppearance(field, hex);
+          }
+        },
+        advancedField: TextFormField(
+          key: ValueKey('content-appearance.$field-$_generation'),
+          controller: controller,
+          enabled: _editable,
+          textDirection: TextDirection.ltr,
+          autocorrect: false,
+          decoration: InputDecoration(
+            labelText: c(label),
+            helperText: c('appearanceHexHelp'),
+            errorText: valid ? null : c('appearanceHexInvalid'),
+            prefixIcon: value.isNotEmpty && valid
+                ? Icon(
+                    Icons.circle,
+                    color: Color(
+                      int.parse('ff${value.substring(1)}', radix: 16),
+                    ),
+                  )
+                : const Icon(Icons.palette_outlined),
+          ),
+          onChanged: (text) =>
+              _changeAppearance(field, text.isEmpty ? null : text),
+        ),
       ),
     );
   }
@@ -509,6 +550,10 @@ class _ContentState extends State<StorefrontContentSection> {
 
   void _changeAppearance(String field, Object? value) {
     if (!mounted || !_editable) return;
+    final controller = _appearanceColors[field];
+    if (controller != null && controller.text != (value ?? '')) {
+      controller.text = value as String? ?? '';
+    }
     _draft!['appearance'] ??= <String, dynamic>{
       for (final key in storefrontAppearanceKeys) key: null,
     };
@@ -522,6 +567,14 @@ class _ContentState extends State<StorefrontContentSection> {
     final media = (_media?.rows ?? <StorefrontContentMediaRow>[])
         .where((row) => row.media.id == mediaId && row.media.isLive)
         .firstOrNull;
+    final referenceFallback =
+        appearance?['scene_preset'] == 'reference_dark' &&
+        (_media?.rows.any(
+              (row) =>
+                  row.media.isLive &&
+                  row.media.inUse.contains(StorefrontSlot.hero),
+            ) ??
+            false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -579,7 +632,7 @@ class _ContentState extends State<StorefrontContentSection> {
           max: 80,
           divisions: 80,
           label: '${dim ?? 15}%',
-          onChanged: _editable && media != null
+          onChanged: _editable && (media != null || referenceFallback)
               ? (value) =>
                     _changeAppearance('menu_background_dim', value.round())
               : null,
@@ -597,6 +650,72 @@ class _ContentState extends State<StorefrontContentSection> {
         ),
       ],
     );
+  }
+
+  Widget _scenePreset() {
+    final appearance = _draft?['appearance'] as Map?;
+    final current = appearance?['scene_preset'] as String?;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _title('sceneTitle'),
+        Text(
+          c(current == 'reference_dark' ? 'sceneReference' : 'sceneLegacy'),
+          key: const Key('content-scene-selection'),
+        ),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: OutlinedButton.icon(
+            key: const Key('content-scene-preview'),
+            onPressed: _editable ? _previewScene : null,
+            icon: const Icon(Icons.compare_outlined),
+            label: Text(c('sceneOpen')),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _previewScene() async {
+    if (!_editable) return;
+    final binding = _bindingGeneration, generation = _generation;
+    final appearance = _draft?['appearance'] as Map?;
+    final current = appearance?['scene_preset'] as String?;
+    final mediaId = appearance?['menu_background_media_id'] as String?;
+    final rows = (_media?.rows ?? <StorefrontContentMediaRow>[]).where(
+      (row) => row.media.isLive,
+    );
+    final custom = rows.where((row) => row.media.id == mediaId).firstOrNull;
+    final image =
+        custom ??
+        rows
+            .where((row) => row.media.inUse.contains(StorefrontSlot.hero))
+            .firstOrNull;
+    final result = await showDialog<StorefrontSceneChoice>(
+      context: context,
+      builder: (_) => StorefrontScenePresetDialog(
+        currentPreset: current,
+        sample: StorefrontColorSample(
+          background: widget.colorSample.background,
+          accent: widget.colorSample.accent,
+          text: appearance?['text_color'] as String?,
+          buttonText: appearance?['button_text_color'] as String?,
+        ),
+        backgroundUrl: image == null
+            ? null
+            : widget.publicUrlFor?.call(image.media.objectKey),
+        customBackground: custom != null,
+        dim: appearance?['menu_background_dim'] as int? ?? 15,
+        headline: _headline.text,
+      ),
+    );
+    if (result == null ||
+        !_current(binding) ||
+        generation != _generation ||
+        !_editable ||
+        current == result.preset)
+      return;
+    _changeAppearance('scene_preset', result.preset);
   }
 
   Widget _select(
@@ -1419,13 +1538,22 @@ class _ContentState extends State<StorefrontContentSection> {
         ] else ...[
           for (final warning in _read!.snapshot!.warnings)
             Text(_warningText(warning)),
-          if (!widget.enabled) Text(c('otherEdits')),
+          // Reserve the notice's natural wrapped height so a profile edit
+          // does not shift that editor while its picker is closing.
+          Visibility(
+            visible: !widget.enabled,
+            maintainSize: true,
+            maintainAnimation: true,
+            maintainState: true,
+            child: Text(c('otherEdits')),
+          ),
           _title('appearance'),
           Text(c('appearanceHelp')),
           _appearanceColor('text_color', 'appearanceTextColor'),
           _appearanceColor('button_text_color', 'appearanceButtonTextColor'),
           _appearanceFont(),
           _menuBackground(),
+          _scenePreset(),
           TextField(
             key: const Key('content-hero-headline'),
             controller: _headline,

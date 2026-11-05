@@ -155,16 +155,21 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       // not attach old derived bytes to the new source generation. This snapshot
       // comes only from the manager-scoped RPC, never from the request body.
       let sourceSnapshot;
-      if (r.slot === 'item') {
+      if (r.slot === 'item' || r.slot === 'product') {
         let current;
         try {
-          current = await caller.rpc('get_storefront_item_source', {
-            p_organization_id: r.organizationId, p_restaurant_id: r.restaurantId, p_source_key: r.sourceKey,
+          current = await caller.rpc(r.slot === 'product' ? 'get_storefront_product_source_v1' : 'get_storefront_item_source', {
+            p_organization_id: r.organizationId, p_restaurant_id: r.restaurantId,
+            ...(r.slot === 'product' ? { p_derivative_id: r.productDerivativeId } : { p_source_key: r.sourceKey }),
           });
         } catch (e) {
           return upstreamFailure(e, false);
         }
         if (current.ok !== true) return stageRefusal(current, false);
+        // The registered association, never the caller's arbitrary key, decides
+        // which private candidate can be read. Both generations are checked by
+        // the RPC before download, at stage/finalize, selection and public read.
+        if (r.slot === 'product' && current.source_key !== r.sourceKey) return fail(422, 'refused', { code: 'source_stale' });
         if (!validSourceSnapshot(current.source_snapshot)) return fail(500, 'internal_error', { retryable: true, uncertain: false });
         sourceSnapshot = current.source_snapshot;
       }
@@ -224,11 +229,12 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       let staged;
       effects = true;
       try {
-        staged = await caller.rpc('stage_storefront_media', {
+        staged = await caller.rpc(r.slot === 'product' ? 'stage_storefront_product_media_v1' : 'stage_storefront_media', {
           p_client_request_id: stageId, p_organization_id: r.organizationId, p_restaurant_id: r.restaurantId,
-          p_source_bucket: r.sourceBucket, p_source_key: r.sourceKey, p_variant: r.variant,
+          ...(r.slot === 'product' ? { p_derivative_id: r.productDerivativeId } : { p_source_bucket: r.sourceBucket }),
+          p_source_key: r.sourceKey, p_variant: r.variant,
           p_content_hash: d.sha256, p_width: d.width, p_height: d.height, p_bytes: d.byteLength,
-          ...(r.slot === 'item' ? { p_source_snapshot: sourceSnapshot } : {}),
+          ...(r.slot === 'item' || r.slot === 'product' ? { p_source_snapshot: sourceSnapshot } : {}),
         });
       } catch (e) {
         return upstreamFailure(e, true);
@@ -247,7 +253,7 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       if (staged.source_bucket !== r.sourceBucket
           || staged.source_key !== r.sourceKey || staged.variant !== r.variant
           || staged.source_mismatch !== false) {
-        return r.slot === 'item'
+        return r.slot === 'item' || r.slot === 'product'
           ? fail(500, 'internal_error', { retryable: true, uncertain: true })
           : fail(409, 'object_conflict');
       }
@@ -295,7 +301,7 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       // (9) finalize: the server proves the object and publishes (idempotent under the derived key)
       let fin;
       try {
-        fin = await caller.rpc('finalize_storefront_media', {
+        fin = await caller.rpc(r.slot === 'product' ? 'finalize_storefront_product_media_v1' : 'finalize_storefront_media', {
           p_client_request_id: finalizeId, p_organization_id: r.organizationId, p_restaurant_id: r.restaurantId,
           p_media_id: staged.media_id,
         });
@@ -314,7 +320,7 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
           default: return fail(500, 'internal_error', { retryable: true, uncertain: true });
         }
       }
-      if (r.slot === 'item' && (fin.media_id !== staged.media_id || fin.object_key !== objectKey || fin.state !== 'published')) {
+      if ((r.slot === 'item' || r.slot === 'product') && (fin.media_id !== staged.media_id || fin.object_key !== objectKey || fin.state !== 'published')) {
         return fail(500, 'internal_error', { retryable: true, uncertain: true });
       }
       return reply(200, {

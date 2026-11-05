@@ -9,6 +9,9 @@
 /// explicit demo label (never a fake "uploaded to a server" claim).
 library;
 
+import 'package:flutter/widgets.dart';
+import '../models/menu_item.dart';
+
 /// The outcome of a (future) menu image upload.
 class MenuImageUpload {
   const MenuImageUpload({required this.objectKey});
@@ -81,8 +84,16 @@ class FakeMenuImageStorage implements MenuImageStorage {
 ///   is recorded in memory, and the panel shows a clear "demo — not uploaded
 ///   to a server" note. Never a false persistence claim.
 class MenuImageStorageConfig {
-  const MenuImageStorageConfig({required this.storage, this.isDemo = false});
+  const MenuImageStorageConfig({
+    required this.storage,
+    this.isDemo = false,
+    this.editorExtension,
+  });
 
   final MenuImageStorage storage;
   final bool isDemo;
+
+  /// Optional surface-owned product editor. No processor or Dashboard state
+  /// enters this package or POS. Receives the freshest persisted source row.
+  final Widget Function(BuildContext context, MenuItem item)? editorExtension;
 }

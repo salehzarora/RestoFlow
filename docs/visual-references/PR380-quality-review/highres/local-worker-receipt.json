@@ -1,0 +1,25 @@
+{
+  "kind": "Local actual worker resource preflight; no publication or visual-quality acceptance",
+  "source": "Wikimedia Hamburger (9).jpg; Miansari66 CC0",
+  "inputWidth": 2816,
+  "inputHeight": 2112,
+  "inputBytes": 4989591,
+  "inputSha256": "81f08a1cb0256293b862db2a661b76f9f9a54067ae5651469a454f7899b50bb3",
+  "workerSourceBase": "e006ee2f145020b12d4d3a096d2c46fdcafbc0a8",
+  "modelSha256": "8d10d2f3bb75ae3b6d527c77944fc5e7dcd94b29809d47a739a7a728a912b491",
+  "benchmark": {
+    "mimeType": "image/png",
+    "elapsedMs": 30663,
+    "bytes": 1262814,
+    "width": 1600,
+    "height": 1200,
+    "alreadyTransparent": false,
+    "peakWorkingSet": 1401290752,
+    "peakPrivateBytes": 1219903488
+  },
+  "outputSha256": "dde8dbc520bb86eca909f17fddcec02637225d3cd468be078824f0dd24d97e04",
+  "outputSizeWithin5MiB": true,
+  "within120SecondBound": true,
+  "dimensionsExpected": true,
+  "memoryMeasurement": "Sampled whole launched Chrome process tree working set/private bytes, not JS heap or universal device bound"
+}

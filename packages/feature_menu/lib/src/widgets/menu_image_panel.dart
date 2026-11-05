@@ -270,7 +270,7 @@ class _MenuImagePanelState extends ConsumerState<MenuImagePanel> {
     final preview = _preview(context, config.storage);
     final controls = _controls(context, l10n, theme, config, pickerSupported);
 
-    return MenuSectionCard(
+    final panel = MenuSectionCard(
       title: l10n.menuImageHeading,
       icon: Icons.image_outlined,
       child: LayoutBuilder(
@@ -296,6 +296,17 @@ class _MenuImagePanelState extends ConsumerState<MenuImagePanel> {
         },
       ),
     );
+    final extension = config.editorExtension;
+    return extension == null
+        ? panel
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              panel,
+              const SizedBox(height: RestoflowSpacing.md),
+              extension(context, widget.item),
+            ],
+          );
   }
 
   Widget _controls(

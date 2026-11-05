@@ -31,6 +31,7 @@ import 'src/staff/staff_repository.dart';
 import 'src/state/locale_controller.dart';
 import 'src/storefront/storefront_dark_gate.dart';
 import 'src/storefront/storefront_media_publisher.dart';
+import 'src/storefront/product_cutout_gateway.dart';
 import 'src/support/platform_support.dart';
 import 'src/support/support_handoff.dart';
 import 'src/support/support_mode_gate.dart';
@@ -162,6 +163,7 @@ Future<void> main() async {
         menuReadSource: real.menuReadSource,
         menuWriter: real.menuWriter,
         menuImageStorage: real.menuImageStorage,
+        productCutoutGateway: real.productCutoutGateway,
         // PRINT-BRANDING-LOGO-001: the restaurant-logo blob store over the same
         // authenticated anon-key client (D-011); the branding REPO is built in
         // the shell from the transport + concrete restaurant scope.
@@ -207,6 +209,7 @@ class DashboardApp extends ConsumerWidget {
     this.menuReadSource,
     this.menuWriter,
     this.menuImageStorage,
+    this.productCutoutGateway,
     this.brandingLogoStorage,
     this.printersRepositoryFor,
     this.staffRepositoryFor,
@@ -255,6 +258,7 @@ class DashboardApp extends ConsumerWidget {
   /// authenticated client). Null in demo mode / tests => the image panel shows
   /// its honest demo/unavailable state.
   final MenuImageStorage? menuImageStorage;
+  final ProductCutoutGateway? productCutoutGateway;
 
   /// PRINT-BRANDING-LOGO-001: the restaurant-logo blob store (real mode only).
   final RestaurantLogoStorage? brandingLogoStorage;
@@ -372,6 +376,7 @@ class DashboardApp extends ConsumerWidget {
           menuReadSource: menuReadSource,
           menuWriter: menuWriter,
           menuImageStorage: menuImageStorage,
+          productCutoutGateway: productCutoutGateway,
           brandingLogoStorage: brandingLogoStorage,
           printersRepository: printersRepositoryFor?.call(scope),
           staffRepository: staffRepositoryFor?.call(scope),

@@ -22,6 +22,7 @@ export function ThemeScope({
   children,
   dir,
   menuImageDim,
+  scenePreset,
 }: {
   tokens: ThemeTokens;
   className: string;
@@ -29,6 +30,8 @@ export function ThemeScope({
   dir: 'rtl' | 'ltr';
   /** Only Home supplies this presentation value; other screens stay unchanged. */
   menuImageDim?: number | null;
+  /** Explicit opt-in, independent of the merchant's stored colour palette. */
+  scenePreset?: 'reference_dark' | null;
 }) {
   const host = useRef<HTMLDivElement>(null);
 
@@ -44,7 +47,7 @@ export function ThemeScope({
   }, [tokens, menuImageDim]);
 
   return (
-    <div ref={host} className={className} dir={dir} data-sf-root="">
+    <div ref={host} className={className} dir={dir} data-sf-root="" data-sf-scene={scenePreset === 'reference_dark' ? scenePreset : undefined}>
       {children}
     </div>
   );

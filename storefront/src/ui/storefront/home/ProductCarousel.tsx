@@ -8,6 +8,7 @@ import { PlusIcon } from '../icons';
 import { TenantText } from '../TenantText';
 import { Price } from './HomeParts';
 import { carouselPosition, cycleIndex, swipeStep } from './carousel';
+import { carouselImageSources } from './productImage';
 import styles from './carousel.module.css';
 
 const COPY = {
@@ -71,7 +72,7 @@ export function ProductCarousel({ items, m, locale, label }: {
           aria-label={item.name} aria-hidden={position === 'away' ? true : undefined}
           tabIndex={position === 'away' ? -1 : 0} disabled={selected && item.soldOut}
           onClick={selected ? undefined : () => setSelectedId(item.id)}>
-          {item.image ? <img src={item.image} alt="" width={600} height={600} draggable={false}
+          {item.image ? <img src={item.image} {...carouselImageSources(item, selected)} alt="" width={600} height={600} draggable={false}
             loading={position === 'away' ? 'lazy' : 'eager'} decoding="async" />
             : <span className={styles.noImage}>{item.name.slice(0, 1)}</span>}
         </button>;

@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFixture, ownerSession, request, rpc, scope, storagePath, readContent, readInvariants, assertDenied, assertRpcDenied } from './service.mjs';
+import { fixture as mediaFixture } from '../../supabase/functions/storefront-media-publish/test/fixtures.mjs';
 
 const results = [];
 const fixture = readFixture();
@@ -15,6 +16,58 @@ const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 async function check(name, operation) {
   try { await operation(); results.push({ name, result: 'PASS' }); }
   catch { results.push({ name, result: 'FAIL' }); throw new Error(`Real-service acceptance failed: ${name}`); }
+}
+
+// Independent security positive controls. These synthetic items are created
+// after the UI journey, so a UI failure cannot turn missing IDs into a false
+// isolation pass. They are not evidence of saving through the Dashboard.
+async function productFixture(owner, token) {
+  async function successful(name, params) {
+    const result = await rpc(fixture, token, name, { ...scope(owner), ...params });
+    assert.equal(result.status, 200, name);
+    assert.equal(result.data?.ok, true, name);
+    return result.data;
+  }
+  const category = await successful('menu_upsert_category', { p_name: 'PRODUCT SECURITY TEST' });
+  const fields = { p_menu_category_id: category.id, p_name: 'PRODUCT SECURITY TEST',
+    p_base_price_minor: 1000, p_currency_code: 'ILS', p_is_active: true };
+  const item = await successful('menu_upsert_item', fields);
+  assert.match(item.id, /^[0-9a-f-]{36}$/);
+  const prefix = `${owner.orgId}/${owner.restaurantId}/global/menu_item/${item.id}`;
+  const originalKey = `${prefix}/${randomUUID()}.jpg`, candidateKey = `${prefix}/${randomUUID()}.png`;
+  const candidate = await mediaFixture('logo_alpha_2000x1000');
+  for (const [key, bytes, contentType] of [[originalKey, image, 'image/jpeg'], [candidateKey, candidate, 'image/png']]) {
+    const upload = await request(fixture, token, `/storage/v1/object/menu-images/${storagePath(key)}`, { method: 'POST', bytes, contentType });
+    assert.equal(upload.status, 200, 'Owner uploads its synthetic private product input');
+  }
+  await successful('menu_upsert_item', { ...fields, p_id: item.id, p_image_path: originalKey });
+  const original = await successful('get_storefront_product_original_v1', { p_item_id: item.id });
+  const registration = { p_client_request_id: randomUUID(), p_item_id: item.id,
+    p_original_key: originalKey, p_original_snapshot: original.source_snapshot,
+    p_candidate_key: candidateKey, p_treatment: 'cutout', p_expected_selection_version: original.selection_version };
+  const registered = await successful('register_storefront_product_derivative_v1', registration);
+  const derivativeId = registered.derivative_id;
+  const source = await successful('get_storefront_product_source_v1', { p_derivative_id: derivativeId });
+  assert.equal(source.source_key, candidateKey);
+  const media = [];
+  for (const variant of ['w480', 'w960']) {
+    const published = await request(fixture, token, '/functions/v1/storefront-media-publish', { method: 'POST', body: {
+      request_id: randomUUID(), organization_id: owner.orgId, restaurant_id: owner.restaurantId,
+      slot: 'product', variant, source_bucket: 'menu-images', source_key: candidateKey,
+      product_derivative_id: derivativeId, rung: 0,
+    } });
+    assert.equal(published.status, 200, 'Product slot must really publish before negative controls');
+    assert.equal(published.data?.status, 'published');
+    media.push(published.data.media);
+  }
+  const selected = await successful('select_storefront_product_derivative_v1', {
+    p_client_request_id: randomUUID(), p_derivative_id: derivativeId,
+  });
+  const current = await successful('get_storefront_product_original_v1', { p_item_id: item.id });
+  assert.equal(current.selected_derivative_id, derivativeId);
+  assert.equal(current.selection_version, selected.selection_version);
+  return { itemId: item.id, originalKey, candidateKey, original, source, derivativeId, media, registration, current,
+    originalHash: hash(image), candidateHash: hash(candidate) };
 }
 
 try {
@@ -32,9 +85,15 @@ try {
   const original = await request(fixture, a, originalPath);
   assert.equal(original.status, 200, 'Owner A must be able to read its actual private original');
   const originalHash = hash(original.bytes);
+  let productA, productB;
+  await check('both owners can publish and select their own complete product pairs with real Auth/Storage/Edge', async () => {
+    productA = await productFixture(fixture.ownerA, a);
+    productB = await productFixture(fixture.ownerB, b);
+    assert.notEqual(productA.derivativeId, productB.derivativeId);
+  });
 
   await check('owner A can read every private RPC and use real Storage read/list/sign endpoints', async () => {
-    for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
+    for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
       const read = await rpc(fixture, a, name, scope(fixture.ownerA));
       assert.equal(read.status, 200);
       assert.equal(read.data?.ok, true);
@@ -59,8 +118,40 @@ try {
   });
 
   for (const [label, token] of [['owner B', b], ['unaffiliated authenticated user', outsider]]) {
+    await check(`${label}: all six new product RPCs reject A scope and real A identifiers`, async () => {
+      const m = productA.media[0];
+      const operations = [
+        ['get_storefront_product_original_v1', { p_item_id: productA.itemId }],
+        ['register_storefront_product_derivative_v1', { ...productA.registration, p_client_request_id: randomUUID() }],
+        ['get_storefront_product_source_v1', { p_derivative_id: productA.derivativeId }],
+        ['stage_storefront_product_media_v1', { p_client_request_id: randomUUID(), p_derivative_id: productA.derivativeId,
+          p_source_key: productA.candidateKey, p_source_snapshot: productA.source.source_snapshot,
+          p_variant: m.variant, p_content_hash: m.content_hash, p_width: m.width, p_height: m.height, p_bytes: m.bytes }],
+        ['finalize_storefront_product_media_v1', { p_client_request_id: randomUUID(), p_media_id: m.id }],
+        ['select_storefront_product_derivative_v1', { p_client_request_id: randomUUID(), p_derivative_id: productA.derivativeId }],
+      ];
+      for (const [name, parameters] of operations) {
+        assertRpcDenied(await rpc(fixture, token, name, { ...scope(fixture.ownerA), ...parameters }), `${label} ${name}`);
+      }
+      const published = await request(fixture, token, '/functions/v1/storefront-media-publish', { method: 'POST', body: {
+        request_id: randomUUID(), organization_id: fixture.ownerA.orgId, restaurant_id: fixture.ownerA.restaurantId,
+        slot: 'product', variant: 'w960', source_bucket: 'menu-images', source_key: productA.candidateKey,
+        product_derivative_id: productA.derivativeId, rung: 0,
+      } });
+      assert.equal(published.status, 403);
+      assert.deepEqual(published.data, { ok: false, status: 'permission_denied' });
+    });
+
+    await check(`${label}: private product original/candidate reads and overwrites are denied`, async () => {
+      for (const key of [productA.originalKey, productA.candidateKey]) {
+        assertDenied(await request(fixture, token, `/storage/v1/object/authenticated/menu-images/${storagePath(key)}`), `${label} product private read`);
+        assertDenied(await request(fixture, token, `/storage/v1/object/menu-images/${storagePath(key)}`, {
+          method: 'PUT', bytes: image, contentType: 'image/jpeg',
+        }), `${label} product private overwrite`);
+      }
+    });
     await check(`${label}: A private content/profile/media/receipt reads denied`, async () => {
-      for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
+      for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
         assertRpcDenied(await rpc(fixture, token, name, scope(fixture.ownerA)), `${label} ${name}`);
       }
       assertDenied(await request(fixture, token, originalPath), `${label} private original`);
@@ -104,6 +195,33 @@ try {
       }), `${label} receipt write`);
     });
   }
+
+  await check('authorized own scope cannot bind a foreign derivative or candidate', async () => {
+    const source = await rpc(fixture, b, 'get_storefront_product_source_v1', {
+      ...scope(fixture.ownerB), p_derivative_id: productA.derivativeId,
+    });
+    assert.equal(source.status, 200);
+    assert.deepEqual(source.data, { ok: false, error: 'source_stale' });
+    const register = await rpc(fixture, a, 'register_storefront_product_derivative_v1', {
+      ...scope(fixture.ownerA), ...productA.registration, p_client_request_id: randomUUID(),
+      p_candidate_key: productB.candidateKey, p_expected_selection_version: productA.current.selection_version,
+    });
+    assert.equal(register.status, 200);
+    assert.deepEqual(register.data, { ok: false, error: 'source_not_found' });
+  });
+
+  await check('product originals/candidates and selected pairs survive every rejection byte-for-byte', async () => {
+    for (const [owner, token, product] of [[fixture.ownerA, a, productA], [fixture.ownerB, b, productB]]) {
+      const current = await rpc(fixture, token, 'get_storefront_product_original_v1', { ...scope(owner), p_item_id: product.itemId });
+      assert.equal(current.status, 200);
+      assert.deepEqual(current.data, product.current);
+      for (const [key, expected] of [[product.originalKey, product.originalHash], [product.candidateKey, product.candidateHash]]) {
+        const read = await request(fixture, token, `/storage/v1/object/authenticated/menu-images/${storagePath(key)}`);
+        assert.equal(read.status, 200);
+        assert.equal(hash(read.bytes), expected);
+      }
+    }
+  });
 
   await check('all denied requests leave A content, Hero, receipt logo and private bytes unchanged', async () => {
     assert.deepEqual(await readContent(fixture, a), baselineContent);

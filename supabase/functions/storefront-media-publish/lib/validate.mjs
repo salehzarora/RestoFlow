@@ -20,6 +20,8 @@ export const REQUEST_KEYS = Object.freeze([
   'request_id', 'organization_id', 'restaurant_id', 'slot', 'variant', 'source_bucket', 'source_key', 'rung',
 ]);
 const REQUEST_KEY_SET = new Set(REQUEST_KEYS);
+const PRODUCT_REQUEST_KEYS = Object.freeze([...REQUEST_KEYS, 'product_derivative_id']);
+const PRODUCT_REQUEST_KEY_SET = new Set(PRODUCT_REQUEST_KEYS);
 
 // Canonical lower-case UUID text (what Postgres prints and the Dashboard sends).
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -42,12 +44,16 @@ export function slotSpec(slot) {
     case 'logo': return LOGO_SLOT;
     case 'hero': return HERO_SLOT;
     case 'item': return ITEM_SLOT;
+    case 'product': return PRODUCT_SLOT;
     default: return null;
   }
 }
 const LOGO_SLOT = Object.freeze({ slot: 'logo', variant: 'w480', buckets: Object.freeze(['restaurant-logos']) });
 const HERO_SLOT = Object.freeze({ slot: 'hero', variant: 'w960', buckets: Object.freeze(['restaurant-logos', 'menu-images']) });
 const ITEM_SLOT = Object.freeze({ slot: 'item', variant: 'w480', buckets: Object.freeze(['menu-images']) });
+// Product presentation is a separately registered, generation-bound input.
+// Both existing c4 sizes are derived directly from it; no recipe change.
+const PRODUCT_SLOT = Object.freeze({ slot: 'product', variant: null, buckets: Object.freeze(['menu-images']) });
 
 function keyMatch(bucket, key) {
   switch (bucket) {
@@ -105,11 +111,15 @@ export function validateRequest(body) {
   // Exact key set: own enumerable keys only (JSON.parse makes "__proto__" an OWN key,
   // which is refused here like any other unknown name).
   const keys = Object.keys(body);
+  const product = body.slot === 'product';
+  const requiredKeys = product ? PRODUCT_REQUEST_KEYS : REQUEST_KEYS;
+  const allowedKeys = product ? PRODUCT_REQUEST_KEY_SET : REQUEST_KEY_SET;
   for (const k of keys) {
     // Echo an unknown name only when it is a plain identifier (never reflect arbitrary text).
-    if (!REQUEST_KEY_SET.has(k)) return refuse(/^[A-Za-z0-9_]{1,64}$/.test(k) ? k : '?', 'unknown_field');
+    if (!allowedKeys.has(k)) return refuse(/^[A-Za-z0-9_]{1,64}$/.test(k) ? k : '?', 'unknown_field');
   }
-  for (const k of REQUEST_KEYS) if (!Object.prototype.hasOwnProperty.call(body, k)) return refuse(k, 'missing');
+  for (const k of requiredKeys) if (!Object.prototype.hasOwnProperty.call(body, k)) return refuse(k, 'missing');
+  if (product && (typeof body.product_derivative_id !== 'string' || !UUID_RE.test(body.product_derivative_id))) return refuse('product_derivative_id', 'value');
 
   const requestId = body.request_id;
   const organizationId = body.organization_id;
@@ -124,7 +134,7 @@ export function validateRequest(body) {
 
   const width = variantWidth(body.variant);
   if (width === null) return refuse('variant', typeof body.variant === 'string' ? 'value' : 'type');
-  if (body.variant !== spec.variant) return refuse('variant', 'mismatch');
+  if (!product && body.variant !== spec.variant) return refuse('variant', 'mismatch');
 
   const maxBytes = sourceMaxBytes(body.source_bucket);
   if (maxBytes === null) return refuse('source_bucket', typeof body.source_bucket === 'string' ? 'value' : 'type');
@@ -147,8 +157,9 @@ export function validateRequest(body) {
     ok: true,
     value: Object.freeze({
       requestId, organizationId, restaurantId,
-      slot: spec.slot, variant: spec.variant, variantWidth: width,
+      slot: spec.slot, variant: body.variant, variantWidth: width,
       sourceBucket: body.source_bucket, sourceMaxBytes: maxBytes, sourceKey, rung,
+      ...(product ? { productDerivativeId: body.product_derivative_id } : {}),
     }),
   };
 }

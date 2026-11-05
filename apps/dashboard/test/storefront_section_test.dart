@@ -12,6 +12,7 @@ import 'package:restoflow_dashboard/src/admin/supabase_settings_repository.dart'
 import 'package:restoflow_dashboard/src/admin/timezone_catalog.dart';
 import 'package:restoflow_dashboard/src/storefront/opening_hours_editor.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_copy.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_color_picker.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_featured_items.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_repository.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_publisher.dart';
@@ -468,6 +469,14 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _enterColor(WidgetTester tester, String role, String hex) async {
+  final field = find.byKey(Key('storefront-$role-color'));
+  if (field.evaluate().isEmpty) {
+    await _tap(tester, find.byKey(Key('storefront-$role-color-advanced')));
+  }
+  await tester.enterText(field, hex);
+}
+
 Future<void> _choose(WidgetTester tester, Key dropdown, String label) async {
   await _tap(tester, find.byKey(dropdown));
   await tester.tap(find.text(label).last);
@@ -509,6 +518,58 @@ void _expectPublishedWithNote(
 }
 
 void main() {
+  for (final role in ['primary', 'accent']) {
+    testWidgets(
+      '$role visual picker Cancel is clean; Apply waits for Save and reread',
+      (tester) async {
+        final repo = _FakeProfileRepo(profile: _profileJson(version: 4));
+        await _pump(tester, StorefrontSection(seams: _seams(repo)));
+        final picker = find.byKey(Key('storefront-$role-color-picker'));
+        final control = find.byKey(ValueKey('storefront-$role-color-control'));
+        final original = tester.widget<StorefrontColorControl>(control).value;
+        Future<String> select() async {
+          await _tap(tester, picker);
+          final square = find.byKey(const Key('storefront-color-sv-field'));
+          await tester.ensureVisible(square);
+          final rect = tester.getRect(square);
+          await tester.tapAt(
+            Offset(rect.left + rect.width * .8, rect.top + rect.height * .2),
+          );
+          await tester.pumpAndSettle();
+          final swatch = tester.widget<Container>(
+            find.descendant(
+              of: find.byKey(const Key('storefront-colorNew-swatch')),
+              matching: find.byType(Container),
+            ),
+          );
+          return storefrontFormatColor(
+            (swatch.decoration as BoxDecoration).color!,
+          );
+        }
+
+        await select();
+        await _tap(tester, find.byKey(const Key('storefront-color-cancel')));
+        expect(tester.widget<StorefrontColorControl>(control).value, original);
+        expect(repo.saves, isEmpty);
+        expect(_enabled(tester, const Key('storefront-save')), isFalse);
+        final selected = await select();
+        await _tap(tester, find.byKey(const Key('storefront-color-apply')));
+        expect(
+          repo.saves,
+          isEmpty,
+          reason: 'Apply only changes the local draft',
+        );
+        expect(tester.widget<StorefrontColorControl>(control).value, selected);
+        expect(_enabled(tester, const Key('storefront-save')), isTrue);
+        await _tap(tester, find.byKey(const Key('storefront-save')));
+        expect(repo.saves.single.expectedVersion, 4);
+        expect(repo.saves.single.patch, {'${role}_color': selected});
+        expect(repo.reads, greaterThanOrEqualTo(2));
+        expect(tester.widget<StorefrontColorControl>(control).value, selected);
+        expect(_enabled(tester, const Key('storefront-save')), isFalse);
+      },
+    );
+  }
   for (final locale in ['ar', 'he', 'en']) {
     for (final field in ['primary', 'accent']) {
       testWidgets(
@@ -534,6 +595,10 @@ void main() {
               ),
             ),
             locale: locale,
+          );
+          await _tap(
+            tester,
+            find.byKey(Key('storefront-$field-color-advanced')),
           );
           final fieldFinder = find.byKey(Key('storefront-$field-color'));
           final editable = find.descendant(
@@ -1730,10 +1795,7 @@ void main() {
         const Key('storefront-motion'),
         l10n.storefrontMotionLively,
       );
-      await tester.enterText(
-        find.byKey(const Key('storefront-primary-color')),
-        '#1A2B3C',
-      );
+      await _enterColor(tester, 'primary', '#1A2B3C');
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('storefront-unsaved')), findsOneWidget);
 
@@ -1798,17 +1860,11 @@ void main() {
         await tester.pumpAndSettle();
         expect(_enabled(tester, save), isTrue, reason: ok);
       }
-      await tester.enterText(
-        find.byKey(const Key('storefront-accent-color')),
-        'orange',
-      );
+      await _enterColor(tester, 'accent', 'orange');
       await tester.pumpAndSettle();
       expect(find.text(l10n.storefrontColorInvalid), findsOneWidget);
       expect(_enabled(tester, save), isFalse);
-      await tester.enterText(
-        find.byKey(const Key('storefront-accent-color')),
-        '#e07b2c',
-      );
+      await _enterColor(tester, 'accent', '#e07b2c');
       await tester.enterText(
         find.byKey(const Key('storefront-tagline')),
         'x' * 91,
@@ -1831,10 +1887,7 @@ void main() {
       const warning = Key('storefront-primary-contrast-warning');
       expect(find.byKey(warning), findsNothing, reason: '#13322a supported');
       for (final hex in ['#e07b2c', '#ffffff']) {
-        await tester.enterText(
-          find.byKey(const Key('storefront-primary-color')),
-          hex,
-        );
+        await _enterColor(tester, 'primary', hex);
         await tester.pumpAndSettle();
         expect(find.byKey(warning), findsOneWidget, reason: hex);
         expect(
@@ -2170,14 +2223,8 @@ void main() {
         timezone: 'UTC',
       );
       await _pump(tester, StorefrontSection(seams: _seams(repo)));
-      await tester.enterText(
-        find.byKey(const Key('storefront-primary-color')),
-        '#211A16',
-      );
-      await tester.enterText(
-        find.byKey(const Key('storefront-accent-color')),
-        '#EAB082',
-      );
+      await _enterColor(tester, 'primary', '#211A16');
+      await _enterColor(tester, 'accent', '#EAB082');
       await tester.pumpAndSettle();
       expect(_enabled(tester, const Key('storefront-save')), isTrue);
       await _tap(tester, find.byKey(const Key('storefront-save')));
@@ -2214,14 +2261,8 @@ void main() {
           timezone: 'UTC',
         );
         await _pump(tester, StorefrontSection(seams: _seams(repo)));
-        await tester.enterText(
-          find.byKey(const Key('storefront-primary-color')),
-          '#211A16',
-        );
-        await tester.enterText(
-          find.byKey(const Key('storefront-accent-color')),
-          '#EAB082',
-        );
+        await _enterColor(tester, 'primary', '#211A16');
+        await _enterColor(tester, 'accent', '#EAB082');
         await tester.pumpAndSettle();
         expect(_enabled(tester, const Key('storefront-save')), isFalse);
         for (var dow = 0; dow < 7; dow++) {
@@ -2517,6 +2558,12 @@ void main() {
           final color = find.byKey(
             const Key('content-appearance.text_color-1'),
           );
+          final advanced = find.byKey(
+            const Key('content-appearance.text_color-advanced'),
+          );
+          await reveal(advanced);
+          await tester.tap(advanced);
+          await tester.pumpAndSettle();
           await reveal(color);
           await tester.enterText(color, '#fff1da');
           await tester.pumpAndSettle();
