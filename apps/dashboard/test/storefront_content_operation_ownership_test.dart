@@ -16,7 +16,7 @@ import 'package:restoflow_dashboard/src/storefront/storefront_section.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_sources.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-import 'helpers/storefront_content_groups.dart';
+import 'helpers/storefront_settings_groups.dart';
 
 // Real StorefrontSection -> real StorefrontContentSection composition. Only
 // repositories/function I/O are synthetic; there is no fake parent callback.
@@ -336,8 +336,7 @@ Future<void> _mount(WidgetTester tester, _Scenario scenario) async {
   addTearDown(tester.view.reset);
   await tester.pumpWidget(_application(scenario));
   await tester.pumpAndSettle();
-  await setContentGroup(tester, 'editorial');
-  await setContentGroup(tester, 'media');
+  await openStorefrontSettingsGroups(tester);
 }
 
 Future<void> _tick(WidgetTester tester) async {
@@ -432,6 +431,7 @@ void main() {
             _application(scenario, locale: layout.locale),
           );
           await tester.pumpAndSettle();
+          await openStorefrontSettingsGroups(tester);
           final l10n = await AppLocalizations.delegate.load(
             Locale(layout.locale),
           );
