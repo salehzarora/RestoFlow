@@ -196,7 +196,7 @@ test('top-level transaction control in the 001D follow-up fails; dollar-quoted P
 
 test('a second later migration fails, including any future follow-up not yet pinned', () => {
   refuses(adding(['20261104150000_second_later.sql', sql('select 1;\n')]), 'Only the pinned 001D, product, scene and background migrations may follow the #379 target');
-  const future = ['20261105122400_future_follow_up.sql', '20261105122500_future_follow_up.sql'];
+  const future = ['20261106122400_future_follow_up.sql', '20261106122500_future_follow_up.sql'];
   assert.ok(future.every(name => name.slice(0, 14) > followupMigrations.at(-1).name.slice(0, 14)));
   refuses(adding([future[0], sql('select 1;\n')], [future[1], sql('select 2;\n')]),
     'Only the pinned 001D, product, scene and background migrations may follow the #379 target');

@@ -148,7 +148,7 @@ export const followupMigrations = Object.freeze([
     sha256: 'a901a709970b4629b22357743831aab687c2882fe066776dd7913b82c29c77d5' }),
   Object.freeze({ name: '20261105025604_bizbot_storefront_visual_parity_scene.sql',
     sha256: '7bfac52a707b20fdf9b67a466d84290a7565fe574850ce1e992c093d5f19b520' }),
-  Object.freeze({ name: '20261105122354_bizbot_storefront_background_clarity_001_api.sql',
+  Object.freeze({ name: '20261105141815_bizbot_storefront_background_clarity_001_api.sql',
     sha256: 'e5cf4b2840837facc5699cecb154689a7439383ac4d6650f13746d5e68bd8504' }),
 ]);
 
