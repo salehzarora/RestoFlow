@@ -7,6 +7,7 @@ import { MAX_REVEAL_WHEELS, nextRevealMove, observeResponse, responseAfterAction
 import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } from './auth-diagnostics.mjs';
 import { LOGICAL_ORIGIN, localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
 import { createHash } from 'node:crypto';
+import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
 
 // This suite drives the shipped Flutter app. It never installs a mocked
@@ -646,7 +647,8 @@ function routeClass(url: string): RouteClass {
   return 'other-local';
 }
 async function upload(page: Page, filename: string, diagnostics: UploadDiagnostics, expectedStatus = 200): Promise<Obj> {
-  const fixturePath = resolve(__dirname, '../../supabase/functions/storefront-media-publish/test/fixtures', filename);
+  const fixturePath = filename === 'background-2816.jpg' ? backgroundFixture
+    : resolve(__dirname, '../../supabase/functions/storefront-media-publish/test/fixtures', filename);
   const onRequest = (request: import('@playwright/test').Request) => {
     const kind = routeClass(request.url());
     if (request.method() === 'POST' && (kind === 'private-upload' || kind === 'publisher')) diagnostics.mark(kind, 'request');
@@ -668,7 +670,8 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
       const u = new URL(r.url());
       return u.origin === API && u.pathname.startsWith('/storage/v1/object/restaurant-logos/') && r.request().method() === 'POST';
     }));
-    const published = diagnostics.observe('publisher-response', page.waitForResponse(r => requestIs(r, '/functions/v1/storefront-media-publish') && r.status() !== 202, { timeout: 120_000 }));
+    const published = diagnostics.observe('publisher-response', page.waitForResponse(r => requestIs(r, '/functions/v1/storefront-media-publish')
+      && r.request().postDataJSON()?.slot === 'hero' && r.status() !== 202, { timeout: 120_000 }));
     const chosen = diagnostics.observe('filechooser', page.waitForEvent('filechooser'));
     diagnostics.mark('click', 'started');
     await diagnostics.value('click', diagnostics.observe('click', tapRevealedButton(page, L.upload)));
@@ -797,7 +800,17 @@ async function verifyReadCompatibility(f: Fixture, token: string): Promise<void>
     expect(response.status, 'Anonymous versioned public menu read succeeds').toBe(200);
     return response.json() as Promise<Obj>;
   };
-  const [oldMenu, newMenu, referenceMenu] = await Promise.all([publicRead('storefront_menu_v4'), publicRead('storefront_menu_v5'), publicRead('storefront_menu_v6')]);
+  const [oldMenu, newMenu, referenceMenu, responsiveMenu] = await Promise.all([
+    publicRead('storefront_menu_v4'), publicRead('storefront_menu_v5'), publicRead('storefront_menu_v6'), publicRead('storefront_menu_v7'),
+  ]);
+  expect(typeof responsiveMenu.server_ts).toBe('string');
+  expect(typeof referenceMenu.server_ts).toBe('string');
+  const v7Projection: Obj = { ...responsiveMenu, server_ts: referenceMenu.server_ts };
+  if (!referenceMenu.content_v1.appearance?.menu_background_url) {
+    expect(Object.hasOwn(v7Projection,'menu_background_images_v1'),'A cleared selection omits the resource manifest').toBe(false);
+  }
+  delete v7Projection.menu_background_images_v1;
+  expect(v7Projection,'All existing public fields remain identical in v7').toEqual(referenceMenu);
   // Separate HTTP snapshots have distinct timestamps; every other old field
   // must remain identical, including prices, modifiers and ordering controls.
   expect(typeof oldMenu.server_ts).toBe('string');
@@ -957,6 +970,8 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
   const network = await guardBrowser(context);
   const out = resolve(process.env.CINEMATIC_ARTIFACT_DIR ?? 'cinematic-artifacts');
   mkdirSync(out, { recursive: true });
+  const quality = new BackgroundQuality(out);
+  quality.observe(page);
   const stages: string[] = [];
   let stage = 'login';
   const loginEvidence: {
@@ -1017,7 +1032,9 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     stages.push(stage);
 
     stage = 'upload-publish-select-save-reload';
-    await upload(page, 'base_420_900x450.jpg', nextUpload());
+    const firstPublish = await upload(page, 'background-2816.jpg', nextUpload());
+    expect([firstPublish.recipe, firstPublish.media.width, firstPublish.media.height, firstPublish.media.bytes, firstPublish.media.content_hash],
+      'The real base publisher identifies its c4 output').toEqual(['storefront-media-c4', 960, 720, 111406, '211a00daf75bb8f868cec1c95aaa1e4c5e7d1d9aba8b46e6867d2753a8ff2ed3']);
     stages.push('first-upload-published-selected');
     stage = 'save-first-background';
     await saveContent(page);
@@ -1025,6 +1042,16 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     stage = 'read-first-background';
     const first = (await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance.menu_background_media_id as string;
     expect(first).not.toBe(f.heroMediaId);
+    expect(first).toBe(firstPublish.media.id);
+    stage = 'verify-first-background-companion';
+    await quality.verifyPublication(first, async () => {
+      const retry = 'إعادة محاولة التحضير نفسه';
+      await reveal(page, page.getByRole('button', {name:retry, exact:true}), 'other', page.getByRole('button', {name:retry, exact:true, includeHidden:true}));
+      await expect(page.getByRole('button', {name:retry, exact:true}), 'Only a genuine uncertain state allows a retry').toBeEnabled();
+      await tapRevealedButton(page, retry);
+    });
+    await quality.privateOriginal(f, token, first);
+    const pair = await quality.readManifest(f);
     const firstUrl = await backgroundUrl(f, token, first);
     await verifyReadCompatibility(f, token);
     stage = 'reload-first-background';
@@ -1151,6 +1178,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await menu.setViewportSize({ width: 390, height: 844 });
     await screenshot(menu, resolve(out, 'scene-same-source-legacy-mobile-test-data.png'));
     await menu.setViewportSize({ width: 1440, height: 1000 });
+    await quality.captureScene(context.browser()!, menu.url(), pair, 'legacy', guardBrowser);
     stages.push(stage);
 
     stage = 'scene-cancel-apply-save-reload';
@@ -1196,6 +1224,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
         await verifyReferenceScene(menu, dim);
         await verifyMenuGeometry(menu);
         await screenshot(menu, resolve(out, 'scene-same-source-reference-mobile-test-data.png'));
+        await quality.captureScene(context.browser()!, menu.url(), pair, 'reference_dark', guardBrowser);
         await menu.setViewportSize({ width: 1440, height: 1000 });
       }
       await invariants(f, token);
@@ -1229,7 +1258,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     stages.push(stage);
 
     stage = 'duplicate-source-rejected';
-    await upload(page, 'base_420_900x450.jpg', nextUpload(), 409);
+    await upload(page, 'background-2816.jpg', nextUpload(), 409);
     expect((await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance.menu_background_media_id).toBe(second);
     await invariants(f, token);
     await openEditor(page, true);
@@ -1277,6 +1306,8 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await backgroundUrl(f, token, f.heroMediaId);
     await renderMenu(menu, f, f.heroUrl, null);
     stages.push(stage);
+    await quality.privateOriginal(f, token, first);
+    quality.complete();
     await network.check();
     writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
   } catch (error) {
