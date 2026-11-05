@@ -17,6 +17,8 @@ const STOREFRONT = 'http://127.0.0.1:3000';
 const origins = new Set([API, DASHBOARD, STOREFRONT]);
 const L = {
   login: 'تسجيل الدخول', email: 'البريد الإلكتروني', nav: 'الإعدادات',
+  profileAppearance: 'المظهر', contentAppearance: 'مظهر النصوص',
+  backgroundAndScene: 'خلفية المنيو والمشهد', mediaLibrary: 'الصور المنشورة',
   upload: 'رفع ونشر خلفية المنيو', save: 'حفظ المحتوى',
   selected: 'نُشرت الخلفية وتم اختيارها. احفظ لتطبيقها على المنيو.',
   saved: 'حُفظ المحتوى وأُعيدت قراءته.',
@@ -256,7 +258,7 @@ async function settleScroll(page: Page, scope: ScrollScope, requireStable = fals
     previous = current;
     if (stable >= 3) return current;
   }
-  if (requireStable) throw new Error('Dashboard geometry did not settle after the modal returned.');
+  if (requireStable) throw new Error('Dashboard control geometry did not settle.');
   return previous;
 }
 async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'other', hiddenTarget = target): Promise<void> {
@@ -517,12 +519,47 @@ async function revealSavedStatus(page: Page): Promise<void> {
   await reveal(page, status, 'content-status');
   await textContains(page, L.saved);
 }
-async function openEditor(page: Page, reload = false): Promise<void> {
+type AppearanceGroup = 'profile' | 'content' | 'background';
+async function openFoldedGroup(page: Page, group: AppearanceGroup, overviewCapture?: string): Promise<void> {
+  const attributes = {
+    profile: { title: L.profileAppearance, control: L.primary },
+    content: { title: L.contentAppearance, control: L.textColor },
+    background: { title: L.backgroundAndScene, control: L.upload },
+  }[group];
+  // Flutter exposes a folded ExpansionTile header as a button. After a
+  // normal click the expanded group exposes its actual child controls.
+  const header = page.getByRole('button', { name: attributes.title, exact: true });
+  const control = page.getByRole('button', { name: attributes.control, exact: true });
+  await reveal(page, header, 'other', page.getByRole('button', { name: attributes.title, exact: true, includeHidden: true }));
+  await expect(control, 'The folded section excludes its control from accessible navigation').toHaveCount(0);
+  if (overviewCapture) await screenshot(page, overviewCapture);
+  await tapRevealedControl(page, header);
+  await reveal(page, control, group === 'background' ? 'upload' : 'field',
+    page.getByRole('button', { name: attributes.control, exact: true, includeHidden: true }));
+  await expect(control, 'Opening the section exposes its enabled control').toBeEnabled();
+  await settleScroll(page, await scrollScope(page, control), true);
+}
+async function openEditor(page: Page, reload = false, colours?: 'profile' | 'content'): Promise<void> {
   if (reload) await page.reload({ waitUntil: 'domcontentloaded' });
   await semantics(page);
   await tapNav(page, L.nav);
-  await reveal(page, page.getByRole('button', { name: L.upload, exact: true }), 'upload', page.getByRole('button', { name: L.upload, exact: true, includeHidden: true }));
-  await expect(page.getByRole('button', { name: L.upload, exact: true })).toBeEnabled();
+  const overview = reload ? undefined : resolve(process.env.CINEMATIC_ARTIFACT_DIR ?? 'cinematic-artifacts', 'dashboard-settings-folded-test-data.png');
+  await openFoldedGroup(page, 'background', overview);
+  if (colours) await openFoldedGroup(page, colours);
+}
+async function captureMediaLibrary(page: Page, mediaId: string, path: string): Promise<void> {
+  const header = page.getByRole('button', { name: L.mediaLibrary, exact: true });
+  await reveal(page, header, 'other', page.getByRole('button', { name: L.mediaLibrary, exact: true, includeHidden: true }));
+  await tapRevealedControl(page, header);
+  // Expanded tile semantics also include its introductory copy. Each card
+  // combines the usage, dimensions and short public media ID into one label.
+  const library = page.getByRole('group', { name: new RegExp(`^${L.mediaLibrary}(?:\\s|$)`) });
+  const id = mediaId.slice(0, 8);
+  const row = library.getByText(new RegExp(`\\b${id}\\b`));
+  await reveal(page, row, 'content-status');
+  await expect(row, 'The gallery displays the published synthetic background').toHaveCount(1);
+  await settleScroll(page, await scrollScope(page, row), true);
+  await screenshot(page, path);
 }
 async function saveContent(page: Page): Promise<void> {
   await revealButton(page, L.save);
@@ -840,13 +877,34 @@ async function renderMenu(page: Page, f: Fixture, image: string, dim: number | n
 async function verifyMenuGeometry(page: Page): Promise<void> {
   const sections = page.locator('[data-sf-module="sections"]');
   await expect(sections, 'All four synthetic menu categories remain present').toHaveCount(4);
-  const layer = await page.locator('[data-sf-menu-background="custom"]').boundingBox();
+  const backdrop = page.locator('[data-sf-menu-background="custom"]');
+  const photo = backdrop.locator('img');
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  const layer = await backdrop.boundingBox();
   const first = await sections.first().boundingBox();
   const last = await sections.last().boundingBox();
   expect(Boolean(layer && first && last), 'Menu/background geometry is measurable').toBe(true);
   expect(layer!.y).toBeLessThanOrEqual(first!.y);
   expect(layer!.y + layer!.height).toBeGreaterThanOrEqual(last!.y + last!.height);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal viewport overflow').toBe(true);
+  await expect(photo).toHaveCSS('position', 'fixed');
+  await expect(photo).toHaveCSS('object-fit', 'cover');
+  await expect(photo).toHaveCSS('object-position', '50% 50%');
+  const viewport = await page.evaluate(() => ({ width: document.documentElement.clientWidth, height: innerHeight }));
+  for (const position of ['top', 'last category'] as const) {
+    if (position === 'last category') {
+      await sections.last().scrollIntoViewIfNeeded();
+      await expect(sections.last()).toBeInViewport();
+      await expect.poll(() => page.evaluate(() => window.scrollY), 'The long menu actually scrolled').toBeGreaterThan(0);
+    }
+    const rect = await photo.boundingBox();
+    expect(rect, `The menu photo remains visible at ${position}`).not.toBeNull();
+    expect(Math.abs(rect!.x), 'Photo stays at the viewport left edge').toBeLessThanOrEqual(1);
+    expect(Math.abs(rect!.y), 'Photo stays at the viewport top edge').toBeLessThanOrEqual(1);
+    expect(Math.abs(rect!.width - viewport.width), 'Photo covers the viewport width').toBeLessThanOrEqual(1);
+    expect(Math.abs(rect!.height - viewport.height), 'Photo covers the viewport height').toBeLessThanOrEqual(1);
+  }
 }
 async function verifyReferenceScene(page: Page, dim: number): Promise<void> {
   const result = await page.evaluate(() => {
@@ -964,6 +1022,8 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await verifyReadCompatibility(f, token);
     stage = 'reload-first-background';
     await openEditor(page, true);
+    await screenshot(page, resolve(out, 'dashboard-menu-background-test-data.png'));
+    await captureMediaLibrary(page, first, resolve(out, 'dashboard-media-library-test-data.png'));
     await invariants(f, token);
     const menu = await context.newPage();
     await renderMenu(menu, f, firstUrl, 15);
@@ -976,6 +1036,8 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       ['content', [[L.textColor, 'text_color'], [L.buttonText, 'button_text_color']]],
     ] as const) {
       stage = `visual-picker-${scope}`;
+      await openFoldedGroup(page, scope);
+      await screenshot(page, resolve(out, `dashboard-${scope}-appearance-test-data.png`));
       const chosen = new Map<string, string>();
       const writesBefore = draftWrites;
       const before = await rpc(f, token, scope === 'profile' ? 'get_restaurant_storefront_profile' : 'get_restaurant_storefront_content_v3');
@@ -1005,7 +1067,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       stage = `visual-picker-${scope}-save-reload`;
       if (scope === 'profile') await saveProfile(page); else await saveContent(page);
       const persisted = await rpc(f, token, scope === 'profile' ? 'get_restaurant_storefront_profile' : 'get_restaurant_storefront_content_v3');
-      await openEditor(page, true);
+      await openEditor(page, true, scope);
       for (const [name, key] of roles) {
         expect((scope === 'profile' ? persisted.profile : persisted.document.appearance)[key]).toBe(chosen.get(key));
         expect(await readColorDraft(page, name, chosen.get(key)!), 'Authoritative save survives Dashboard reload').toBe(chosen.get(key));
@@ -1014,13 +1076,14 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     }
 
     stage = 'profile-colours';
+    await openFoldedGroup(page, 'profile');
     await fill(page, L.primary, '#211A16', { blur: true });
     await fill(page, L.accent, '#EAB082', { blur: true });
     await saveProfile(page);
     const savedProfile = await rpc(f, token, 'get_restaurant_storefront_profile');
     expect(savedProfile.profile.primary_color, 'Authoritative saved primary HEX').toBe('#211a16');
     expect(savedProfile.profile.accent_color, 'Authoritative saved accent HEX').toBe('#eab082');
-    await openEditor(page, true);
+    await openEditor(page, true, 'profile');
     for (const [name, value] of [[L.primary, '#211a16'], [L.accent, '#eab082']]) {
       await revealColorAdvanced(page, name);
       const field = page.getByRole('textbox', { name, exact: true });
@@ -1036,6 +1099,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     }
     stages.push(stage);
 
+    await openFoldedGroup(page, 'content');
     for (const [dim, fromFont, label, font] of [
       [0, L.fontDefault, L.fontAlexandria, 'alexandria'],
       [15, L.fontAlexandria, L.fontRubik, 'rubik'],
@@ -1048,7 +1112,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       await selectRevealedDropdown(page, fromFont, label);
       await setDim(page, dim);
       await saveContent(page);
-      await openEditor(page, true);
+      await openEditor(page, true, 'content');
       const a = (await rpc(f, token, 'get_restaurant_storefront_content_v3')).document.appearance;
       expect(a.menu_background_dim, 'Explicit dimming survives save and reread').toBe(dim);
       expect(a.text_color).toBe('#fff1da');
@@ -1067,6 +1131,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     }
 
     stage = 'scene-bright-brand-before';
+    await openFoldedGroup(page, 'profile');
     await fill(page, L.primary, '#00FF00', { blur: true });
     await fill(page, L.accent, '#FF00FF', { blur: true });
     await saveProfile(page);
@@ -1118,9 +1183,11 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       await renderMenu(menu, f, firstUrl, dim, referenceColours, 'reference_dark');
       await verifyReferenceScene(menu, dim);
       if (dim === 15) {
+        await verifyMenuGeometry(menu);
         await screenshot(menu, resolve(out, 'scene-same-source-reference-desktop-test-data.png'));
         await menu.setViewportSize({ width: 390, height: 844 });
         await verifyReferenceScene(menu, dim);
+        await verifyMenuGeometry(menu);
         await screenshot(menu, resolve(out, 'scene-same-source-reference-mobile-test-data.png'));
         await menu.setViewportSize({ width: 1440, height: 1000 });
       }
