@@ -75,6 +75,6 @@ product pairs from retraction.
 
 ## Rollout and verification
 
-The product registration/helper migration must precede `20261104155000_bizbot_storefront_visual_parity_scene.sql`. That migration must precede clients using content v3/menu v6. New private read grants remain `authenticated` only, with the same scoped manager/owner checks; the new public menu grant remains `anon`/`service_role`, and private helpers receive no anonymous authority.
+The product registration/helper migration `20261105025413_bizbot_storefront_visual_parity_product_media.sql` precedes `20261105025604_bizbot_storefront_visual_parity_scene.sql`, using the versions assigned by the official applies on 2026-11-05 without changing either SQL file's bytes. The scene migration must precede clients using content v3/menu v6. New private read grants remain `authenticated` only, with the same scoped manager/owner checks; the new public menu grant remains `anon`/`service_role`, and private helpers receive no anonymous authority.
 
 Focused tests cover strict old/new decoders, null/omission semantics, current-product binding, bounds, unchanged order fields, Dashboard readiness and model rejection. Rollback-only pgTAP covers authoritative save/readback, replay, legacy write preservation, exact legacy projections, audit contents, database validation and tenant/role denial. Full real-service media integration and the consolidated independent review remain delivery gates.

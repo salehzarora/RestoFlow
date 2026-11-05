@@ -196,7 +196,9 @@ test('top-level transaction control in the 001D follow-up fails; dollar-quoted P
 
 test('a second later migration fails, including any future follow-up not yet pinned', () => {
   refuses(adding(['20261104150000_second_later.sql', sql('select 1;\n')]), 'Only the reviewed 001D then product and scene migrations may follow the #379 target');
-  refuses(adding(['20261104156000_future_follow_up.sql', sql('select 1;\n')], ['20261104157000_future_follow_up.sql', sql('select 2;\n')]),
+  const future = ['20261105025700_future_follow_up.sql', '20261105025800_future_follow_up.sql'];
+  assert.ok(future.every(name => name.slice(0, 14) > followupMigrations.at(-1).name.slice(0, 14)));
+  refuses(adding([future[0], sql('select 1;\n')], [future[1], sql('select 2;\n')]),
     'Only the reviewed 001D then product and scene migrations may follow the #379 target');
 });
 
@@ -241,7 +243,9 @@ test('both visual migrations fail closed on missing, swapped, changed, CRLF or c
   const [product, scene] = followupMigrations.map(pin => pin.name);
   refuses(sources.map(([name, bytes]) => [name, name === product ? bytesOf(scene) : name === scene ? bytesOf(product) : bytes]),
     'Unreviewed visual follow-up bytes');
-  refuses(adding(['20261104154500_between_product_and_scene.sql', sql('select 1;\n')]),
+  const between = '20261105025500_between_product_and_scene.sql';
+  assert.ok(product.slice(0, 14) < between.slice(0, 14) && between.slice(0, 14) < scene.slice(0, 14));
+  refuses(adding([between, sql('select 1;\n')]),
     'Only the reviewed 001D then product and scene migrations may follow the #379 target');
 });
 

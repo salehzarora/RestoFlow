@@ -144,9 +144,9 @@ export const followUpVersion = '20261104141959';
 export const followUpFingerprint = '468768f89029a0fb131869f754d5374127930b8bf05b48cd8de19d645546352e';
 // Every function the reviewed #379 target creates or replaces.
 export const followupMigrations = Object.freeze([
-  Object.freeze({ name: '20261104154000_bizbot_storefront_visual_parity_product_media.sql',
+  Object.freeze({ name: '20261105025413_bizbot_storefront_visual_parity_product_media.sql',
     sha256: 'a901a709970b4629b22357743831aab687c2882fe066776dd7913b82c29c77d5' }),
-  Object.freeze({ name: '20261104155000_bizbot_storefront_visual_parity_scene.sql',
+  Object.freeze({ name: '20261105025604_bizbot_storefront_visual_parity_scene.sql',
     sha256: '7bfac52a707b20fdf9b67a466d84290a7565fe574850ce1e992c093d5f19b520' }),
 ]);
 

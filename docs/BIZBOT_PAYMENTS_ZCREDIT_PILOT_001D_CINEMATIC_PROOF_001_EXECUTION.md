@@ -161,6 +161,18 @@ hash the raw bytes, so a committed CRLF, or a CRLF in the Linux CI checkout, is 
   | `20261104154000` | #380 product media |
   | `20261104155000` | #380 scene |
 
+  **PR380 release reconciliation, 2026-11-05 (BIZBOT-STOREFRONT-VISUAL-PARITY-001).**
+  The table above preserves the planned versions recorded by this payment proof.
+  The two official visual migration applies assigned the versions below; repository
+  filenames and visual sequence pins now match those receipts, with every SQL byte
+  preserved. The #379 and payment 001D versions, hashes and prefix proof are unchanged.
+  This mapping does not imply that payment 001D was applied to the hosted database.
+
+  | Historical planned version | Official applied version | Unchanged SQL SHA-256 |
+  |---|---|---|
+  | `20261104154000` (product media) | `20261105025413` | `a901a709970b4629b22357743831aab687c2882fe066776dd7913b82c29c77d5` |
+  | `20261104155000` (scene) | `20261105025604` | `7bfac52a707b20fdf9b67a466d84290a7565fe574850ce1e992c093d5f19b520` |
+
 - #380 must then extend this pinned sequence, re-derive D1 and keep both of its `docs/API_CONTRACT.md` changes, and it
   needs its own fresh CI and review.
 - This record authorizes no merge of #381 or #380. Nothing of #380 is imported, merged or modified here.
