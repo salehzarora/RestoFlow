@@ -6,8 +6,8 @@ import 'product_cutout_gateway.dart';
 import 'product_cutout_processor.dart';
 
 /// Product-only, local candidate review. Private source upload remains owned
-/// by MenuImagePanel. Removal is review-only until dish/container preservation
-/// meets acceptance; ordinary Original publication does not invoke the processor.
+/// by MenuImagePanel. Optional removal runs only after explicit intent;
+/// ordinary Original review/publication never invokes the processor.
 class ProductCutoutEditor extends StatefulWidget {
   const ProductCutoutEditor({
     super.key,
@@ -31,13 +31,21 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
       widget.processor ?? createProductCutoutProcessor();
   ProductCutoutOriginal? _original;
   ProductCutoutCandidate? _candidate;
-  bool _processing = false,
+  bool _loadingOriginal = false,
+      _processing = false,
       _saving = false,
       _removeBackground = false,
       _dark = false;
   int _generation = 0;
   String? _error, _stage, _requestId;
+  String? _publishedSelectionProof;
+  bool? _publishedRemoveBackground;
   ProductCutoutPublishStatus? _status;
+
+  bool get _alreadyPublished =>
+      _original != null &&
+      _publishedSelectionProof == _original!.sourceGeneration &&
+      _publishedRemoveBackground == _removeBackground;
 
   String _t(String en, String ar, String he) =>
       switch (Localizations.localeOf(context).languageCode) {
@@ -60,10 +68,13 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
       _candidate = null;
       _status = null;
       _requestId = null;
+      _publishedSelectionProof = null;
+      _publishedRemoveBackground = null;
       _removeBackground = false;
+      final generation = _generation;
       if (widget.item.imagePath != null)
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _prepare();
+          if (mounted && generation == _generation) _loadOriginal();
         });
     }
   }
@@ -103,6 +114,7 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
   void _cancel() {
     _generation++;
     if (_processing) _processor.cancel();
+    _loadingOriginal = false;
     _processing = false;
     _stage = null;
   }
@@ -113,11 +125,18 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
     super.dispose();
   }
 
-  Future<void> _prepare() async {
-    if (_processing || _saving || widget.item.imagePath == null) return;
+  Future<void> _prepare() => _loadOriginal(prepareRemoval: true);
+
+  Future<void> _loadOriginal({bool prepareRemoval = false}) async {
+    if (_loadingOriginal ||
+        _processing ||
+        _saving ||
+        _status == ProductCutoutPublishStatus.uncertain ||
+        widget.item.imagePath == null)
+      return;
     final generation = ++_generation;
     setState(() {
-      _processing = true;
+      _loadingOriginal = true;
       _error = null;
       _status = null;
       _stage = 'loading-original';
@@ -127,14 +146,27 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
       if (!mounted || generation != _generation) return;
       if (original.sourceKey != widget.item.imagePath)
         throw StateError('Source changed');
+      final unchanged = _original != null && _sameSource(_original!, original);
       setState(() {
         _original = original;
-        _candidate = null;
+        if (!unchanged) {
+          _candidate = null;
+          _removeBackground = false;
+          _publishedSelectionProof = null;
+          _publishedRemoveBackground = null;
+        }
         _requestId = null;
-        _removeBackground = false;
-        _stage = widget.removalEnabled ? 'preparing' : null;
+        _loadingOriginal = false;
+        _stage = null;
       });
-      if (!widget.removalEnabled) return;
+      // A valid candidate belongs only to this source and editor session.
+      // Revalidating/reviewing it must not download the model or infer again.
+      if (!prepareRemoval || !widget.removalEnabled || _candidate != null)
+        return;
+      setState(() {
+        _processing = true;
+        _stage = 'preparing';
+      });
       final candidate = await _processor.process(
         original.bytes,
         original.mimeType,
@@ -169,6 +201,7 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
     } finally {
       if (mounted && generation == _generation)
         setState(() {
+          _loadingOriginal = false;
           _processing = false;
           _stage = null;
         });
@@ -178,7 +211,9 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
   Future<void> _publish() async {
     final original = _original;
     if (original == null ||
+        _alreadyPublished ||
         _saving ||
+        _loadingOriginal ||
         _processing ||
         (_removeBackground && (!widget.removalEnabled || _candidate == null)))
       return;
@@ -215,12 +250,23 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
         _status = result.status;
         if (result.status == ProductCutoutPublishStatus.published) {
           _original = refreshed;
+          _publishedSelectionProof = null;
+          _publishedRemoveBackground = null;
           if (refreshed == null || !_sameSource(original, refreshed)) {
             _candidate = null;
             _removeBackground = false;
             if (refreshed != null)
               _status = ProductCutoutPublishStatus.staleSource;
+          } else {
+            // Repeated clicks on the confirmed choice are not a new logical
+            // publication. A changed choice/proof remains explicitly writable.
+            _publishedSelectionProof = refreshed.sourceGeneration;
+            _publishedRemoveBackground = _removeBackground;
           }
+        } else if (result.status == ProductCutoutPublishStatus.staleSource) {
+          _original = null;
+          _candidate = null;
+          _removeBackground = false;
         }
         if (result.status != ProductCutoutPublishStatus.uncertain)
           _requestId = null;
@@ -237,6 +283,7 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
   Widget build(BuildContext context) {
     if (widget.item.imagePath == null) return const SizedBox.shrink();
     final locked =
+        _loadingOriginal ||
         _processing ||
         _saving ||
         _status == ProductCutoutPublishStatus.uncertain;
@@ -259,14 +306,14 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
             Text(
               widget.removalEnabled
                   ? _t(
-                      'Prepare a transparent preview on this device. Review food, packaging and serving dishes before publishing. Complex shots and transparent cups may need Original.',
-                      'حضّر معاينة شفافة على هذا الجهاز. راجع الطعام والتغليف وأطباق التقديم قبل النشر. قد تحتاج الصور المعقدة والأكواب الشفافة إلى الصورة الأصلية.',
-                      'הכינו תצוגה שקופה במכשיר זה. בדקו את המזון, האריזה וכלי ההגשה לפני פרסום. בצילומים מורכבים ובכוסות שקופות ייתכן שעדיף המקור.',
+                      'Background removal is optional and starts only when you choose Prepare. It may remove parts of food, packaging or dishes, or retain background objects. Review the result before choosing and publishing it. Original stays selected by default.',
+                      'إزالة الخلفية اختيارية وتبدأ فقط عند اختيار التحضير. قد تُزال أجزاء من الطعام أو التغليف أو الأطباق، وقد تبقى عناصر من الخلفية. راجع النتيجة قبل اختيارها ونشرها. تبقى الصورة الأصلية مختارة افتراضيًا.',
+                      'הסרת רקע היא אפשרות שמתחילה רק בלחיצה על הכנה. היא עלולה להסיר חלקי מזון, אריזה או כלי הגשה, או להשאיר עצמים ברקע. בדקו את התוצאה לפני בחירה ופרסום. המקור נשאר מסומן כברירת מחדל.',
                     )
                   : _t(
-                      'Automatic background removal is unavailable while food, packaging and serving-dish preservation is under review. You can upload a photo normally, review Original and publish it.',
-                      'إزالة الخلفية الآلية غير متاحة أثناء مراجعة الحفاظ على الطعام والتغليف وأطباق التقديم. يمكنك رفع الصورة كالمعتاد ومراجعة الأصل ونشره.',
-                      'הסרת רקע אוטומטית אינה זמינה בזמן שבודקים שמירה על המזון, האריזה וכלי ההגשה. אפשר להעלות תמונה כרגיל, לבדוק את המקור ולפרסם אותו.',
+                      'Optional background removal is unavailable in this build. You can upload a photo normally, review Original and publish it.',
+                      'إزالة الخلفية الاختيارية غير متاحة في هذا الإصدار. يمكنك رفع الصورة كالمعتاد ومراجعة الأصل ونشره.',
+                      'הסרת רקע אופציונלית אינה זמינה בגרסה זו. אפשר להעלות תמונה כרגיל, לבדוק את המקור ולפרסם אותו.',
                     ),
             ),
             const SizedBox(height: 12),
@@ -330,7 +377,7 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
                       }),
               ),
             ],
-            if (_processing || _saving) ...[
+            if (_loadingOriginal || _processing || _saving) ...[
               const SizedBox(height: 12),
               const LinearProgressIndicator(),
               Text(
@@ -339,6 +386,12 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
                         'Publishing selection…',
                         'جارٍ نشر الاختيار…',
                         'מפרסם את הבחירה…',
+                      )
+                    : _loadingOriginal
+                    ? _t(
+                        'Loading Original photo…',
+                        'تحميل الصورة الأصلية…',
+                        'טוען את התמונה המקורית…',
                       )
                     : _stage == 'loading'
                     ? _t(
@@ -387,30 +440,37 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
               runSpacing: 8,
               children: [
                 OutlinedButton.icon(
-                  key: const Key('product-cutout-prepare'),
-                  onPressed: locked ? null : _prepare,
-                  icon: Icon(
-                    widget.removalEnabled
-                        ? Icons.auto_fix_high
-                        : Icons.image_outlined,
-                  ),
+                  key: const Key('product-cutout-load-original'),
+                  onPressed: locked ? null : _loadOriginal,
+                  icon: const Icon(Icons.image_outlined),
                   label: Text(
-                    !widget.removalEnabled
-                        ? _t(
-                            'Load Original photo',
-                            'تحميل الصورة الأصلية',
-                            'טעינת התמונה המקורית',
-                          )
-                        : _t(
-                            candidate == null
-                                ? 'Prepare background removal'
-                                : 'Retry background removal',
-                            'تحضير إزالة الخلفية',
-                            'הכנת הסרת רקע',
-                          ),
+                    _t(
+                      'Load Original photo',
+                      'تحميل الصورة الأصلية',
+                      'טעינת התמונה המקורית',
+                    ),
                   ),
                 ),
-                if (_processing)
+                if (widget.removalEnabled)
+                  OutlinedButton.icon(
+                    key: const Key('product-cutout-prepare'),
+                    onPressed: locked ? null : _prepare,
+                    icon: const Icon(Icons.auto_fix_high),
+                    label: Text(
+                      _t(
+                        candidate == null
+                            ? 'Prepare background removal'
+                            : 'Review prepared background removal',
+                        candidate == null
+                            ? 'تحضير إزالة الخلفية'
+                            : 'مراجعة إزالة الخلفية المحضّرة',
+                        candidate == null
+                            ? 'הכנת הסרת רקע'
+                            : 'בדיקת הסרת הרקע המוכנה',
+                      ),
+                    ),
+                  ),
+                if (_loadingOriginal || _processing)
                   TextButton(
                     key: const Key('product-cutout-cancel'),
                     onPressed: () => setState(_cancel),
@@ -421,7 +481,13 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
                 if (original != null)
                   FilledButton(
                     key: const Key('product-cutout-publish'),
-                    onPressed: _processing || _saving ? null : _publish,
+                    onPressed:
+                        _loadingOriginal ||
+                            _processing ||
+                            _saving ||
+                            _alreadyPublished
+                        ? null
+                        : _publish,
                     child: Text(
                       _t(
                         'Publish selected photo',

@@ -24,6 +24,8 @@ const samples = [
 const L = { pick: 'اختيار صورة', replace: 'استبدال الصورة', save: 'حفظ الصورة', original: 'الأصل', remove: 'إزالة الخلفية',
   publish: 'نشر الصورة المختارة', published: 'تم نشر الاختيار.', dark: 'فحص الحواف على خلفية داكنة',
   prepare: 'تحضير إزالة الخلفية', cancel: 'إلغاء المعالجة',
+  loadOriginal: 'تحميل الصورة الأصلية',
+  reviewPrepared: 'مراجعة إزالة الخلفية المحضّرة',
   failed: 'تعذرت إزالة الخلفية. الصورة الأصلية محفوظة. أعد المحاولة أو احتفظ بالأصل.',
   transparent: 'هذه الصورة شفافة بالفعل؛ لم تُجرَ عملية فصل.' };
 const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
@@ -167,7 +169,30 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
   const fixture = readFixture();
   const advance = progress.advance;
   advance('route-setup');
-  let violation = false, modelReads = 0, registerCalls = 0;
+  let violation = false, modelReads = 0, registerCalls = 0, workerStarts = 0, runtimeReads = 0;
+  const assetTransfers: { kind: 'model' | 'runtime'; status: number; responseBodyBytes: number | null }[] = [];
+  const assetReplies: Promise<void>[] = [];
+  const assetKind = (url: URL): 'model' | 'runtime' | null => {
+    if (url.origin !== DASHBOARD_URL || !url.pathname.startsWith('/product-cutout/')) return null;
+    if (/\/(?:vendor|assets\/[a-f0-9]{64})\/u2net-\d{2}\.bin$/.test(url.pathname)) return 'model';
+    if (/\/(?:vendor|assets\/[a-f0-9]{64})\/ort[^/]*\.(?:mjs|wasm)$/.test(url.pathname)) return 'runtime';
+    return null;
+  };
+  page.on('worker', worker => {
+    if (new URL(worker.url()).pathname.endsWith('/product-cutout/worker.mjs')) workerStarts++;
+  });
+  context.on('response', response => {
+    const kind = assetKind(new URL(response.url()));
+    if (kind) assetReplies.push(response.finished().then(async () => {
+      const sizes = await response.request().sizes();
+      const bytes = sizes.responseBodySize;
+      assetTransfers.push({ kind, status: response.status(), responseBodyBytes: Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : null });
+    }).catch(() => {
+      // A terminated worker can make browser transfer metadata unavailable.
+      // Record that explicitly; never retain an exception, URL or headers.
+      assetTransfers.push({ kind, status: response.status(), responseBodyBytes: null });
+    }));
+  });
   let fileChoosers = 0, originalUploads = 0, itemSaves = 0;
   let modelFault: 'none' | 'hold' | 'fail' = 'none';
   let heldModelRequest: Route | undefined;
@@ -185,7 +210,8 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       && url.pathname.startsWith('/storage/v1/object/menu-images/')) originalUploads++;
     if (url.origin === API_URL && route.request().method() === 'POST'
       && url.pathname === '/rest/v1/rpc/menu_upsert_item') itemSaves++;
-    if (url.origin === DASHBOARD_URL && /\/product-cutout\/vendor\/u2net-\d+\.bin$/.test(url.pathname)) {
+    if (assetKind(url) === 'runtime') runtimeReads++;
+    if (assetKind(url) === 'model') {
       modelReads++;
       if (modelFault === 'hold') {
         modelFault = 'none'; heldModelRequest = route;
@@ -215,12 +241,15 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
   const initialInvariants = await readInvariants(fixture, token);
   advance('initial-model-count');
   expect(modelReads, 'No model is loaded for login or ordinary Dashboard navigation').toBe(0);
+  expect(runtimeReads).toBe(0); expect(workerStarts).toBe(0);
   const evidence: Record<string, unknown>[] = [];
   const qualityEvidence: Record<string, unknown>[] = [];
   let restoredBurger: { itemId: string; sourceKey: string; sourceSnapshot: unknown;
     derivativeId: string; selectionVersion: number } | undefined;
   for (const sample of samples) {
     const beforeChoose = { fileChoosers, originalUploads, itemSaves };
+    const beforeIntent = { modelReads, runtimeReads, workerStarts };
+    const transfersBefore = assetTransfers.length;
     advance('open-product', sample.name);
     await tapNav(page, 'القائمة');
     await tapText(page, sample.category);
@@ -231,6 +260,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     });
     advance('choose-source');
     await expect(picker).toHaveCount(1);
+    expect({ modelReads, runtimeReads, workerStarts }, 'Opening or switching products never starts removal').toEqual(beforeIntent);
     await reveal(page, picker);
     const chooser = page.waitForEvent('filechooser');
     await picker.click();
@@ -247,7 +277,6 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     }
     await (await chooser).setFiles(path);
     const previousModelReads = modelReads, previousRegisters = registerCalls;
-    if (sample.name === 'burger' || sample.name === 'fries-cup') modelFault = 'hold';
     advance('save-source');
     const saved = page.waitForResponse(response => post(response, '/rest/v1/rpc/menu_upsert_item'));
     await click(page, L.save);
@@ -303,27 +332,24 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
     expect(privateBefore.status).toBe(200);
     advance('private-original-bytes');
     expect(sha(privateBefore.bytes), 'The real private upload retains exact source bytes').toBe(sha(source));
+    advance('original-only-no-processing');
+    await expect(page.getByRole('button', { name: L.publish, exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: L.remove, exact: true })).toBeDisabled();
+    expect({ modelReads, runtimeReads, workerStarts }, 'Ordinary upload and Original loading do not start a worker or fetch heavy assets').toEqual(beforeIntent);
+    expect(registerCalls).toBe(previousRegisters);
     let successfulModelStart = previousModelReads;
+    let successfulPrepareStartedAt = Date.now();
     let existingBaseline: typeof beforeChoose | undefined;
     if (sample.name === 'fries-cup') {
-      advance('existing-await-auto');
-      await expect.poll(() => heldModelRequest !== undefined).toBe(true);
       // First prove these observers saw the ordinary upload. Unchanged counts
       // later can then prove the reopened path performs no chooser/upload/save.
       expect(fileChoosers).toBe(beforeChoose.fileChoosers + 1);
       expect(originalUploads).toBe(beforeChoose.originalUploads + 1);
       expect(itemSaves).toBe(beforeChoose.itemSaves + 1);
       existingBaseline = { fileChoosers, originalUploads, itemSaves };
-      const worker = page.workers().find(worker => new URL(worker.url()).pathname.endsWith('/product-cutout/worker.mjs'));
-      expect(worker, 'Automatic preparation owns an actual worker').toBeDefined();
       advance('existing-close');
-      // The held first chunk prevents inference from completing naturally.
-      // Observe actual disposal before releasing the route or resetting counts.
-      await responseAfterAction(observeResponse(worker!.waitForEvent('close')),
-        () => tapButton(page, 'إلغاء'));
+      await tapButton(page, 'إلغاء');
       await expect(page.getByRole('button', { name: L.prepare, exact: true })).toHaveCount(0);
-      await heldModelRequest!.abort('aborted').catch(() => {});
-      heldModelRequest = undefined;
       expect(page.workers().filter(worker => new URL(worker.url()).pathname.endsWith('/product-cutout/worker.mjs'))).toHaveLength(0);
       advance('existing-reopen');
       await tapNav(page, 'القائمة');
@@ -331,14 +357,23 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       await tapText(page, sample.item);
       await expect(page.getByRole('button', { name: L.prepare, exact: true })).toBeEnabled();
       await expect(page.getByRole('button', { name: L.remove, exact: true })).toHaveCount(0);
+      await click(page, L.loadOriginal);
+      await expect(page.getByRole('button', { name: L.publish, exact: true })).toBeEnabled();
+      expect({ modelReads, runtimeReads, workerStarts }, 'Reopening and reviewing the saved Original does not start removal').toEqual(beforeIntent);
       successfulModelStart = modelReads;
       advance('existing-prepare');
+      successfulPrepareStartedAt = Date.now();
+      await click(page, L.prepare);
+    } else {
+      advance('explicit-prepare');
+      if (sample.name === 'burger') modelFault = 'hold';
+      successfulPrepareStartedAt = Date.now();
       await click(page, L.prepare);
     }
     if (sample.name === 'burger') {
       advance('cancel-await-model-download');
       await expect.poll(() => heldModelRequest !== undefined,
-        { message: 'Automatic preparation reaches a real model download' }).toBe(true);
+        { message: 'Explicit preparation reaches a real model download' }).toBe(true);
       advance('cancel-worker');
       await click(page, L.cancel);
       await expect(page.getByRole('button', { name: L.cancel, exact: true })).toHaveCount(0);
@@ -365,6 +400,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       expect(sha((await downloadOriginal()).bytes), 'Failure retains actual private original bytes').toBe(sha(source));
       successfulModelStart = modelReads;
       advance('retry-worker');
+      successfulPrepareStartedAt = Date.now();
       await click(page, L.prepare); // Retry the actual worker, without mocked inference.
     }
     advance('worker-ready');
@@ -384,6 +420,7 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       advance('model-chunk-count');
       expect(modelReads - successfulModelStart, 'Successful retry fetches all eleven pinned model chunks').toBe(11);
     }
+    const successfulPrepareToReadyMs = Date.now() - successfulPrepareStartedAt;
     if (existingBaseline) {
       advance('existing-verify');
       expect({ fileChoosers, originalUploads, itemSaves },
@@ -398,7 +435,16 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       expect(sha(unchanged.bytes)).toBe(sha(privateBefore.bytes));
     }
     advance('prepublication-no-register');
-    expect(registerCalls, 'Saving an original and automatic local review never publishes a candidate').toBe(previousRegisters);
+    expect(registerCalls, 'Saving an original and explicit local review never publishes a candidate').toBe(previousRegisters);
+    advance('candidate-session-reuse');
+    const preparedCounts = { modelReads, runtimeReads, workerStarts };
+    // The explicit action revalidates Original but reuses this session's valid
+    // candidate; an unchanged source must not pay another inference/download.
+    await responseAfterAction(observeResponse(page.waitForResponse(response =>
+      post(response, '/rest/v1/rpc/get_storefront_product_original_v1'))),
+      () => click(page, L.reviewPrepared));
+    await expect(page.getByRole('button', { name: L.reviewPrepared, exact: true })).toBeEnabled();
+    expect({ modelReads, runtimeReads, workerStarts }).toEqual(preparedCounts);
     const dark = page.getByRole('switch', { name: L.dark, exact: true });
     advance('light-review-capture');
     await reveal(page, dark);
@@ -477,9 +523,9 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       qualityEvidence.push({ treatment: 'experimental-cutout', sourceBytes: source.length, sourceSha256: sha(source),
         sourceGeometry, processedBytes: selectedPrivate.bytes.length, processedSha256: sha(selectedPrivate.bytes),
         processedGeometry: selectedAlpha, publishedImages, rendered,
-        visualMaskAcceptance: 'not-established; saliency alpha may lose plate/food detail; inspect original and processed pixels' });
+        visualMaskAcceptance: 'owner-reviewed optional behavior; known plate/food loss and retained background objects remain accepted limits' });
       writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'quality-highres.json'), JSON.stringify({
-        status: 'PARTIAL', buildContext: 'Isolated Actions review build; SF_PRODUCT_CUTOUT_REVIEW=true; removal unavailable by default',
+        status: 'PARTIAL', buildContext: 'Isolated Actions release build; SF_PRODUCT_CUTOUT_REVIEW=true; optional processing requires explicit intent',
         source: 'Wikimedia Commons Hamburger (9).jpg; Miansari66; CC0 1.0; unmodified original', cases: qualityEvidence,
       }, null, 2));
     }
@@ -527,17 +573,24 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
           publishedImages: originalImages, rendered });
         writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'quality-highres.json'), JSON.stringify({
           status: 'PASS', scope: 'Actual isolated service publication and shipped menu rendering; no clean-mask acceptance claim',
-          buildContext: 'Isolated Actions review build; SF_PRODUCT_CUTOUT_REVIEW=true; removal unavailable by default',
+          buildContext: 'Isolated Actions release build; SF_PRODUCT_CUTOUT_REVIEW=true; optional processing requires explicit intent',
           source: 'Wikimedia Commons Hamburger (9).jpg; Miansari66; CC0 1.0; unmodified original', cases: qualityEvidence,
         }, null, 2));
       }
     }
+    await Promise.all(assetReplies);
+    expect({ modelReads, runtimeReads, workerStarts }, 'Review, choice and publication reuse the prepared candidate without more processing').toEqual(preparedCounts);
     evidence.push({ sample: sample.name, sourceKind: sample.name === 'burger-highres'
       ? 'Genuine licensed camera original, 2816x2112; Wikimedia Commons, Miansari66, CC0 1.0'
       : 'Existing published c4/w480 copy, not private original', sourceGeometry,
       sourceBytes: source.length, sourceSha256: sha(source), treatment: sample.alpha ? 'original-alpha-bypass' : 'u2net-cutout',
       processedBytes: selectedPrivate.bytes.length, processedSha256: sha(selectedPrivate.bytes), processedGeometry: selectedAlpha,
       modelPartReads: modelReads - previousModelReads, originalPreserved: sha(privateAfter.bytes) === sha(privateBefore.bytes),
+      noProcessingBeforeExplicitIntent: true, unchangedSessionCandidateReused: true,
+      successfulPrepareToReadyMs,
+      workerStarts: workerStarts - beforeIntent.workerStarts,
+      runtimeAssetRequests: runtimeReads - beforeIntent.runtimeReads,
+      heavyAssetTransfers: assetTransfers.slice(transfersBefore),
       privateBeforeSha256: sha(privateBefore.bytes), privateAfterSha256: sha(privateAfter.bytes),
       cancelAndFailedFetchRetainedOriginal: sample.name === 'burger', publishedImages,
       existingOriginalPreparedWithoutUpload: sample.name === 'fries-cup',
@@ -556,7 +609,8 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
   expect(violation, 'No image bytes or runtime requests leave the allowed loopback services').toBe(false);
   advance('success-evidence');
   writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'product-cutout.json'), JSON.stringify({
-    buildContext: 'Isolated Actions review build; SF_PRODUCT_CUTOUT_REVIEW=true; removal unavailable by default',
+    buildContext: 'Isolated Actions release build; SF_PRODUCT_CUTOUT_REVIEW=true; optional processing requires explicit intent',
+    networkMeasurement: 'Actual response body bytes from guarded routed browser journey; Playwright routing disables HTTP cache, so these are not cold/warm cache measurements',
     model: 'U2Net FP32', modelNativeHeapLimitBytes: 536870912,
     fixturesArePublishedCopies: false, fixtureKinds: ['four-existing-published-copies', 'one-unmodified-licensed-highres-original'], cases: evidence,
   }, null, 2));

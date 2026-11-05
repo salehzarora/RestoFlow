@@ -9,10 +9,15 @@ import 'package:restoflow_dashboard/src/storefront/product_cutout_gateway.dart';
 import 'package:restoflow_dashboard/src/storefront/product_cutout_processor.dart';
 
 final pixels = Uint8List.fromList([1, 2, 3]);
-MenuItem item(String? path) => MenuItem(
-  id: 'item',
-  organizationId: 'org',
-  restaurantId: 'restaurant',
+MenuItem item(
+  String? path, {
+  String id = 'item',
+  String org = 'org',
+  String restaurant = 'restaurant',
+}) => MenuItem(
+  id: id,
+  organizationId: org,
+  restaurantId: restaurant,
   branchId: null,
   menuCategoryId: 'category',
   name: 'Burger',
@@ -33,7 +38,14 @@ class Gateway implements ProductCutoutGateway {
   int selectionVersion = 0;
   Completer<ProductCutoutPublishResult>? pendingPublish;
   final requests =
-      <({String id, Uint8List? candidate, ProductCutoutOriginal original})>[];
+      <
+        ({
+          String id,
+          Uint8List? candidate,
+          ProductCutoutOriginal original,
+          MenuItem item,
+        })
+      >[];
   ProductCutoutPublishStatus status = ProductCutoutPublishStatus.published;
   @override
   Future<ProductCutoutOriginal> loadOriginal(MenuItem item) async {
@@ -62,6 +74,7 @@ class Gateway implements ProductCutoutGateway {
       id: requestId,
       candidate: candidateBytes,
       original: original,
+      item: item,
     ));
     return pendingPublish?.future ?? ProductCutoutPublishResult(status);
   }
@@ -106,6 +119,9 @@ Future<void> mount(
   Processor processor, {
   String? path = 'original',
   bool removalEnabled = true,
+  String id = 'item',
+  String org = 'org',
+  String restaurant = 'restaurant',
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -113,7 +129,7 @@ Future<void> mount(
         body: SingleChildScrollView(
           child: ProductCutoutEditor(
             key: const ValueKey('editor'),
-            item: item(path),
+            item: item(path, id: id, org: org, restaurant: restaurant),
             gateway: gateway,
             processor: processor,
             removalEnabled: removalEnabled,
@@ -132,6 +148,236 @@ Future<void> tap(WidgetTester tester, String key) async {
 }
 
 void main() {
+  testWidgets(
+    'confirmed unchanged choice cannot publish duplicate derivatives',
+    (tester) async {
+      final gateway = Gateway(), processor = Processor();
+      await mount(tester, gateway, processor);
+      await tap(tester, 'product-cutout-load-original');
+      final publish = tester
+          .widget<FilledButton>(find.byKey(const Key('product-cutout-publish')))
+          .onPressed!;
+      gateway.selectionVersion = 1;
+      publish();
+      publish();
+      await tester.pumpAndSettle();
+      expect(gateway.requests, hasLength(1));
+      publish();
+      await tester.pumpAndSettle();
+      await tap(tester, 'product-cutout-load-original');
+      expect(gateway.requests, hasLength(1));
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('product-cutout-publish')),
+            )
+            .onPressed,
+        isNull,
+      );
+      // A newer authoritative selection version is a different explicit write.
+      gateway.selectionVersion = 2;
+      await tap(tester, 'product-cutout-load-original');
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests, hasLength(2));
+      expect(processor.runs, 0);
+    },
+  );
+  testWidgets('repeated prepare intent starts only one pending job', (
+    tester,
+  ) async {
+    final gateway = Gateway(),
+        processor = Processor()..pending = Completer<ProductCutoutCandidate>();
+    await mount(tester, gateway, processor);
+    final button = find.byKey(const Key('product-cutout-prepare'));
+    final start = tester.widget<OutlinedButton>(button).onPressed!;
+    start();
+    start();
+    await tester.pump();
+    await tester.pump();
+    expect(gateway.loads, 1);
+    expect(processor.runs, 1);
+    expect(gateway.requests, isEmpty);
+    await tester.ensureVisible(find.byKey(const Key('product-cutout-cancel')));
+    await tester.tap(find.byKey(const Key('product-cutout-cancel')));
+    await tester.pumpAndSettle();
+    processor.pending!.complete(
+      ProductCutoutCandidate(
+        bytes: pixels,
+        mimeType: 'image/png',
+        width: 1,
+        height: 1,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(processor.cancels, 1);
+  });
+  testWidgets('opening and reviewing Original never starts processing', (
+    tester,
+  ) async {
+    final gateway = Gateway(), processor = Processor();
+    await mount(tester, gateway, processor);
+    expect(gateway.loads, 0);
+    expect(processor.runs, 0);
+    await tap(tester, 'product-cutout-load-original');
+    expect(gateway.loads, 1);
+    expect(processor.runs, 0);
+    expect(gateway.requests, isEmpty);
+    expect(
+      tester
+          .widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>))
+          .selected,
+      {false},
+    );
+    await tap(tester, 'product-cutout-publish');
+    expect(gateway.requests.single.candidate, isNull);
+    expect(processor.runs, 0);
+  });
+  testWidgets(
+    'unchanged prepared candidate is reused after source revalidation',
+    (tester) async {
+      final gateway = Gateway(), processor = Processor();
+      await mount(tester, gateway, processor);
+      await tap(tester, 'product-cutout-prepare');
+      await tap(tester, 'product-cutout-prepare');
+      await tap(tester, 'product-cutout-load-original');
+      expect(gateway.loads, 3);
+      expect(processor.runs, 1);
+      expect(gateway.requests, isEmpty);
+      expect(
+        tester
+            .widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>))
+            .selected,
+        {false},
+      );
+      gateway.snapshot = {'object_id': 'source-B', 'version': 2};
+      await tap(tester, 'product-cutout-load-original');
+      expect(processor.runs, 1);
+      expect(
+        tester
+            .widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>))
+            .segments
+            .last
+            .enabled,
+        isFalse,
+      );
+      await tap(tester, 'product-cutout-prepare');
+      expect(processor.runs, 2);
+    },
+  );
+  for (final change in ['item', 'organization', 'restaurant', 'source']) {
+    testWidgets(
+      '$change change discards late candidate without automatic processing',
+      (tester) async {
+        final gateway = Gateway(),
+            processor = Processor()
+              ..pending = Completer<ProductCutoutCandidate>();
+        await mount(tester, gateway, processor);
+        await tester.ensureVisible(
+          find.byKey(const Key('product-cutout-prepare')),
+        );
+        await tester.tap(find.byKey(const Key('product-cutout-prepare')));
+        await tester.pump();
+        await tester.pump();
+        expect(processor.runs, 1);
+        await mount(
+          tester,
+          gateway,
+          processor,
+          id: change == 'item' ? 'item-B' : 'item',
+          org: change == 'organization' ? 'org-B' : 'org',
+          restaurant: change == 'restaurant' ? 'restaurant-B' : 'restaurant',
+          path: change == 'source' ? 'original-B' : 'original',
+        );
+        expect(processor.cancels, 1);
+        expect(processor.runs, 1);
+        processor.pending!.complete(
+          ProductCutoutCandidate(
+            bytes: pixels,
+            mimeType: 'image/png',
+            width: 1,
+            height: 1,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final selection = tester.widget<SegmentedButton<bool>>(
+          find.byType(SegmentedButton<bool>),
+        );
+        expect(selection.selected, {false});
+        expect(selection.segments.last.enabled, isFalse);
+        await tap(tester, 'product-cutout-publish');
+        expect(gateway.requests.single.candidate, isNull);
+        expect(
+          gateway.requests.single.item.id,
+          change == 'item' ? 'item-B' : 'item',
+        );
+        expect(
+          gateway.requests.single.item.organizationId,
+          change == 'organization' ? 'org-B' : 'org',
+        );
+        expect(processor.runs, 1);
+      },
+    );
+  }
+  testWidgets(
+    'uncertain candidate publication locks preparation and retries identical bytes and identity',
+    (tester) async {
+      final gateway = Gateway()..status = ProductCutoutPublishStatus.uncertain,
+          processor = Processor();
+      await mount(tester, gateway, processor);
+      await tap(tester, 'product-cutout-prepare');
+      await tester.tap(find.text('Remove background').last);
+      await tester.pumpAndSettle();
+      await tap(tester, 'product-cutout-publish');
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.byKey(const Key('product-cutout-prepare')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.byKey(const Key('product-cutout-load-original')),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests[0].id, gateway.requests[1].id);
+      expect(
+        gateway.requests[0].candidate,
+        same(gateway.requests[1].candidate),
+      );
+      expect(processor.runs, 1);
+    },
+  );
+  testWidgets(
+    'stale publication invalidates review without automatically preparing again',
+    (tester) async {
+      final gateway = Gateway()
+            ..status = ProductCutoutPublishStatus.staleSource,
+          processor = Processor();
+      await mount(tester, gateway, processor);
+      await tap(tester, 'product-cutout-prepare');
+      await tester.tap(find.text('Remove background').last);
+      await tester.pumpAndSettle();
+      await tap(tester, 'product-cutout-publish');
+      expect(find.byKey(const Key('product-cutout-publish')), findsNothing);
+      expect(processor.runs, 1);
+      await tap(tester, 'product-cutout-load-original');
+      expect(processor.runs, 1);
+      expect(
+        tester
+            .widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>))
+            .segments
+            .last
+            .enabled,
+        isFalse,
+      );
+    },
+  );
   test('non-web processor reports a fixed unsupported-device stage', () async {
     final stages = <String>[];
     await expectLater(
@@ -150,7 +396,7 @@ void main() {
       final gateway = Gateway()..failLoad = true;
       final processor = Processor();
       await mount(tester, gateway, processor, removalEnabled: false);
-      await tap(tester, 'product-cutout-prepare');
+      await tap(tester, 'product-cutout-load-original');
       expect(
         find.textContaining('original photo could not be loaded'),
         findsOneWidget,
@@ -159,14 +405,14 @@ void main() {
       expect(gateway.requests, isEmpty);
       expect(find.byKey(const Key('product-cutout-publish')), findsNothing);
       gateway.failLoad = false;
-      await tap(tester, 'product-cutout-prepare');
+      await tap(tester, 'product-cutout-load-original');
       await tap(tester, 'product-cutout-publish');
       expect(gateway.requests.single.candidate, isNull);
       expect(processor.runs, 0);
     },
   );
   testWidgets(
-    'release default loads and publishes only Original without inference',
+    'capability-disabled build loads and publishes Original without inference',
     (tester) async {
       final gateway = Gateway(), processor = Processor();
       // Use the actual constructor default, not the test helper's review opt-in.
@@ -185,11 +431,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.textContaining('Automatic background removal is unavailable'),
+        find.textContaining('Optional background removal is unavailable'),
         findsOneWidget,
       );
       expect(find.text('Load Original photo'), findsOneWidget);
-      await tap(tester, 'product-cutout-prepare');
+      expect(find.byKey(const Key('product-cutout-prepare')), findsNothing);
+      await tap(tester, 'product-cutout-load-original');
       expect(processor.runs, 0);
       expect(gateway.requests, isEmpty);
       final selection = tester.widget<SegmentedButton<bool>>(
@@ -347,8 +594,19 @@ void main() {
             .selected,
         {true},
       );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('product-cutout-publish')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(gateway.requests, hasLength(1));
+      await tester.tap(find.text('Original').last);
+      await tester.pumpAndSettle();
       await tap(tester, 'product-cutout-publish');
-      expect(gateway.requests.last.candidate, pixels);
+      expect(gateway.requests.last.candidate, isNull);
       expect(
         jsonDecode(
           gateway.requests.last.original.sourceGeneration,
@@ -373,7 +631,7 @@ void main() {
     gateway.snapshot = {'object_id': 'source-B', 'version': 2};
     processor.resultBytes = Uint8List.fromList([7, 8, 9]);
     await mount(tester, gateway, processor, path: 'new-original');
-    expect(processor.runs, 2);
+    expect(processor.runs, 1);
     final loadsBeforeOldCompletion = gateway.loads;
     gateway.pendingPublish = null;
     pending.complete(
@@ -382,6 +640,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(gateway.loads, loadsBeforeOldCompletion);
     expect(find.text('Selection published.'), findsNothing);
+    await tap(tester, 'product-cutout-prepare');
+    expect(processor.runs, 2);
     await tester.tap(find.text('Remove background').last);
     await tester.pumpAndSettle();
     await tap(tester, 'product-cutout-publish');
@@ -450,14 +710,25 @@ void main() {
     );
   });
   testWidgets(
-    'successful original upload change automatically prepares but never publishes',
+    'successful upload loads only Original until explicit preparation',
     (tester) async {
       final gateway = Gateway(), processor = Processor();
       await mount(tester, gateway, processor, path: null);
       await mount(tester, gateway, processor, path: 'new-original');
       expect(gateway.loads, 1);
-      expect(processor.runs, 1);
+      expect(processor.runs, 0);
       expect(gateway.requests, isEmpty);
+      await tap(tester, 'product-cutout-publish');
+      expect(gateway.requests.single.candidate, isNull);
+      expect(processor.runs, 0);
+      await tap(tester, 'product-cutout-prepare');
+      expect(processor.runs, 1);
+      expect(
+        tester
+            .widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>))
+            .selected,
+        {false},
+      );
     },
   );
   testWidgets('cancel discards late candidate and retains original bytes', (
