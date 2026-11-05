@@ -32,6 +32,7 @@ class RestaurantLogoSection extends StatefulWidget {
     required this.organizationId,
     required this.restaurantId,
     this.isDemo = false,
+    this.embedded = false,
     this.idGenerator,
     this.picker,
     this.pickerSupported,
@@ -44,6 +45,7 @@ class RestaurantLogoSection extends StatefulWidget {
   final String organizationId;
   final String restaurantId;
   final bool isDemo;
+  final bool embedded;
 
   final LogoImageIdGenerator? idGenerator;
   final Future<PickedMenuImage?> Function()? picker;
@@ -416,35 +418,35 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    return AdminSectionCard(
-      title: l10n.brandingSectionTitle,
-      icon: Icons.image_outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.brandingSectionSubtitle, style: theme.textTheme.bodySmall),
-          const SizedBox(height: RestoflowSpacing.md),
-          if (!_wired)
-            Text(
-              widget.isDemo ? l10n.brandingDemoNote : l10n.brandingUnavailable,
-              key: const Key('branding-unavailable'),
-              style: theme.textTheme.bodyMedium,
-            )
-          else if (_loading)
-            const Padding(
-              padding: EdgeInsets.all(RestoflowSpacing.md),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_readFailed)
-            Text(
-              l10n.brandingErrorSaveFailed,
-              style: theme.textTheme.bodyMedium,
-            )
-          else
-            ..._editor(l10n, theme),
-        ],
-      ),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.brandingSectionSubtitle, style: theme.textTheme.bodySmall),
+        const SizedBox(height: RestoflowSpacing.md),
+        if (!_wired)
+          Text(
+            widget.isDemo ? l10n.brandingDemoNote : l10n.brandingUnavailable,
+            key: const Key('branding-unavailable'),
+            style: theme.textTheme.bodyMedium,
+          )
+        else if (_loading)
+          const Padding(
+            padding: EdgeInsets.all(RestoflowSpacing.md),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_readFailed)
+          Text(l10n.brandingErrorSaveFailed, style: theme.textTheme.bodyMedium)
+        else
+          ..._editor(l10n, theme),
+      ],
     );
+    return widget.embedded
+        ? content
+        : AdminSectionCard(
+            title: l10n.brandingSectionTitle,
+            icon: Icons.image_outlined,
+            child: content,
+          );
   }
 
   List<Widget> _editor(AppLocalizations l10n, ThemeData theme) {
