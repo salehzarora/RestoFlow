@@ -234,9 +234,20 @@ export class BackgroundQuality {
                 }
                 await page.waitForLoadState('networkidle');
                 expect(selectedResponses.length, 'No second background resource fetched on scroll').toBe(1);
-                this.views.push({ scene, viewport: name, width, height, dpr, selected: useHigh ? 'bg2560' : 'w960', encodedWidth: spec.width,
-                    encodedHeight: spec.height, encodedBytes: bytes.length, sha256: spec.sha256, coverWidth, requiredPhysicalWidth: coverWidth * dpr,
-                    naturalWidth: top.naturalWidth, naturalHeight: top.naturalHeight, sizes: top.sizes, dim: top.dim, paintWidth: coverWidth, paintHeight: coverWidth * spec.height / spec.width, topMiddleFooterMatch: true, backgroundRequests: 1 });
+                const [encodedWidth, encodedHeight] = decoded;
+                const paintWidth = Math.max(top.width, top.height * encodedWidth / encodedHeight);
+                // The receipt includes only the verified public Storage path and measured photo rectangle.
+                const publicPath = new URL(localMediaTarget(top.currentSrc)).pathname;
+                this.views.push({
+                    scene, viewport: name, width, height, dpr: top.dpr,
+                    selected: useHigh ? 'bg2560' : 'w960', currentSrcPath: publicPath,
+                    encodedWidth, encodedHeight, encodedBytes: bytes.length, sha256: sha(bytes),
+                    naturalWidth: top.naturalWidth, naturalHeight: top.naturalHeight, sizes: top.sizes, dim: top.dim,
+                    rect: { x: top.x, y: top.y, width: top.width, height: top.height },
+                    paintWidth, paintHeight: paintWidth * encodedHeight / encodedWidth,
+                    requiredPhysicalWidth: paintWidth * top.dpr, topMiddleFooterMatch: true,
+                    backgroundRequests: selectedResponses.length,
+                });
                 this.record('responsive-scene-view');
                 await network.check();
             }
