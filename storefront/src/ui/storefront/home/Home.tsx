@@ -40,7 +40,7 @@ export function Home({ resolution, locale, slug, hrefFor }: {
           />
           {items.length === 0 || modules.promo === null ? null : <PromoBanner promo={modules.promo} m={m} />}
           {items.length === 0 || modules.story === null ? null : <StoryCard story={modules.story} />}
-          <SiteFooter tenant={tenant} m={m} />
+          <SiteFooter tenant={tenant} m={m} sceneImage={background.image} />
           <DockSlot locale={locale} motion={view.motion} state={tenant.service.state} opensAt={tenant.hours.opens} cartHref={cartPath(locale, slug)} />
         </main>
       </StorefrontRuntime>
