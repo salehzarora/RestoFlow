@@ -1,14 +1,19 @@
 // BIZBOT-STOREFRONT-CINEMATIC-001B. Run before any acceptance fixtures.
 // Uses only the pinned, supported Supabase local runner. No hosted API or URL.
 // The intentional failure exists only in a disposable copy of the migration.
+// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-CINEMATIC-PROOF-001: the late failure and
+// the target-only apply run in disposable workdirs that hold exactly the prefix
+// ending at the #379 target; the one reviewed follow-up (001D) is then applied
+// by itself from the repository.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   migrationName, migrationVersion, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration,
-  requireEphemeralCi, sha256,
+  requireEphemeralCi, sha256, predecessorVersion, followUpName, followUpVersion, targetFunctions, proveMigrationSequence,
+  targetPrefixSources,
 } from './cinematic_001b_migration_contract.mjs';
 
 requireEphemeralCi(process.env); // Must precede subprocesses, including Docker.
@@ -21,7 +26,7 @@ await mkdir(artifactDir, { recursive: true, mode: 0o700 });
 const container = 'supabase_db_RestoFlow';
 let phase = 'preflight';
 const receipt = { status: 'FAIL', phase, real_supabase_runner: true, local_only: true };
-let temporary;
+const temporaries = [];
 
 function command(program, args, options = {}) {
   try {
@@ -65,6 +70,33 @@ const readinessQuery = `select json_build_object(
   'media_rpc', to_regprocedure('public.list_storefront_content_media_v2(uuid,uuid)') is not null,
   'menu_rpc', to_regprocedure('public.storefront_menu_v5(text)') is not null,
   'history', (select count(*) from supabase_migrations.schema_migrations where version='${migrationVersion}'))::text;`;
+const historyVersionsQuery = "select coalesce(jsonb_agg(version order by version),'[]'::jsonb)::text from supabase_migrations.schema_migrations;";
+const historyThroughTargetQuery = `select coalesce(jsonb_agg(to_jsonb(h) order by version),'[]'::jsonb)::text
+  from supabase_migrations.schema_migrations h where version <= '${migrationVersion}';`;
+// Every surface the #379 target creates or replaces: its functions (definition,
+// ACL, owner, comment), its appearance column and the table's constraints.
+const targetSurfacesQuery = `select jsonb_build_object(
+  'functions', (select coalesce(jsonb_agg(jsonb_build_object(
+      'name', n.nspname || '.' || p.proname, 'identity', p.oid::regprocedure::text, 'definition', pg_get_functiondef(p.oid),
+      'acl', p.proacl, 'owner', p.proowner, 'comment', obj_description(p.oid, 'pg_proc'))
+      order by p.oid::regprocedure::text), '[]'::jsonb)
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where (n.nspname || '.' || p.proname) = any(array[${targetFunctions.map((name) => `'${name}'`).join(',')}])),
+  'appearance', (select jsonb_build_object('type', format_type(a.atttypid, a.atttypmod), 'not_null', a.attnotnull,
+      'default', pg_get_expr(d.adbin, d.adrelid), 'acl', a.attacl, 'comment', col_description(a.attrelid, a.attnum))
+    from pg_attribute a left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+    where a.attrelid = 'app.storefront_content_profiles'::regclass and a.attname = 'appearance' and not a.attisdropped),
+  'constraints', (select coalesce(jsonb_agg(jsonb_build_object('name', c.conname, 'definition', pg_get_constraintdef(c.oid))
+      order by c.conname), '[]'::jsonb)
+    from pg_constraint c where c.conrelid = 'app.storefront_content_profiles'::regclass))::text;`;
+const versionsOf = (names) => names.map((name) => name.slice(0, 14));
+async function readMigrationSources(directory) {
+  // Raw bytes in the supported CLI's byte-wise file-name order; regular files only.
+  const entries = await readdir(directory, { withFileTypes: true });
+  assert.ok(entries.every((entry) => entry.isFile()), 'The migration directory may hold only regular files');
+  const names = entries.map((entry) => entry.name).sort();
+  return Promise.all(names.map(async (name) => [name, await readFile(join(directory, name))]));
+}
 
 try {
   assert.equal(checked('supabase', ['--version']).trim(), '2.107.0', 'Use the project-pinned CLI');
@@ -83,33 +115,50 @@ try {
   assert.match(config, /^project_id = "RestoFlow"$/m);
   assert.match(config, /^\[db\][\s\S]*?^port = 54322$/m);
   assert.equal(sql('select (select count(*) from auth.users)+(select count(*) from public.restaurants)+(select count(*) from public.orders);'), '0', 'Only a fresh stack before fixtures may be reset');
-  const migrationPath = join(root, 'supabase/migrations', migrationName);
-  const corrected = await readFile(migrationPath, 'utf8');
-  const original = checked('git', ['show', `${originalCommit}:supabase/migrations/${historicalMigrationName}`]);
-  const historical = checked('git', ['show', `${wrapperOnlyCommit}:supabase/migrations/${historicalMigrationName}`]);
-  Object.assign(receipt, { historical_wrapper_only: proveWrapperOnly(original, historical) }, proveFinalMigration(corrected), {
+  const migrationsDirectory = join(root, 'supabase/migrations');
+  const migrationPath = join(migrationsDirectory, migrationName);
+  Object.assign(receipt, {
     tested_commit: checked('git', ['rev-parse', 'HEAD']).trim(),
     tested_tree: checked('git', ['rev-parse', 'HEAD^{tree}']).trim(),
     cli_version: '2.107.0',
   });
-  const migrations = (await readdir(join(root, 'supabase/migrations'))).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
-  assert.equal(migrations.at(-1), migrationName, 'This narrow proof must be reviewed if later migrations are introduced');
-  const previousVersion = migrations.at(-2).split('_')[0];
+  // The exact reviewed sequence and its raw bytes replace the newest-migration guard.
+  const sources = await readMigrationSources(migrationsDirectory);
+  const sequence = proveMigrationSequence(sources);
+  const sourceBytes = new Map(sources);
+  const corrected = sourceBytes.get(migrationName).toString('utf8');
+  const original = checked('git', ['show', `${originalCommit}:supabase/migrations/${historicalMigrationName}`]);
+  const historical = checked('git', ['show', `${wrapperOnlyCommit}:supabase/migrations/${historicalMigrationName}`]);
+  Object.assign(receipt, { historical_wrapper_only: proveWrapperOnly(original, historical) }, proveFinalMigration(corrected),
+    { migration_sequence: sequence.summary });
+  const beforeTarget = sequence.target_prefix.slice(0, -1);
+  const previousVersion = predecessorVersion;
   receipt.previous_version = previousVersion;
+  // A disposable workdir that holds exactly the prefix ending at the #379
+  // target (the follow-up is never part of it), verified before use.
+  const prefixWorkdir = async (prefix, targetBytes) => {
+    const workdir = await mkdtemp(join(process.env.RUNNER_TEMP, prefix));
+    temporaries.push(workdir);
+    await mkdir(join(workdir, 'supabase/migrations'), { recursive: true });
+    await writeFile(join(workdir, 'supabase/config.toml'), config);
+    const plan = targetPrefixSources(sources, targetBytes);
+    for (const [name, bytes] of plan) await writeFile(join(workdir, 'supabase/migrations', name), bytes);
+    const written = await readMigrationSources(join(workdir, 'supabase/migrations'));
+    assert.deepEqual(written.map(([name]) => name), sequence.target_prefix, 'The disposable workdir must hold exactly the prefix ending at the #379 target');
+    assert.ok(written.every(([, bytes], index) => bytes.equals(plan[index][1])), 'The disposable workdir must hold exactly the planned bytes');
+    return workdir;
+  };
 
   phase = 'prepare_before_target';
   checked('supabase', ['db', 'reset', '--local', '--version', previousVersion, '--no-seed', '--yes']);
   assert.deepEqual(JSON.parse(sql(readinessQuery)), { column: false, rpc: false, media_rpc: false, menu_rpc: false, history: 0 });
+  assert.deepEqual(JSON.parse(sql(historyVersionsQuery)), versionsOf(beforeTarget), 'The reset must stop exactly at the #379 predecessor');
   const beforeSchema = schemaSnapshot();
   const beforeHistory = sql(historyQuery);
   const beforeLegacyReaders = sql(legacyReadersQuery);
   receipt.before_schema_sha256 = sha256(beforeSchema);
   receipt.before_history_sha256 = sha256(beforeHistory);
   receipt.legacy_readers_before_sha256 = sha256(beforeLegacyReaders);
-  temporary = await mkdtemp(join(process.env.RUNNER_TEMP, 'cinematic-migration-failure-'));
-  await mkdir(join(temporary, 'supabase'), { recursive: true });
-  await writeFile(join(temporary, 'supabase/config.toml'), config);
-  await cp(join(root, 'supabase/migrations'), join(temporary, 'supabase/migrations'), { recursive: true });
   // Function declarations above have executed when this block runs. Its
   // deliberate exception must roll them, their ACLs and migration history back.
   const failure = `\ndo $cinematic_late_failure$\nbegin
@@ -121,9 +170,9 @@ try {
  end if;
  raise exception 'BIZBOT_CINEMATIC_LATE_FAILURE' using errcode='P0001';
 end;\n$cinematic_late_failure$;\n`;
-  await writeFile(join(temporary, 'supabase/migrations', migrationName), corrected + failure);
+  const failureWorkdir = await prefixWorkdir('cinematic-migration-failure-', Buffer.from(corrected + failure));
   phase = 'intentional_late_failure';
-  const failed = command('supabase', ['migration', 'up', '--local', '--workdir', temporary]);
+  const failed = command('supabase', ['migration', 'up', '--local', '--workdir', failureWorkdir]);
   assert.notEqual(failed.code, 0, 'The disposable late-failure migration must fail');
   assert.match(failed.stderr + failed.stdout, /ERROR: BIZBOT_CINEMATIC_LATE_FAILURE\b/);
   assert.match(failed.stderr + failed.stdout, /SQLSTATE P0001/);
@@ -133,18 +182,49 @@ end;\n$cinematic_late_failure$;\n`;
   assert.equal(schemaSnapshot(), beforeSchema, 'Schema (including replaced functions and ACLs) must roll back');
   assert.equal(sql(historyQuery), beforeHistory, 'Entire migration history must roll back with schema');
   receipt.schema_and_history_rollback = 'PASS';
+  assert.ok((await readFile(migrationPath)).equals(sourceBytes.get(migrationName)), 'Tracked migration must remain unmodified');
+  receipt.tracked_target_unchanged_after_failure = 'PASS';
 
-  phase = 'apply_corrected_target';
-  checked('supabase', ['migration', 'up', '--local']);
+  phase = 'apply_target_alone';
+  const targetWorkdir = await prefixWorkdir('cinematic-migration-target-', sourceBytes.get(migrationName));
+  checked('supabase', ['migration', 'up', '--local', '--workdir', targetWorkdir]);
   assert.deepEqual(JSON.parse(sql(readinessQuery)), { column: true, rpc: true, media_rpc: true, menu_rpc: true, history: 1 });
-  assert.equal(await readFile(migrationPath, 'utf8'), corrected, 'Tracked migration must remain unmodified');
+  assert.deepEqual(JSON.parse(sql(historyVersionsQuery)), versionsOf(sequence.target_prefix), 'Only the #379 target may be applied in this phase');
+  assert.ok((await readFile(migrationPath)).equals(sourceBytes.get(migrationName)), 'Tracked migration must remain unmodified');
   const afterLegacyReaders = sql(legacyReadersQuery);
   assert.equal(afterLegacyReaders, beforeLegacyReaders, 'Legacy reader definitions, ACLs and owners must remain byte-identical');
   receipt.legacy_readers_after_sha256 = sha256(afterLegacyReaders);
   receipt.legacy_reader_catalog_preservation = 'PASS';
   receipt.successful_target_application = 'PASS';
-  receipt.after_schema_sha256 = sha256(schemaSnapshot());
-  receipt.after_history_sha256 = sha256(sql(historyQuery));
+  const targetSurfaces = sql(targetSurfacesQuery);
+  const surfaces = JSON.parse(targetSurfaces);
+  assert.deepEqual([...new Set(surfaces.functions.map((item) => item.name))].sort(), [...targetFunctions].sort(),
+    'Every function of the #379 target must exist');
+  assert.ok(surfaces.appearance && surfaces.constraints.length > 0, 'The #379 appearance column and its table constraints must exist');
+  const targetOnlyHistory = sql(historyQuery);
+  receipt.target_only_schema_sha256 = sha256(schemaSnapshot());
+  receipt.target_only_history_sha256 = sha256(targetOnlyHistory);
+  receipt.target_surfaces_sha256 = sha256(targetSurfaces);
+
+  phase = 'apply_reviewed_follow_up';
+  checked('supabase', ['migration', 'up', '--local']);
+  const appliedVersions = JSON.parse(sql(historyVersionsQuery));
+  assert.deepEqual(appliedVersions, versionsOf([...sequence.target_prefix, followUpName]),
+    'Exactly one 001D history row and no other migration later than #379');
+  receipt.follow_up_history_rows = appliedVersions.filter((version) => version === followUpVersion).length;
+  // Large values: compare without generating a diff; the receipt keeps the message only.
+  assert.ok(sql(historyThroughTargetQuery) === targetOnlyHistory, 'The #379 target and every earlier history row must remain unchanged');
+  assert.deepEqual(JSON.parse(sql(readinessQuery)), { column: true, rpc: true, media_rpc: true, menu_rpc: true, history: 1 });
+  assert.ok(sql(legacyReadersQuery) === beforeLegacyReaders, 'Legacy reader definitions, ACLs and owners must remain byte-identical');
+  assert.ok(sql(targetSurfacesQuery) === targetSurfaces, 'The #379 target surfaces must remain unchanged');
+  receipt.target_and_legacy_readers_unchanged = 'PASS';
+  const finalSources = await readMigrationSources(migrationsDirectory);
+  assert.ok(finalSources.length === sources.length && finalSources.every(([name, bytes], index) =>
+    name === sources[index][0] && bytes.equals(sources[index][1])), 'Every tracked migration source must remain byte-identical');
+  receipt.tracked_migration_sources_unchanged = 'PASS';
+  receipt.follow_up_application = 'PASS';
+  receipt.follow_up_schema_sha256 = sha256(schemaSnapshot());
+  receipt.follow_up_history_sha256 = sha256(sql(historyQuery));
   receipt.status = 'PASS';
   phase = 'complete';
 } catch (error) {
@@ -154,6 +234,6 @@ end;\n$cinematic_late_failure$;\n`;
 } finally {
   receipt.phase = phase;
   await writeFile(join(artifactDir, 'migration-atomicity.json'), JSON.stringify(receipt, null, 2) + '\n', { mode: 0o600 });
-  if (temporary) await rm(temporary, { recursive: true, force: true });
+  for (const workdir of temporaries) await rm(workdir, { recursive: true, force: true });
   console.log(JSON.stringify(receipt));
 }

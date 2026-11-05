@@ -130,3 +130,92 @@ export function requireEphemeralCi(env) {
     assert.ok(!env[name], `Unexpected endpoint/credential override: ${name}`);
   }
 }
+
+// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-CINEMATIC-PROOF-001: the exact reviewed
+// migration sequence. The #379 target must follow its exact predecessor and the
+// exact 183-migration prefix of main 0df86dcb, and exactly one reviewed
+// follow-up (001D) may follow it. Any other migration, anywhere, is refused
+// until a reviewed change extends this pin: it is not a generic mechanism.
+export const predecessorName = '20261102015942_bizbot_storefront_seo_discovery_001.sql';
+export const predecessorVersion = '20261102015942';
+export const prefixNamesFingerprint = '6ee60a7fc86607ebbcd69492f551f673622336c4476823ee8a2c014106f15643';
+export const followUpName = '20261104141959_bizbot_zcredit_001d_server_ledger.sql';
+export const followUpVersion = '20261104141959';
+export const followUpFingerprint = '468768f89029a0fb131869f754d5374127930b8bf05b48cd8de19d645546352e';
+// Every function the reviewed #379 target creates or replaces.
+export const targetFunctions = [
+  'app.get_restaurant_storefront_content_v2', 'app.list_storefront_content_media_v2', 'app.set_restaurant_storefront_content_v1',
+  'app.storefront_content_document_shape_v1', 'app.storefront_content_media_in_use_v1', 'app.storefront_content_read_v2',
+  'app.storefront_content_repoint_media_v1', 'public.get_restaurant_storefront_content_v2',
+  'public.list_storefront_content_media_v2', 'public.storefront_menu_v5',
+];
+const migrationFileName = /^\d{14}_[a-z0-9][a-z0-9_]*\.sql$/;
+// The supported runner applies each file atomically; top-level transaction
+// control would split that apply. Dollar-quoted PL/pgSQL BEGIN/END never matches.
+const transactionControl = /^(?:begin|start\s+transaction|commit|end|rollback|abort|savepoint|release|prepare\s+transaction)\b/i;
+
+export function topLevelTransactionControl(sql) {
+  return statements(sql).filter((item) => transactionControl.test(item.text)).map((item) => item.text);
+}
+
+export function proveFollowUpMigration(bytes) {
+  assert.ok(Buffer.isBuffer(bytes), 'Migration sources must be raw bytes');
+  // Structure first, then the reviewed bytes, so that each refusal names its cause.
+  const sql = bytes.toString('utf8');
+  assert.ok(topLevelTransactionControl(sql).length === 0, 'Unexpected top-level transaction control in the 001D follow-up');
+  assert.equal(sha256(bytes), followUpFingerprint, 'Unreviewed 001D follow-up bytes');
+  return { follow_up_sha256: sha256(bytes), follow_up_statements: statements(sql).length, follow_up_no_embedded_transaction: true };
+}
+
+// `sources` is the migration directory as [name, raw bytes] pairs in the order
+// the supported CLI applies them (byte-wise file-name order). Nothing is sorted
+// or filtered here: the caller's exact listing and exact bytes are proved.
+export function proveMigrationSequence(sources) {
+  assert.ok(Array.isArray(sources) && sources.length > 0, 'Expected the migration directory listing');
+  assert.ok(sources.every((entry) => Array.isArray(entry) && entry.length === 2 && Buffer.isBuffer(entry[1])),
+    'Migration sources must be raw bytes');
+  const names = sources.map(([name]) => name);
+  for (const name of names) {
+    assert.match(String(name), migrationFileName, 'Migration file names must be a 14-digit version, a lower-case name and .sql');
+  }
+  const versions = names.map((name) => name.slice(0, 14));
+  assert.equal(new Set(versions).size, versions.length, 'Duplicate migration version');
+  assert.ok(versions.every((version, index) => index === 0 || version > versions[index - 1]),
+    'Migration versions must be strictly ascending');
+  const index = names.indexOf(migrationName);
+  assert.ok(index >= 0, 'Missing the exact #379 target migration');
+  assert.equal(names[index - 1], predecessorName, 'The #379 target must directly follow its exact predecessor');
+  const prefixNames = sha256(names.slice(0, index).join('\n'));
+  assert.equal(prefixNames, prefixNamesFingerprint, 'Unreviewed migration sequence before the #379 target');
+  const later = names.slice(index + 1);
+  assert.ok(later.length > 0, 'Missing the reviewed 001D follow-up migration');
+  if (later[0] !== followUpName) {
+    assert.ok(!later.includes(followUpName), 'Interleaved migration between the #379 target and the 001D follow-up');
+    assert.fail('Unknown migration after the #379 target');
+  }
+  assert.equal(later.length, 1, 'Only the reviewed 001D follow-up may follow the #379 target');
+  const bytes = new Map(sources);
+  proveFinalMigration(bytes.get(migrationName).toString('utf8'));
+  const followUp = proveFollowUpMigration(bytes.get(followUpName));
+  // A renamed or copied migration cannot carry the reviewed bytes elsewhere.
+  for (const [name, value] of sources) {
+    const digest = sha256(value);
+    assert.ok(name === migrationName || digest !== finalFingerprint, 'The reviewed #379 target bytes may appear only under its pinned name');
+    assert.ok(name === followUpName || digest !== followUpFingerprint, 'The reviewed 001D bytes may appear only under their pinned name');
+  }
+  return {
+    target_prefix: names.slice(0, index + 1),
+    summary: { migrations: names.length, before_target: index, predecessor: predecessorName, target: migrationName,
+      later_than_target: later, prefix_names_sha256: prefixNames, ...followUp },
+  };
+}
+
+// The disposable workdir of the late-failure and target-only phases: the exact
+// sources before the #379 target, then the given target bytes (the broken copy,
+// or the tracked bytes). The 001D follow-up is never part of it.
+export function targetPrefixSources(sources, targetBytes) {
+  assert.ok(Buffer.isBuffer(targetBytes), 'Migration sources must be raw bytes');
+  const { target_prefix: prefix } = proveMigrationSequence(sources);
+  const bytes = new Map(sources);
+  return prefix.map((name) => [name, name === migrationName ? targetBytes : bytes.get(name)]);
+}
