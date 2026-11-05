@@ -1449,7 +1449,11 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       ],
     );
     if (widget.embedded) {
-      return KeyedSubtree(key: const Key('storefront-section'), child: content);
+      // Keep the card's separate accessibility nodes inside the Settings group.
+      return KeyedSubtree(
+        key: const Key('storefront-section'),
+        child: Semantics(explicitChildNodes: true, child: content),
+      );
     }
     return AdminSectionCard(
       key: const Key('storefront-section'),
