@@ -9,6 +9,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'opening_hours_editor.dart';
 import 'storefront_background_upload.dart';
+import 'storefront_background_publisher.dart';
 import 'storefront_contrast.dart';
 import 'storefront_color_picker.dart';
 import 'storefront_content_models.dart';
@@ -41,6 +42,7 @@ class StorefrontEditorSeams {
     StorefrontContentCatalog? contentCatalog,
     this.publisher,
     this.backgroundUpload,
+    this.backgroundPublisher,
     this.publicUrlFor,
   }) : _contentRepository = contentRepository,
        _contentCatalog = contentCatalog;
@@ -76,6 +78,7 @@ class StorefrontEditorSeams {
   /// here; the media slots then show an honest note).
   final StorefrontMediaPublisher? publisher;
   final StorefrontBackgroundUpload? backgroundUpload;
+  final StorefrontBackgroundPublisher? backgroundPublisher;
 
   /// The public URL of a published derivative (preview only; null = none).
   final Uri Function(String objectKey)? publicUrlFor;
@@ -399,6 +402,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
         !identical(old?.contentRepository, current?.contentRepository) ||
         !identical(old?.contentCatalog, current?.contentCatalog) ||
         !identical(old?.publisher, current?.publisher) ||
+        !identical(old?.backgroundPublisher, current?.backgroundPublisher) ||
         !identical(old?.backgroundUpload, current?.backgroundUpload)) {
       final keepDraft =
           _patch().isNotEmpty ||
@@ -1862,6 +1866,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               _featuredPending == null,
           publisher: widget.seams!.publisher,
           backgroundUpload: widget.seams!.backgroundUpload,
+          backgroundPublisher: widget.seams!.backgroundPublisher,
           sources: _sources,
           reloadSources: _reloadSources,
           publicUrlFor: widget.seams!.publicUrlFor,

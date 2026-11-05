@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'storefront_background_upload.dart';
+import 'storefront_background_publisher.dart';
 import 'storefront_content_models.dart';
 import 'storefront_content_repository.dart';
 import 'storefront_content_unicode.dart' as unicode;
@@ -51,6 +52,7 @@ class StorefrontContentSection extends StatefulWidget {
     this.colorSample = const StorefrontColorSample(),
     this.publisher,
     this.backgroundUpload,
+    this.backgroundPublisher,
     this.sources,
     this.reloadSources,
     this.publicUrlFor,
@@ -66,6 +68,7 @@ class StorefrontContentSection extends StatefulWidget {
   final StorefrontColorSample colorSample;
   final StorefrontMediaPublisher? publisher;
   final StorefrontBackgroundUpload? backgroundUpload;
+  final StorefrontBackgroundPublisher? backgroundPublisher;
   final StorefrontSourceOptions? sources;
   final Future<StorefrontSourceOptions> Function()? reloadSources;
   final Uri Function(String)? publicUrlFor;
@@ -85,6 +88,13 @@ class _ContentState extends State<StorefrontContentSection> {
   final _appearanceColors = <String, TextEditingController>{};
   bool _busy = false, _dirty = false, _stale = false;
   bool _uploadingBackground = false;
+  ({
+    String mediaId,
+    String requestId,
+    int? baseRung,
+    StorefrontBackgroundResult? result,
+  })?
+  _backgroundQuality;
   int _visibleMediaCount = 6;
   int _generation = 0;
   int _bindingGeneration = 0;
@@ -142,10 +152,12 @@ class _ContentState extends State<StorefrontContentSection> {
     if (!identical(old.repository, widget.repository) ||
         !identical(old.catalog, widget.catalog) ||
         !identical(old.publisher, widget.publisher) ||
+        !identical(old.backgroundPublisher, widget.backgroundPublisher) ||
         !identical(old.backgroundUpload, widget.backgroundUpload) ||
         old.savedBranchId != widget.savedBranchId) {
       final abandonedUpload = _uploadingBackground;
       _uploadingBackground = false;
+      _backgroundQuality = null;
       _bindingGeneration++;
       _generation++;
       _ownsRefresh = false;
@@ -552,6 +564,7 @@ class _ContentState extends State<StorefrontContentSection> {
 
   void _changeAppearance(String field, Object? value) {
     if (!mounted || !_editable) return;
+    if (field == 'menu_background_media_id') _backgroundQuality = null;
     final controller = _appearanceColors[field];
     if (controller != null && controller.text != (value ?? '')) {
       controller.text = value as String? ?? '';
@@ -633,6 +646,42 @@ class _ContentState extends State<StorefrontContentSection> {
             ),
           Text(_mediaDimensions(media.media)),
           Text(c('backgroundResolutionHelp')),
+          if (widget.backgroundPublisher != null) ...[
+            if (_backgroundQuality?.mediaId == mediaId)
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _backgroundQualityText(),
+                  key: const Key('content-background-quality-status'),
+                ),
+              ),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                key: const Key('content-background-quality-prepare'),
+                onPressed:
+                    _editable &&
+                        !_dirty &&
+                        !(_backgroundQuality?.mediaId == mediaId &&
+                            [
+                              StorefrontBackgroundStatus.published,
+                              StorefrontBackgroundStatus.notNeeded,
+                            ].contains(_backgroundQuality?.result?.status))
+                    ? () => _prepareExistingBackground(media.media)
+                    : null,
+                icon: const Icon(Icons.high_quality_outlined),
+                label: Text(
+                  c(
+                    _backgroundQuality?.mediaId == mediaId &&
+                            _backgroundQuality?.result?.status ==
+                                StorefrontBackgroundStatus.uncertain
+                        ? 'backgroundQualityRetry'
+                        : 'backgroundQualityPrepare',
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
         Text(c('menuBackgroundDim').replaceAll('{percent}', '${dim ?? 15}')),
         Slider(
@@ -1317,6 +1366,91 @@ class _ContentState extends State<StorefrontContentSection> {
         source: StorefrontMediaSource.menuImage(image.imageKey),
       ),
   ];
+  String _backgroundQualityText() {
+    final result = _backgroundQuality?.result;
+    if (result == null) return c('backgroundQualityWorking');
+    return switch (result.status) {
+      StorefrontBackgroundStatus.published =>
+        c('backgroundQualityReady')
+            .replaceAll(
+              '{size}',
+              '\u2066${result.width}×${result.height}\u2069',
+            )
+            .replaceAll('{bytes}', '${result.byteLength}'),
+      StorefrontBackgroundStatus.notNeeded => c('backgroundQualityNative'),
+      StorefrontBackgroundStatus.uncertain => c('backgroundQualityUncertain'),
+      _ => c('backgroundQualityUnavailable'),
+    };
+  }
+
+  Future<void> _prepareExistingBackground(StorefrontMediaRow media) async {
+    if (!_editable || _dirty || widget.backgroundPublisher == null) return;
+    final binding = _bindingGeneration;
+    _setBusy(true);
+    await _prepareBackgroundQuality(
+      mediaId: media.id,
+      width: media.width,
+      height: media.height,
+    );
+    if (_current(binding)) _setBusy(false);
+  }
+
+  Future<void> _prepareBackgroundQuality({
+    required String mediaId,
+    required int width,
+    required int height,
+    int? baseRung,
+  }) async {
+    final publisher = widget.backgroundPublisher;
+    if (publisher == null) return;
+    final binding = _bindingGeneration;
+    final previous = _backgroundQuality;
+    final retry =
+        previous?.mediaId == mediaId &&
+        previous?.result?.status == StorefrontBackgroundStatus.uncertain;
+    final requestId = retry
+        ? previous!.requestId
+        : storefrontRequestId('pbl:background:hd:', [
+            widget.savedBranchId,
+            mediaId,
+          ], DateTime.now().microsecondsSinceEpoch);
+    final proofRung = baseRung ?? (retry ? previous?.baseRung : null);
+    setState(
+      () => _backgroundQuality = (
+        mediaId: mediaId,
+        requestId: requestId,
+        baseRung: proofRung,
+        result: null,
+      ),
+    );
+    StorefrontBackgroundResult result;
+    try {
+      result = await publisher.publish(
+        requestId: requestId,
+        branchId: widget.savedBranchId,
+        baseMediaId: mediaId,
+        baseWidth: width,
+        baseHeight: height,
+        baseRung: proofRung,
+      );
+    } catch (_) {
+      result = const StorefrontBackgroundResult(
+        StorefrontBackgroundStatus.uncertain,
+      );
+    }
+    if (!_current(binding)) return;
+    setState(
+      () => _backgroundQuality = (
+        mediaId: mediaId,
+        requestId: requestId,
+        baseRung: result.baseRung ?? proofRung,
+        result: result,
+      ),
+    );
+    // Optional companion publication never selects, saves, or re-points an
+    // image. The existing base and whole-document CAS remain usable.
+  }
+
   Future<void> _uploadMenuBackground() async {
     final upload = widget.backgroundUpload;
     if (!_editable || _dirty || upload == null || widget.publisher == null)
@@ -1425,6 +1559,16 @@ class _ContentState extends State<StorefrontContentSection> {
       return;
     }
     if (result.isPublished) {
+      if (background && widget.backgroundPublisher != null) {
+        final media = result.media!;
+        await _prepareBackgroundQuality(
+          mediaId: media.id,
+          width: media.width,
+          height: media.height,
+          baseRung: result.rung,
+        );
+        if (!_current(binding)) return;
+      }
       // No slot/profile write here. The owner selects a content media reference
       // and saves the whole document through the same global profile CAS.
       _pendingPublish = null;
