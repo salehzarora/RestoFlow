@@ -950,6 +950,9 @@ async function screenshot(page: Page, path: string): Promise<void> {
 }
 
 test('real owner Dashboard → Storage → publisher → save → live menu; replacement, clear and appearance', async ({ page, context }) => {
+  // Leave both final clear checks their full render windows after the earlier
+  // saves, reloads and scene checks in this serial browser journey.
+  test.setTimeout(20 * 60_000);
   const f = fixture();
   const network = await guardBrowser(context);
   const out = resolve(process.env.CINEMATIC_ARTIFACT_DIR ?? 'cinematic-artifacts');
