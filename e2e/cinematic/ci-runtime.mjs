@@ -124,13 +124,17 @@ async function main(action) {
     checked('node', ['prepare.mjs'], { cwd: resolve(root, 'apps/dashboard/cutout'), stdio: 'inherit' });
     checked('npm', ['test'], { cwd: resolve(root, 'apps/dashboard/cutout'), stdio: 'inherit' });
     const defines = resolve(privateDir, 'dashboard-defines.json');
-    // Experimental segmentation is enabled only in this guarded disposable
-    // acceptance build. Release-default Original behavior has focused tests.
+    // Exercise the same optional explicit-action processor compiled for the
+    // owner-enabled Production editor; this harness still uses isolated data.
     writeFileSync(defines, JSON.stringify({ RESTOFLOW_DEMO_MODE: 'false', RESTOFLOW_STOREFRONT_EDITOR: 'true',
       SF_PRODUCT_CUTOUT_REVIEW: 'true',
       RESTOFLOW_SUPABASE_URL: status.url, RESTOFLOW_SUPABASE_ANON_KEY: status.anonKey }), { mode: 0o600 });
     checked('flutter', ['build', 'web', '--release', '--no-pub', '--no-web-resources-cdn', `--dart-define-from-file=${defines}`],
       { cwd: resolve(root, 'apps/dashboard'), stdio: 'inherit' });
+    checked('node', ['prepare.mjs', '--verify-build', 'true', 'dashboard-only'],
+      { cwd: resolve(root, 'apps/dashboard/cutout'), stdio: 'inherit' });
+    writeFileSync(resolve(publicDir, 'dashboard-cutout-build.json'),
+      readFileSync(resolve(root, 'apps/dashboard/build/web/product-cutout/build-record.json')));
     const fontMirror = installDashboardFontMirror(root);
     writeFileSync(resolve(publicDir, 'dashboard-font-mirror.json'), JSON.stringify(fontMirror, null, 2));
     assert.equal(JSON.parse(readFileSync(resolve(root, 'storefront/package.json'), 'utf8')).scripts.build, 'next build');

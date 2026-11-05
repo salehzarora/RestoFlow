@@ -1,7 +1,7 @@
 // BIZBOT-STOREFRONT-VISUAL-PARITY-001: one disposable local inference worker.
 import { LIMITS, MODEL, outputSize, inputTensor, alphaMatte } from './limits.mjs';
-import { sniffSource } from './vendor/sniff.mjs';
-import { pngRawSize, sanitizePng } from './vendor/pngbound.mjs';
+import { vendorPath } from './assets.mjs';
+const vendorRoot = new URL(vendorPath, import.meta.url);
 const stage = value => postMessage({ stage: value });
 const hex = bytes => [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
 
@@ -9,6 +9,10 @@ self.onmessage = async ({ data }) => {
   let bitmap, session;
   try {
     if (!(data.bytes instanceof ArrayBuffer)) throw new Error('Invalid image');
+    // Install the handler synchronously: a top-level awaited import can yield
+    // before the bridge's initial message arrives and lose that one message.
+    const { sniffSource } = await import(new URL('sniff.mjs', vendorRoot).href);
+    const { pngRawSize, sanitizePng } = await import(new URL('pngbound.mjs', vendorRoot).href);
     const bytes = new Uint8Array(data.bytes);
     const info = sniffSource(bytes, LIMITS);
     stage('decoding');
@@ -37,7 +41,7 @@ self.onmessage = async ({ data }) => {
     const model = new Uint8Array(MODEL.bytes);
     for (let i = 0; i < MODEL.parts.length; i++) {
       const expected = Math.min(MODEL.partBytes, MODEL.bytes - i * MODEL.partBytes);
-      const response = await fetch(new URL(`./vendor/u2net-${String(i).padStart(2, '0')}.bin`, import.meta.url), { credentials: 'same-origin' });
+      const response = await fetch(new URL(`u2net-${String(i).padStart(2, '0')}.bin`, vendorRoot), { credentials: 'same-origin' });
       if (!response.ok || (response.headers.get('content-length') && Number(response.headers.get('content-length')) !== expected)) throw new Error('Local model unavailable');
       const reader = response.body.getReader();
       let offset = i * MODEL.partBytes;
@@ -51,8 +55,8 @@ self.onmessage = async ({ data }) => {
       if (offset !== end || hex(new Uint8Array(await crypto.subtle.digest('SHA-256', model.subarray(i * MODEL.partBytes, end)))) !== MODEL.parts[i]) throw new Error('Local model integrity check failed');
     }
     if (hex(new Uint8Array(await crypto.subtle.digest('SHA-256', model))) !== MODEL.sha256) throw new Error('Local model integrity check failed');
-    const ort = await import('./vendor/ort.wasm.min.mjs');
-    ort.env.wasm.wasmPaths = new URL('./vendor/', import.meta.url).href;
+    const ort = await import(new URL('ort.wasm.min.mjs', vendorRoot).href);
+    ort.env.wasm.wasmPaths = vendorRoot.href;
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
     session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'], executionMode: 'sequential', enableCpuMemArena: false, enableMemPattern: false });

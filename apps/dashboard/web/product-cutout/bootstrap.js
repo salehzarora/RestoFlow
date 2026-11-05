@@ -1,4 +1,4 @@
-// Tiny Dashboard bridge. No model/runtime/worker loads until product editing.
+// Tiny Dashboard bridge. No model/runtime/worker loads until explicit processing.
 (() => {
   const base = new URL('./bridge.mjs', document.currentScript.src);
   let module;

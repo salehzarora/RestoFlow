@@ -9,26 +9,26 @@ owner explicitly publishes Original or Remove background. The menu image pointer
 and private original stay unchanged. The Dashboard gateway owns authenticated
 source-generation/selection-version checks and existing media publication.
 
-## Release default: Original only
+## Release: optional explicit preparation
 
-Automatic removal is **unavailable by default**. The demonstrated masks lose
-part of the burger plate, make the fries cup/plate translucent, and retain
-unrelated bottles. Raw model confidence already contains these errors; the
-measured mask processing and c4 alpha transport do not repair or introduce them.
-No threshold/opacity correction or replacement model is adopted as a claimed fix.
+The owner accepted the demonstrated mask limitations for PR380's release on
+2026-11-05. Original remains selected; loading a photo or opening/switching the
+editor does not process it. The separate **Prepare** action starts the worker;
+reviewing a candidate and explicitly publishing a choice remain separate steps.
 
-The editor still loads, reviews and explicitly publishes **Original**, and the
-ordinary image uploader is unchanged. It does not instantiate a processor worker
-or fetch the model in this default path. `SF_PRODUCT_CUTOUT_REVIEW=true` is an
-explicit build-time opt-in for the isolated quality-review stack only. The
-existing CI harness enables it to exercise the experimental path; those results
-are not proof of release-default automatic removal or acceptable masks.
+The existing Production Storefront editor gate enables
+`SF_PRODUCT_CUTOUT_REVIEW=true` for Dashboard only. The name is retained for
+compatibility. Unset/disabled gates and Preview builds do not ship the heavy
+assets. A disabled processor or an unsupported device still permits explicit
+Original publication. The isolated CI build enables the same compile flag to
+exercise the real action, without using production data.
 
-Focused tests separately cover the constructor default, new/existing original
-photos, failed loading, explicit publication, disabling an already-selected or
-in-flight candidate, and unsupported-device fallback. Keep the review opt-in out
-of release builds until preservation quality is accepted. No hosted environment
-setting is changed by this PR.
+Known masks lose part of a burger plate, make a fries cup/plate translucent, or
+retain unrelated bottles. These errors originate in the raw model confidence;
+no threshold/opacity correction or replacement model is claimed to fix them.
+Review each candidate and keep Original if food or serving context is lost.
+Historical quality reports remain unchanged. Acceptance is not a claim of
+perfect segmentation, universal device support, or zero operating cost.
 
 ## Chosen runtime and weights
 
@@ -59,22 +59,47 @@ BRIA RMBG is not adopted because its free weight license excludes commercial use
 ## Build and delivery
 
 From this directory run `npm ci --ignore-scripts`, then `npm run prepare`.
-Preparation verifies the model digest, writes 11 pinned chunks (at most 16 MiB)
-under **Dashboard** `web/product-cutout/vendor`, and copies the pinned runtime,
-notices, and the existing publication engine's bounded pre-decode validators.
-Model download happens only during the build. Runtime fetches only same-origin
-chunks; no image or metadata is sent to a model provider. The worker verifies
-each chunk and the assembled model before inference. One preallocated model
-buffer avoids concatenation copies. Browser caching can reuse immutable assets;
-deployment should give versioned paths immutable caching, or revalidation otherwise.
+The existing Product Vercel build executes those pinned commands only when its
+Production editor gate is enabled. Preparation verifies the model and each of
+its 11 chunks (at most 16 MiB), copies the pinned runtime, notices and bounded
+pre-decode validators, and writes **Dashboard-only** assets under
+`web/product-cutout/assets/<64-hex SHA-256>/`. The directory identity covers the
+sorted filenames, lengths and SHA-256 digests of all 20 files. `assets.mjs` points
+the worker at that revision; no per-tenant copies or URLs are created.
 
-`web/index.html` loads only the 1 KB bootstrap. The model/runtime are lazy loaded
-by the product editor. No Storefront/POS import, public page script, service,
-provider key, or generative API is added. Build artifacts are gitignored and
-must be prepared before a Dashboard deployment. Vercel's CLI source upload limit
-is aggregate (100 MB Hobby, 1 GB Pro); chunks do not evade that limit. A remote
-build can prepare assets from the small committed source manifest. Official
-limits: <https://vercel.com/docs/limits>.
+`asset-manifest.json` also binds the stable bootstrap/worker/bridge/limits code.
+The build verifies the copied output, the production flag, and exclusion from
+POS/KDS/Kiosk, then writes sanitized `product-cutout/build-record.json` with the
+source commit, asset revision/digests/bytes and enabled state. CI retains this
+record as `dashboard-cutout-build.json`. Disabled builds remove only the fixed
+generated processor outputs before Flutter builds, preventing reused-checkout
+leakage. These checks do not alter or raise a build/resource budget.
+
+`vercel.json` assigns immutable public caching only to the content-addressed
+processor files. Stable modules/manifests revalidate; module/WASM/model/notices
+have explicit MIME types and `nosniff`. Missing processor paths return 404
+instead of the Dashboard SPA. These headers do not cover private source images,
+authenticated Storage requests, tokens, or other API responses. Merchant source
+bytes stay in the browser during preparation; authenticated publication uses
+the existing media path separately. Runtime verifies each chunk and the assembled
+model before inference; one preallocated buffer avoids concatenation copies.
+
+`web/index.html` loads only the tiny bootstrap. No model/runtime is fetched until
+an explicit processing call. No Storefront/POS import, public storefront script,
+provider key or external inference service is added. Prepared assets are
+shared static build files, gitignored, and must exist before an enabled build.
+Browser/CDN reuse reduces repeat transfer but is not guaranteed storage: eviction,
+new devices/browsers or changed versions require another cold download. The
+model alone is about 176 MB, and runtime transfer and browser memory are additional.
+
+`node cache-benchmark.mjs INPUT_JPEG REPORT.json` measures the actual worker twice
+in one fresh, un-routed local Chrome context. It records server response body
+bytes, model request counts, output hashes and timings using the committed cache
+headers. It also checks missing paths and that opening the page loads no heavy
+assets. This is local browser-cache evidence, not production CDN measurement,
+wire overhead, a permanent cache promise or a real-service save. The routed
+acceptance journey disables HTTP cache and labels its resource receipts accordingly.
+Production response headers/build identity must be verified after deployment.
 
 ## Resource and lifecycle bounds
 

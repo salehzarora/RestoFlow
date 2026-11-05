@@ -10,11 +10,11 @@ import { fileURLToPath } from 'node:url';
 // Absolute end assertion: JavaScript's $ alone also accepts a final newline.
 const SHA = /^[a-f0-9]{40}(?![\s\S])/i;
 const ENGINE = 'tools/vercel/ignore-build.mjs';
-const BUILD_SCRIPT_HASH = '5ed8dee670144e28713eebb2e173a765f05ea8130bb8fd0487739dac524b3d01';
+const BUILD_SCRIPT_HASH = 'bae4a30b7212cfaf53b23ed82eeef937f16dbcb58f4f969683fed13cbf528b3a';
 // VISUAL-PARITY-001: the conditional Dashboard prepare step reads only its
 // cutout/web trees and these two copied publisher utilities. Pin its entrypoints
 // as well as the outer builder so later inputs require another graph review.
-const CUTOUT_PREPARE_HASH = '6e5c8ca45b931df49457744e192ade85c8edb136962c98320dee328c43f62e6a';
+const CUTOUT_PREPARE_HASH = '29132205c66e2d1e16220361eef8615919c953f661cf27c94d60b5ac26af1150';
 const CUTOUT_MANIFEST_HASH = '27cc8a4536eaf2dbc6f0793231f7f4b1dab9ee54a97bfaf2979901bfabbdfeb3';
 const CUTOUT_LIMITS_HASH = '50bf64be65f0208f30671e654855176f1cf3f11f01017890f88b4df444fb0342';
 const CUTOUT_COPIED_INPUTS = [

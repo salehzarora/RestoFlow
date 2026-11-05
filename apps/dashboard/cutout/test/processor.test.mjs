@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { LIMITS, MODEL, outputSize, inputTensor, alphaMatte } from '../../web/product-cutout/limits.mjs';
-import { sniffSource } from '../../web/product-cutout/vendor/sniff.mjs';
+import { vendorPath } from '../../web/product-cutout/assets.mjs';
+const vendor = new URL(vendorPath, new URL('../../web/product-cutout/', import.meta.url));
+const { sniffSource } = await import(new URL('sniff.mjs', vendor));
 import { unavailableReason } from '../../web/product-cutout/bridge.mjs';
 
 test('unsupported and low-memory devices are refused before worker/decode/model work', async (t) => {
@@ -62,13 +64,13 @@ test('actual model tensor normalization and matte reject invalid outputs', () =>
 test('model parts assemble to licensed pinned artifact and native heap is capped', async () => {
   const digest = createHash('sha256'); let bytes = 0;
   for (let i = 0; i < MODEL.parts.length; i++) {
-    const part = await readFile(new URL(`../../web/product-cutout/vendor/u2net-${String(i).padStart(2,'0')}.bin`, import.meta.url));
+    const part = await readFile(new URL(`u2net-${String(i).padStart(2,'0')}.bin`, vendor));
     assert.ok(part.length <= MODEL.partBytes);
     assert.equal(createHash('sha256').update(part).digest('hex'), MODEL.parts[i]);
     digest.update(part); bytes += part.length;
   }
   assert.equal(bytes, MODEL.bytes); assert.equal(digest.digest('hex'), MODEL.sha256);
-  const runtime = await readFile(new URL('../../web/product-cutout/vendor/ort-wasm-simd-threaded.mjs', import.meta.url), 'utf8');
+  const runtime = await readFile(new URL('ort-wasm-simd-threaded.mjs', vendor), 'utf8');
   assert.ok(runtime.includes('initial:256,maximum:8192,shared:!0'));
   assert.ok(!runtime.includes('initial:256,maximum:65536,shared:!0'));
 });
