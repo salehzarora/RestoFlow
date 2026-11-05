@@ -72,6 +72,7 @@ import { SourceRejected, sniffSource, webpInfo } from './sniff.mjs';
 import { PngRejected, pngRawSize, sanitizePng } from './pngbound.mjs';
 import { applyOrientation, jpegExifOrientation } from './orient.mjs';
 import { boxReduce } from './box.mjs';
+import { BACKGROUND_RECIPE, resizeBackgroundBilinear } from './background-bilinear.mjs';
 import { CodecInitError, loadCodecs } from './codecs.mjs';
 
 // The ONLY accepted variant names and source buckets, exactly.
@@ -270,10 +271,10 @@ export function createDeriverFromCodecs(codecs, recipe = RECIPE) {
    * or throws SourceRejected / DerivationError (typed).
    * `inspect: true` (tests only) also returns the pre-encode RGBA raster.
    */
-  async function derive(bytes, { variant, source, rung = 0, inspect = false } = {}) {
+  async function deriveImage(bytes, { variant, source, rung = 0, inspect = false } = {}, background = false) {
     const t0 = performance.now();
     // Exact allowlists (Map membership of a primitive string); validated before any byte is read.
-    const target = variantWidth(variant);
+    const target = background ? BACKGROUND_RECIPE.longEdge : variantWidth(variant);
     if (target === null) throw new DerivationError('unknown_variant');
     const maxInputBytes = sourceMaxBytes(source);
     if (maxInputBytes === null) throw new DerivationError('unknown_source');
@@ -336,7 +337,8 @@ export function createDeriverFromCodecs(codecs, recipe = RECIPE) {
     const resizeInput = px;
     if (rw !== pw || rh !== ph) {
       try {
-        px = codecs.resize(px, pw, ph, rw, rh, recipe.resize.method, recipe.resize.premultiply, recipe.resize.linearRGB);
+        px = background ? resizeBackgroundBilinear(px, pw, ph, rw, rh)
+          : codecs.resize(px, pw, ph, rw, rh, recipe.resize.method, recipe.resize.premultiply, recipe.resize.linearRGB);
       } catch (e) {
         throw codecFailure(e, { taints: true });
       }
@@ -413,7 +415,8 @@ export function createDeriverFromCodecs(codecs, recipe = RECIPE) {
   }
 
   return {
-    derive,
+    derive: (bytes, options) => deriveImage(bytes, options),
+    deriveBackground: (bytes, options) => deriveImage(bytes, options, true),
     /** Marks the engine as untrusted: every later derive() is refused as engine_unavailable. */
     poison,
     get poisoned() { return poisoned; },

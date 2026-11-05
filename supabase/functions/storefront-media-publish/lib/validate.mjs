@@ -14,12 +14,15 @@
 // whitespace variant, no empty string and no future name can pass. No ordinary
 // object is ever indexed with an untrusted string.
 
+import { BACKGROUND_RECIPE } from './background-bilinear.mjs';
 import { sourceMaxBytes, variantWidth, RECIPE } from './recipe.mjs';
 
 export const REQUEST_KEYS = Object.freeze([
   'request_id', 'organization_id', 'restaurant_id', 'slot', 'variant', 'source_bucket', 'source_key', 'rung',
 ]);
 const REQUEST_KEY_SET = new Set(REQUEST_KEYS);
+const BACKGROUND_REQUEST_KEYS = ['request_id','organization_id','restaurant_id','branch_id','base_media_id','slot','variant','base_rung','rung'];
+const BACKGROUND_REQUEST_KEY_SET = new Set(BACKGROUND_REQUEST_KEYS);
 const PRODUCT_REQUEST_KEYS = Object.freeze([...REQUEST_KEYS, 'product_derivative_id']);
 const PRODUCT_REQUEST_KEY_SET = new Set(PRODUCT_REQUEST_KEYS);
 
@@ -61,6 +64,14 @@ function keyMatch(bucket, key) {
     case 'menu-images': return MENU_KEY_RE.exec(key);
     default: return null;
   }
+}
+
+export function privateSourceInScope(bucket, key, organizationId, restaurantId, branchId) {
+  if (typeof key !== 'string' || key.length > MAX_SOURCE_KEY_LENGTH) return false;
+  const match = keyMatch(bucket, key);
+  if (!match || match[0] !== key || match[1] !== organizationId || match[2] !== restaurantId) return false;
+  const sourceBranch = key.split('/')[2];
+  return bucket !== 'menu-images' || sourceBranch === 'global' || sourceBranch === branchId;
 }
 
 const refuse = (field, reason) => ({ ok: false, field, reason });
@@ -112,8 +123,9 @@ export function validateRequest(body) {
   // which is refused here like any other unknown name).
   const keys = Object.keys(body);
   const product = body.slot === 'product';
-  const requiredKeys = product ? PRODUCT_REQUEST_KEYS : REQUEST_KEYS;
-  const allowedKeys = product ? PRODUCT_REQUEST_KEY_SET : REQUEST_KEY_SET;
+  const background = body.slot === 'background';
+  const requiredKeys = background ? BACKGROUND_REQUEST_KEYS : product ? PRODUCT_REQUEST_KEYS : REQUEST_KEYS;
+  const allowedKeys = background ? BACKGROUND_REQUEST_KEY_SET : product ? PRODUCT_REQUEST_KEY_SET : REQUEST_KEY_SET;
   for (const k of keys) {
     // Echo an unknown name only when it is a plain identifier (never reflect arbitrary text).
     if (!allowedKeys.has(k)) return refuse(/^[A-Za-z0-9_]{1,64}$/.test(k) ? k : '?', 'unknown_field');
@@ -129,6 +141,17 @@ export function validateRequest(body) {
     if (!UUID_RE.test(v)) return refuse(field, 'value');
   }
 
+  if (background) {
+    for (const field of ['request_id','organization_id','restaurant_id','branch_id','base_media_id']) {
+      if (typeof body[field] !== 'string' || body[field].length !== 36 || !UUID_RE.test(body[field])) return refuse(field, 'value');
+    }
+    if (body.variant !== BACKGROUND_RECIPE.variant) return refuse('variant', 'mismatch');
+    for (const field of ['base_rung','rung']) {
+      if (!Number.isInteger(body[field]) || body[field] < 0 || body[field] >= RECIPE.ladder.length) return refuse(field, 'value');
+    }
+    return { ok:true, value:Object.freeze({ requestId, organizationId, restaurantId, slot:'background', variant:BACKGROUND_RECIPE.variant,
+      variantWidth:BACKGROUND_RECIPE.longEdge, branchId:body.branch_id, baseMediaId:body.base_media_id, baseRung:body.base_rung, rung:body.rung }) };
+  }
   const spec = slotSpec(body.slot);
   if (spec === null) return refuse('slot', typeof body.slot === 'string' ? 'value' : 'type');
 
