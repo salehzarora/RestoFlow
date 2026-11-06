@@ -460,8 +460,22 @@ class _Header extends ConsumerWidget {
           icon: const Icon(Icons.refresh),
           // MANUAL refresh goes through the coordinator like everything else, so it
           // cannot race the periodic tick — a second caller joins the one in flight.
-          onPressed: () =>
+          onPressed: () {
+            if (!ref.read(runtimeConfigProvider).isDemoMode) {
+              final probe = ref.read(staffCapabilitiesProvider);
+              final caps = probe.valueOrNull;
+              // A transient failure is cached as unknown and withdraws Edit.
+              // Use this explicit refresh to recover the current session's
+              // missing proof, preserving known denials and in-flight reads.
+              if (!probe.isLoading &&
+                  (caps?.branchFeatures == null || caps?.role == null)) {
+                ref.invalidate(staffCapabilitiesProvider);
+              }
+            }
+            unawaited(
               ref.read(posOrderSyncControllerProvider.notifier).refreshWindow(),
+            );
+          },
         ),
       ],
     );
