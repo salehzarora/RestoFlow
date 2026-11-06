@@ -115,7 +115,7 @@ try {
     const hero = envelope.restaurant.hero_url;
     const background = settings.menu_background_url || hero;
     if (background) {
-      const image = page.locator('[data-sf-screen="home"] > div[aria-hidden="true"] img').first();
+      const image = page.locator('[data-sf-screen="home"] > div[aria-hidden="true"] > img');
       await image.evaluate(node => node.decode());
       assert.ok((await image.getAttribute('src')).endsWith(new URL(background, apiOrigin).pathname));
     }
@@ -142,7 +142,7 @@ try {
       await welcome.close();
     }
     await page.reload({ waitUntil: 'networkidle' });
-    const reloaded = page.locator('[data-sf-screen="home"] > div[aria-hidden="true"] img').first();
+    const reloaded = page.locator('[data-sf-screen="home"] > div[aria-hidden="true"] > img');
     if (background) assert.ok((await reloaded.getAttribute('src')).endsWith(new URL(background, apiOrigin).pathname));
     evidence.appearance.push({ slug, css, hero, background, reloaded: true });
   }

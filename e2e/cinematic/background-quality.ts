@@ -176,7 +176,7 @@ export class BackgroundQuality {
                     await expect(root).toHaveAttribute('data-sf-scene', scene);
                 else
                     await expect(root).not.toHaveAttribute('data-sf-scene', 'reference_dark');
-                const img = page.locator('[data-sf-menu-background="custom"] img');
+                const img = page.locator('[data-sf-menu-background="custom"] [data-sf-menu-primary]');
                 await expect(img).toHaveAttribute('src', pair.baseUrl);
                 await expect(img).toHaveAttribute('srcset', pair.baseUrl + ' 960w, ' + pair.highUrl + ' 2560w');
                 const coverWidth = Math.max(width, height * high.width / high.height);
@@ -235,7 +235,19 @@ export class BackgroundQuality {
                     const frame = await inspect();
                     expect(Math.abs(frame.y + scrollY - top.y), 'Artwork remains attached to the document').toBeLessThanOrEqual(1);
                     expect({ ...frame, y:top.y }, 'Scroll changes only the viewport position of the same selected artwork').toEqual(top);
-                    scrollFrames.push({ scrollY, imageViewportY:frame.y });
+                    const continuation = await page.locator('[data-sf-menu-continuation]').evaluate((grid, selectedSrc) => {
+                        const strips = Array.from(grid.querySelectorAll<HTMLImageElement>('[data-sf-scene-strip] > img'));
+                        const visible = strips.filter(copy => {
+                            const box = copy.parentElement!.getBoundingClientRect();
+                            return box.bottom > 0 && box.top < innerHeight;
+                        });
+                        return { visible: visible.length, count: strips.length,
+                            selected: visible.every(copy => copy.complete && copy.naturalWidth > 0 && copy.currentSrc === selectedSrc) };
+                    }, top.currentSrc);
+                    expect(continuation.visible).toBeGreaterThan(0);
+                    expect(continuation.count).toBeLessThanOrEqual(64);
+                    expect(continuation.selected).toBe(true);
+                    scrollFrames.push({ scrollY, imageViewportY:frame.y, visibleStrips:continuation.visible });
                 }
                 await page.waitForLoadState('networkidle');
                 expect(selectedResponses.length, 'No second background resource fetched on scroll').toBe(1);

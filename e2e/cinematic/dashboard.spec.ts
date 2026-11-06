@@ -853,7 +853,7 @@ async function renderMenu(page: Page, f: Fixture, image: string, dim: number | n
       }
       const observation = await page.evaluate(({ expectedImage, expectedDim, expectedColours, expectedScene }) => {
         const roots = document.querySelectorAll<HTMLElement>('[data-sf-root]');
-        const backgrounds = document.querySelectorAll<HTMLImageElement>('main[data-sf-screen="home"] > div[aria-hidden="true"] img');
+        const backgrounds = document.querySelectorAll<HTMLImageElement>('main[data-sf-screen="home"] [data-sf-menu-primary]');
         const root = roots.length === 1 ? roots[0] : null;
         const style = root ? getComputedStyle(root) : null;
         const value = (name: string) => style?.getPropertyValue(name).trim() ?? '';
@@ -886,7 +886,7 @@ async function renderMenu(page: Page, f: Fixture, image: string, dim: number | n
     }, { timeout: 100_000, intervals: [100, 250, 500, 1000] }).toBe(true);
     await expect(page.locator('[data-sf-root]')).toHaveAttribute('dir', 'rtl');
     if (dim === null) await expect(page.locator('[data-sf-menu-background="custom"]')).toHaveCount(0);
-    const bg = page.locator('main[data-sf-screen="home"] > div[aria-hidden="true"] img').first();
+    const bg = page.locator('main[data-sf-screen="home"] [data-sf-menu-primary]');
     await expect.poll(() => bg.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
     trace.result = 'ready';
   } catch (error) { trace.result = 'failed'; throw error; }
@@ -895,7 +895,7 @@ async function verifyMenuGeometry(page: Page): Promise<void> {
   const sections = page.locator('[data-sf-module="sections"]');
   await expect(sections, 'All four synthetic menu categories remain present').toHaveCount(4);
   const backdrop = page.locator('[data-sf-menu-background="custom"]');
-  const photo = backdrop.locator('img');
+  const photo = backdrop.locator('[data-sf-menu-primary]');
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   const layer = await backdrop.boundingBox();
@@ -916,7 +916,7 @@ async function verifyMenuGeometry(page: Page): Promise<void> {
       await expect.poll(() => page.evaluate(() => window.scrollY), 'The long menu actually scrolled').toBeGreaterThan(0);
     }
     const rect = await photo.boundingBox();
-    expect(rect, `The menu photo remains visible at ${position}`).not.toBeNull();
+    expect(rect, `The lead photograph remains laid out at ${position}`).not.toBeNull();
     const scrollY = await page.evaluate(() => window.scrollY);
     expect(Math.abs(rect!.x), 'Photo stays at the document left edge').toBeLessThanOrEqual(1);
     expect(Math.abs(rect!.y + scrollY), 'Photo stays at the document top').toBeLessThanOrEqual(1);
@@ -928,7 +928,7 @@ async function verifyReferenceScene(page: Page, dim: number): Promise<void> {
   const result = await page.evaluate(() => {
     const home = document.querySelector('main[data-sf-screen="home"]')!;
     const layer = home.querySelector('div[aria-hidden="true"]')!;
-    const image = layer.querySelector('img')!;
+    const image = layer.querySelector('[data-sf-menu-primary]')!;
     const photo = getComputedStyle(image), overlay = getComputedStyle(layer, '::after');
     const header = getComputedStyle(home.querySelector('header')!);
     const category = getComputedStyle(home.querySelector('[data-sf-module="categories"]')!.parentElement!);
