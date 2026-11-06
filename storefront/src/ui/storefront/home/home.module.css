@@ -220,17 +220,26 @@
 .page{position:relative;isolation:isolate;--header-height:82px;min-height:100svh;background:transparent}
 .page[data-sf-screen="home"]{min-height:100dvh}
 .sceneBackdrop{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--bg)}
-.sceneBackdrop img{position:fixed;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center 58%;opacity:.18;filter:blur(22px);transform:scale(1.08)}
-.sceneBackdrop::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent,rgba(0,0,0,.25));pointer-events:none}
-/* Stable artwork scrolls once with the document. The scene covers short and
-   long menus, blending below the photo without enlarging or repeating it. */
+.sceneBackdrop>img{position:fixed;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center 58%;opacity:.18;filter:blur(22px);transform:scale(1.08)}
+.sceneBackdrop::after{content:'';position:absolute;inset:0;z-index:2;background:linear-gradient(180deg,transparent,rgba(0,0,0,.25));pointer-events:none}
+/* Keep the lead composition; reflected lower-photo strips continue through the
+   whole document. Integer tracks avoid fractional-pixel gaps between strips. */
 .menuBackdrop{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--bg)}
 .menuBackdrop,.page[data-sf-screen="home"] .sceneBackdrop{background:radial-gradient(ellipse at 20% 0%,var(--hair),transparent 65%),linear-gradient(var(--scrim,rgba(6,8,7,.66)),var(--scrim,rgba(6,8,7,.66))),var(--bg)}
-.menuBackdrop img{position:absolute;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center top;filter:none}
-.menuBackdrop img,.page[data-sf-screen="home"] .sceneBackdrop img{mask-image:linear-gradient(#000 70%,transparent)}
-.page[data-sf-screen="home"] .sceneBackdrop img{position:absolute;object-position:center top;transform-origin:center top}
-.menuBackdrop::after{content:'';position:absolute;inset:0;background:var(--bg);opacity:var(--menu-image-dim,.15);pointer-events:none}
-.page[data-sf-screen="intro"] .sceneBackdrop img{opacity:1;filter:none;transform:none}
+.menuBackdrop>img{position:absolute;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center top;filter:none}
+.menuBackdrop>img,.page[data-sf-screen="home"] .sceneBackdrop>img{z-index:1;mask-image:linear-gradient(#000 70%,transparent)}
+.page[data-sf-screen="home"] .sceneBackdrop>img{position:absolute;object-position:center top;transform-origin:center top}
+.menuBackdrop::after{content:'';position:absolute;inset:0;z-index:2;background:var(--bg);opacity:var(--menu-image-dim,.15);pointer-events:none}
+.menuSceneContinuation{position:absolute;inset:0;z-index:0;display:grid;overflow:hidden;grid-template-rows:repeat(8,minmax(192px,1fr));grid-template-rows:repeat(8,max(192px,round(up,12.5%,1px)));mask-image:linear-gradient(transparent 55svh,#000 78svh)}
+.sceneRows16{grid-template-rows:repeat(16,minmax(192px,1fr));grid-template-rows:repeat(16,max(192px,round(up,6.25%,1px)))}
+.sceneRows32{grid-template-rows:repeat(32,minmax(192px,1fr));grid-template-rows:repeat(32,max(192px,round(up,3.125%,1px)))}
+.sceneRows64{grid-template-rows:repeat(64,minmax(192px,1fr));grid-template-rows:repeat(64,max(192px,round(up,1.5625%,1px)))}
+.menuSceneStrip{position:relative;display:block;overflow:hidden;min-width:0;min-height:0;margin-block:-1px}
+.menuSceneStrip:nth-child(even){transform:scaleY(-1)}
+.menuSceneStrip img{position:absolute;top:0;inset-inline-start:0;display:block;width:100%;height:calc(100% + 64px);object-fit:cover;object-position:center bottom}
+@supports(height:round(up,1px,1px)){.menuSceneStrip{margin-block:0}}
+.page[data-sf-screen="home"] .sceneBackdrop .menuSceneContinuation{opacity:.18;filter:blur(22px)}
+.page[data-sf-screen="intro"] .sceneBackdrop>img{opacity:1;filter:none;transform:none}
 .page[data-sf-screen="intro"] .sceneBackdrop::after{background:linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,.04) 38%,rgba(0,0,0,.03) 62%,rgba(0,0,0,.8))}
 .inner{width:min(1240px,calc(100% - 80px))}
 .header{background:color-mix(in srgb,var(--bg) 94%,transparent);border:0;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
@@ -302,9 +311,9 @@
 .page[data-sf-screen="intro"] .service{gap:15px;justify-content:center}.page[data-sf-screen="intro"] .serviceCell{font-size:12px;gap:9px}
 .page[data-sf-screen="intro"]>.footerInner{padding-block:18px 24px}.page[data-sf-screen="intro"] .footerCredit{margin:0}
 @media(min-width:651px){
- .page[data-sf-screen="intro"] .sceneBackdrop img{width:72%;inset-inline-start:auto;inset-inline-end:0;object-position:center 65%;mask-image:linear-gradient(270deg,#000 60%,transparent 100%)}
+ .page[data-sf-screen="intro"] .sceneBackdrop>img{width:72%;inset-inline-start:auto;inset-inline-end:0;object-position:center 65%;mask-image:linear-gradient(270deg,#000 60%,transparent 100%)}
  .page[data-sf-screen="intro"] .sceneBackdrop::after{background:linear-gradient(90deg,var(--bg),color-mix(in srgb,var(--bg) 85%,transparent) 28%,transparent 70%)}
- .page[data-sf-screen="intro"]:dir(rtl) .sceneBackdrop img{mask-image:linear-gradient(90deg,#000 60%,transparent 100%)}
+ .page[data-sf-screen="intro"]:dir(rtl) .sceneBackdrop>img{mask-image:linear-gradient(90deg,#000 60%,transparent 100%)}
  .page[data-sf-screen="intro"]:dir(rtl) .sceneBackdrop::after{background:linear-gradient(270deg,var(--bg),color-mix(in srgb,var(--bg) 85%,transparent) 28%,transparent 70%)}
  .footer .servicePanel{grid-template-columns:1fr 1fr;gap:20px 35px}.footer .findUs{max-width:950px}
 }
@@ -323,7 +332,7 @@
  .page[data-sf-screen="intro"] .heroTitle{margin-block:10px 16px}
  .page[data-sf-screen="intro"] .heroActions{margin-block-start:auto;padding-block-start:220px}
  .page[data-sf-screen="intro"] .heroActions .promoCta{width:100%;justify-content:space-between}
- .page[data-sf-screen="intro"] .hero .eyebrow{display:none}.sceneBackdrop img{object-position:50% 55%}
+ .page[data-sf-screen="intro"] .hero .eyebrow{display:none}.sceneBackdrop>img{object-position:50% 55%}
  .page[data-sf-screen="intro"] .serviceWrap{width:calc(100% - 36px);padding:13px 16px;margin-block:0}
  .page[data-sf-screen="intro"] .service{gap:9px 16px;justify-content:space-between}.page[data-sf-screen="intro"] .serviceIcon svg{width:18px;height:18px}
  .page[data-sf-screen="intro"] .serviceOff{flex-basis:100%;justify-content:center}
@@ -392,7 +401,9 @@
 [data-sf-scene="reference_dark"] .page .servicePanel,
 [data-sf-scene="reference_dark"] .page .contactLine,
 [data-sf-scene="reference_dark"] .page[data-sf-screen="intro"] .serviceWrap{background:var(--sceneGlassSoft);border-color:var(--sceneLine)}
-[data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop img{position:absolute;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center top;opacity:1;filter:none;transform:none}
+[data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop>img{position:absolute;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center top;opacity:1;filter:none;transform:none}
 [data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .menuBackdrop::after,
 [data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop::after{background:#000;opacity:var(--menu-image-dim,.15)}
 [data-sf-scene="reference_dark"] .footerPhoto img{filter:none}
+
+[data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop .menuSceneContinuation{opacity:1;filter:none}
