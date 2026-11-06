@@ -412,6 +412,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-EXACT-GAP-APPLY-001 (DECISION D-066): the GR-37 bounded-apply wrapper's unit
+      # tests - the default route's regression tests and the one-time exact-gap mode's positive and negative tests. Pure
+      # Node against an injected fake CLI and synthetic data: no database, no Docker, no network, no credential, no
+      # hosted target, no pooler and no migration apply. It runs before the Docker steps and needs nothing they start.
+      - name: Tests — GR-37 bounded apply wrapper (default route + one-time exact-gap mode; no database)
+        run: node --test tools/supabase/bounded-db-push.test.mjs
+
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v1
         with:
