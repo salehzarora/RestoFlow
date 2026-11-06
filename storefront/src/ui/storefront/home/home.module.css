@@ -236,7 +236,7 @@
 .sceneRows64{grid-template-rows:repeat(64,minmax(192px,1fr));grid-template-rows:repeat(64,max(192px,round(up,1.5625%,1px)))}
 .menuSceneStrip{position:relative;display:block;overflow:hidden;min-width:0;min-height:0;margin-block:-1px}
 .menuSceneStrip:nth-child(even){transform:scaleY(-1)}
-.menuSceneStrip img{position:absolute;top:0;inset-inline-start:0;display:block;width:100%;height:calc(100% + 64px);object-fit:cover;object-position:center bottom}
+.menuSceneStrip img{position:absolute;inset-block-start:auto;inset-block-end:-64px;inset-inline-start:0;display:block;width:100%;height:calc(200% + 128px);object-fit:cover;object-position:center bottom}
 @supports(height:round(up,1px,1px)){.menuSceneStrip{margin-block:0}}
 .page[data-sf-screen="home"] .sceneBackdrop .menuSceneContinuation{opacity:.18;filter:blur(22px)}
 .page[data-sf-screen="intro"] .sceneBackdrop>img{opacity:1;filter:none;transform:none}
