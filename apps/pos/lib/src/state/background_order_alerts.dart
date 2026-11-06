@@ -113,6 +113,7 @@ class BackgroundOrderAlertState {
     this.busy = false,
     this.failed = false,
     this.authorizationExpired = false,
+    this.authorizedUntil,
     this.failureReason,
     this.diagnostics = const BackgroundOrderAlertDiagnostics(),
   });
@@ -121,6 +122,7 @@ class BackgroundOrderAlertState {
   final bool busy;
   final bool failed;
   final bool authorizationExpired;
+  final DateTime? authorizedUntil;
   final BackgroundOrderAlertFailure? failureReason;
   final BackgroundOrderAlertDiagnostics diagnostics;
 }
@@ -276,6 +278,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   DateTime? _authorityExpiresAt;
   DateTime? _lastRegistrationAttempt;
   Timer? _authorityRenewal;
+  Timer? _authorityExpiry;
   BackgroundAlertInactivityLock? _lastInactivityProof;
   DeviceContext? _lastDeviceContext;
   DateTime Function() _proofClock = DateTime.now;
@@ -313,7 +316,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     _wake();
     _off = false;
     _explicitFailure = false;
-    _authorityExpiresAt = null;
+    _clearDeadline();
     _lastRegistrationAttempt = null;
     _authorityRenewal?.cancel();
     _authorityRenewal = null;
@@ -364,6 +367,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       _disposed = true;
       _active?.retainOptInOnExit = false;
       _generation++;
+      _clearDeadline();
       _authorityRenewal?.cancel();
       _authorityRenewal = null;
       _finishIntent();
@@ -502,7 +506,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     _active?.retainOptInOnExit = retainOptIn;
     _off = !retainOptIn;
     _explicitFailure = failed;
-    _authorityExpiresAt = null;
+    _clearDeadline();
     _authorityRenewal?.cancel();
     _authorityRenewal = null;
     _finishIntent();
@@ -525,6 +529,30 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   }
 
   int get authorityGeneration => _generation;
+
+  void _clearDeadline() {
+    _authorityExpiry?.cancel();
+    _authorityExpiry = null;
+    _authorityExpiresAt = null;
+  }
+
+  void _expireAuthority() {
+    unawaited(
+      _cancel(
+        failed: true,
+        retainOptIn: true,
+        authorizationExpired: true,
+        reason: BackgroundAlertRevocationReason.authorityExpired,
+      ),
+    );
+  }
+
+  bool _expireIfDue() {
+    final deadline = _authorityExpiresAt;
+    if (deadline == null || deadline.isAfter(_proofClock())) return false;
+    _expireAuthority();
+    return true;
+  }
 
   Future<void> setEnabled(bool value) {
     if (!value)
@@ -554,7 +582,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       }
       return Future.value();
     }
-    if (state.enabled) return Future.value();
+    if (_expireIfDue() || state.enabled) return Future.value();
     final existing = _intent;
     if (existing != null) return existing.done.future;
     _off = false;
@@ -570,6 +598,9 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   }
 
   void _kick({bool force = false}) {
+    // Resume may happen before a suspended Dart timer or in-flight prepare
+    // continues. Invalidate the old grant before either can claim readiness.
+    if (_expireIfDue()) return;
     if (!_authorized(_generation) ||
         !_foreground ||
         _active != null ||
@@ -592,19 +623,6 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       return;
     }
     final now = ref.read(backgroundOrderAlertClockProvider)();
-    if (_authorityExpiresAt != null && !_authorityExpiresAt!.isAfter(now)) {
-      // Notification delegation cannot outlive the employee authority. Keep
-      // the opt-in only; the ordinary PIN flow must establish a new identity.
-      unawaited(
-        _cancel(
-          failed: true,
-          retainOptIn: true,
-          authorizationExpired: true,
-          reason: BackgroundAlertRevocationReason.authorityExpired,
-        ),
-      );
-      return;
-    }
     if (_intent == null && !force) {
       if (_authorityExpiresAt?.isAfter(now.add(const Duration(minutes: 2))) ??
           false)
@@ -663,6 +681,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         if (_confirmed(attempt)) {
           throw _AlertFailure(_preparationFailure(prepared['failure_reason']));
         }
+        _clearDeadline();
         state = BackgroundOrderAlertState(
           // Build support controls visibility. A native/Firebase preparation
           // failure must not hide the switch and its recovery feedback.
@@ -712,6 +731,12 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       diagnostics = diagnostics.withResult(
         registration: BackgroundOrderAlertRegistrationResult.confirmed,
       );
+      // Android caps even a valid server timestamp at eight elapsed hours.
+      // Start this UI bound before awaiting bind so its latency cannot extend it.
+      final nativeLimit = _proofClock().add(const Duration(hours: 8));
+      final boundDeadline = deadline.isBefore(nativeLimit)
+          ? deadline
+          : nativeLimit;
       final bound = await bridge.bind({
         'identity': attempt.identity,
         'generation': prepared['generation'],
@@ -722,13 +747,19 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       });
       diagnostics = diagnostics.withResult(bound: bound);
       if (!await _foregroundFor(attempt)) return;
-      if (!bound ||
-          !deadline.isAfter(ref.read(backgroundOrderAlertClockProvider)()))
+      if (!bound || !boundDeadline.isAfter(_proofClock()))
         throw const _AlertFailure(BackgroundOrderAlertFailure.bindingFailed);
-      _authorityExpiresAt = deadline;
+      _clearDeadline();
+      _authorityExpiresAt = boundDeadline;
+      // One local expiry, including while paused. This timer never registers
+      // or extends a grant; native code enforces its own monotonic deadline.
+      _authorityExpiry = Timer(boundDeadline.difference(_proofClock()), () {
+        if (_current(attempt.generation)) _expireAuthority();
+      });
       state = BackgroundOrderAlertState(
         available: true,
         enabled: true,
+        authorizedUntil: boundDeadline,
         diagnostics: diagnostics,
       );
       if (_confirmed(attempt)) unawaited(saveBackgroundAlertAttempt(state));
@@ -757,7 +788,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         registrationQuarantined: _registrationUncertain,
       );
       if (_owns(attempt)) {
-        _authorityExpiresAt = null;
+        _clearDeadline();
         final explicitFailure = _confirmed(attempt);
         _explicitFailure = explicitFailure;
         await _revoke(bridge, suspend: true);
@@ -828,7 +859,8 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   }
 
   void _publish(OnlineOrderInboxState inbox) {
-    if (!state.enabled ||
+    if (_expireIfDue() ||
+        !state.enabled ||
         _identity == null ||
         !_online ||
         _authorityExpiresAt == null ||

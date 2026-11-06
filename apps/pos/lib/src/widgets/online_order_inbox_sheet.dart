@@ -284,6 +284,11 @@ class _BackgroundOrderAlertControlState
           value: alerts.enabled,
           onChanged: alerts.busy || _confirming ? null : _change,
         ),
+        BackgroundAlertGrantStatus(
+          authorizedUntil: alerts.authorizedUntil,
+          expired: alerts.authorizationExpired,
+          onDisable: () => _change(false),
+        ),
         const BackgroundAlertActivationPanel(),
         if (alerts.busy)
           Row(

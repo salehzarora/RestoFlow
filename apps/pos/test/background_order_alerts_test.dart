@@ -824,6 +824,132 @@ void main() {
     },
   );
   testWidgets(
+    'a slow device clock and delayed bind cannot extend the native eight-hour cap',
+    (tester) async {
+      final start = DateTime.utc(2026, 10, 20, 12);
+      var now = start;
+      final localEnd = start.add(const Duration(hours: 8));
+      final serverEnd = localEnd.add(const Duration(minutes: 5));
+      final bound = Completer<bool>();
+      await _run(
+        tester,
+        (c, b, repo, registrations) async {
+          expect(
+            b.bindings.single['authority_expires_at'],
+            serverEnd.toIso8601String(),
+          );
+          now = start.add(const Duration(minutes: 1));
+          await tester.pump(const Duration(minutes: 1));
+          bound.complete(true);
+          await tester.pump();
+          expect(
+            c.read(backgroundOrderAlertsProvider).authorizedUntil,
+            localEnd,
+          );
+          c.read(backgroundOrderAlertsProvider.notifier).onPaused();
+          now = localEnd;
+          await tester.pump(const Duration(hours: 7, minutes: 59));
+          expect(c.read(backgroundOrderAlertsProvider).enabled, isFalse);
+          expect(
+            c.read(backgroundOrderAlertsProvider).authorizationExpired,
+            isTrue,
+          );
+          expect(registrations, hasLength(1));
+          expect(repo.decisions, isEmpty);
+        },
+        clock: () => now,
+        bind: (_) => bound.future,
+        register: (_) async => {
+          ..._registered(),
+          'authority_expires_at': serverEnd.toIso8601String(),
+        },
+      );
+    },
+  );
+  testWidgets(
+    'saved opt-in stops reporting ready at the paused grant deadline',
+    (tester) async {
+      var now = DateTime.utc(2026, 10, 20, 12);
+      final deadline = now.add(const Duration(hours: 8));
+      await _run(
+        tester,
+        (c, b, repo, registrations) async {
+          final owner = c.read(backgroundOrderAlertsProvider.notifier);
+          expect(c.read(backgroundOrderAlertsProvider).enabled, isTrue);
+          expect(
+            c.read(backgroundOrderAlertsProvider).authorizedUntil,
+            deadline,
+          );
+          owner.onPaused();
+          now = deadline.subtract(const Duration(milliseconds: 1));
+          await tester.pump(
+            const Duration(hours: 8) - const Duration(milliseconds: 1),
+          );
+          expect(c.read(backgroundOrderAlertsProvider).enabled, isTrue);
+          now = deadline;
+          await tester.pump(const Duration(milliseconds: 1));
+          expect(c.read(backgroundOrderAlertsProvider).enabled, isFalse);
+          expect(
+            c.read(backgroundOrderAlertsProvider).authorizationExpired,
+            isTrue,
+          );
+          expect(c.read(backgroundOrderAlertsProvider).authorizedUntil, isNull);
+          expect(registrations, hasLength(1));
+          expect(b.permissionPrompts, 0);
+          expect(repo.decisions, isEmpty);
+          await owner.setEnabled(false);
+          owner.onResume();
+          await tester.pump();
+          expect(b.disables, 1);
+          expect(registrations, hasLength(1));
+        },
+        clock: () => now,
+        register: (_) async => {
+          ..._registered(),
+          'authority_expires_at': deadline.toIso8601String(),
+        },
+      );
+    },
+  );
+  testWidgets(
+    'resume expires a frozen grant even while a passive preparation is pending',
+    (tester) async {
+      var now = DateTime.utc(2026, 10, 20, 12);
+      final deadline = now.add(const Duration(hours: 8));
+      final preparation = Completer<Map<String, dynamic>>();
+      var prepares = 0;
+      await _run(
+        tester,
+        (c, b, repo, registrations) async {
+          final owner = c.read(backgroundOrderAlertsProvider.notifier);
+          b.tokenChanged!();
+          await tester.pump();
+          expect(prepares, 2);
+          owner.onPaused();
+          // Android may freeze Dart timers until the Activity resumes.
+          now = deadline;
+          owner.onResume();
+          final onReturn = c.read(backgroundOrderAlertsProvider);
+          preparation.complete(_prepared());
+          await tester.pump();
+          expect(onReturn.enabled, isFalse);
+          expect(onReturn.authorizationExpired, isTrue);
+          expect(registrations, hasLength(1));
+          expect(b.bindings, hasLength(1));
+          expect(b.permissionPrompts, 0);
+          expect(repo.decisions, isEmpty);
+        },
+        clock: () => now,
+        prepare: (_) async =>
+            ++prepares == 2 ? preparation.future : _prepared(),
+        register: (_) async => {
+          ..._registered(),
+          'authority_expires_at': deadline.toIso8601String(),
+        },
+      );
+    },
+  );
+  testWidgets(
     'expired background delegation needs a fresh authenticated identity',
     (tester) async {
       var clock = DateTime.utc(2026, 10, 20, 12);

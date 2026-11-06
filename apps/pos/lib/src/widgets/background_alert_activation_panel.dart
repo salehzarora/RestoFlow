@@ -8,6 +8,44 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../media/background_order_alert_bridge.dart';
 import '../state/background_alert_attempt_report.dart';
 
+/// Current bound grant, separate from the historical activation report below.
+class BackgroundAlertGrantStatus extends StatelessWidget {
+  const BackgroundAlertGrantStatus({
+    super.key,
+    required this.authorizedUntil,
+    required this.expired,
+    required this.onDisable,
+  });
+
+  final DateTime? authorizedUntil;
+  final bool expired;
+  final VoidCallback onDisable;
+
+  @override
+  Widget build(BuildContext context) {
+    final copy = _Copy(Localizations.localeOf(context).languageCode);
+    if (expired) {
+      return Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: TextButton(
+          key: const Key('background-alert-clear-preference'),
+          onPressed: onDisable,
+          child: Text(copy.text('clear_opt_in')),
+        ),
+      );
+    }
+    final until = authorizedUntil?.toLocal();
+    if (until == null) return const SizedBox.shrink();
+    final local = MaterialLocalizations.of(context);
+    final date = local.formatShortDate(until);
+    final time = TimeOfDay.fromDateTime(until).format(context);
+    return Text(
+      copy.field('authorized_until', '$date $time'),
+      key: const Key('background-alert-authorized-until'),
+    );
+  }
+}
+
 /// Small read-only support view. Opening settings never prepares/registers/binds.
 class BackgroundAlertActivationPanel extends ConsumerStatefulWidget {
   const BackgroundAlertActivationPanel({super.key});
@@ -245,6 +283,16 @@ class _Copy {
   }
 
   static const _words = <String, List<String>>{
+    'authorized_until': [
+      'تفويض التنبيهات الحالي صالح حتى',
+      'הרשאת ההתראות הנוכחית בתוקף עד',
+      'Current alert authorization valid until',
+    ],
+    'clear_opt_in': [
+      'إلغاء تفضيل تفعيل التنبيهات',
+      'ביטול ההעדפה לקבלת התראות',
+      'Clear saved alert preference',
+    ],
     'title': [
       'تفاصيل تفعيل التنبيهات',
       'פרטי הפעלת התראות',
