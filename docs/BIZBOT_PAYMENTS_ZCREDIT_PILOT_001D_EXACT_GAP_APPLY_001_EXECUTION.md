@@ -888,3 +888,23 @@ The corrected source (`3e9e2316`) was recomposed onto `0fe8ef80` blob for blob a
 | State query | SHA-256 `88cdc196…` | SHA-256 `09a3d902…` |
 
 Unchanged: the 001D manifest and its pins, CR-EG-01, CR-EG-02, the default route and the one CI step.
+
+## 17. Hosted PRE compatibility and D-067 (HOSTED-PRE-COMPAT-001, 2026-11-06)
+
+The read-only hosted check of 2026-11-06 stopped at its first PRE: six of the seven re-created functions hold, on
+hosted, their reviewed pre-001D body in an exact legacy CRLF form, and hosted's default privileges are not the local
+reference's. **DECISION D-067** amends this mode's contract; the
+[HOSTED-PRE-COMPAT-001 execution packet](BIZBOT_PAYMENTS_ZCREDIT_PILOT_001D_EXACT_GAP_HOSTED_PRE_COMPAT_001_EXECUTION.md)
+holds the change, its local hosted-shape proof and its review. What changed:
+
+| Item | REPIN-001 (merged as #385) | D-067 (on `e29bdb51`) |
+|---|---|---|
+| A re-created function's body at PRE | its canonical LF pin | its canonical LF pin or, for six functions only, its exact reviewed legacy CRLF form; any other form refused, naming the function and the rule |
+| Line-ending facts in the state | none | the LF-normalized body digest, the CR, LF and CRLF-pair counts and a lone-CR flag of every selected function, inside the fingerprint |
+| A function body at POST | its POST pin | its POST pin, canonical LF only |
+| Default privileges | a digest compared PRE to POST | the first PRE's digest is the run's baseline, never compared with a local reference; the second PRE and POST must equal it |
+| The check route | the first PRE, then the dry run | the first PRE, the dry run, then a second PRE that must equal the first |
+| State query | SHA-256 `09a3d902…` | SHA-256 `c623b45d…` |
+
+Unchanged: the local and remote sets, the stored statements, the runtime gate, the #382 surface pins, the 001D manifest
+and its exact access pins, CR-EG-01, the default route and the one CI step.
