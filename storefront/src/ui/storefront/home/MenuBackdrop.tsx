@@ -1,15 +1,17 @@
 import type { menuBackground } from './menuBackground';
 import styles from './home.module.css';
 
-const ROWS = [8, 16, 32, 64] as const;
-const ROW_CLASS = { 8: '', 16: styles.sceneRows16, 32: styles.sceneRows32, 64: styles.sceneRows64 };
+const ROWS = [8, 16, 32, 64, 128, 256, 512] as const;
+const ROW_CLASS = { 8: '', 16: styles.sceneRows16, 32: styles.sceneRows32, 64: styles.sceneRows64,
+  128: styles.sceneRows128, 256: styles.sceneRows256, 512: styles.sceneRows512 };
 
 /** Reuse the selected photograph through the menu, without enlarging it to document height. */
 export function MenuBackdrop({ background, sectionCount = 0, itemCount = 0 }: {
   background: ReturnType<typeof menuBackground>; sectionCount?: number; itemCount?: number;
 }) {
-  const target = Math.max(8, sectionCount * 2 + Math.ceil(itemCount / 4));
-  const rows = ROWS.find(count => count >= target) ?? 64;
+  // Long catalogues need more short crops, rather than enlarging each crop.
+  const target = Math.max(8, sectionCount * (sectionCount > 8 ? 4 : 2) + Math.ceil(itemCount / 4));
+  const rows = ROWS.find(count => count >= target) ?? 512;
   const image = background.image;
   return <div className={background.kind === 'legacy' ? styles.sceneBackdrop : styles.menuBackdrop}
     data-sf-menu-background={background.kind === 'custom' ? 'custom' : undefined} aria-hidden="true">

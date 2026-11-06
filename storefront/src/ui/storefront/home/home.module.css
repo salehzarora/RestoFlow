@@ -234,6 +234,9 @@
 .sceneRows16{grid-template-rows:repeat(16,minmax(192px,1fr));grid-template-rows:repeat(16,max(192px,round(up,6.25%,1px)))}
 .sceneRows32{grid-template-rows:repeat(32,minmax(192px,1fr));grid-template-rows:repeat(32,max(192px,round(up,3.125%,1px)))}
 .sceneRows64{grid-template-rows:repeat(64,minmax(192px,1fr));grid-template-rows:repeat(64,max(192px,round(up,1.5625%,1px)))}
+.sceneRows128{grid-template-rows:repeat(128,minmax(192px,1fr));grid-template-rows:repeat(128,max(192px,round(up,.78125%,1px)))}
+.sceneRows256{grid-template-rows:repeat(256,minmax(192px,1fr));grid-template-rows:repeat(256,max(192px,round(up,.390625%,1px)))}
+.sceneRows512{grid-template-rows:repeat(512,minmax(192px,1fr));grid-template-rows:repeat(512,max(192px,round(up,.1953125%,1px)))}
 .menuSceneStrip{position:relative;display:block;overflow:hidden;min-width:0;min-height:0;margin-block:-1px}
 .menuSceneStrip:nth-child(even){transform:scaleY(-1)}
 .menuSceneStrip img{position:absolute;inset-block-start:auto;inset-block-end:-64px;inset-inline-start:0;display:block;width:100%;height:calc(200% + 128px);object-fit:cover;object-position:center bottom}
