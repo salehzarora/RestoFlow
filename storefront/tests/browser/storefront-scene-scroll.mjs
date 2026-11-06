@@ -9,6 +9,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { scenePhotoPixels } from './helpers/scene-photo-pixels.mjs';
+import { measureDenseMenu } from './helpers/scene-source-budget.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const engine = process.argv.includes('--webkit') ? webkit : chromium;
@@ -31,6 +32,16 @@ await new Promise(ok => reserve.listen(0, '127.0.0.1', ok));
 const port = reserve.address().port;
 await new Promise(ok => reserve.close(ok));
 const origin = 'http://127.0.0.1:' + port;
+const routeFixture=(allowed,violations,onPhoto)=>route=>{
+  const req=route.request(),url=new URL(req.url());
+  if(req.method()==='GET' && url.origin===origin)return route.continue();
+  const match=/^\/storage\/v1\/object\/public\/storefront-media\/0{32}\/([abcde])\1{63}\.webp$/.exec(url.pathname);
+  if(req.method()==='GET' && url.origin==='https://oqmevrndtivqxgyvcmwy.supabase.co' && match && allowed.has(match[1])){
+    onPhoto(match[1]);
+    return route.fulfill({contentType:'image/webp',body:allowed.get(match[1])});
+  }
+  violations.push('unexpected-network-request');return route.abort();
+};
 const child = spawn(process.execPath, [join(root,'node_modules/next/dist/bin/next'), 'start','-H','127.0.0.1','-p',String(port)], {
   cwd:root, stdio:['ignore','pipe','pipe'], env:{...process.env, NEXT_TELEMETRY_DISABLED:'1', STOREFRONT_SOURCE:'live',
     STOREFRONT_SUPABASE_URL:'https://oqmevrndtivqxgyvcmwy.supabase.co', STOREFRONT_SUPABASE_ANON_KEY:'sb_publishable_SYNTHETIC_scene_scroll_only',
@@ -41,7 +52,7 @@ const rows=[], failures=[];
 const check=(ok, name, row)=>{if(!ok) failures.push({case:row.name,check:name});};
 const near=(a,b,epsilon=1)=>Math.abs(a-b)<=epsilon;
 const settle=page=>page.evaluate(()=>new Promise(ok=>requestAnimationFrame(()=>requestAnimationFrame(ok))));
-let browser;
+let browser,denseMenu;
 try {
   let ready=false;
   for(let i=0;i<100;i++){
@@ -65,16 +76,7 @@ try {
     const ctx=await browser.newContext(contextOptions);
     try {
       const violations=[], errors=[]; let photoRequests=0;
-      const fixtureRoute=route=>{
-        const req=route.request(), url=new URL(req.url());
-        if(req.method()==='GET' && url.origin===origin)return route.continue();
-        const match=/^\/storage\/v1\/object\/public\/storefront-media\/0{32}\/([abc])\1{63}\.webp$/.exec(url.pathname);
-        if(req.method()==='GET'&&url.origin==='https://oqmevrndtivqxgyvcmwy.supabase.co' && match){
-          if(match[1]==='b')photoRequests++;
-          return route.fulfill({contentType:'image/webp',body:images.get(match[1])});
-        }
-        violations.push('unexpected-network-request');return route.abort();
-      };
+      const fixtureRoute=routeFixture(images,violations,key=>{if(key==='b')photoRequests++});
       await ctx.route('**/*',fixtureRoute);
       const page=await ctx.newPage();page.on('pageerror',e=>errors.push(e.name));
       const slug=suffix=>'scene-'+[locale,scene,source,suffix].join('-');
@@ -129,7 +131,7 @@ try {
         check(frame.cornerInsideHome,label+' viewport bottom belongs to home',row);
         check(frame.underlayImage!=='none'||!['rgba(0, 0, 0, 0)','transparent'].includes(frame.underlayColor),label+' painted underlay',row);
         const bands=frame.stripGeometry;
-        check(bands.count>=8 && bands.count<=64 && bands.first<=frame.mainTop+1 && bands.last>=frame.mainBottom-1 &&
+        check(bands.count>=8 && bands.count<=512 && bands.first<=frame.mainTop+1 && bands.last>=frame.mainBottom-1 &&
           bands.maxGap<=.1 && bands.sameSource && bands.proportionate,label+' proportional photo strips cover the entire menu',row);
       };
       for(const [label,fraction] of [['top',0],['middle',.5],['footer',1],['return',0]]){
@@ -273,11 +275,16 @@ try {
       console.log(name, 'geometry/visibility checks:', failures.filter(f=>f.case===name).length, 'failures');
     } finally {await ctx.close();}
   }
+  denseMenu=await measureDenseMenu(browser,origin,routeFixture,images);
+  check(denseMenu.sectionCount===100 && denseMenu.stripCount===512 && denseMenu.mainHeight>60000 &&
+    denseMenu.footerCovered && denseMenu.footerScrollY>0 && denseMenu.sameNativeSelection &&
+    denseMenu.maxStripRequiredWidth<=denseMenu.sourceWidth && denseMenu.leadRequiredWidth<=denseMenu.sourceWidth,
+    'Maximum catalogue fits the decoded native source at actual DPR through the footer',{name:engine.name()+'-dense-menu'});
 } finally {
   await browser?.close();
   if(child.exitCode===null){const stopped=new Promise(ok=>child.once('exit',ok));child.kill();await stopped;}
   if(out) writeFileSync(join(out,'scene-scroll-'+engine.name()+'.json'),JSON.stringify({engine:engine.name(),version:browser?.version(),
     scope:'Local production renderer, synthetic tenant, read-only fixtures. Desktop WebKit and controlled viewport resizing are not a physical iPhone.',
-    physicalIPhone:'NOT_RUN',backgroundSha256:createHash('sha256').update(background).digest('hex'),buildId:readFileSync(join(root,'.next/BUILD_ID'),'utf8').trim(),rows,failures},null,2)+'\n');
+    physicalIPhone:'NOT_RUN',backgroundSha256:createHash('sha256').update(background).digest('hex'),buildId:readFileSync(join(root,'.next/BUILD_ID'),'utf8').trim(),rows,denseMenu,failures},null,2)+'\n');
 }
 assert.deepEqual(failures,[]);

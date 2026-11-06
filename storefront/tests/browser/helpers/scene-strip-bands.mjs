@@ -23,7 +23,7 @@ export async function testStripBands(browser,origin,setMenu) {
       await page.goto(origin);
       await page.locator('[data-sf-menu-primary]').evaluate(img=>img.decode());
       const count=await page.locator('[data-sf-scene-strip]').count();
-      assert.equal(count,64,'Long fixture uses the maximum bounded strip count');
+      assert.equal(count,64,'Long fixture exercises 64 strips');
       for (const depth of ['top','middle','footer']) {
         const geometry=await page.evaluate(depth=>{
           scrollTo(0,depth==='top'?0:depth==='middle'?10010:document.documentElement.scrollHeight);

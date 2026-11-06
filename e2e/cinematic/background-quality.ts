@@ -245,7 +245,7 @@ export class BackgroundQuality {
                             selected: visible.every(copy => copy.complete && copy.naturalWidth > 0 && copy.currentSrc === selectedSrc) };
                     }, top.currentSrc);
                     expect(continuation.visible).toBeGreaterThan(0);
-                    expect(continuation.count).toBeLessThanOrEqual(64);
+                    expect(continuation.count).toBeLessThanOrEqual(512);
                     expect(continuation.selected).toBe(true);
                     scrollFrames.push({ scrollY, imageViewportY:frame.y, visibleStrips:continuation.visible });
                 }
