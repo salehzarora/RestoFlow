@@ -5,6 +5,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 
 import '../data/online_order_inbox.dart';
 import '../media/background_order_alert_bridge.dart';
+import 'background_alert_attempt_report.dart';
 import 'background_alert_delegation.dart';
 import 'online_order_inbox_controller.dart';
 import 'pos_offline_state.dart';
@@ -535,7 +536,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         !_authorized(_generation) ||
         _cleanupFailed ||
         _registrationUncertain) {
-      if (!_disposed && _bridge != null)
+      if (!_disposed && _bridge != null) {
         state = BackgroundOrderAlertState(
           available: true,
           failed: true,
@@ -549,6 +550,8 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
             cleanupQuarantined: _cleanupFailed,
           ),
         );
+        unawaited(saveBackgroundAlertAttempt(state));
+      }
       return Future.value();
     }
     if (state.enabled) return Future.value();
@@ -661,7 +664,13 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
           throw _AlertFailure(_preparationFailure(prepared['failure_reason']));
         }
         state = BackgroundOrderAlertState(
-          available: prepared['available'] == true,
+          // Build support controls visibility. A native/Firebase preparation
+          // failure must not hide the switch and its recovery feedback.
+          available: true,
+          failed: prepared['available'] != true,
+          failureReason: prepared['available'] != true
+              ? _preparationFailure(prepared['failure_reason'])
+              : null,
           diagnostics: diagnostics,
         );
         return;
@@ -722,6 +731,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         enabled: true,
         diagnostics: diagnostics,
       );
+      if (_confirmed(attempt)) unawaited(saveBackgroundAlertAttempt(state));
       _finishIntent();
       _publish(ref.read(onlineOrderInboxControllerProvider));
       _armAuthorityRenewal();
@@ -748,7 +758,8 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       );
       if (_owns(attempt)) {
         _authorityExpiresAt = null;
-        _explicitFailure = _confirmed(attempt);
+        final explicitFailure = _confirmed(attempt);
+        _explicitFailure = explicitFailure;
         await _revoke(bridge, suspend: true);
         if (_owns(attempt)) {
           state = BackgroundOrderAlertState(
@@ -761,6 +772,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
               cleanupQuarantined: _cleanupFailed,
             ),
           );
+          if (explicitFailure) unawaited(saveBackgroundAlertAttempt(state));
           _finishIntent();
         }
       }

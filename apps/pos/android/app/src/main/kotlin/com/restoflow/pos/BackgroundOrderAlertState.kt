@@ -448,6 +448,37 @@ internal class BackgroundOrderAlertHints {
 }
 
 internal enum class BackgroundOrderAlertHintAction { foreground, reconcile, start, fallback, none }
+
+/** Read-only activation UI projection. No identity, credential, token or arbitrary exception input. */
+internal object BackgroundOrderAlertReadiness {
+    // ConnectionResult codes from the existing Firebase/Play-services dependency.
+    fun googlePlayServices(code: Int?): String = when (code) {
+        0 -> "available"
+        1 -> "missing"
+        2 -> "update_required"
+        3 -> "disabled"
+        9 -> "unsupported"
+        else -> "unknown"
+    }
+
+    fun snapshot(version: String?, sdk: Int, model: String?, permission: Boolean?,
+        notifications: Boolean?, channel: Boolean?, importance: Boolean?, sound: Boolean?,
+        firebase: Boolean?, googleServicesCode: Int?): Map<String, Any?> = mapOf(
+        "app_version" to version.orEmpty().filter { it in 'a'..'z' || it in 'A'..'Z' ||
+            it in '0'..'9' || it in ".-+_" }.take(64).ifEmpty { "unknown" },
+        "android_sdk" to sdk,
+        "model" to model.orEmpty().filter { it in 'a'..'z' || it in 'A'..'Z' ||
+            it in '0'..'9' || it in " ._()-" }.take(64).trim().ifEmpty { "unknown" },
+        "permission_allowed" to permission,
+        "notifications_enabled" to notifications,
+        "channel_present" to channel,
+        "channel_importance_allowed" to importance,
+        "channel_sound_present" to sound,
+        "google_play_services" to googlePlayServices(googleServicesCode),
+        "firebase_initialized" to firebase,
+    )
+}
+
 internal fun backgroundOrderAlertHintAction(foreground: Boolean, running: Boolean, high: Boolean, allowed: Boolean): BackgroundOrderAlertHintAction = when {
     foreground -> BackgroundOrderAlertHintAction.foreground
     !allowed -> BackgroundOrderAlertHintAction.none

@@ -8,12 +8,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_pos/src/data/online_order_inbox.dart';
 import 'package:restoflow_pos/src/media/background_order_alert_bridge.dart';
 import 'package:restoflow_pos/src/state/background_order_alerts.dart';
+import 'package:restoflow_pos/src/state/background_alert_attempt_report.dart';
 import 'package:restoflow_pos/src/state/background_alert_delegation.dart';
 import 'package:restoflow_pos/src/state/online_order_inbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_offline_state.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'online_order_inbox_fixtures.dart';
 
@@ -231,6 +233,108 @@ Future<void> _run(
 }
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    latestBackgroundAlertAttempt.value = null;
+  });
+
+  testWidgets(
+    'only completed explicit enable publishes a safe attempt result',
+    (tester) async {
+      await _run(tester, (c, b, r, registrations) async {
+        expect(latestBackgroundAlertAttempt.value, isNull);
+        final controller = c.read(backgroundOrderAlertsProvider.notifier);
+        await controller.setEnabled(true);
+        final report = latestBackgroundAlertAttempt.value!;
+        expect(report.values['result'], 'confirmed');
+        expect(report.values['registration'], 'confirmed');
+        expect(report.values['bound'], true);
+        expect(report.encode(), isNot(contains('synthetic-token')));
+        expect(report.encode(), isNot(contains('installation_id')));
+        await tester.pump();
+        expect(
+          (await BackgroundAlertAttemptReport.load())?.values,
+          report.values,
+        );
+        await controller.setEnabled(false);
+        controller.onResume();
+        await tester.pump();
+        expect(latestBackgroundAlertAttempt.value, same(report));
+        expect(registrations, hasLength(1));
+        expect(r.decisions, isEmpty);
+      }, nativeEnabled: false);
+    },
+  );
+
+  testWidgets('passive registration cannot replace a saved explicit result', (
+    tester,
+  ) async {
+    unawaited(
+      saveBackgroundAlertAttempt(
+        const BackgroundOrderAlertState(
+          available: true,
+          failed: true,
+          failureReason: BackgroundOrderAlertFailure.registrationRejected,
+        ),
+      ),
+    );
+    await tester.pump();
+    final previous = latestBackgroundAlertAttempt.value;
+    await _run(tester, (c, b, r, registrations) async {
+      expect(c.read(backgroundOrderAlertsProvider).enabled, true);
+      expect(registrations, hasLength(1));
+      expect(latestBackgroundAlertAttempt.value, same(previous));
+      expect(r.decisions, isEmpty);
+    });
+  });
+
+  testWidgets(
+    'explicit attempt retains cleanup refusal after intent completion',
+    (tester) async {
+      await _run(
+        tester,
+        (c, b, r, registrations) async {
+          b.cleanupThrows = true;
+          await c.read(backgroundOrderAlertsProvider.notifier).setEnabled(true);
+          final report = latestBackgroundAlertAttempt.value!;
+          expect(report.values['result'], 'cleanupFailed');
+          expect(report.values['registration'], 'confirmed');
+          expect(report.values['bound'], false);
+          expect(report.values['cleanup_quarantined'], true);
+          expect(c.read(backgroundOrderAlertsProvider).enabled, false);
+          expect(registrations, hasLength(1));
+          expect(r.decisions, isEmpty);
+          b.cleanupThrows = false;
+        },
+        nativeEnabled: false,
+        bindsAllowed: false,
+      );
+    },
+  );
+
+  testWidgets(
+    'missing authority reports refusal without preparing or registering',
+    (tester) async {
+      await _run(tester, (c, b, r, registrations) async {
+        c.read(_identity.notifier).state = null;
+        await tester.pump();
+        final prepares = b.prepares;
+        await c.read(backgroundOrderAlertsProvider.notifier).setEnabled(true);
+        expect(
+          latestBackgroundAlertAttempt.value?.values['result'],
+          'unavailable',
+        );
+        expect(
+          latestBackgroundAlertAttempt.value?.values['registration'],
+          'notAttempted',
+        );
+        expect(b.prepares, prepares);
+        expect(registrations, isEmpty);
+        expect(r.decisions, isEmpty);
+      }, nativeEnabled: false);
+    },
+  );
+
   testWidgets(
     'inactivity handshake timeout is fail closed and cannot become a late success',
     (tester) async {
@@ -359,6 +463,44 @@ void main() {
       expect(r.decisions, isEmpty);
     }, deviceContext: lockedDevice);
   });
+  testWidgets(
+    'unavailable Firebase keeps activation failure visible without prompting',
+    (tester) async {
+      await _run(
+        tester,
+        (c, b, r, registrations) async {
+          final state = c.read(backgroundOrderAlertsProvider);
+          expect(
+            state.available,
+            true,
+            reason: 'supported build must retain recovery UI',
+          );
+          expect(state.enabled, false);
+          expect(state.failed, true);
+          expect(
+            state.failureReason,
+            BackgroundOrderAlertFailure.firebaseUnavailable,
+          );
+          expect(state.diagnostics.firebaseInitialized, false);
+          expect(state.diagnostics.tokenAcquired, isNull);
+          expect(
+            state.diagnostics.registration,
+            BackgroundOrderAlertRegistrationResult.notAttempted,
+          );
+          expect(b.permissionPrompts, 0);
+          expect(registrations, isEmpty);
+          expect(b.bindings, isEmpty);
+          expect(r.decisions, isEmpty);
+        },
+        prepare: (_) async => {
+          'available': false,
+          'enabled': false,
+          'failure_reason': 'firebase_unavailable',
+          'diagnostics': {'firebase_initialized': false},
+        },
+      );
+    },
+  );
   for (final (nativeReason, expected) in [
     ('permission_denied', BackgroundOrderAlertFailure.permissionDenied),
     (
@@ -476,6 +618,14 @@ void main() {
             expect(state.failureReason, expected);
             expect(state.diagnostics.registration, registration);
             expect(state.diagnostics.registrationQuarantined, false);
+            expect(
+              latestBackgroundAlertAttempt.value?.values['result'],
+              expected.name,
+            );
+            expect(
+              latestBackgroundAlertAttempt.value?.values['registration'],
+              registration.name,
+            );
             expect(transport.calls, ['pos_register_order_alert']);
             expect(b.bindings, isEmpty);
             expect(r.decisions, isEmpty);
@@ -1297,6 +1447,18 @@ void main() {
       final before = b.prepares;
       await controller.setEnabled(true);
       expect(b.prepares, before);
+      expect(
+        latestBackgroundAlertAttempt.value?.values['result'],
+        'cleanupFailed',
+      );
+      expect(
+        latestBackgroundAlertAttempt.value?.values['cleanup_quarantined'],
+        true,
+      );
+      expect(
+        latestBackgroundAlertAttempt.value?.values['registration'],
+        'notAttempted',
+      );
       b.cleanupThrows = false;
       await controller.setEnabled(
         false,

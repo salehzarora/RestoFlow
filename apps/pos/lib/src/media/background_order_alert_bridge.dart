@@ -93,6 +93,12 @@ abstract interface class BackgroundOrderAlertRevocation {
   Future<bool> revoke({bool suspend = false, bool retainOptIn = false});
 }
 
+/// Read-only readiness and own-app Android settings. Neither grants authority.
+abstract interface class BackgroundOrderAlertActivationSupport {
+  Future<Map<String, dynamic>> activationStatus();
+  Future<bool> openNotificationSettings({required bool channel});
+}
+
 final backgroundOrderAlertsBuildEnabledProvider = Provider<bool>(
   (ref) =>
       !kIsWeb &&
@@ -113,13 +119,30 @@ class MethodChannelBackgroundOrderAlertBridge
         BackgroundOrderAlertBridge,
         BackgroundOrderAlertRevocation,
         BackgroundOrderAlertInactivityRetention,
-        BackgroundOrderAlertReasonedRevocation {
+        BackgroundOrderAlertReasonedRevocation,
+        BackgroundOrderAlertActivationSupport {
   MethodChannelBackgroundOrderAlertBridge({MethodChannel? channel})
     : _channel =
           channel ??
           const MethodChannel('restoflow.pos/background_order_alert');
   final MethodChannel _channel;
   bool _disposed = false;
+
+  @override
+  Future<Map<String, dynamic>> activationStatus() async {
+    final value = await _call<Map>('activationStatus');
+    return value == null
+        ? const {}
+        : {
+            for (final entry in value.entries)
+              if (entry.key is String) entry.key as String: entry.value,
+          };
+  }
+
+  @override
+  Future<bool> openNotificationSettings({required bool channel}) async =>
+      await _call<bool>('openNotificationSettings', {'channel': channel}) ??
+      false;
 
   Future<T?> _call<T>(String method, [Object? arguments]) async {
     if (_disposed || kIsWeb || defaultTargetPlatform != TargetPlatform.android)

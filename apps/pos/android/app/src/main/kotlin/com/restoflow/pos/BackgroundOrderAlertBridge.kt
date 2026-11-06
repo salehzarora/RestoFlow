@@ -16,6 +16,8 @@ internal class BackgroundOrderAlertBridge(private val activity: Activity, messen
         coordinator.bridge()?.setMethodCallHandler { call, result ->
             val args = call.arguments as? Map<*, *> ?: emptyMap<Any, Any>()
             when (call.method) {
+                "activationStatus" -> result.success(BackgroundOrderAlertActivationStatus.snapshot(activity))
+                "openNotificationSettings" -> result.success(BackgroundOrderAlertActivationStatus.openSettings(activity, args["channel"] == true))
                 "prepare" -> {
                     if (args["request_permission"] == true && BackgroundOrderAlertCoordinator.initializeFirebase(activity) && Build.VERSION.SDK_INT >= 33 &&
                         ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {

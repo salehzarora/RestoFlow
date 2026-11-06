@@ -6,6 +6,37 @@ fun main() {
     fun scenario(name: String, body: () -> Unit) { body(); passed++; println("PASS $name") }
     fun pending(vararg ids: String) = ids.associateWith { 100_000L }
 
+    scenario("activation recovery classifies Play services without guessing unsupported states") {
+        check(BackgroundOrderAlertReadiness.googlePlayServices(0) == "available")
+        check(BackgroundOrderAlertReadiness.googlePlayServices(1) == "missing")
+        check(BackgroundOrderAlertReadiness.googlePlayServices(2) == "update_required")
+        check(BackgroundOrderAlertReadiness.googlePlayServices(3) == "disabled")
+        check(BackgroundOrderAlertReadiness.googlePlayServices(9) == "unsupported")
+        for (code in listOf(null, -1, 7, 18, 999)) {
+            check(BackgroundOrderAlertReadiness.googlePlayServices(code) == "unknown")
+        }
+    }
+    scenario("readiness keeps unchecked channel and Firebase observations unknown") {
+        val status = BackgroundOrderAlertReadiness.snapshot("0.0.75", 25, "Test Tablet",
+            true, true, null, null, null, null, null)
+        check(status.keys == setOf("app_version", "android_sdk", "model", "permission_allowed",
+            "notifications_enabled", "channel_present", "channel_importance_allowed",
+            "channel_sound_present", "google_play_services", "firebase_initialized"))
+        check(status["channel_present"] == null && status["channel_importance_allowed"] == null)
+        check(status["channel_sound_present"] == null && status["firebase_initialized"] == null)
+        check(status["google_play_services"] == "unknown")
+    }
+    scenario("readiness is bounded ASCII and keeps actual false distinct from unchecked") {
+        val status = BackgroundOrderAlertReadiness.snapshot("0.0.76-qa.1\n", 33,
+            "Test\n\u202e\u0000" + "x".repeat(100), false, false, false, null, null, false, 1)
+        check(status["app_version"] == "0.0.76-qa.1")
+        check((status["model"] as String).length == 64)
+        check((status["model"] as String).all { it.code in 32..126 })
+        check(status["permission_allowed"] == false && status["channel_present"] == false)
+        check(status["channel_importance_allowed"] == null && status["channel_sound_present"] == null)
+        check(status["firebase_initialized"] == false && status["google_play_services"] == "missing")
+    }
+
     scenario("activation channel diagnostics preserve every permission importance and sound gate") {
         val allowed = BackgroundOrderAlertChannelPolicy(true, true, true, true, true)
         check(allowed.failureReason == null)

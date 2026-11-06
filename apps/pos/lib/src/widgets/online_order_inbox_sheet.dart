@@ -8,6 +8,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/online_order_inbox.dart';
 import '../format/money_format.dart';
 import '../media/pos_media_image.dart';
+import 'background_alert_activation_panel.dart';
 import '../state/online_order_inbox_controller.dart';
 import '../state/background_order_alerts.dart';
 import '../state/pos_menu_provider.dart';
@@ -283,6 +284,7 @@ class _BackgroundOrderAlertControlState
           value: alerts.enabled,
           onChanged: alerts.busy || _confirming ? null : _change,
         ),
+        const BackgroundAlertActivationPanel(),
         if (alerts.busy)
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
