@@ -57,7 +57,7 @@
 .imageCover{width:100%;height:100%;object-fit:cover}
 .promoImg{composes:imageCover}
 .heroImg{composes:imageCover;transform-origin:50% 123%}
-.announce{composes:flexRow;position:relative;min-height:49px;justify-content:center;gap:36px;background:var(--acc);padding:10px 60px;font:500 12px/1.8 var(--font)}
+.announce{composes:flexRow;position:relative;width:min(1240px,calc(100% - 80px));margin:12px auto 0;min-height:49px;justify-content:center;gap:24px;background:linear-gradient(var(--scrim,rgba(6,8,7,.66)),var(--scrim,rgba(6,8,7,.66))),var(--scrim,rgba(6,8,7,.66));color:var(--promoWarm,#f3e6d2);border:1px solid color-mix(in srgb,var(--acc) 30%,var(--hair));border-radius:var(--r-control);padding:10px 60px;font:500 12px/1.8 var(--font)}
 .announce>span[dir]{min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;text-align:center}.announce>span[aria-hidden]{flex:none;font-size:22px}
 .announceClose{composes:gridCenter;width:28px;height:28px;position:absolute;inset-inline-end:18px;inset-block-start:calc(50% - 14px);background:none;border:0;color:inherit;cursor:pointer}
 .announceClose::after{content:'';position:absolute;inset:-8px}
@@ -170,7 +170,7 @@
 .heroActions{grid-column:1/-1}
 .heroActions .promoCta{justify-content:space-between;gap:14px}
 .heroVisual{grid-column:2;grid-row:2;margin:0;max-width:none}
-.announce{min-height:39px;gap:25px;padding:8px 44px}.announce>span[aria-hidden]{font-size:18px}.serviceWrap{gap:8px}.service{gap:12px}.menuHeading{flex-direction:column}
+.announce{width:calc(100% - 36px);min-height:44px;gap:12px;padding:8px 44px}.announceClose{inset-inline-end:10px}.announce>span[aria-hidden]{font-size:18px}.serviceWrap{gap:8px}.service{gap:12px}.menuHeading{flex-direction:column}
 .searchBox{width:100%;margin:0;box-sizing:border-box}.chip{border-color:var(--hair)}
 .sectionHead{gap:8px}
 .gridWrap{min-height:200px}.badge{line-height:1.5}.cardMain{align-items:flex-start;gap:3px;flex-direction:column}
@@ -218,12 +218,17 @@
 /* BIZBOT-STOREFRONT-CINEMATIC-001 — photographic mobile presentation.
    All content, colours and existing interaction hooks remain tenant-driven. */
 .page{position:relative;isolation:isolate;--header-height:82px;min-height:100svh;background:transparent}
+.page[data-sf-screen="home"]{min-height:100dvh}
 .sceneBackdrop{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--bg)}
 .sceneBackdrop img{position:fixed;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center 58%;opacity:.18;filter:blur(22px);transform:scale(1.08)}
 .sceneBackdrop::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent,rgba(0,0,0,.25));pointer-events:none}
-/* The dimming layer spans the menu; the selected photo covers one viewport. */
+/* Stable artwork scrolls once with the document. The scene covers short and
+   long menus, blending below the photo without enlarging or repeating it. */
 .menuBackdrop{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--bg)}
-.menuBackdrop img{position:fixed;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center;filter:none}
+.menuBackdrop,.page[data-sf-screen="home"] .sceneBackdrop{background:radial-gradient(ellipse at 20% 0%,var(--hair),transparent 65%),linear-gradient(var(--scrim,rgba(6,8,7,.66)),var(--scrim,rgba(6,8,7,.66))),var(--bg)}
+.menuBackdrop img{position:absolute;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center top;filter:none}
+.menuBackdrop img,.page[data-sf-screen="home"] .sceneBackdrop img{mask-image:linear-gradient(#000 70%,transparent)}
+.page[data-sf-screen="home"] .sceneBackdrop img{position:absolute;object-position:center top;transform-origin:center top}
 .menuBackdrop::after{content:'';position:absolute;inset:0;background:var(--bg);opacity:var(--menu-image-dim,.15);pointer-events:none}
 .page[data-sf-screen="intro"] .sceneBackdrop img{opacity:1;filter:none;transform:none}
 .page[data-sf-screen="intro"] .sceneBackdrop::after{background:linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,.04) 38%,rgba(0,0,0,.03) 62%,rgba(0,0,0,.8))}
@@ -253,7 +258,6 @@
 .hero[data-sf-hero-mode="editorial"] .heroVisual{display:none}
 .page[data-sf-screen="intro"] .hero{min-height:calc(100svh - 220px)}
 .page[data-sf-screen="intro"] .heroCopy{min-height:540px;align-self:stretch;justify-content:center}
-.announce{background:color-mix(in srgb,var(--acc) 10%,transparent);color:var(--tx);border:0;font-size:12px}
 .menu{padding-block:40px 36px;scroll-margin-block-start:96px}
 .menuHeading{margin-block-end:24px;align-items:center}.menuHeading h2{font-size:40px;font-weight:800;letter-spacing:normal}
 .menuHeading .eyebrow{font-size:12px;margin-block-end:10px}.menuHeading .eyebrow::before,.menuHeading .eyebrow>span{display:none}
@@ -385,11 +389,10 @@
 [data-sf-scene="reference_dark"] .page .categoryWrap{background:var(--sceneGlass);backdrop-filter:none;-webkit-backdrop-filter:none}
 [data-sf-scene="reference_dark"] .page .searchBox,
 [data-sf-scene="reference_dark"] .page .suggestionSlot .suggest,
-[data-sf-scene="reference_dark"] .page .announce,
 [data-sf-scene="reference_dark"] .page .servicePanel,
 [data-sf-scene="reference_dark"] .page .contactLine,
 [data-sf-scene="reference_dark"] .page[data-sf-screen="intro"] .serviceWrap{background:var(--sceneGlassSoft);border-color:var(--sceneLine)}
-[data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop img{position:fixed;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center;opacity:1;filter:none;transform:none}
+[data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop img{position:absolute;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center top;opacity:1;filter:none;transform:none}
 [data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .menuBackdrop::after,
 [data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop::after{background:#000;opacity:var(--menu-image-dim,.15)}
 [data-sf-scene="reference_dark"] .footerPhoto img{filter:none}

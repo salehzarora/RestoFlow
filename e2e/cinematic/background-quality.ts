@@ -206,7 +206,7 @@ export class BackgroundQuality {
                 });
                 const top = await inspect();
                 expect([top.x, top.y, top.width, top.height, top.fit, top.position, top.dpr, top.dim, top.center, top.filter])
-                    .toEqual([0, 0, top.layoutWidth, height, 'cover', 'fixed', dpr, 0.15, '50% 50%', 'none']);
+                    .toEqual([0, 0, top.layoutWidth, height, 'cover', 'absolute', dpr, 0.15, '50% 0%', 'none']);
                 expect(top.naturalWidth).toBeGreaterThan(0);
                 if (name === 'desktop' || name === 'phone-portrait') {
                     // Only the verified synthetic restaurant and the pinned public photo reach this capture.
@@ -226,11 +226,16 @@ export class BackgroundQuality {
                 }
                 const sections = page.locator('[data-sf-module="sections"]');
                 await expect(sections).toHaveCount(4);
+                const scrollFrames = [];
                 for (const target of [sections.nth(2), page.locator('[data-sf-module="footer"]')]) {
                     await target.scrollIntoViewIfNeeded();
                     await expect(target).toBeInViewport();
-                    expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
-                    expect(await inspect(), 'The same photo and viewport geometry survive scrolling').toEqual(top);
+                    const scrollY = await page.evaluate(() => window.scrollY);
+                    expect(scrollY).toBeGreaterThan(0);
+                    const frame = await inspect();
+                    expect(Math.abs(frame.y + scrollY - top.y), 'Artwork remains attached to the document').toBeLessThanOrEqual(1);
+                    expect({ ...frame, y:top.y }, 'Scroll changes only the viewport position of the same selected artwork').toEqual(top);
+                    scrollFrames.push({ scrollY, imageViewportY:frame.y });
                 }
                 await page.waitForLoadState('networkidle');
                 expect(selectedResponses.length, 'No second background resource fetched on scroll').toBe(1);
@@ -251,7 +256,7 @@ export class BackgroundQuality {
                     naturalWidth: top.naturalWidth, naturalHeight: top.naturalHeight, sizes: top.sizes, dim: top.dim,
                     rect: { x: top.x, y: top.y, width: top.width, height: top.height },
                     paintWidth, paintHeight: paintWidth * encodedHeight / encodedWidth,
-                    requiredPhysicalWidth: paintWidth * top.dpr, topMiddleFooterMatch: true,
+                    requiredPhysicalWidth: paintWidth * top.dpr, topMiddleFooterSourceAndSizeMatch: true, scrollFrames,
                     backgroundRequests: selectedResponses.length, resourceTiming,
                     playwrightResponseSizes: { bodyBytes: sizes.responseBodySize, headerBytes: sizes.responseHeadersSize },
                 });

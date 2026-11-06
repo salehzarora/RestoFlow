@@ -258,9 +258,9 @@ export function StoryCard({ story }: { story: StoryModule }) {
   );
 }
 
-export function SiteFooter({ tenant, m }: { tenant: Tenant; m: StorefrontMessages }) {
+export function SiteFooter({ tenant, m, sceneImage }: { tenant: Tenant; m: StorefrontMessages; sceneImage?: string | null }) {
   return <footer className={styles.footer} data-sf-module="footer">
-    {tenant.heroImage ? <div className={styles.footerPhoto} aria-hidden="true">
+    {tenant.heroImage && tenant.heroImage !== sceneImage ? <div className={styles.footerPhoto} aria-hidden="true">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={tenant.heroImage} alt="" loading="lazy" decoding="async" />
     </div> : null}

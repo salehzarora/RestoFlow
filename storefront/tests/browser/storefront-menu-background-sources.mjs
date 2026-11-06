@@ -94,8 +94,8 @@ try {
         const decoded = webpInfo(received);
         assert.deepEqual([decoded.width, decoded.height], [expected.width, expected.height]);
         assert.deepEqual(received, files.get(new URL(expected.url).pathname));
-        for (const [,x,y,w,h] of frame.bounds) {
-          assert.equal(x,0); assert.equal(y,0); assert.equal(w,width); assert.ok(Math.abs(h-height)<.25);
+        for (const [scroll,x,y,w,h] of frame.bounds) {
+          assert.equal(x,0); assert.ok(Math.abs(y+scroll)<1, 'Artwork stays at the document top'); assert.equal(w,width); assert.ok(Math.abs(h-height)<.25);
         }
         assert.ok(frame.bounds[2][0] > frame.bounds[1][0] && frame.bounds[1][0] > 0);
         const timing = await page.evaluate(url => performance.getEntriesByName(url).at(-1)?.toJSON(), frame.currentSrc);
@@ -119,7 +119,8 @@ try {
             }, {preset,dim});
             assert.equal(check.color, preset === 'brand' ? 'rgb(0, 255, 0)' : 'rgb(0, 0, 0)');
             assert.equal(check.alpha,String(dim/100));
-            assert.ok(check.positions.every(p => p.y === 0 && p.currentSrc === expected.url));
+            assert.ok(check.positions.every(p => Math.abs(p.y+p.scrollY)<1 && p.currentSrc === expected.url));
+            assert.ok(check.positions.at(-1).y + frame.bounds[0][4] <= 0, 'Artwork leaves the footer viewport');
             sceneChecks.push(check);
           }
           assert.equal(seen.length,1);

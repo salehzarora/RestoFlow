@@ -12,7 +12,7 @@ let checks = 0;
 try {
   for (const width of [390, 1440]) for (const preset of [null, 'reference_dark']) for (const dim of [0, 15, 80]) {
     const page = await browser.newPage({ viewport: { width, height: 844 } });
-    await page.setContent(`<style>${css}\n${carouselCss}</style>
+    await page.setContent(`<style>html,body{margin:0}*{box-sizing:border-box}${css}\n${carouselCss}</style>
       <div id="root" ${preset ? 'data-sf-scene="reference_dark"' : ''}>
         <main class="page" data-sf-screen="home">
           <div class="menuBackdrop"><img alt="" src="data:image/webp;base64,${photo}"></div>
@@ -42,7 +42,7 @@ try {
     assert.equal(computed.dim.opacity, String(dim / 100));
     assert.equal(computed.layer.pointerEvents, 'none');
     assert.equal(computed.image.objectFit, 'cover');
-    assert.equal(computed.image.position, 'fixed');
+    assert.equal(computed.image.position, 'absolute');
     assert.equal(computed.image.filter, 'none');
     assert.equal(computed.image.opacity, '1');
     const frames = await page.locator('.menuBackdrop img').evaluate(async image => {
@@ -55,7 +55,8 @@ try {
     });
     assert.ok(frames[2].scrollY > frames[1].scrollY && frames[1].scrollY > 0);
     for (const { scrollY, ...frame } of frames) {
-      assert.deepEqual(frame, { x: 0, y: 0, width, height: 844, objectPosition: '50% 50%' });
+      assert.ok(Math.abs(frame.y + scrollY) <= 1, 'Image scrolls with the document');
+      assert.deepEqual([frame.x, frame.width, frame.height, frame.objectPosition], [0, width, 844, '50% 0%']);
     }
     assert.equal(computed.product.objectFit, 'contain');
     assert.doesNotMatch(computed.product.filter, /(?:^|\s)blur\(/);
@@ -66,7 +67,7 @@ try {
       assert.equal(computed.header.backdropFilter, 'none');
       assert.equal(computed.category.backdropFilter, 'none');
       assert.equal(computed.inherited.objectFit, 'cover');
-      assert.equal(computed.inherited.position, 'fixed');
+      assert.equal(computed.inherited.position, 'absolute');
       assert.equal(computed.inherited.height, '844px');
       assert.equal(computed.inherited.filter, 'none');
       assert.equal(computed.inherited.opacity, '1');
