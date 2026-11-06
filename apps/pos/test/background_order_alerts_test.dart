@@ -2,6 +2,11 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_pos/src/widgets/online_order_inbox_sheet.dart';
+import 'package:restoflow_pos/src/state/background_alert_duty.dart';
+import 'package:restoflow_pos/src/widgets/background_alert_activation_panel.dart';
 import 'package:flutter/services.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -108,6 +113,147 @@ class _Bridge implements BackgroundOrderAlertBridge {
   Future<void> dispose() async {}
 }
 
+const _sid = '11111111-1111-4111-8111-111111111111';
+const _cid = '22222222-2222-4222-8222-222222222222';
+const _rid = '33333333-3333-4333-8333-333333333333';
+const _rev = '44444444-4444-4444-8444-444444444444';
+const _shift = '55555555-5555-4555-8555-555555555555';
+const _transportGen = '66666666-6666-4666-8666-666666666666';
+const _none = {
+  'can_start_consent': true,
+  'available': true,
+  'ready': false,
+  'opt_in': false,
+  'phase': 'none',
+};
+const _revoking = {
+  'can_start_consent': false,
+  'available': true,
+  'ready': false,
+  'opt_in': false,
+  'phase': 'revoking',
+};
+final _start = DateTime.utc(2026, 11, 5, 6);
+final _end = _start.add(const Duration(hours: 12));
+Map<String, dynamic> _grant({bool issued = false, String consent = _cid}) => {
+  'ok': true,
+  'mode': 'shift',
+  'consent_id': consent,
+  'shift_id': _shift,
+  'policy_revision': _rev,
+  'authority_expires_at': _end.toIso8601String(),
+  'server_time': _start.toIso8601String(),
+  if (issued) ...{'registration_id': _rid, 'generation': _transportGen},
+};
+Map<String, dynamic> _activeDuty(Duration remaining, {String consent = _cid}) =>
+    {
+      ..._none,
+      'phase': 'active',
+      'can_start_consent': false,
+      'opt_in': true,
+      'ready': true,
+      'remaining_ms': remaining.inMilliseconds,
+      'authority_expires_at': _end.toIso8601String(),
+      'consent_id': consent,
+      'registration_generation': _transportGen,
+    };
+
+class _DutyBridge extends _Bridge implements BackgroundAlertDutyBridge {
+  @override
+  Future<bool> consumeInboxTap() async => false;
+  Map? nativeState = _none;
+  int prepPreviews = 0, grantsPrepared = 0, bindingsDuty = 0, cancelled = 0;
+  bool armed = false;
+  String consent = _cid;
+  int effectsSuspensions = 0, statusValidations = 0;
+  @override
+  Future<bool> suspendDutyEffects(String identity) async {
+    effectsSuspensions++;
+    nativeState = {
+      ..._none,
+      'phase': 'pending',
+      'opt_in': true,
+      'can_start_consent': false,
+    };
+    return true;
+  }
+
+  @override
+  Future<bool> revalidateDuty(String identity) async {
+    statusValidations++;
+    nativeState = _activeDuty(const Duration(hours: 10));
+    return true;
+  }
+
+  @override
+  Future<Map?> dutyState(String identity) async => nativeState;
+  @override
+  Future<Map?> prepareDutyPreview(Map<String, dynamic> args) async {
+    assert(
+      args.length == 2 &&
+          args.containsKey('identity') &&
+          args.containsKey('endpoint'),
+    );
+    prepPreviews++;
+    return {
+      'installation_id': _sid,
+      'consent_id': consent,
+      'generation': 3,
+      'revoke_hash': 'a' * 64,
+    };
+  }
+
+  Completer<bool>? permission;
+  int dutyPermissionRequests = 0;
+  @override
+  Future<bool> requestDutyPermission(Map<String, dynamic> args) async {
+    assert(args['consent_id'] == consent);
+    dutyPermissionRequests++;
+    return permission?.future ?? true;
+  }
+
+  @override
+  Future<Map?> prepareDuty(Map<String, dynamic> args) async {
+    assert(args['consent_id'] == consent);
+    assert(args['generation'] == 3);
+    armed = true;
+    grantsPrepared++;
+    return {
+      'installation_id': _sid,
+      'consent_id': consent,
+      'generation': 3,
+      'status_secret': 'b' * 64,
+      'fcm_token': 'synthetic-transport-token',
+    };
+  }
+
+  @override
+  Future<bool> bindDuty(Map<String, dynamic> args) async {
+    assert(args['registration_generation'] == _transportGen);
+    assert(args['generation'] == 3);
+    assert(args['authority_expires_at'] == _end.toIso8601String());
+    assert(!args.containsKey('status_secret'));
+    bindingsDuty++;
+    nativeState = _activeDuty(const Duration(hours: 12), consent: consent);
+    return true;
+  }
+
+  @override
+  Future<bool> cancelDuty(Map<String, dynamic> args) async {
+    assert(args['consent_id'] == consent);
+    assert(args['generation'] == 3);
+    cancelled++;
+    nativeState = armed ? _revoking : _none;
+    return true;
+  }
+
+  @override
+  Future<void> disable() async {
+    await super.disable();
+    nativeState = armed ? _revoking : _none;
+  }
+}
+
 class _Transport extends SyncRpcTransport {
   _Transport(this.handler);
   final Future<Object?> Function() handler;
@@ -146,6 +292,8 @@ Future<void> _run(
     List<Map<String, dynamic>>,
   )
   body, {
+  _Bridge? suppliedBridge,
+  ShiftAlertRpc? dutyRpc,
   bool enabledBuild = true,
   bool nativeEnabled = true,
   bool nativeAvailable = true,
@@ -158,7 +306,7 @@ Future<void> _run(
   DateTime Function()? clock,
   DeviceContext? deviceContext,
 }) async {
-  final bridge = _Bridge()
+  final bridge = (suppliedBridge ?? _Bridge())
     ..prepareHandler = prepare
     ..bindHandler = bind
     ..enabled = nativeEnabled
@@ -168,6 +316,7 @@ Future<void> _run(
   final registrations = <Map<String, dynamic>>[];
   final container = ProviderContainer(
     overrides: [
+      if (dutyRpc != null) shiftAlertRpcProvider.overrideWithValue(dutyRpc),
       backgroundOrderAlertsBuildEnabledProvider.overrideWithValue(enabledBuild),
       backgroundOrderAlertBridgeProvider.overrideWithValue(bridge),
       if (clock != null)
@@ -263,6 +412,490 @@ void main() {
         expect(registrations, hasLength(1));
         expect(r.decisions, isEmpty);
       }, nativeEnabled: false);
+    },
+  );
+
+  testWidgets(
+    'server deadline is shown before consent; Cancel acquires no transport credential; one explicit issue',
+    (tester) async {
+      final bridge = _DutyBridge();
+      final calls = <ShiftAlertCall>[];
+      await _run(
+        tester,
+        (c, b, repo, registrations) async {
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: c,
+              child: MaterialApp(home: Scaffold(body: ShiftAlertControl())),
+            ),
+          );
+          await tester.tap(find.byKey(const Key('shift-alert-preview')));
+          await tester.pumpAndSettle();
+          expect(find.byType(AlertDialog), findsOneWidget);
+          expect(find.textContaining('November 5, 2026'), findsOneWidget);
+          expect(calls, [ShiftAlertCall.preview]);
+          expect(bridge.grantsPrepared, 0);
+          await tester.tap(find.text('Cancel'));
+          await tester.pumpAndSettle();
+          expect(bridge.cancelled, 1);
+          expect(bridge.grantsPrepared, 0);
+          await tester.tap(find.byKey(const Key('shift-alert-preview')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('shift-alert-confirm')));
+          await tester.pumpAndSettle();
+          expect(calls, [
+            ShiftAlertCall.preview,
+            ShiftAlertCall.preview,
+            ShiftAlertCall.enroll,
+          ]);
+          expect(bridge.grantsPrepared, 1);
+          expect(bridge.bindingsDuty, 1);
+          expect(c.read(backgroundOrderAlertsProvider).authorizedUntil, _end);
+          expect(c.read(boundShiftAlertProvider)?.end, _end);
+          expect(find.byKey(const Key('shift-alert-active')), findsOneWidget);
+          expect(registrations, isEmpty);
+          expect(repo.decisions, isEmpty);
+          await tester.pumpWidget(const SizedBox.shrink());
+        },
+        suppliedBridge: bridge,
+        nativeEnabled: false,
+        clock: () => _start,
+        dutyRpc: (call, input, current) async {
+          expect(current(), true);
+          calls.add(call);
+          if (call == ShiftAlertCall.preview) {
+            expect(
+              input.keys,
+              unorderedEquals([
+                'p_installation_id',
+                'p_consent_id',
+                'p_revoke_hash',
+              ]),
+            );
+          } else {
+            expect(input['p_consent'], true);
+            expect(input['p_expected_deadline'], _end.toIso8601String());
+            expect(input['p_shift_id'], _shift);
+            expect(input['p_policy_revision'], _rev);
+          }
+          return _grant(issued: call == ShiftAlertCall.enroll);
+        },
+      );
+    },
+  );
+  for (final unavailable in [true, false]) {
+    testWidgets(
+      'ineligible or old server preserves explicit legacy path; missing RPC=$unavailable',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final bridge = _DutyBridge();
+        await _run(
+          tester,
+          (c, b, repo, registrations) async {
+            final owner = c.read(backgroundOrderAlertsProvider.notifier);
+            expect(await owner.previewShift(), isNull);
+            expect(bridge.grantsPrepared, 0);
+            expect(bridge.cancelled, 1);
+            expect(registrations, isEmpty);
+            await owner.setEnabled(true);
+            expect(registrations, hasLength(1));
+            expect(c.read(backgroundOrderAlertsProvider).enabled, isTrue);
+            await tester.pump();
+          },
+          suppliedBridge: bridge,
+          nativeEnabled: false,
+          dutyRpc: (call, _, __) async {
+            expect(call, ShiftAlertCall.preview);
+            if (unavailable) throw StateError('synthetic missing function');
+            return {'ok': false, 'error': 'no_approved_duty'};
+          },
+        );
+      },
+    );
+  }
+  testWidgets(
+    'OFF while enrollment reply is outstanding cannot bind or register a replacement',
+    (tester) async {
+      final bridge = _DutyBridge(), reply = Completer<Map>();
+      var calls = 0;
+      await _run(
+        tester,
+        (c, b, repo, registrations) async {
+          final owner = c.read(backgroundOrderAlertsProvider.notifier);
+          final preview = await owner.previewShift();
+          expect(preview, isNotNull);
+          final pending = owner.confirmShift(preview!);
+          await tester.pump();
+          expect(calls, 1);
+          expect(await owner.confirmShift(preview), false);
+          await owner.setEnabled(false);
+          expect(bridge.disables, 1);
+          reply.complete(_grant(issued: true));
+          await tester.pump();
+          expect(await pending, false);
+          expect(bridge.bindingsDuty, 0);
+          owner.onResume();
+          bridge.tokenChanged!();
+          await tester.pump();
+          expect(calls, 1);
+          expect(bridge.grantsPrepared, 1);
+          expect(registrations, isEmpty);
+          expect(c.read(backgroundOrderAlertsProvider).enabled, isFalse);
+        },
+        suppliedBridge: bridge,
+        nativeEnabled: false,
+        clock: () => _start,
+        dutyRpc: (call, _, __) async {
+          if (call == ShiftAlertCall.preview) return _grant();
+          calls++;
+          return reply.future;
+        },
+      );
+    },
+  );
+  testWidgets(
+    'server approval drift or uncertain issue is fenced and never automatically retried',
+    (tester) async {
+      final bridge = _DutyBridge();
+      var calls = 0;
+      await _run(
+        tester,
+        (c, b, repo, legacy) async {
+          final owner = c.read(backgroundOrderAlertsProvider.notifier);
+          final p = await owner.previewShift();
+          expect(p, isNotNull);
+          expect(await owner.confirmShift(p!), false);
+          expect(bridge.cancelled, 1);
+          expect(bridge.bindingsDuty, 0);
+          owner.onResume();
+          bridge.tokenChanged!();
+          await tester.pump();
+          expect(calls, 1);
+          expect(legacy, isEmpty);
+          expect(owner.canPreviewShift, false);
+        },
+        suppliedBridge: bridge,
+        nativeEnabled: false,
+        clock: () => _start,
+        dutyRpc: (call, _, __) async {
+          if (call == ShiftAlertCall.preview) return _grant();
+          calls++;
+          return {..._grant(issued: true), 'shift_id': _sid};
+        },
+      );
+    },
+  );
+  testWidgets(
+    'expired preview requires a fresh choice before any native permission request',
+    (tester) async {
+      final bridge = _DutyBridge();
+      var now = _start;
+      await _run(
+        tester,
+        (c, b, repo, legacy) async {
+          final owner = c.read(backgroundOrderAlertsProvider.notifier);
+          final p = await owner.previewShift();
+          now = now.add(const Duration(minutes: 5));
+          expect(await owner.confirmShift(p!), false);
+          expect(bridge.grantsPrepared, 0);
+          expect(bridge.cancelled, 1);
+          expect(legacy, isEmpty);
+        },
+        suppliedBridge: bridge,
+        nativeEnabled: false,
+        clock: () => now,
+        dutyRpc: (call, _, __) async {
+          expect(call, ShiftAlertCall.preview);
+          return _grant();
+        },
+      );
+    },
+  );
+  for (final interruption in ['overlay', 'background', 'off', 'identity']) {
+    testWidgets(
+      'first notification permission through actual lifecycle: $interruption',
+      (tester) async {
+        final bridge = _DutyBridge()..permission = Completer<bool>();
+        final calls = <ShiftAlertCall>[];
+        await _run(
+          tester,
+          (c, b, repo, legacy) async {
+            await tester.pumpWidget(
+              UncontrolledProviderScope(
+                container: c,
+                child: MaterialApp(
+                  localizationsDelegates:
+                      AppLocalizations.localizationsDelegates,
+                  supportedLocales: AppLocalizations.supportedLocales,
+                  home: const Scaffold(body: OnlineOrderInboxButton()),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            final owner = c.read(backgroundOrderAlertsProvider.notifier);
+            final p = await owner.previewShift();
+            expect(bridge.dutyPermissionRequests, 0);
+            final done = owner.confirmShift(p!);
+            await tester.pump();
+            expect(bridge.dutyPermissionRequests, 1);
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.inactive,
+            );
+            await tester.pump();
+            if (interruption == 'background') {
+              tester.binding.handleAppLifecycleStateChanged(
+                AppLifecycleState.paused,
+              );
+            }
+            if (interruption == 'off') await owner.setEnabled(false);
+            if (interruption == 'identity')
+              c.read(_identity.notifier).state = 'other';
+            bridge.permission!.complete(true);
+            await tester.pump();
+            expect(calls, [ShiftAlertCall.preview]);
+            expect(bridge.grantsPrepared, 0);
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.resumed,
+            );
+            await tester.pump();
+            expect(
+              await done,
+              interruption == 'overlay',
+              reason:
+                  'previews=${bridge.prepPreviews} prepares=${bridge.grantsPrepared} issued=${calls.length} binds=${bridge.bindingsDuty} cancels=${bridge.cancelled} phase=${c.read(backgroundOrderAlertsProvider).shiftPhase}',
+            );
+            expect(
+              calls.where((x) => x == ShiftAlertCall.enroll),
+              hasLength(interruption == 'overlay' ? 1 : 0),
+            );
+            expect(bridge.bindingsDuty, interruption == 'overlay' ? 1 : 0);
+            expect(legacy, isEmpty);
+            await tester.pumpWidget(const SizedBox.shrink());
+          },
+          suppliedBridge: bridge,
+          nativeEnabled: false,
+          clock: () => _start,
+          dutyRpc: (call, _, __) async {
+            calls.add(call);
+            return _grant(issued: call == ShiftAlertCall.enroll);
+          },
+        );
+      },
+    );
+  }
+  testWidgets(
+    'verified native shift grant survives ordinary container teardown without re-enrollment',
+    (tester) async {
+      final bridge = _DutyBridge()
+        ..nativeState = _activeDuty(const Duration(hours: 12));
+      await _run(
+        tester,
+        (c, b, repo, legacy) async {
+          expect(c.read(backgroundOrderAlertsProvider).enabled, true);
+          expect(legacy, isEmpty);
+        },
+        suppliedBridge: bridge,
+        clock: () => _start,
+      );
+      expect(bridge.disables + bridge.suspends, 0);
+      expect(bridge.grantsPrepared, 0);
+    },
+  );
+  testWidgets(
+    'production shift transport uses current PIN and paired device only, and fences a delayed credential read',
+    (tester) async {
+      final gate = _GatedStore();
+      final transport = _Transport(() async => _grant());
+      await _run(
+        tester,
+        (c, b, repo, legacy) async {
+          final rpc = c.read(shiftAlertRpcProvider);
+          var valid = true;
+          final pending = rpc(ShiftAlertCall.preview, {
+            'p_consent_id': _cid,
+          }, () => valid);
+          valid = false;
+          gate.gate.complete(
+            const DeviceSessionCredential(
+              deviceId: deviceId,
+              sessionToken: 'synthetic-device-token',
+            ),
+          );
+          expect(await pending, isNull);
+          expect(transport.calls, isEmpty);
+          for (final call in ShiftAlertCall.values) {
+            await rpc(call, {'p_consent_id': _cid}, () => true);
+          }
+          expect(transport.calls, [
+            'pos_preview_shift_order_alert',
+            'pos_register_shift_order_alert',
+          ]);
+          for (final args in transport.parameters) {
+            expect(args['p_pin_session_id'], pinId);
+            expect(args['p_device_id'], deviceId);
+            expect(args['p_device_session_token'], 'synthetic-device-token');
+          }
+        },
+        suppliedBridge: _DutyBridge(),
+        nativeEnabled: false,
+        transport: transport,
+        store: gate,
+      );
+    },
+  );
+  testWidgets(
+    'durable stop pending ACK allows only an explicitly confirmed replacement grant',
+    (tester) async {
+      const bId = '77777777-7777-4777-8777-777777777777';
+      final bridge = _DutyBridge()
+        ..armed = true
+        ..nativeState = _activeDuty(const Duration(hours: 12));
+      final calls = <ShiftAlertCall>[];
+      await _run(
+        tester,
+        (c, b, repo, legacy) async {
+          final owner = c.read(backgroundOrderAlertsProvider.notifier);
+          await owner.setEnabled(false);
+          expect(owner.canPreviewShift, false);
+          bridge.consent = bId;
+          bridge.nativeState = {..._revoking, 'can_start_consent': true};
+          owner.onResume();
+          await tester.pump();
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: c,
+              child: MaterialApp(home: Scaffold(body: ShiftAlertControl())),
+            ),
+          );
+          expect(find.byKey(const Key('shift-alert-revoking')), findsOneWidget);
+          expect(find.byKey(const Key('shift-alert-preview')), findsOneWidget);
+          expect(calls, isEmpty);
+          expect(legacy, isEmpty);
+          await tester.tap(find.byKey(const Key('shift-alert-preview')));
+          await tester.pumpAndSettle();
+          expect(calls, [ShiftAlertCall.preview]);
+          await tester.tap(find.byKey(const Key('shift-alert-confirm')));
+          await tester.pumpAndSettle();
+          expect(calls, [ShiftAlertCall.preview, ShiftAlertCall.enroll]);
+          // The older ACK changes only A's native outbox row; its callback rereads B.
+          bridge.tokenChanged!();
+          await tester.pump();
+          expect(c.read(backgroundOrderAlertsProvider).enabled, isTrue);
+          expect(bridge.bindingsDuty, 1);
+          expect(legacy, isEmpty);
+          expect(repo.decisions, isEmpty);
+          await tester.pumpWidget(const SizedBox.shrink());
+        },
+        suppliedBridge: bridge,
+        nativeEnabled: false,
+        clock: () => _start,
+        dutyRpc: (call, input, valid) async {
+          expect(input['p_consent_id'], bId);
+          expect(valid(), true);
+          calls.add(call);
+          return _grant(issued: call == ShiftAlertCall.enroll, consent: bId);
+        },
+      );
+    },
+  );
+  testWidgets(
+    'a cached-menu network outage silences duty effects without revoking; online revalidates only status',
+    (tester) async {
+      final bridge = _DutyBridge()
+        ..nativeState = _activeDuty(const Duration(hours: 12));
+      await _run(
+        tester,
+        (c, b, repo, legacy) async {
+          expect(c.read(backgroundOrderAlertsProvider).enabled, isTrue);
+          c.read(posOfflineModeProvider.notifier).recordSetupRequired();
+          await tester.pump();
+          expect(c.read(backgroundOrderAlertsProvider).enabled, isFalse);
+          expect(bridge.effectsSuspensions, 1);
+          expect(bridge.suspends + bridge.disables, 0);
+          expect(bridge.statusValidations, 0);
+          c.read(posOfflineModeProvider.notifier).recordOnlineFetch();
+          await tester.pump();
+          expect(bridge.statusValidations, 1);
+          expect(c.read(backgroundOrderAlertsProvider).enabled, isTrue);
+          expect(legacy, isEmpty);
+          expect(bridge.grantsPrepared + bridge.prepPreviews, 0);
+        },
+        suppliedBridge: bridge,
+        nativeEnabled: false,
+        clock: () => _start,
+      );
+    },
+  );
+  testWidgets(
+    'active native duty survives eight hours; at negotiated deadline no passive enrollment',
+    (tester) async {
+      final bridge = _DutyBridge()
+        ..nativeState = _activeDuty(const Duration(hours: 12));
+      var now = _start;
+      await _run(
+        tester,
+        (c, b, repo, legacy) async {
+          final owner = c.read(backgroundOrderAlertsProvider.notifier);
+          expect(c.read(backgroundOrderAlertsProvider).authorizedUntil, _end);
+          owner.onPaused();
+          now = now.add(const Duration(hours: 8));
+          await tester.pump(const Duration(hours: 8));
+          expect(c.read(backgroundOrderAlertsProvider).enabled, isTrue);
+          bridge.nativeState = {..._none, 'phase': 'expired'};
+          now = _end;
+          await tester.pump(const Duration(hours: 4));
+          expect(c.read(backgroundOrderAlertsProvider).enabled, isFalse);
+          owner.onResume();
+          await tester.pump();
+          expect(
+            c.read(backgroundOrderAlertsProvider).authorizationExpired,
+            true,
+          );
+          expect(legacy, isEmpty);
+          expect(bridge.prepares, 0);
+          expect(bridge.grantsPrepared, 0);
+        },
+        suppliedBridge: bridge,
+        nativeEnabled: false,
+        clock: () => now,
+      );
+    },
+  );
+  test(
+    'duty wire proof rejects missing, type-confused and drifting approval fields',
+    () {
+      for (final broken in [
+        {..._grant(), 'unexpected': 'x'},
+        {..._grant(), 'ok': 1},
+        {..._grant(), 'mode': 'legacy'},
+        {..._grant(), 'policy_revision': 42},
+        {..._grant(), 'authority_expires_at': '2026-02-31T09:00:00Z'},
+        {..._grant(), 'server_time': '2026-11-05T01:00:00'},
+        {..._grant(), 'authority_expires_at': _start.toIso8601String()},
+      ]) {
+        expect(
+          ShiftAlertPreview.parse(broken, consent: _cid, issued: false),
+          isNull,
+        );
+      }
+      expect(
+        ShiftAlertStatus.parse({
+          ..._activeDuty(const Duration(hours: 12)),
+          'remaining_ms': '43200000',
+        }),
+        isNull,
+      );
+      expect(ShiftAlertStatus.parse({..._none, 'phase': 'new-type'}), isNull);
+    },
+  );
+  testWidgets(
+    'shift revoke fence blocks legacy passive registration after restart',
+    (tester) async {
+      await _run(tester, (c, b, repo, registrations) async {
+        expect(b.prepares, 0);
+        expect(registrations, isEmpty);
+        expect(c.read(backgroundOrderAlertsProvider).enabled, isFalse);
+      }, suppliedBridge: _DutyBridge()..nativeState = _revoking);
     },
   );
 
@@ -1605,6 +2238,7 @@ void main() {
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
         call,
       ) async {
+        if (call.method == 'dutyState') return _none;
         if (call.method == 'prepare') {
           prepares++;
           if (prepares == 1) {

@@ -93,6 +93,19 @@ abstract interface class BackgroundOrderAlertRevocation {
   Future<bool> revoke({bool suspend = false, bool retainOptIn = false});
 }
 
+/// Negotiated shift notifications. All write methods require explicit foreground
+/// consent; reading the native phase never prepares or registers a grant.
+abstract interface class BackgroundAlertDutyBridge {
+  Future<Map?> dutyState(String identity);
+  Future<bool> suspendDutyEffects(String identity);
+  Future<bool> revalidateDuty(String identity);
+  Future<Map?> prepareDutyPreview(Map<String, dynamic> args);
+  Future<bool> requestDutyPermission(Map<String, dynamic> args);
+  Future<Map?> prepareDuty(Map<String, dynamic> args);
+  Future<bool> bindDuty(Map<String, dynamic> args);
+  Future<bool> cancelDuty(Map<String, dynamic> args);
+}
+
 /// Read-only readiness and own-app Android settings. Neither grants authority.
 abstract interface class BackgroundOrderAlertActivationSupport {
   Future<Map<String, dynamic>> activationStatus();
@@ -120,13 +133,62 @@ class MethodChannelBackgroundOrderAlertBridge
         BackgroundOrderAlertRevocation,
         BackgroundOrderAlertInactivityRetention,
         BackgroundOrderAlertReasonedRevocation,
-        BackgroundOrderAlertActivationSupport {
+        BackgroundOrderAlertActivationSupport,
+        BackgroundAlertDutyBridge {
   MethodChannelBackgroundOrderAlertBridge({MethodChannel? channel})
     : _channel =
           channel ??
           const MethodChannel('restoflow.pos/background_order_alert');
   final MethodChannel _channel;
   bool _disposed = false;
+
+  @override
+  Future<Map?> dutyState(String identity) async {
+    if (_disposed || kIsWeb || defaultTargetPlatform != TargetPlatform.android)
+      return null;
+    try {
+      return await _channel.invokeMapMethod('dutyState', {
+        'identity': identity,
+      });
+    } on MissingPluginException {
+      return const {
+        'available': false,
+        'can_start_consent': false,
+        'ready': false,
+        'opt_in': false,
+        'phase': 'none',
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<bool> suspendDutyEffects(String identity) async =>
+      await _call<bool>('suspendDutyEffects', {'identity': identity}) ?? false;
+  @override
+  Future<bool> revalidateDuty(String identity) async =>
+      await _call<bool>('revalidateDuty', {'identity': identity}) ?? false;
+
+  @override
+  Future<Map?> prepareDutyPreview(Map<String, dynamic> args) =>
+      _call<Map>('prepareDutyPreview', args);
+
+  @override
+  Future<bool> requestDutyPermission(Map<String, dynamic> args) async =>
+      await _call<bool>('requestDutyPermission', args) ?? false;
+
+  @override
+  Future<Map?> prepareDuty(Map<String, dynamic> args) =>
+      _call<Map>('prepareDuty', args);
+
+  @override
+  Future<bool> bindDuty(Map<String, dynamic> args) async =>
+      await _call<bool>('bindDuty', args) ?? false;
+
+  @override
+  Future<bool> cancelDuty(Map<String, dynamic> args) async =>
+      await _call<bool>('cancelDuty', args) ?? false;
 
   @override
   Future<Map<String, dynamic>> activationStatus() async {

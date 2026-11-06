@@ -114,3 +114,8 @@ final backgroundAlertInactivityLockProvider =
       BackgroundAlertInactivityLockController,
       BackgroundAlertInactivityLock?
     >(BackgroundAlertInactivityLockController.new);
+
+/// Readiness of an already bound, separate notification-only duty grant.
+/// Never authorizes a POS action or creation of another grant.
+final boundShiftAlertProvider =
+    StateProvider<({String identity, DateTime end})?>((ref) => null);

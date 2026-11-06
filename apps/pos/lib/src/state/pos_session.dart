@@ -310,6 +310,20 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
     }
     final absoluteExpiry = started.add(policy.maxAge);
     if (!now.isBefore(absoluteExpiry)) {
+      final duty = ref.read(boundShiftAlertProvider);
+      final binding = _binding;
+      final scope = _scopeOfBinding(binding);
+      final session = state.valueOrNull;
+      if (binding != null &&
+          scope != null &&
+          session != null &&
+          duty != null &&
+          duty.identity ==
+              '${scope.key}|${binding.deviceSessionId}|${session.pinSessionId}' &&
+          now.isBefore(duty.end)) {
+        _endSessionForInactivity(duty.end);
+        return true;
+      }
       endSession(
         clearStoredSession: false,
         reason: BackgroundAlertRevocationReason.authorityExpired,
@@ -320,7 +334,17 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
         now.isBefore(pausedAt.add(policy.inactivityTimeout))) {
       return false;
     }
-    _endSessionForInactivity(absoluteExpiry);
+    final duty = ref.read(boundShiftAlertProvider);
+    final scope = _scopeOfBinding(_binding);
+    final identity =
+        '${scope?.key}|${_binding?.deviceSessionId}|${state.valueOrNull?.pinSessionId}';
+    _endSessionForInactivity(
+      duty != null &&
+              duty.identity == identity &&
+              duty.end.isAfter(absoluteExpiry)
+          ? duty.end
+          : absoluteExpiry,
+    );
     return true;
   }
 
@@ -405,6 +429,7 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   }
 
   void _revokeBackgroundDelegation(BackgroundAlertRevocationReason reason) {
+    ref.read(boundShiftAlertProvider.notifier).state = null;
     ref.read(backgroundAlertInactivityLockProvider.notifier).clear();
     if (ref.exists(backgroundOrderAlertBridgeProvider)) {
       unawaited(

@@ -77,7 +77,12 @@ class _InboxButtonState extends ConsumerState<OnlineOrderInboxButton>
       unawaited(_consumeNotificationTap());
     } else {
       _controller?.onPaused();
-      ref.read(backgroundOrderAlertsProvider.notifier).onPaused();
+      final alerts = ref.read(backgroundOrderAlertsProvider.notifier);
+      if (state == AppLifecycleState.inactive) {
+        alerts.onInactive();
+      } else {
+        alerts.onPaused();
+      }
     }
   }
 
@@ -289,6 +294,7 @@ class _BackgroundOrderAlertControlState
           expired: alerts.authorizationExpired,
           onDisable: () => _change(false),
         ),
+        const ShiftAlertControl(),
         const BackgroundAlertActivationPanel(),
         if (alerts.busy)
           Row(

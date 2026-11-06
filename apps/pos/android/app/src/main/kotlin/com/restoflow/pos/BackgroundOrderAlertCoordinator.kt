@@ -87,7 +87,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     private val state = BackgroundOrderAlertState()
     private val ownership = BackgroundOrderAlertOwnership()
     private val hints = BackgroundOrderAlertHints()
-    private var record = vault.read() ?: JSONObject()
+    private var unreadableVault = false
+    private var record = vault.read() ?: JSONObject().also { unreadableVault = vault.hasSealedRecord() }
+    @Volatile private var dutyBound = record.has("consent_id")
     private val uiLock = BackgroundOrderAlertUiLock(record.has("ui_inactivity_lock"))
     private val optIn = BackgroundOrderAlertOptIn(record.optBoolean("opt_in"))
     private val generation: Long get() = ownership.generation
@@ -98,6 +100,11 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     private var visibilityEpoch = 0L
     private var fallbackWanted = false
     private var readSequence = 0L
+    private val dutyReads = DutyReadFence()
+    private var validatingDuty: DutyReadFence.Read? = null
+    private var revokeInFlight = false
+    private var dutyTokenLookup: String? = null
+    private var durableStopUncertain = unreadableVault
     private val fallbackJobs = BackgroundOrderAlertJobOwnership()
     private val tokenLane = BackgroundOrderAlertTokenLane()
     // Visibility expiry must not invalidate an authenticated read already in flight for B.
@@ -144,6 +151,239 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     }
 
     private fun persist() = vault.write(record)
+    private val statusEndpoint: String get() = BuildConfig.BIZBOT_SUPABASE_URL.trimEnd('/') + "/functions/v1/pos-order-alert-status"
+
+    init {
+        // A process cannot finish a foreground consent dialog from an earlier lifetime. An
+        // enrollment might already have committed despite losing its response.
+        if (unreadableVault) {
+            // Never replace unidentified ciphertext with a fresh apparently OFF installation.
+            try { vault.latchDutyStop() } catch (_: Exception) {}
+        } else if (record.has(DutyJournal.STAGED) || vault.dutyStopRequested() ||
+            (record.has("consent_id") && record.optInt("boot_count", -1) != vault.bootCount())) {
+            clearAuthority(reason = AlertRevocation.SECURITY_FAILURE)
+        } else {
+            if (record.has("consent_id")) {
+                record.put("duty_status_unknown",true) // A past process cannot vouch for current pending truth.
+                try { persist() } catch (_: Exception) { durableStopUncertain = true }
+            }
+            if (record.has(DutyJournal.QUEUE)) DutyRevokeJob.enqueue(context)
+        }
+    }
+
+    fun drainDutyRevokes(fromJob: Boolean = false, done: () -> Unit = {}) {
+        if (revokeInFlight || durableStopUncertain || !exactEndpoint(statusEndpoint)) { done(); return }
+        val batch = DutyJournal.queue(record)
+        if (batch.isEmpty()) { done(); return }
+        revokeInFlight = true
+        network.execute {
+            val acknowledged = mutableListOf<BackgroundOrderAlertDuty.Revocation>()
+            for (proof in batch) {
+                try {
+                    val revoke = JSONObject().put("installation_id", proof.installation).put("consent_id", proof.consent)
+                        .put("endpoint", statusEndpoint).put("revoke_secret", proof.secret)
+                    val reply = request(revoke, true, 3_000) ?: continue
+                    if (BackgroundOrderAlertDuty.acknowledge(listOf(proof), proof, reply.opt("ok"), reply.opt("consent_id")).isEmpty()) {
+                        acknowledged.add(proof)
+                    }
+                } catch (_: Exception) { /* Offline, denied, truncated or unknown is never an ACK. */ }
+            }
+            handler.post {
+                revokeInFlight = false
+                if (acknowledged.isNotEmpty()) try {
+                    val next = JSONObject(record.toString())
+                    DutyJournal.setQueue(next, DutyJournal.queue(next).filterNot { it in acknowledged })
+                    vault.write(next, stopped = !next.has("consent_id") && !next.has(DutyJournal.STAGED))
+                    record = next
+                    durableStopUncertain = false
+                } catch (_: Exception) { /* Persisted work retains its original identity for next opportunity. */ }
+                // One connectivity-constrained opportunity. A failed job never reschedules itself.
+                if (!fromJob && DutyJournal.queue(record).isNotEmpty()) DutyRevokeJob.enqueue(context)
+                done()
+            }
+        }
+    }
+
+    fun dutyState(args: Map<*, *>): Map<String, Any?> {
+        val identity = args["identity"] as? String
+        val matches = !identity.isNullOrBlank() && identity == record.optString("identity")
+        val active = record.has("consent_id")
+        // An absent UI identity is normal behind the PIN screen. It may neither expose the
+        // bound grant nor turn a null projection into a sign-out. Explicit logout uses disable.
+        if (active && !identity.isNullOrBlank() && !matches) clearAuthority(reason = AlertRevocation.IDENTITY_OR_PAIRING_CHANGED)
+        else if (active && !authorityBound()) {
+            val expired = observedAuthority() == AlertAuthority.EXPIRED
+            clearAuthority(retainOptIn = expired, reason = if (expired) AlertRevocation.AUTHORITY_EXPIRED else AlertRevocation.SECURITY_FAILURE)
+        }
+        val ready = matches && record.has("consent_id") && authorityValid() && dutyReady()
+        val phase = when {
+            ready -> "active"
+            record.has(DutyJournal.STAGED) || record.has("consent_id") -> "pending"
+            record.has("duty_expired") -> "expired"
+            durableStopUncertain || record.has(DutyJournal.QUEUE) -> "revoking"
+            else -> "none"
+        }
+        val result = mutableMapOf<String, Any?>("available" to BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS,
+            "phase" to phase, "ready" to ready, "opt_in" to (record.opt("opt_in") == true),
+            "can_start_consent" to (BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS && !identity.isNullOrBlank() &&
+                uiLock.activityForeground && !uiLock.inactivityLocked && vault.bootCount() >= 0 &&
+                !durableStopUncertain && !vault.dutyStopRequested() && record.opt("enabled") != true &&
+                !record.has("consent_id") && !record.has(DutyJournal.STAGED) &&
+                DutyJournal.queue(record).size < BackgroundOrderAlertDuty.MAX_PENDING_REVOKES))
+        if (ready) {
+            result["consent_id"] = record.getString("consent_id")
+            result["registration_generation"] = record.getString("registration_generation")
+            result["authority_expires_at"] = record.getString("duty_end")
+            result["remaining_ms"] = record.getLong("authority_deadline") - SystemClock.elapsedRealtime()
+        }
+        return result
+    }
+
+    private fun dutyReady() = BackgroundOrderAlertDuty.ready(record.opt("enabled"),record.opt("opt_in"),
+        record.opt("duty_status_unknown"),record.opt("token_refresh_unconfirmed"))
+
+    fun suspendDutyEffects(args: Map<*,*>): Boolean {
+        if (!dutyBound || args["identity"] != record.opt("identity")) return false
+        dutyReads.invalidate()
+        state.clear()
+        stopBackground()
+        record.put("duty_status_unknown",true)
+        return try { persist(); true } catch (_: Exception) { false }
+    }
+
+    private fun restoreVerified(receipt: DutyJournal.Snapshot) {
+        check(authorityValid())
+        if (record.opt("duty_status_unknown") != false || record.getLong("authority_deadline") != receipt.deadline ||
+            record.optString("duty_end") != receipt.absoluteEnd) {
+            val next = JSONObject(record.toString()).put("duty_status_unknown",false)
+                .put("authority_deadline",receipt.deadline).put("duty_end",receipt.absoluteEnd)
+            vault.write(next)
+            record = next
+        }
+    }
+
+    fun revalidateDuty(args: Map<*,*>, done: (Boolean)->Unit) {
+        val scope = DutyJournal.scope(record)
+        if (scope == null || args["identity"] != scope.identity || !authorityValid() || !uiLock.activityForeground ||
+            record.opt("token_refresh_unconfirmed") != false) { done(false); return }
+        if (validatingDuty?.let { dutyReads.current(it, scope) } == true) { done(false); return }
+        reconciliation.cancel() // A superseded background watchdog cannot clear a newer foreground read.
+        val read = dutyReads.begin(scope)
+        validatingDuty = read
+        val captured = JSONObject(record.toString())
+        val started = SystemClock.elapsedRealtime()
+        network.execute {
+            var denied = false
+            val body = try { request(captured,false,3_000) } catch (_: AuthorityDenied) { denied=true; null } catch (_:Exception) { null }
+            handler.post completion@{
+                if (validatingDuty === read) validatingDuty = null
+                if (!dutyReads.current(read,DutyJournal.scope(record)) || !authorityValid()) { done(false); return@completion }
+                if (SystemClock.elapsedRealtime() - started >= BackgroundOrderAlertReconciliation.READ_BUDGET_MS) {
+                    suspendDutyEffects(args); done(false); return@completion
+                }
+                if (denied) { clearAuthority(reason=AlertRevocation.SERVER_AUTH_REVOKED); done(false); return@completion }
+                try {
+                    check(body != null)
+                    restoreVerified(DutyJournal.snapshot(body,scope,record,started,SystemClock.elapsedRealtime()))
+                    done(true)
+                } catch (_: Exception) { suspendDutyEffects(args); done(false) }
+            }
+        }
+    }
+
+    fun prepareDutyPreview(args: Map<*, *>): Map<String, Any?> {
+        val identity = args["identity"] as? String ?: return emptyMap()
+        val endpoint = args["endpoint"] as? String ?: return emptyMap()
+        if (!BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS || !uiLock.activityForeground || uiLock.inactivityLocked ||
+            identity.isBlank() || identity.length > 512 ||
+            !exactEndpoint(endpoint) || vault.bootCount() < 0 || durableStopUncertain || vault.dutyStopRequested() ||
+            record.opt("enabled") == true || record.has("consent_id") || record.has(DutyJournal.STAGED) ||
+            DutyJournal.queue(record).size >= BackgroundOrderAlertDuty.MAX_PENDING_REVOKES) return emptyMap()
+        val installation = record.optString("installation_id").takeIf(::uuid) ?: UUID.randomUUID().toString()
+        val staged = DutyJournal.stage(installation, identity, endpoint, vault.bootCount())
+        val next = JSONObject(record.toString()).put("installation_id", installation).put(DutyJournal.STAGED, staged)
+        vault.write(next)
+        record = next
+        drainDutyRevokes()
+        return mapOf("installation_id" to installation, "consent_id" to staged.getString("consent_id"),
+            "revoke_hash" to DutyJournal.hash(staged.getString("revoke_secret")), "generation" to generation)
+    }
+
+    private fun matchesDuty(value: JSONObject, args: Map<*, *>): Boolean =
+        value.has("consent_id") && value.optString("consent_id") == args["consent_id"] && value.optString("identity") == args["identity"] &&
+            (args["generation"] as? Number)?.toLong() == generation
+
+    fun stagedDuty(args: Map<*, *>, requireForeground: Boolean = true): Boolean = record.optJSONObject(DutyJournal.STAGED)?.let {
+        (!requireForeground || uiLock.activityForeground) && !uiLock.inactivityLocked && matchesDuty(it, args) && it.optInt("boot_count",-1) == vault.bootCount() &&
+            it.optString("endpoint") == args["endpoint"] && !vault.dutyStopRequested()
+    } == true
+
+    fun prepareDuty(args: Map<*, *>, callback: (Map<String, Any?>) -> Unit) {
+        if (!stagedDuty(args) || !initializeFirebase(context)) { callback(emptyMap()); return }
+        createChannel()
+        val policy = channelPolicy()
+        if (policy == null || policy.failureReason != null) { callback(emptyMap()); return }
+        val staged = record.getJSONObject(DutyJournal.STAGED)
+        val consent = staged.getString("consent_id")
+        if (staged.has("started_tick") || dutyTokenLookup == consent) { callback(emptyMap()); return }
+        dutyTokenLookup = consent
+        try {
+            FirebaseMessaging.getInstance().isAutoInitEnabled = true
+            FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                if (dutyTokenLookup == consent) dutyTokenLookup = null
+                if (!stagedDuty(args) || !task.isSuccessful || !BackgroundOrderAlertTokenRefresh.validToken(task.result ?: "")) {
+                    callback(emptyMap()); return@addOnCompleteListener
+                }
+                try {
+                    // Only this handoff permits Dart to issue enroll. An abandoned OS prompt or
+                    // failed SDK lookup leaves a harmless, expiring preview-only reservation.
+                    val current = record.getJSONObject(DutyJournal.STAGED)
+                    current.put("started_tick",SystemClock.elapsedRealtime()).put("status_secret",DutyJournal.token())
+                    persist()
+                    callback(mapOf("installation_id" to current.getString("installation_id"), "consent_id" to consent,
+                        "generation" to generation, "status_secret" to current.getString("status_secret"), "fcm_token" to task.result))
+                } catch (_: Exception) { callback(emptyMap()) }
+            }
+        } catch (_: Exception) {
+            if (dutyTokenLookup == consent) dutyTokenLookup = null
+            callback(emptyMap())
+        }
+    }
+
+    fun bindDuty(args: Map<*, *>): Boolean {
+        if (!stagedDuty(args)) return false
+        val staged = record.getJSONObject(DutyJournal.STAGED)
+        val next = DutyJournal.bind(staged,args,SystemClock.elapsedRealtime(),record) ?: return false
+        vault.write(next)
+        dutyReads.invalidate()
+        reconciliation.cancel()
+        hints.clear()
+        state.clear()
+        stopBackground()
+        tokenLane.finishPreparation()
+        record = next
+        dutyBound = true
+        optIn.prepare(true)
+        uiLock.confirmedBind()
+        applyForeground()
+        return true
+    }
+
+    fun cancelDuty(args: Map<*, *>): Boolean {
+        val staged = record.optJSONObject(DutyJournal.STAGED)
+        if (!matchesDuty(staged ?: record, args)) return false
+        return disable(AlertRevocation.USER_NOTIFICATION_OFF)
+    }
+
+    fun stopFromNotification(consent: String?): Boolean {
+        if (record.has(DutyJournal.STAGED) || !BackgroundOrderAlertDuty.stopMatches(consent,DutyJournal.scope(record)?.consent)) return false
+        return disable(AlertRevocation.USER_NOTIFICATION_STOP)
+    }
+
+    fun currentWake(intent: Intent?): Boolean = intent != null && !foreground && authorityValid() &&
+        BackgroundOrderAlertDuty.wakeMatches(intent.getStringExtra("consent_id"),intent.getStringExtra("generation"),DutyJournal.scope(record))
+
+    fun ownsService(value: BackgroundOrderAlertService) = service === value
     private fun notifications(): NotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     private fun permissionAllowed(): Boolean = Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -206,6 +446,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     }
 
     fun attach(messenger: BinaryMessenger) {
+        drainDutyRevokes()
         channel?.setMethodCallHandler(null)
         channel = MethodChannel(messenger, "restoflow.pos/background_order_alert")
     }
@@ -219,6 +460,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     fun bridge(): MethodChannel? = channel
 
     fun prepare(activity: Activity, requestPermission: Boolean, callback: (Map<String, Any?>) -> Unit) {
+        if (DutyJournal.owns(record) || durableStopUncertain || (!requestPermission && record.has("duty_expired"))) {
+            callback(mapOf("available" to true, "enabled" to false)); return
+        }
         if (!initializeFirebase(context)) { callback(preparationResult(false, false, "firebase_unavailable", firebaseInitialized = false)); return }
         createChannel()
         val policy = channelPolicy()
@@ -262,6 +506,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     } catch (_: Exception) { false }
 
     fun bind(args: Map<*, *>): Boolean {
+        if (DutyJournal.owns(record) || durableStopUncertain) return false
         val identity = args["identity"] as? String ?: return false
         val endpoint = args["endpoint"] as? String ?: return false
         val registration = args["registration_id"] as? String ?: return false
@@ -310,7 +555,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         } catch (_: Exception) { false }
     }
 
-    private fun retainedGrantValid(): Boolean = try { retainedScopeMatches() && authorityValid() } catch (_: Exception) { false }
+    private fun retainedGrantValid(): Boolean = try { retainedScopeMatches() && authorityBound() } catch (_: Exception) { false }
 
     /** Called only for the exact identity from the trusted Dart inactivity transition. */
     fun retainInactivity(args: Map<*, *>): Boolean {
@@ -341,13 +586,21 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         } catch (_: Exception) { clearAuthority(reason = AlertRevocation.SECURITY_FAILURE); false }
     }
 
-    private fun authorityValid(): Boolean = authorityState() == AlertAuthority.VALID
+    private fun authorityBound(): Boolean = authorityState() == AlertAuthority.VALID
+
+    // Keep enough authority to finish the outstanding token CAS or revoke it. Until its exact
+    // result is known, even a valid old-generation status response cannot authorize effects.
+    private fun authorityValid(): Boolean = authorityBound() && (!dutyBound || BackgroundOrderAlertDuty.mayRead(
+        record.opt("enabled"),record.opt("opt_in"),record.opt("duty_status_unknown"),record.opt("token_refresh_unconfirmed")))
 
     // Extra observation must not introduce a new Settings/vault failure on a stop path.
     private fun observedAuthority(): AlertAuthority? = try { authorityState() } catch (_: Exception) { null }
 
     // Same short-circuit order as the original guard. No vault contents leave this method.
     private fun authorityState(): AlertAuthority = when {
+        durableStopUncertain || vault.dutyStopRequested() -> AlertAuthority.OPTED_OUT
+        dutyBound && !BackgroundOrderAlertDuty.boundFlagsValid(record.opt("enabled"),record.opt("opt_in"),
+            record.opt("duty_status_unknown"),record.opt("token_refresh_unconfirmed")) -> AlertAuthority.BINDING_MISSING
         !BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS -> AlertAuthority.FEATURE_OFF
         !record.optBoolean("enabled") -> AlertAuthority.OPTED_OUT
         !record.has("registration_id") || !record.has("status_secret") -> AlertAuthority.BINDING_MISSING
@@ -359,6 +612,9 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     }
 
     fun pending(args: Map<*, *>): Boolean {
+        // This foreground Inbox projection has no consent/generation/read sequence. It must
+        // never seed duty audio or notifications after a handoff; only its own status read may.
+        if (dutyBound) return false
         if (!foreground || !authorityValid() || args["identity"] != record.optString("identity")) return false
         val serverTime = parseTime(args["server_time"] as? String ?: return false) ?: return false
         val requests = args["requests"] as? List<*> ?: return false
@@ -376,6 +632,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     }
 
     fun foreground(value: Boolean) {
+        if (value) drainDutyRevokes()
         uiLock.activity(value)
         // A persisted lock is meaningful only for the exact still-valid original grant.
         if (uiLock.inactivityLocked && !retainedGrantValid()) clearAuthority(reason = AlertRevocation.SECURITY_FAILURE)
@@ -399,6 +656,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         } else {
             playback.stop()
             if (authorityValid() && state.active(SystemClock.elapsedRealtime()) && channelAllowed()) startBackground()
+            else if (dutyBound && authorityValid() && channelAllowed()) fallbackNotification()
         }
     }
 
@@ -415,31 +673,55 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
     fun consumeTap(): Boolean = pendingInboxTap.also { pendingInboxTap = false }
     fun onIntent(intent: Intent?) { if (intent?.action == OPEN_INBOX) pendingInboxTap = true }
 
-    fun clearAuthority(retainOptIn: Boolean = false, reason: AlertRevocation = AlertRevocation.SECURITY_FAILURE) {
+    fun clearAuthority(retainOptIn: Boolean = false, reason: AlertRevocation = AlertRevocation.SECURITY_FAILURE): Boolean {
+        if (unreadableVault) {
+            try { vault.latchDutyStop() } catch (_: Exception) {}
+            return false
+        }
         // A reason string alone cannot retain authority; only retainInactivity may do that.
         val revocation = if (reason == AlertRevocation.INACTIVITY_UI_LOCK) AlertRevocation.SECURITY_FAILURE else reason
+        val hadDuty = DutyJournal.owns(record) || durableStopUncertain
+        if (hadDuty) {
+            val stopped = DutyJournal.stopped(record, retainOptIn, reason == AlertRevocation.AUTHORITY_EXPIRED)
+            durableStopUncertain = true
+            try { vault.latchDutyStop() } catch (_: Exception) { /* The atomic encrypted swap below also fences cold restore. */ }
+            try { vault.write(stopped, stopped = true); durableStopUncertain = false } catch (_: Exception) {}
+            record = stopped
+            dutyBound = false
+        }
         observe(AlertEvent.AUTHORITY, revocation.observation)
         uiLock.revoke()
         tokenLane.finishPreparation()
         ownership.invalidate()
+        dutyReads.invalidate()
         state.clear()
         hints.clear()
         playback.stop()
         stopBackground()
         val install = record.optString("installation_id")
         optIn.clear(retainOptIn)
+        if (hadDuty) {
+            if (!durableStopUncertain && DutyJournal.queue(record).isNotEmpty()) {
+                DutyRevokeJob.enqueue(context)
+                drainDutyRevokes()
+            }
+            return !durableStopUncertain
+        }
         record = JSONObject().apply {
             if (uuid(install)) put("installation_id", install)
             if (optIn.enabled) put("opt_in", true)
         }
         try { vault.clear(); if (record.length() > 0) persist() } catch (_: Exception) { /* No in-memory authority remains. */ }
+        return true
     }
 
-    fun disable(reason: AlertRevocation = AlertRevocation.EXPLICIT_SIGN_OUT) {
+    fun disable(reason: AlertRevocation = AlertRevocation.EXPLICIT_SIGN_OUT): Boolean {
         val old = record.toString()
-        clearAuthority(reason = reason)
+        val duty = record.has("consent_id")
+        val stopped = clearAuthority(reason = reason)
         try { if (initializeFirebase(context)) FirebaseMessaging.getInstance().isAutoInitEnabled = false } catch (_: Exception) { }
-        network.execute { try { request(JSONObject(old), true) } catch (_: Exception) { /* Local stop never waits on network. */ } }
+        if (!duty) network.execute { try { request(JSONObject(old), true) } catch (_: Exception) { /* Local stop never waits on network. */ } }
+        return stopped
     }
 
     fun tokenChanged(token: String) {
@@ -447,15 +729,15 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
             if (!BackgroundOrderAlertTokenRefresh.validToken(token)) return@post
             // PIN-locked status-only retention grants no new token ownership. The
             // ordinary authenticated foreground prepare reads the latest SDK token.
-            if (!uiLock.authenticatedUiAvailable) return@post
-            if (foreground || tokenLane.preparing) {
+            if (!uiLock.authenticatedUiAvailable && !record.has("consent_id")) return@post
+            if ((!dutyBound && foreground) || tokenLane.preparing) {
                 // Keep the generation/status secret stable while a serialized
                 // foreground prepare/bind may be in flight. That owner reads
                 // the latest SDK token before registration; logout still revokes.
                 channel?.invokeMethod("tokenChanged", null)
                 return@post
             }
-            if (!authorityValid()) {
+            if (!authorityBound()) {
                 clearAuthority(true, if (observedAuthority() == AlertAuthority.EXPIRED) AlertRevocation.AUTHORITY_EXPIRED else AlertRevocation.SECURITY_FAILURE)
                 channel?.invokeMethod("tokenChanged", null)
                 return@post
@@ -474,6 +756,11 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
             // another token against an unconfirmed server generation.
             record.put("token_refresh_unconfirmed", true)
             persist()
+            if (dutyBound) {
+                dutyReads.invalidate()
+                state.clear()
+                stopBackground()
+            }
         } catch (_: Exception) {
             tokenLane.complete(work, null)
             clearAuthority(true)
@@ -489,8 +776,8 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                 catch (_: AuthorityDenied) { denied = true; null } catch (_: Exception) { null }
             handler.post completion@ {
                 if (expected != generation || !tokenLane.canComplete(work, record.optString("registration_generation")) ||
-                    !authorityValid() || snapshot.optString("registration_id") != record.optString("registration_id")) return@completion
-                if (foreground) {
+                    !authorityBound() || snapshot.optString("registration_id") != record.optString("registration_id")) return@completion
+                if (foreground && !dutyBound) {
                     // An old background denial must not cancel a foreground
                     // registration that has committed but has not bound yet.
                     tokenLane.complete(work, null)
@@ -502,18 +789,28 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                     clearAuthority(true, AlertRevocation.SERVER_AUTH_REVOKED)
                 } else if (response != null) {
                     try {
-                        check(response.getBoolean("ok") &&
+                        val duty = DutyJournal.scope(snapshot)
+                        if (duty != null) check(BackgroundOrderAlertDuty.validReply(response.opt("ok"), response.opt("consent_id"),
+                            response.opt("registration_id"), response.opt("generation"), duty, rotating = true))
+                        check(response.opt("ok") == true &&
                             response.getString("registration_id") == record.getString("registration_id") &&
                             uuid(response.getString("generation")))
                         val serverTime = parseTime(response.getString("server_time")) ?: error("invalid time")
                         val expiry = parseTime(response.getString("authority_expires_at")) ?: error("invalid expiry")
+                        if (duty != null) check(expiry <= (parseTime(record.getString("duty_end")) ?: error("unbound")))
                         val now = SystemClock.elapsedRealtime()
                         val remaining = BackgroundOrderAlertTokenRefresh.remaining(serverTime, expiry,
                             startedAt, now, record.getLong("authority_deadline")) ?: error("expired authority")
-                        record.put("authority_deadline", now + remaining)
+                        val next = JSONObject(record.toString()).put("authority_deadline", now + remaining)
                             .put("registration_generation", response.getString("generation"))
-                        record.remove("token_refresh_unconfirmed")
-                        persist()
+                        if (duty == null) next.remove("token_refresh_unconfirmed") else next.put("token_refresh_unconfirmed",false)
+                        if (duty != null) {
+                            next.put("duty_end", response.getString("authority_expires_at"))
+                            next.optJSONObject("ui_inactivity_lock")?.put("registration_generation",response.getString("generation"))
+                        }
+                        vault.write(next)
+                        record = next
+                        if (duty != null) { dutyReads.invalidate(); reconciliation.cancel(); if (!foreground) fallbackNotification() }
                         committedGeneration = response.getString("generation")
                     } catch (_: Exception) {
                         // Unknown writes block this lane until foreground
@@ -528,14 +825,18 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
 
     fun hint(data: Map<String, String>, highPriority: Boolean) {
         BackgroundOrderAlertCallbackHandoff.run(
-            post = { handler.post(it) }, fallback = { BackgroundOrderAlertJobService.enqueue(context) },
+            post = { handler.post(it) }, fallback = {
+                // A duty wake cannot trigger an unscoped OS job if it never reached the main-thread fence.
+                if (dutyBound || data["version"] == "2") false else BackgroundOrderAlertJobService.enqueue(context)
+            },
         ) handoff@ {
             val authority = authorityState()
-            if (authority != AlertAuthority.VALID) {
+            if (authority != AlertAuthority.VALID || (dutyBound && record.opt("token_refresh_unconfirmed") == true)) {
                 observe(AlertEvent.AUTHORITY, AlertResult.REFUSED, authority = authority, foreground = foreground)
                 return@handoff
             }
-            val accepted = hints.accept(data, record.optString("registration_id"), System.currentTimeMillis(), SystemClock.elapsedRealtime())
+            val accepted = hints.accept(data, record.optString("registration_id"), System.currentTimeMillis(),
+                SystemClock.elapsedRealtime(), DutyJournal.scope(record))
             observe(AlertEvent.HINT, if (accepted) AlertResult.ACCEPTED else AlertResult.REFUSED,
                 authority = authority, channel = channelState(), foreground = foreground)
             if (!accepted) return@handoff
@@ -558,7 +859,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
 
     fun messagesDeleted() {
         BackgroundOrderAlertCallbackHandoff.run(
-            post = { handler.post(it) }, fallback = { BackgroundOrderAlertJobService.enqueue(context) },
+            post = { handler.post(it) }, fallback = { if (dutyBound) false else BackgroundOrderAlertJobService.enqueue(context) },
         ) {
             if (foreground) channel?.invokeMethod("pendingHint", null)
             else fallbackNotification() // A lost hint grants no authority; read the full set.
@@ -573,6 +874,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         observe(AlertEvent.FGS_REQUEST, AlertResult.REQUESTED, authority = observedAuthority(), channel = channelState(), foreground = foreground)
         try {
             val intent = Intent(context, BackgroundOrderAlertService::class.java)
+            DutyJournal.scope(record)?.let { intent.putExtra("consent_id",it.consent).putExtra("generation",it.transport) }
             ContextCompat.startForegroundService(context, intent)
         } catch (error: Exception) {
             // Includes Android 12+ ForegroundServiceStartNotAllowedException and permission failures.
@@ -631,6 +933,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         val expectedJob = fallbackJobs.current
         val startedAt = SystemClock.elapsedRealtime()
         val snapshot = JSONObject(record.toString())
+        val dutyRead = DutyJournal.scope(snapshot)?.let(dutyReads::begin)
         val cancelled = AtomicBoolean(false)
         val connection = AtomicReference<HttpURLConnection?>(null)
         val future = network.submit {
@@ -644,7 +947,8 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
             } catch (_: AuthorityDenied) { denied = true; null } catch (_: Exception) { null }
             handler.post {
                 val completed = reconciliation.complete(work) completion@ {
-                    if (expected != generation || expectedVisibility != visibilityEpoch || foreground ||
+                    if ((dutyRead != null && !dutyReads.current(dutyRead, DutyJournal.scope(record))) ||
+                        expected != generation || expectedVisibility != visibilityEpoch || foreground ||
                         service !== expectedService || (service == null && !fallbackWanted) || !authorityValid() ||
                         snapshot.optString("registration_id") != record.optString("registration_id")) {
                         if (!foreground && (service != null || fallbackWanted) && authorityValid()) scheduleReconcile()
@@ -653,7 +957,14 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                     }
                     if (denied) { observe(AlertEvent.STATUS_COMPLETE, AlertResult.DENIED, read = ordinal); clearAuthority(reason = AlertRevocation.SERVER_AUTH_REVOKED); return@completion }
                     try {
-                        check(response != null && response.getBoolean("ok"))
+                        check(response != null && response.opt("ok") == true)
+                        if (dutyRead != null) {
+                            val now = SystemClock.elapsedRealtime()
+                            val receipt = DutyJournal.snapshot(response, dutyRead.scope, record, startedAt, now)
+                            restoreVerified(receipt)
+                            applyStatus(receipt.values, receipt.serverNow, receipt.deadline - now, ordinal)
+                            return@completion
+                        }
                         check(response.getString("registration_id") == record.optString("registration_id"))
                         val serverTime = parseTime(response.getString("server_time")) ?: error("invalid time")
                         val expiry = parseTime(response.getString("authority_expires_at")) ?: error("invalid expiry")
@@ -668,18 +979,11 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
                         }
                         val conservativeServerNow = serverTime + (SystemClock.elapsedRealtime() - startedAt)
                         val remaining = minOf(expiry - conservativeServerNow, record.optLong("authority_deadline") - SystemClock.elapsedRealtime())
-                        observe(AlertEvent.STATUS_COMPLETE, AlertResult.ACCEPTED, read = ordinal)
-                        if (service == null) showVerifiedFallback(values, conservativeServerNow, remaining)
-                        else {
-                            state.replace(values, conservativeServerNow, remaining, SystemClock.elapsedRealtime())
-                            observe(AlertEvent.PENDING_APPLIED, AlertResult.APPLIED,
-                                pendingCount = state.count(SystemClock.elapsedRealtime()), read = ordinal)
-                            handler.removeCallbacks(tick)
-                            tick.run()
-                        }
+                        applyStatus(values, conservativeServerNow, remaining, ordinal)
                     } catch (_: Exception) {
                         // Unknown state is not permission to continue ringing indefinitely.
                         val failure = AlertResult.UNAVAILABLE_OR_INVALID
+                        if (dutyRead != null) { record.put("duty_status_unknown",true); try { persist() } catch (_: Exception) {} }
                         observe(AlertEvent.STATUS_COMPLETE, failure, read = ordinal)
                         state.clear()
                         stopBackground(failure)
@@ -696,14 +1000,31 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         }
     }
 
+    private fun applyStatus(values: Map<String,Long>, conservativeServerNow: Long, remaining: Long, ordinal: Long) {
+        observe(AlertEvent.STATUS_COMPLETE, AlertResult.ACCEPTED, read = ordinal)
+        if (service == null) showVerifiedFallback(values, conservativeServerNow, remaining)
+        else {
+            state.replace(values, conservativeServerNow, remaining, SystemClock.elapsedRealtime())
+            observe(AlertEvent.PENDING_APPLIED, AlertResult.APPLIED,
+                pendingCount = state.count(SystemClock.elapsedRealtime()), read = ordinal)
+            handler.removeCallbacks(tick)
+            tick.run()
+        }
+    }
+
     private fun request(snapshot: JSONObject, disable: Boolean, timeoutMs: Int = 7_000, token: String? = null,
         cancelled: () -> Boolean = { false }, opened: (HttpURLConnection) -> Unit = {}): JSONObject? {
         if (cancelled()) return null
         val endpoint = snapshot.optString("endpoint")
-        if (!exactEndpoint(endpoint) || !snapshot.has("status_secret") || !uuid(snapshot.optString("installation_id"))) return null
+        val duty = snapshot.has("consent_id")
+        val secret = if (duty && disable) "revoke_secret" else "status_secret"
+        if (!exactEndpoint(endpoint) || !snapshot.has(secret) || !uuid(snapshot.optString("installation_id")) ||
+            (duty && !uuid(snapshot.optString("consent_id")))) return null
         if (token != null && (disable || !uuid(snapshot.optString("registration_generation")) ||
             !BackgroundOrderAlertTokenRefresh.validToken(token))) return null
-        val path = if (disable) "/disable" else if (token != null) "/token/refresh" else ""
+        val path = if (duty) {
+            if (disable) "/duty/revoke" else if (token != null) "/duty/token/refresh" else "/duty/status"
+        } else if (disable) "/disable" else if (token != null) "/token/refresh" else ""
         val connection = URL(endpoint + path).openConnection() as HttpURLConnection
         val startedAt = SystemClock.elapsedRealtime()
         return try {
@@ -714,9 +1035,10 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
             connection.connectTimeout = timeoutMs
             connection.readTimeout = timeoutMs
             connection.doOutput = true
-            connection.setRequestProperty("Authorization", "Bearer ${snapshot.getString("status_secret")}")
+            connection.setRequestProperty("Authorization", "Bearer ${snapshot.getString(secret)}")
             connection.setRequestProperty("Content-Type", "application/json")
             val input = JSONObject().put("installation_id", snapshot.getString("installation_id"))
+            if (duty) input.put("consent_id",snapshot.getString("consent_id"))
             if (token != null) input.put("fcm_token", token).put("generation", snapshot.getString("registration_generation"))
             val body = input.toString().toByteArray(Charsets.UTF_8)
             connection.setFixedLengthStreamingMode(body.size)
@@ -747,7 +1069,7 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         // API 24/25 cannot enforce notification expiry after process death. Fail silent there.
         if (Build.VERSION.SDK_INT < 26) return
         if (fallbackJobs.current != null) { scheduleReconcile(); return }
-        BackgroundOrderAlertJobService.enqueue(context)
+        BackgroundOrderAlertJobService.enqueue(context,DutyJournal.scope(record))
     }
 
     /** Called only by the OS JobService, on main; status authority is never renewed here. */
@@ -806,7 +1128,13 @@ internal class BackgroundOrderAlertCoordinator private constructor(context: Cont
         val open = Intent(context, MainActivity::class.java).setAction(OPEN_INBOX)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val tap = PendingIntent.getActivity(context, 38101, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val stop = PendingIntent.getBroadcast(context, 38102, Intent(context, BackgroundOrderAlertStopReceiver::class.java).setAction(STOP_ALERTS),
+        val stopIntent = Intent(context, BackgroundOrderAlertStopReceiver::class.java).setAction(STOP_ALERTS)
+        DutyJournal.scope(record)?.let {
+            // Extras alone do not participate in PendingIntent identity.
+            stopIntent.data = Uri.Builder().scheme("bizbot-duty").authority("stop").appendPath(it.consent).build()
+            stopIntent.putExtra("consent_id",it.consent)
+        }
+        val stop = PendingIntent.getBroadcast(context, 38102, stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
         builder.setSmallIcon(android.R.drawable.ic_dialog_info)

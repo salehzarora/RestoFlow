@@ -52,6 +52,7 @@ internal class BackgroundOrderAlertJobOwnership {
 /** Batch only obligations acquired BEFORE a read, never arrivals during its snapshot. */
 internal class BackgroundOrderAlertJobQueue<T>(private val take: () -> T?, private val complete: (T) -> Unit) {
     private var batch: List<T> = emptyList()
+    fun anyCurrent(matches: (T) -> Boolean) = batch.any(matches)
     fun beginRead(): Boolean {
         check(batch.isEmpty())
         val pending = mutableListOf<T>()
@@ -423,9 +424,14 @@ internal class BackgroundOrderAlertHints {
     private val recent = linkedMapOf<String, Long>()
     private val terminal = linkedSetOf<String>()
     fun clear() { recent.clear(); terminal.clear() }
-    fun accept(data: Map<String, String>, registration: String, wallNow: Long, monotonicNow: Long): Boolean {
-        if (data.keys != setOf("version", "kind", "request_id", "expires_at", "registration_id") ||
-            data["version"] != "1" || data["kind"] !in setOf("pending", "cancel") ||
+    fun accept(data: Map<String, String>, registration: String, wallNow: Long, monotonicNow: Long,
+               duty: DutyScope? = null): Boolean {
+        val keys = setOf("version", "kind", "request_id", "expires_at", "registration_id")
+        if (duty == null) {
+            if (data.keys != keys || data["version"] != "1") return false
+        } else if (data.keys != keys + setOf("consent_id", "generation") || data["version"] != "2" ||
+            data["consent_id"] != duty.consent || data["generation"] != duty.transport) return false
+        if (data["kind"] !in setOf("pending", "cancel") ||
             !BackgroundOrderAlertProtocol.uuid(data["request_id"].orEmpty()) ||
             !BackgroundOrderAlertProtocol.uuid(data["registration_id"].orEmpty()) || data["registration_id"] != registration) return false
         val expiry = BackgroundOrderAlertProtocol.timestamp(data["expires_at"].orEmpty()) ?: return false

@@ -4,6 +4,93 @@ package com.restoflow.pos
 fun main() {
     var passed = 0
     fun scenario(name: String, body: () -> Unit) { body(); passed++; println("PASS $name") }
+    val a = "10000000-0000-4000-8000-000000000001"
+    val b = "20000000-0000-4000-8000-000000000002"
+    val rotation = "30000000-0000-4000-8000-000000000003"
+    val scope = DutyScope(a, "installation", "principal/branch", "shift", b, rotation, "policy")
+    scenario("duty snapshots fence activation, scope, transport and latest read before order effects") {
+        val fence = DutyReadFence()
+        val first = fence.begin(scope)
+        val second = fence.begin(scope)
+        val state = BackgroundOrderAlertState()
+        check(fence.current(second, scope))
+        state.replace(mapOf("B" to 30_000L), 0, 30_000, 0)
+        if (fence.current(first, scope)) state.replace(mapOf("A" to 1_000L), 0, 30_000, 0)
+        check(!fence.current(first, scope))
+        for (changed in listOf(scope.copy(consent = b), scope.copy(identity = "other"), scope.copy(shift = "other"),
+                scope.copy(installation = "other"), scope.copy(transport = a), scope.copy(registration = a), scope.copy(policy = "other"))) {
+            check(!fence.current(second, changed))
+        }
+        check(state.count(5_000) == 1)
+        fence.invalidate()
+        check(!fence.current(second, scope))
+    }
+    scenario("current duty response requires literal boolean and exact immutable enrollment and registration") {
+        for (bad in listOf(null,"true","false",0,1)) {
+            check(!BackgroundOrderAlertDuty.ready(bad,true,false,false))
+            check(!BackgroundOrderAlertDuty.ready(true,bad,false,false))
+            check(!BackgroundOrderAlertDuty.ready(true,true,bad,false))
+            check(!BackgroundOrderAlertDuty.ready(true,true,false,bad))
+        }
+        check(BackgroundOrderAlertDuty.ready(true,true,false,false))
+        check(!BackgroundOrderAlertDuty.ready(true,true,true,false))
+        check(!BackgroundOrderAlertDuty.ready(true,true,false,true))
+        for (uncertain in listOf(true, "false", null)) {
+            val queuedWakeMatches = BackgroundOrderAlertDuty.wakeMatches(a,rotation,scope)
+            val oldTransportStatusMatches = BackgroundOrderAlertDuty.validReply(true,a,b,rotation,scope)
+            check(queuedWakeMatches && oldTransportStatusMatches)
+            check(!(queuedWakeMatches && oldTransportStatusMatches && BackgroundOrderAlertDuty.mayRead(true,true,false,uncertain)))
+        }
+        for (bad in listOf(null, "true", "false", 1, false)) {
+            check(!BackgroundOrderAlertDuty.validReply(bad, a, b, rotation, scope))
+        }
+        check(BackgroundOrderAlertDuty.validReply(true, a, b, rotation, scope))
+        check(!BackgroundOrderAlertDuty.validReply(true, b, b, rotation, scope))
+        check(!BackgroundOrderAlertDuty.validReply(true, a, a, rotation, scope))
+        check(!BackgroundOrderAlertDuty.validReply(true, a, b, a, scope))
+        check(BackgroundOrderAlertDuty.validReply(true, a, b, a, scope, rotating = true))
+        check(!BackgroundOrderAlertDuty.validReply(true, a, b, "bad", scope, rotating = true))
+    }
+    scenario("duty v2 wake cannot cross a consent even when registration id stays unchanged") {
+        val hints = BackgroundOrderAlertHints()
+        val old = mapOf("version" to "1", "kind" to "pending", "request_id" to a,
+            "registration_id" to b, "expires_at" to "2026-10-20T12:05:00Z")
+        val wall = BackgroundOrderAlertProtocol.timestamp("2026-10-20T12:00:00Z")!!
+        check(!hints.accept(old,b,wall,0,scope))
+        val next = old + mapOf("version" to "2","consent_id" to a,"generation" to rotation)
+        check(!hints.accept(next,b,wall,0))
+        check(!hints.accept(next,b,wall,0,scope.copy(consent = b)))
+        check(!hints.accept(next,b,wall,0,scope.copy(transport = a)))
+        check(hints.accept(next,b,wall,0,scope))
+        check(!BackgroundOrderAlertDuty.stopMatches(a,b) && !BackgroundOrderAlertDuty.stopMatches(null,a))
+        check(BackgroundOrderAlertDuty.stopMatches(a,scope.copy(transport=b).consent))
+        check(BackgroundOrderAlertDuty.stopMatches(null,null))
+        check(!BackgroundOrderAlertDuty.wakeMatches(a,rotation,scope.copy(consent=b)))
+        check(!BackgroundOrderAlertDuty.wakeMatches(a,rotation,scope.copy(transport=b)))
+        check(!BackgroundOrderAlertDuty.wakeMatches(null,null,scope))
+    }
+    scenario("revoke-only receipt matches both queued credential and immutable consent; failed/old ACKs retain newer work") {
+        check(!BackgroundOrderAlertDuty.needsRevocation(false,false)) // preview alone cannot become an endless tombstone
+        check(BackgroundOrderAlertDuty.needsRevocation(false,true))
+        check(BackgroundOrderAlertDuty.needsRevocation(true,false))
+        val first = BackgroundOrderAlertDuty.Revocation("install",a,"revoke-A")
+        val second = BackgroundOrderAlertDuty.Revocation("install",b,"revoke-B")
+        val queue = BackgroundOrderAlertDuty.enqueue(BackgroundOrderAlertDuty.enqueue(emptyList(),first),second)
+        check(BackgroundOrderAlertDuty.enqueue(queue,first) == queue)
+        for (wrong in listOf(null, false, "true", "false", 1)) check(BackgroundOrderAlertDuty.acknowledge(queue,first,wrong,a) == queue)
+        check(BackgroundOrderAlertDuty.acknowledge(queue,first,true,b) == queue)
+        check(BackgroundOrderAlertDuty.acknowledge(queue,first.copy(secret="different"),true,a) == queue)
+        val after = BackgroundOrderAlertDuty.acknowledge(queue,first,true,a)
+        check(after == listOf(second))
+        check(BackgroundOrderAlertDuty.acknowledge(after,first,true,a) == after)
+    }
+    scenario("duty expiry charges RTT and caps against recorded elapsed time on every status/rotation") {
+        check(BackgroundOrderAlertDuty.remaining(0, 36_000_000, 36_000_000, 0, 2_000, null) == 35_998_000L)
+        check(BackgroundOrderAlertDuty.remaining(1000, 100_000, 100_000, 0, 20_000, 21_000) == 1_000L)
+        check(BackgroundOrderAlertDuty.remaining(0, 100_001, 100_000, 0, 20, null) == null)
+        check(BackgroundOrderAlertDuty.remaining(0, 10, 10, 0, 10, null) == null)
+        check(BackgroundOrderAlertDuty.remaining(0, 30, 30, 0, 10, 10) == null)
+    }
     fun pending(vararg ids: String) = ids.associateWith { 100_000L }
 
     scenario("activation recovery classifies Play services without guessing unsupported states") {

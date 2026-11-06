@@ -4,6 +4,7 @@
          source sets, so the release (main) manifest must declare it too, or a
          release build's pilot APK would have no network access (ANDROID-001). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -45,6 +46,8 @@
         <receiver android:name=".BackgroundOrderAlertStopReceiver" android:exported="false"
             android:enabled="${bizbotBackgroundAlertsEnabled}" />
         <service android:name=".BackgroundOrderAlertJobService" android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" android:enabled="${bizbotBackgroundAlertsEnabled}" />
+        <service android:name=".DutyRevokeJob" android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" android:enabled="${bizbotBackgroundAlertsEnabled}" />
         <provider android:name=".BackgroundOrderAlertInitProvider" android:authorities="${applicationId}.backgroundorderalert.init"
             android:exported="false" android:initOrder="101" android:enabled="${bizbotBackgroundAlertsEnabled}" />

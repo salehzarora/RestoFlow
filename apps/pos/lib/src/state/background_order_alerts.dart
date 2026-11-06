@@ -6,6 +6,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import '../data/online_order_inbox.dart';
 import '../media/background_order_alert_bridge.dart';
 import 'background_alert_attempt_report.dart';
+import 'background_alert_duty.dart';
 import 'background_alert_delegation.dart';
 import 'online_order_inbox_controller.dart';
 import 'pos_offline_state.dart';
@@ -114,6 +115,7 @@ class BackgroundOrderAlertState {
     this.failed = false,
     this.authorizationExpired = false,
     this.authorizedUntil,
+    this.shiftPhase,
     this.failureReason,
     this.diagnostics = const BackgroundOrderAlertDiagnostics(),
   });
@@ -123,6 +125,7 @@ class BackgroundOrderAlertState {
   final bool failed;
   final bool authorizationExpired;
   final DateTime? authorizedUntil;
+  final ShiftAlertPhase? shiftPhase;
   final BackgroundOrderAlertFailure? failureReason;
   final BackgroundOrderAlertDiagnostics diagnostics;
 }
@@ -255,6 +258,29 @@ class _RegistrationAttempt {
   bool retainOptInOnExit = false;
 }
 
+class _DutyAttempt {
+  _DutyAttempt(
+    this.identity,
+    this.installation,
+    this.consent,
+    this.generation,
+    this.bridge,
+    this.endpoint,
+  );
+  final String identity, installation, consent, endpoint;
+  final int generation;
+  final BackgroundAlertDutyBridge bridge;
+  ShiftAlertPreview? preview;
+  DateTime? confirmBy;
+  DateTime? previewStarted;
+
+  Map<String, dynamic> get fence => {
+    'identity': identity,
+    'consent_id': consent,
+    'generation': generation,
+  };
+}
+
 class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   int _generation = 0;
   String? _identity;
@@ -275,6 +301,18 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   _RegistrationAttempt? _active;
   _EnableIntent? _intent;
   Completer<void>? _resume;
+  Completer<void>? _dutyReadBarrier;
+  bool _dutyBlocked = false;
+  String? _boundDutyIdentity;
+  bool _dutyAvailable = false;
+  bool _canStartConsent = false;
+  bool _dutyNeedsValidation = false;
+  Future<bool>? _dutySuspension;
+
+  bool _dutyWriting = false;
+  int _dutyEpoch = 0;
+  _DutyAttempt? _dutyAttempt;
+  _DutyAttempt? _permissionOverlay;
   DateTime? _authorityExpiresAt;
   DateTime? _lastRegistrationAttempt;
   Timer? _authorityRenewal;
@@ -309,6 +347,13 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         ),
       );
     }
+    _dutyEpoch++;
+    _dutyWriting = false;
+    _dutyAttempt = null;
+    _dutyAvailable = false;
+    _canStartConsent = false;
+    _dutyNeedsValidation = false;
+    _dutySuspension = null;
     _disposed = false;
     final gen = ++_generation;
     // Never release an unfinished native lane on rebuild/identity replacement.
@@ -323,8 +368,13 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     if (!enabledBuild) return const BackgroundOrderAlertState();
     final bridge = ref.watch(backgroundOrderAlertBridgeProvider);
     _bridge = bridge;
+    _dutyBlocked = bridge is BackgroundAlertDutyBridge;
     ref.listen(posOfflineModeProvider.select((s) => s.phase), (_, next) {
       if (next != PosOfflinePhase.online) {
+        if (_dutyBlocked && bridge is BackgroundAlertDutyBridge) {
+          unawaited(_unverifiedDuty());
+          return;
+        }
         unawaited(
           _cancel(
             retainOptIn: _intent == null,
@@ -332,12 +382,21 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
           ),
         );
       } else if (_foreground) {
-        _kick();
+        if (_dutyBlocked && bridge is BackgroundAlertDutyBridge) {
+          unawaited(_readDuty());
+        } else {
+          _kick();
+        }
       }
     });
-    ref.listen(onlineOrderInboxControllerProvider, (_, next) {
+    ref.listen(onlineOrderInboxControllerProvider, (previous, next) {
       if (next.failure == OnlineInboxFailure.invalidSession ||
           next.failure == OnlineInboxFailure.permissionDenied) {
+        if (_dutyBlocked && bridge is BackgroundAlertDutyBridge) {
+          if (previous?.failure != next.failure)
+            unawaited(_unverifiedDuty(recheck: true));
+          return;
+        }
         unawaited(
           _cancel(reason: BackgroundAlertRevocationReason.serverAuthRevoked),
         );
@@ -350,10 +409,16 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       tokenChanged: () {
         if (!_current(_generation)) return;
         _tokenRefreshPending = true;
-        if (_foreground) _kick(force: true);
+        if (_foreground) {
+          if (_dutyBlocked) {
+            unawaited(_readDuty());
+          } else {
+            _kick(force: true);
+          }
+        }
       },
       pendingHint: () {
-        if (_current(_generation) && _foreground)
+        if (_current(_generation) && _foreground && !_dutyBlocked)
           unawaited(
             ref.read(onlineOrderInboxControllerProvider.notifier).refresh(),
           );
@@ -364,7 +429,19 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       // handoff can protect existing native authority during PIN removal.
       // A null identity, disposal or background transition alone cannot.
       final retainExisting = _retainingInactivity();
+      // A UI container can disappear while the notification-only native owner is
+      // still on duty. Identity/logout writers revoke separately; disposal cannot
+      // create or restore authority. An unconfirmed attempt never takes this path.
+      final retainBoundDuty =
+          _boundDutyIdentity != null &&
+          _boundDutyIdentity == _identity &&
+          !_off &&
+          !_dutyWriting &&
+          _active == null &&
+          (_authorityExpiresAt?.isAfter(_proofClock()) ?? false);
       _disposed = true;
+      final staged = _dutyAttempt;
+      if (staged != null) unawaited(staged.bridge.cancelDuty(staged.fence));
       _active?.retainOptInOnExit = false;
       _generation++;
       _clearDeadline();
@@ -374,7 +451,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       _wake();
       // Paused, already-bound delegation remains bounded in native code.
       // An unfinished enable must instead be revoked, including late completion.
-      if (retainExisting) return;
+      if (retainExisting || retainBoundDuty || staged != null) return;
       if (_active != null) {
         unawaited(_revoke(bridge));
       } else if (_foreground) {
@@ -382,7 +459,13 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       }
     });
     Future.microtask(() {
-      if (_current(gen)) _kick();
+      if (_current(gen)) {
+        if (bridge is BackgroundAlertDutyBridge) {
+          unawaited(_readDuty());
+        } else {
+          _kick();
+        }
+      }
     });
     return const BackgroundOrderAlertState(available: true);
   }
@@ -502,6 +585,11 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         BackgroundAlertRevocationReason.securityFailure,
   }) {
     ref.read(backgroundAlertInactivityLockProvider.notifier).clear();
+    ref.read(boundShiftAlertProvider.notifier).state = null;
+    _dutyEpoch++;
+    _dutyWriting = false;
+    _dutyNeedsValidation = false;
+    _dutyAttempt = null;
     _generation++;
     _active?.retainOptInOnExit = retainOptIn;
     _off = !retainOptIn;
@@ -518,19 +606,25 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
         authorizationExpired: authorizationExpired,
       );
     final bridge = _bridge;
-    return bridge == null
-        ? Future.value()
+    final cleanup = bridge == null
+        ? Future<void>.value()
         : _revoke(
             bridge,
             suspend: retainOptIn,
             retainOptIn: retainOptIn,
             reason: reason,
           );
+    final gen = _generation;
+    return cleanup.then((_) async {
+      if (_current(gen) && _foreground && bridge is BackgroundAlertDutyBridge)
+        await _readDuty();
+    });
   }
 
   int get authorityGeneration => _generation;
 
   void _clearDeadline() {
+    _boundDutyIdentity = null;
     _authorityExpiry?.cancel();
     _authorityExpiry = null;
     _authorityExpiresAt = null;
@@ -559,7 +653,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
       return _cancel(
         reason: BackgroundAlertRevocationReason.userNotificationOff,
       );
-    if (!_buildEnabled) return Future.value();
+    if (!_buildEnabled || _dutyBlocked) return Future.value();
     if (_bridge == null ||
         !_authorized(_generation) ||
         _cleanupFailed ||
@@ -601,7 +695,8 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     // Resume may happen before a suspended Dart timer or in-flight prepare
     // continues. Invalidate the old grant before either can claim readiness.
     if (_expireIfDue()) return;
-    if (!_authorized(_generation) ||
+    if (_dutyBlocked ||
+        !_authorized(_generation) ||
         !_foreground ||
         _active != null ||
         _cleanupFailed ||
@@ -643,11 +738,17 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   }
 
   Future<bool> _foregroundFor(_RegistrationAttempt attempt) async {
-    while (_owns(attempt) && !_foreground) {
-      _resume ??= Completer<void>();
-      await _resume!.future;
+    while (_owns(attempt)) {
+      if (!_foreground) {
+        _resume ??= Completer<void>();
+        await _resume!.future;
+      } else if (_dutyReadBarrier case final barrier?) {
+        await barrier.future;
+      } else {
+        return !_dutyBlocked;
+      }
     }
-    return _owns(attempt) && _foreground;
+    return false;
   }
 
   Future<void> _register(_RegistrationAttempt attempt) async {
@@ -835,7 +936,8 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     _authorityRenewal?.cancel();
     _authorityRenewal = null;
     final deadline = _authorityExpiresAt;
-    if (!_foreground ||
+    if (_dutyBlocked ||
+        !_foreground ||
         !state.enabled ||
         deadline == null ||
         !_authorized(_generation) ||
@@ -860,6 +962,7 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
 
   void _publish(OnlineOrderInboxState inbox) {
     if (_expireIfDue() ||
+        _dutyBlocked ||
         !state.enabled ||
         _identity == null ||
         !_online ||
@@ -880,8 +983,17 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
     );
   }
 
-  void onPaused() {
+  void onPaused() => _pause(transientInactive: false);
+  void onInactive() => _pause(transientInactive: true);
+
+  void _pause({required bool transientInactive}) {
     _foreground = false;
+    if (_dutyWriting &&
+        !(transientInactive &&
+            _permissionOverlay != null &&
+            identical(_permissionOverlay, _dutyAttempt))) {
+      unawaited(cancelShiftPreview());
+    }
     _authorityRenewal?.cancel();
     _authorityRenewal = null;
   }
@@ -889,8 +1001,439 @@ class BackgroundOrderAlerts extends Notifier<BackgroundOrderAlertState> {
   void onResume() {
     _foreground = true;
     _wake();
+    if (_expireIfDue()) return;
+    if (_bridge is BackgroundAlertDutyBridge) {
+      unawaited(_readDuty());
+      return;
+    }
     if (_bridge != null) _kick(force: _tokenRefreshPending);
     _armAuthorityRenewal();
+  }
+
+  bool get needsDutyStop => _dutyBlocked && !state.enabled && !state.busy;
+
+  bool get canPreviewShift =>
+      _dutyAvailable &&
+      _canStartConsent &&
+      !_dutyWriting &&
+      _foreground &&
+      _identity != null &&
+      _authorized(_generation) &&
+      !state.enabled &&
+      (!_dutyBlocked ||
+          state.shiftPhase == ShiftAlertPhase.expired ||
+          state.shiftPhase == ShiftAlertPhase.revoking) &&
+      _active == null &&
+      BackgroundOrderAlerts._nativeOwner == null &&
+      BackgroundOrderAlerts._revocation == null &&
+      !BackgroundOrderAlerts._cleanupFailed &&
+      !BackgroundOrderAlerts._registrationUncertain;
+
+  bool _dutyCurrent(int epoch, int gen) =>
+      _dutyEpoch == epoch && _current(gen) && _foreground && _authorized(gen);
+
+  // A failed menu/PIN read cannot revoke an independent notification grant.
+  // Silence existing effects first. Only the dedicated status route revalidates it.
+  Future<void> _unverifiedDuty({bool recheck = false}) async {
+    if (_dutyWriting) {
+      await cancelShiftPreview();
+      return;
+    }
+    final bridge = _bridge, identity = _identity, gen = _generation;
+    if (bridge is! BackgroundAlertDutyBridge ||
+        identity == null ||
+        state.shiftPhase == ShiftAlertPhase.expired ||
+        state.shiftPhase == ShiftAlertPhase.revoking)
+      return;
+    if (!_dutyNeedsValidation) {
+      _dutyNeedsValidation = true;
+      _dutyEpoch++;
+      state = const BackgroundOrderAlertState(
+        available: true,
+        shiftPhase: ShiftAlertPhase.pending,
+      );
+      _dutySuspension = (bridge as BackgroundAlertDutyBridge)
+          .suspendDutyEffects(identity)
+          .catchError((_) => false);
+    }
+    await _dutySuspension;
+    if (recheck && _current(gen) && _foreground && _online) await _readDuty();
+  }
+
+  Future<void> _readDuty({
+    ShiftAlertPreview? expected,
+    String? expectedGeneration,
+  }) async {
+    final barrier = Completer<void>();
+    _dutyReadBarrier = barrier;
+    try {
+      await _applyDutyState(expected, expectedGeneration);
+    } finally {
+      if (identical(_dutyReadBarrier, barrier)) _dutyReadBarrier = null;
+      barrier.complete();
+    }
+  }
+
+  Future<void> _applyDutyState(
+    ShiftAlertPreview? expected,
+    String? expectedGeneration,
+  ) async {
+    final bridge = _bridge;
+    if (bridge is! BackgroundAlertDutyBridge ||
+        _identity == null ||
+        !_foreground ||
+        _dutyWriting)
+      return;
+    final gen = _generation, epoch = ++_dutyEpoch;
+    final start = _proofClock();
+    _dutyBlocked = true;
+    final native = bridge as BackgroundAlertDutyBridge;
+    final identity = _identity!;
+    bool current() => _current(gen) && _foreground && _dutyEpoch == epoch;
+    Future<Map?> read() async {
+      try {
+        return await native
+            .dutyState(identity)
+            .timeout(const Duration(seconds: 2), onTimeout: () => null);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    await _dutySuspension;
+    if (!current()) return;
+    var raw = await read();
+    if (!current()) return;
+    var view = ShiftAlertStatus.parse(raw);
+    if (view != null &&
+        (view.phase == ShiftAlertPhase.active ||
+            view.phase == ShiftAlertPhase.pending)) {
+      if (!_online) {
+        await _unverifiedDuty();
+        return;
+      }
+      if (_dutyNeedsValidation ||
+          (view.phase == ShiftAlertPhase.pending && raw?['opt_in'] == true)) {
+        bool accepted;
+        try {
+          accepted = await native.revalidateDuty(identity);
+        } catch (_) {
+          accepted = false;
+        }
+        if (!current()) return;
+        raw = await read();
+        if (!current()) return;
+        view = ShiftAlertStatus.parse(raw);
+        if (!accepted &&
+            (view == null ||
+                view.phase == ShiftAlertPhase.active ||
+                view.phase == ShiftAlertPhase.pending)) {
+          _dutyNeedsValidation = true;
+          state = const BackgroundOrderAlertState(
+            available: true,
+            shiftPhase: ShiftAlertPhase.pending,
+          );
+          return;
+        }
+      }
+    }
+    _dutyNeedsValidation = false;
+    _dutySuspension = null;
+    _dutyAvailable = view?.available ?? false;
+    _canStartConsent = view?.canStartConsent ?? false;
+    final matchesIssue =
+        expected == null ||
+        (view?.phase == ShiftAlertPhase.active &&
+            raw?['consent_id'] == expected.consentId &&
+            raw?['registration_generation'] == expectedGeneration &&
+            view?.end == expected.end);
+    if (view == null || !matchesIssue) {
+      _clearDeadline();
+      ref.read(boundShiftAlertProvider.notifier).state = null;
+      state = const BackgroundOrderAlertState(
+        available: true,
+        failed: true,
+        failureReason: BackgroundOrderAlertFailure.unavailable,
+      );
+      return;
+    }
+    final phase = view.phase;
+    if (phase == ShiftAlertPhase.active &&
+        expected == null &&
+        (_off || BackgroundOrderAlerts._cleanupFailed)) {
+      _dutyBlocked = true;
+      _clearDeadline();
+      state = const BackgroundOrderAlertState(
+        available: true,
+        failed: true,
+        failureReason: BackgroundOrderAlertFailure.cleanupFailed,
+      );
+      return;
+    }
+    _dutyBlocked = phase != ShiftAlertPhase.none;
+    if (phase == ShiftAlertPhase.none) {
+      if (state.shiftPhase != null) {
+        _clearDeadline();
+        state = const BackgroundOrderAlertState(available: true);
+      }
+      ref.read(boundShiftAlertProvider.notifier).state = null;
+      _kick(force: _tokenRefreshPending);
+      _armAuthorityRenewal();
+      return;
+    }
+    _authorityRenewal?.cancel();
+    _clearDeadline();
+    if (phase == ShiftAlertPhase.active &&
+        start.add(view.remaining!).isAfter(_proofClock())) {
+      if (expected != null)
+        _off = false; // New, explicit consent may follow A's durable OFF.
+      _boundDutyIdentity = _identity;
+      final effective = start.add(view.remaining!);
+      _authorityExpiresAt = effective;
+      _authorityExpiry = Timer(effective.difference(_proofClock()), () {
+        if (_current(gen)) _expireAuthority();
+      });
+      ref.read(boundShiftAlertProvider.notifier).state = (
+        identity: _identity!,
+        end: effective,
+      );
+      state = BackgroundOrderAlertState(
+        available: true,
+        enabled: true,
+        authorizedUntil: view.end,
+        shiftPhase: phase,
+      );
+      return;
+    }
+    ref.read(boundShiftAlertProvider.notifier).state = null;
+    state = BackgroundOrderAlertState(
+      available: true,
+      shiftPhase: phase,
+      authorizationExpired:
+          phase == ShiftAlertPhase.expired || phase == ShiftAlertPhase.active,
+    );
+  }
+
+  Future<ShiftAlertPreview?> previewShift() async {
+    final endpoint = ref.read(backgroundOrderAlertEndpointProvider);
+    final bridge = _bridge;
+    if (!canPreviewShift ||
+        bridge is! BackgroundAlertDutyBridge ||
+        endpoint == null)
+      return null;
+    final native = bridge as BackgroundAlertDutyBridge;
+    final gen = _generation, epoch = ++_dutyEpoch, identity = _identity!;
+    bool current() => _dutyCurrent(epoch, gen);
+    _dutyWriting = true;
+    _canStartConsent = false;
+    _dutyBlocked = true;
+    state = const BackgroundOrderAlertState(
+      available: true,
+      busy: true,
+      shiftPhase: ShiftAlertPhase.pending,
+    );
+    _DutyAttempt? staged;
+    try {
+      final prep = await native.prepareDutyPreview({
+        'identity': identity,
+        'endpoint': endpoint,
+      });
+      if (!dutyFields(prep, {
+            'installation_id',
+            'consent_id',
+            'generation',
+            'revoke_hash',
+          }) ||
+          !dutyId(prep!['installation_id']) ||
+          !dutyId(prep['consent_id']) ||
+          prep['generation'] is! int ||
+          (prep['generation'] as int) < 0 ||
+          !dutyHash(prep['revoke_hash'])) {
+        throw const FormatException();
+      }
+      staged = _DutyAttempt(
+        identity,
+        prep['installation_id'],
+        prep['consent_id'],
+        prep['generation'],
+        native,
+        endpoint,
+      );
+      if (!current()) {
+        await native.cancelDuty(staged.fence);
+        return null;
+      }
+      _dutyAttempt = staged;
+      final sentAt = _proofClock();
+      final raw =
+          await ref.read(shiftAlertRpcProvider)(ShiftAlertCall.preview, {
+            'p_installation_id': staged.installation,
+            'p_consent_id': staged.consent,
+            'p_revoke_hash': prep['revoke_hash'],
+          }, current);
+      if (!current()) return null;
+      final preview = ShiftAlertPreview.parse(
+        raw,
+        consent: staged.consent,
+        issued: false,
+      );
+      if (preview == null) throw const FormatException();
+      final remaining = preview.end.difference(preview.serverTime);
+      const ttl = Duration(minutes: 5);
+      staged.previewStarted = sentAt;
+      staged.confirmBy = sentAt.add(remaining < ttl ? remaining : ttl);
+      if (!_proofClock().isBefore(staged.confirmBy!))
+        throw const FormatException();
+      staged.preview = preview;
+      return preview;
+    } catch (_) {
+      if (current()) await cancelShiftPreview();
+      return null;
+    }
+  }
+
+  /// Only the affirmative response to the dialog may call this entry point.
+  /// Neither token refresh nor resume can replay an issued enrollment.
+  Future<bool> confirmShift(ShiftAlertPreview preview) async {
+    final staged = _dutyAttempt;
+    if (staged == null || !identical(staged.preview, preview) || !_dutyWriting)
+      return false;
+    staged.preview = null; // consume once, including ambiguous replies
+    final gen = _generation, epoch = _dutyEpoch;
+    bool current() =>
+        _dutyCurrent(epoch, gen) && identical(staged, _dutyAttempt);
+    bool withinConfirmation() =>
+        !_proofClock().isBefore(staged.previewStarted!) &&
+        _proofClock().isBefore(staged.confirmBy!);
+    if (!current() || !withinConfirmation()) {
+      await cancelShiftPreview();
+      return false;
+    }
+    try {
+      // Android's permission overlay may report inactive and deliver its result
+      // before resumed. Keep only this exact unarmed consent, bounded by its own
+      // preview window; hidden/paused, OFF and identity change invalidate it.
+      _permissionOverlay = staged;
+      try {
+        final permission = await staged.bridge
+            .requestDutyPermission({
+              ...staged.fence,
+              'endpoint': staged.endpoint,
+            })
+            .timeout(
+              staged.confirmBy!.difference(_proofClock()),
+              onTimeout: () => false,
+            );
+        if (!permission ||
+            !identical(_dutyAttempt, staged) ||
+            _dutyEpoch != epoch ||
+            !_current(gen)) {
+          if (identical(_dutyAttempt, staged)) await cancelShiftPreview();
+          return false;
+        }
+        if (!_foreground && withinConfirmation()) {
+          _resume ??= Completer<void>();
+          await _resume!.future.timeout(
+            staged.confirmBy!.difference(_proofClock()),
+          );
+        }
+      } finally {
+        if (identical(_permissionOverlay, staged)) _permissionOverlay = null;
+      }
+      if (!current() || !withinConfirmation()) {
+        if (identical(_dutyAttempt, staged)) await cancelShiftPreview();
+        return false;
+      }
+      final prep = await staged.bridge.prepareDuty({
+        ...staged.fence,
+        'endpoint': staged.endpoint,
+      });
+      if (!current()) return false;
+      if (!dutyFields(prep, {
+            'installation_id',
+            'consent_id',
+            'generation',
+            'status_secret',
+            'fcm_token',
+          }) ||
+          prep!['installation_id'] != staged.installation ||
+          prep['consent_id'] != staged.consent ||
+          prep['generation'] is! int ||
+          prep['generation'] != staged.generation ||
+          !dutyHash(prep['status_secret']) ||
+          prep['fcm_token'] is! String ||
+          !RegExp(r'^[^\s\x00-\x1f\x7f]{20,4096}$').hasMatch(prep['fcm_token']))
+        throw const FormatException();
+      if (!withinConfirmation()) throw const FormatException();
+      final raw = await ref.read(shiftAlertRpcProvider)(ShiftAlertCall.enroll, {
+        'p_installation_id': staged.installation,
+        'p_consent_id': staged.consent,
+        'p_consent': true,
+        'p_shift_id': preview.shiftId,
+        'p_policy_revision': preview.revision,
+        'p_expected_deadline': preview.endWire,
+        'p_status_secret': prep['status_secret'],
+        'p_fcm_token': prep['fcm_token'],
+      }, current);
+      if (!current()) return false;
+      final issued = ShiftAlertPreview.parse(
+        raw,
+        consent: staged.consent,
+        issued: true,
+      );
+      if (issued == null || !preview.matches(issued))
+        throw const FormatException();
+      final bound = await staged.bridge.bindDuty({
+        ...staged.fence,
+        'installation_id': staged.installation,
+        'registration_id': raw!['registration_id'],
+        'registration_generation': raw['generation'],
+        'shift_id': issued.shiftId,
+        'policy_revision': issued.revision,
+        'authority_expires_at': raw['authority_expires_at'],
+        'server_time': raw['server_time'],
+        'endpoint': staged.endpoint,
+      });
+      if (!current()) return false;
+      if (!bound) throw const FormatException();
+      _dutyWriting = false;
+      _dutyAttempt = null;
+      await _readDuty(
+        expected: issued,
+        expectedGeneration: raw['generation'] as String,
+      );
+      if (state.shiftPhase != ShiftAlertPhase.active || !state.enabled) {
+        await staged.bridge.cancelDuty(staged.fence);
+        return false;
+      }
+      return state.shiftPhase == ShiftAlertPhase.active && state.enabled;
+    } catch (_) {
+      if (identical(staged, _dutyAttempt)) await cancelShiftPreview();
+      return false;
+    }
+  }
+
+  Future<void> cancelShiftPreview([ShiftAlertPreview? expected]) async {
+    if (expected != null && !identical(expected, _dutyAttempt?.preview)) return;
+    if (!_dutyWriting) return;
+    final gen = _generation, epoch = ++_dutyEpoch;
+    final staged = _dutyAttempt;
+    _dutyWriting = false;
+    _dutyAttempt = null;
+    _wake();
+    if (staged != null) {
+      try {
+        await staged.bridge.cancelDuty(staged.fence);
+      } catch (_) {
+        /* Native owns durable revocation. */
+      }
+    }
+    if (_disposed || gen != _generation || epoch != _dutyEpoch) return;
+    state = const BackgroundOrderAlertState(
+      available: true,
+      shiftPhase: ShiftAlertPhase.revoking,
+    );
+    if (_foreground) await _readDuty();
   }
 
   Future<bool> consumeInboxTap() async {

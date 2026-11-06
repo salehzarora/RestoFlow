@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../media/background_order_alert_bridge.dart';
 import '../state/background_alert_attempt_report.dart';
+import '../state/background_alert_duty.dart';
+import '../state/background_order_alerts.dart';
 
 /// Current bound grant, separate from the historical activation report below.
 class BackgroundAlertGrantStatus extends StatelessWidget {
@@ -42,6 +44,113 @@ class BackgroundAlertGrantStatus extends StatelessWidget {
     return Text(
       copy.field('authorized_until', '$date $time'),
       key: const Key('background-alert-authorized-until'),
+    );
+  }
+}
+
+/// Presents the server-approved time before any enrollment RPC.
+class ShiftAlertControl extends ConsumerStatefulWidget {
+  const ShiftAlertControl({super.key});
+  @override
+  ConsumerState<ShiftAlertControl> createState() => _ShiftAlertControlState();
+}
+
+class _ShiftAlertControlState extends ConsumerState<ShiftAlertControl> {
+  bool _pending = false;
+  Future<void> _choose() async {
+    if (_pending) return;
+    final controller = ref.read(backgroundOrderAlertsProvider.notifier);
+    final copy = _Copy(Localizations.localeOf(context).languageCode);
+    setState(() => _pending = true);
+    try {
+      final preview = await controller.previewShift();
+      if (preview == null) {
+        if (mounted)
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(content: Text(copy.text('shift_unavailable'))),
+          );
+        return;
+      }
+      if (!mounted) {
+        await controller.cancelShiftPreview(preview);
+        return;
+      }
+      final date = preview.end.toLocal(),
+          labels = MaterialLocalizations.of(context);
+      final end =
+          '${labels.formatFullDate(date)} · ${TimeOfDay.fromDateTime(date).format(context)}';
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          scrollable: true,
+          title: Text(copy.text('shift_enable')),
+          content: Text(
+            '${copy.text('shift_until')} $end\n${copy.text('shift_scope')}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(labels.cancelButtonLabel),
+            ),
+            FilledButton(
+              key: const Key('shift-alert-confirm'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(copy.text('shift_confirm')),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || accepted != true) {
+        await controller.cancelShiftPreview(preview);
+        return;
+      }
+      final ok = await controller.confirmShift(preview);
+      if (!ok && mounted)
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(copy.text('shift_unavailable'))),
+        );
+    } finally {
+      if (mounted) setState(() => _pending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(backgroundOrderAlertsProvider);
+    final controller = ref.read(backgroundOrderAlertsProvider.notifier);
+    final copy = _Copy(Localizations.localeOf(context).languageCode);
+    if (state.shiftPhase == ShiftAlertPhase.active && state.enabled) {
+      return Text(
+        copy.text('shift_active'),
+        key: const Key('shift-alert-active'),
+      );
+    }
+    final offer = controller.canPreviewShift;
+    final stop = controller.needsDutyStop && !state.authorizationExpired;
+    if (!offer && !stop) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (state.shiftPhase == ShiftAlertPhase.pending)
+          Text(copy.text('shift_unknown')),
+        if (state.shiftPhase == ShiftAlertPhase.revoking)
+          Text(
+            copy.text('shift_revoking'),
+            key: const Key('shift-alert-revoking'),
+          ),
+        if (stop)
+          TextButton(
+            key: const Key('shift-alert-stop'),
+            onPressed: () => controller.setEnabled(false),
+            child: Text(copy.text('shift_stop')),
+          ),
+        if (offer)
+          TextButton(
+            key: const Key('shift-alert-preview'),
+            onPressed: _pending ? null : _choose,
+            child: Text(copy.text('shift_enable')),
+          ),
+      ],
     );
   }
 }
@@ -283,6 +392,51 @@ class _Copy {
   }
 
   static const _words = <String, List<String>>{
+    'shift_unknown': [
+      'تعذّر التحقق من جاهزية تنبيهات المناوبة',
+      'כשירות התראות המשמרת טרם אומתה',
+      'Shift alert readiness is unconfirmed',
+    ],
+    'shift_stop': [
+      'إيقاف التنبيهات على هذا الجهاز',
+      'כיבוי התראות במכשיר זה',
+      'Turn off alerts on this device',
+    ],
+    'shift_enable': [
+      'تنبيهات المناوبة لهذا الجهاز',
+      'התראות משמרת למכשיר הזה',
+      'Shift alerts for this device',
+    ],
+    'shift_until': [
+      'يسمح الخادم بالتنبيه حتى',
+      'השרת מאשר התראות עד',
+      'The server authorizes alerts until',
+    ],
+    'shift_scope': [
+      'يستطيع الجهاز التنبيه بعد قفل الشاشة وانتهاء جلسة الموظف. تتطلب إدارة الطلبات إدخال PIN.',
+      'המכשיר יכול להתריע לאחר נעילה ותום חיבור העובד. פעולות בהזמנות דורשות קוד PIN.',
+      'The device may alert after the screen locks and staff sign-in expires. Order actions still require a PIN.',
+    ],
+    'shift_confirm': [
+      'تفعيل تنبيهات المناوبة',
+      'הפעלת התראות משמרת',
+      'Enable shift alerts',
+    ],
+    'shift_active': [
+      'تنبيهات المناوبة مفعّلة لهذا الجهاز',
+      'התראות המשמרת מופעלות במכשיר זה',
+      'Shift alerts enabled on this device',
+    ],
+    'shift_revoking': [
+      'جارٍ التحقق من إلغاء تفويض المناوبة',
+      'ביטול הרשאת המשמרת ממתין לאימות',
+      'Shift alert revocation awaiting confirmation',
+    ],
+    'shift_unavailable': [
+      'تعذّر تأكيد تفويض تنبيهات المناوبة لهذا الجهاز.',
+      'לא ניתן לאשר הרשאת התראות משמרת למכשיר זה.',
+      'Shift alert authorization could not be confirmed for this device.',
+    ],
     'authorized_until': [
       'تفويض التنبيهات الحالي صالح حتى',
       'הרשאת ההתראות הנוכחית בתוקף עד',

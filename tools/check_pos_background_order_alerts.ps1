@@ -25,6 +25,7 @@ try {
     & $java -cp $compilerClasspath org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect `
         -classpath $classpath -jvm-target 17 -d $jar `
         (Join-Path $repoRoot 'apps/pos/android/app/src/main/kotlin/com/restoflow/pos/BackgroundOrderAlertState.kt') `
+        (Join-Path $repoRoot 'apps/pos/android/app/src/main/kotlin/com/restoflow/pos/BackgroundOrderAlertDuty.kt') `
         (Join-Path $repoRoot 'apps/pos/android/test/BackgroundOrderAlertStateTest.kt')
     if ($LASTEXITCODE -ne 0) { throw 'Background alert state compilation failed.' }
     & $java -cp "$jar$([IO.Path]::PathSeparator)$classpath" com.restoflow.pos.BackgroundOrderAlertStateTestKt
