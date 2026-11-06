@@ -1537,6 +1537,10 @@ export async function exactGapMain(argv, env, print, deps = {}) {
     const when = args.apply ? 'at the re-read immediately before the push' : 'at the second PRE read, after the dry run';
     const second = await read(label);
     if (!second.ok) { say('RESULT: PRE_READ_FAILED (STOP: preserve the evidence; nothing was pushed; no retry)'); return 3; }
+    // D-067, its review's F1: the second read's own session must be read-only, encrypted and carry the fixed startup
+    // settings, as the first one's (the fingerprint leaves the session block out).
+    const session = sessionProblems(second.state, label);
+    if (session.length) refuse(session[0][0], `${session[0][1]} (${when}); nothing was pushed`);
     // REPIN-001: the PostgreSQL runtime and TimeZone are checked again, explicitly; the fingerprint covers them too.
     const drift = runtimeProblems(second.state, pins, label);
     if (drift.length) refuse(drift[0][0], `${drift[0][1]} (${when}); nothing was pushed`);

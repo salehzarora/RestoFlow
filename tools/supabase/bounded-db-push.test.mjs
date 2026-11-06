@@ -2316,3 +2316,34 @@ test('exact-gap flow (D-067): the hosted-like Default ACL applies end to end; PO
   assert.deepEqual(await after((p) => { rel(p, EG.tables[2]).columns.push(['attempt_id', 'service_role', 'SELECT', false, 'postgres']); }, 'a column grant'), ['post_column_access']);
   assert.deepEqual(await after((p) => { rel(p, EG.sequence).access.push(['authenticated', 'USAGE', false, 'postgres']); }, 'authenticated on the revision sequence'), ['post_sequence_access']);
 });
+
+test('exact-gap flow (D-067, review F1): the second PRE\'s own session must be read-only, encrypted and carry the fixed settings', async () => {
+  const wd = path.resolve(scratch);
+  const check = ['--mode', 'local', '--workdir', wd, EXACT_GAP_FLAG, EXACT_GAP_MODE];
+  const pre = egHostedShapePre();
+  // The session block is outside the state fingerprint, so only this check sees a second read in another session.
+  for (const [route, argv, label, when] of [
+    ['check', check, 'second PRE', 'at the second PRE read, after the dry run'],
+    ['apply', undefined, 're-check', 'at the re-read immediately before the push'],
+  ]) {
+    for (const [change, code, what] of [
+      [{ read_only: 'off' }, 'session_not_read_only', 'is not read-only'],
+      [{ ssl: false }, 'session_not_tls', 'is not encrypted'],
+      [{ ssl: null }, 'session_not_tls', 'is not encrypted'],
+      [{ application_name: 'psql' }, 'session_settings', 'does not carry the fixed startup settings'],
+      [{ lock_timeout: '0' }, 'session_settings', 'does not carry the fixed startup settings'],
+      [{ statement_timeout: '0' }, 'session_settings', 'does not carry the fixed startup settings'],
+    ]) {
+      const second = { ...pre, session: { ...pre.session, ...change } };
+      assert.equal(stateFingerprint(second), stateFingerprint(pre), 'the session block is outside the fingerprint');
+      const r = await runExactGap({ argv, scenario: { pre, changedBeforePush: second } });
+      assert.equal(r.code, 2, `${route} / ${JSON.stringify(change)}: ${r.out}`);
+      assert.match(r.out, new RegExp(`^REFUSED ${code}: the ${label} session ${what} \\(${when}\\); nothing was pushed$`, 'm'), `${route} / ${JSON.stringify(change)}`);
+      assert.deepEqual(kinds(r.calls), ['version', 'query', 'dry-include-all', 'query'], `${route} / ${JSON.stringify(change)}`);
+      assert.ok(!/RESULT: (CHECKED|APPLIED)/.test(r.out) && noLeak(r.out), r.out);
+    }
+    const missing = await runExactGap({ argv, scenario: { pre, changedBeforePush: { ...pre, session: undefined } } });
+    assert.equal(missing.code, 2, `${route} / no session block: ${missing.out}`);
+    assert.match(missing.out, /^REFUSED session_not_read_only:/m);
+  }
+});
