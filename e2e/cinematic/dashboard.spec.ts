@@ -8,6 +8,7 @@ import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } fro
 import { LOGICAL_ORIGIN, localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
 import { createHash } from 'node:crypto';
 import { BackgroundQuality, backgroundFixture } from './background-quality';
+import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
 
 // This suite drives the shipped Flutter app. It never installs a mocked
@@ -185,7 +186,7 @@ async function targetGeometry(page: Page, target: Locator) {
       hitRelation: hit === null ? 'none' : hit === el ? 'self' : el.contains(hit) ? 'descendant' : hit.contains(el) ? 'ancestor' : 'other' };
   });
 }
-type RevealPurpose = 'upload' | 'content-save' | 'content-status' | 'profile-save' | 'field' | 'dimming' | 'other';
+type RevealPurpose = 'upload' | 'content-save' | 'content-status' | 'background-status' | 'profile-save' | 'field' | 'dimming' | 'other';
 type ScrollScope = { x: number; y: number; width: number; height: number; source: 'target' | 'editor-anchor' | 'cached' | 'settings-gutter'; kind: 'clipping-ancestor' | 'flutter-view' | 'settings-viewport' };
 type RevealSample = { iteration: number; geometry: Awaited<ReturnType<typeof targetGeometry>>; hiddenGeometry: Awaited<ReturnType<typeof targetGeometry>>; normalMatches: number; hiddenMatches: number; labelEvidence: { exact: number; normalized: number; button: number; hidden: number; textExact: number; textNormalized: number; textButton: number } | null; progressed: boolean | null; visibleNodes: number; surface: ScrollScope; direction: number; reversed: boolean };
 type RevealTrace = { purpose: RevealPurpose; result: 'ready' | 'stalled' | 'ambiguous' | 'iteration-limit' | 'disabled'; wheelSteps: number; samples: RevealSample[] };
@@ -315,9 +316,10 @@ async function reveal(page: Page, target: Locator, purpose: RevealPurpose = 'oth
     samples.push(sample);
     if (normalMatches > 1) { trace.result = 'ambiguous'; break; }
     const geometry = controlGeometry(box, viewport, box?.centerHit ?? false, box?.flutterSurfaceHit ?? false);
-    const readableStatus = purpose === 'content-status' && visibleGeometry(box, viewport);
+    const statusOnly = purpose === 'content-status' || purpose === 'background-status';
+    const readableStatus = statusOnly && visibleGeometry(box, viewport);
     if ((readableStatus || geometry.ready) && await target.isVisible()) {
-      if (purpose !== 'content-status') {
+      if (!statusOnly) {
         // Flutter temporarily disables its native range input after pointer
         // input; observe it re-enable before allowing keyboard interaction.
         try { await expect(target, 'Revealed control settles enabled').toBeEnabled(); }
@@ -573,6 +575,15 @@ async function saveContent(page: Page): Promise<void> {
   expect(response.status(), 'Content writer HTTP result').toBe(200);
   expect((await response.json()).ok, 'Content writer accepted actual owner session').toBe(true);
   await revealSavedStatus(page);
+}
+async function readCompanionUi(page: Page): Promise<CompanionUi> {
+  // The background group was opened during upload. Return to its control without
+  // toggling the header, then physically reveal the selected media's live status.
+  const upload = page.getByRole('button', {name:L.upload, exact:true});
+  await reveal(page, upload, 'upload', page.getByRole('button', {name:L.upload, exact:true, includeHidden:true}));
+  const status = companionStatus(page);
+  await reveal(page, status, 'background-status');
+  return classifyCompanion(await status.innerText());
 }
 async function invariants(f: Fixture, token: string): Promise<void> {
   const profile = await rpc(f, token, 'get_restaurant_storefront_profile');
@@ -853,7 +864,7 @@ async function renderMenu(page: Page, f: Fixture, image: string, dim: number | n
       }
       const observation = await page.evaluate(({ expectedImage, expectedDim, expectedColours, expectedScene }) => {
         const roots = document.querySelectorAll<HTMLElement>('[data-sf-root]');
-        const backgrounds = document.querySelectorAll<HTMLImageElement>('main[data-sf-screen="home"] > div[aria-hidden="true"] img');
+        const backgrounds = document.querySelectorAll<HTMLImageElement>('main[data-sf-screen="home"] [data-sf-menu-primary]');
         const root = roots.length === 1 ? roots[0] : null;
         const style = root ? getComputedStyle(root) : null;
         const value = (name: string) => style?.getPropertyValue(name).trim() ?? '';
@@ -886,7 +897,7 @@ async function renderMenu(page: Page, f: Fixture, image: string, dim: number | n
     }, { timeout: 100_000, intervals: [100, 250, 500, 1000] }).toBe(true);
     await expect(page.locator('[data-sf-root]')).toHaveAttribute('dir', 'rtl');
     if (dim === null) await expect(page.locator('[data-sf-menu-background="custom"]')).toHaveCount(0);
-    const bg = page.locator('main[data-sf-screen="home"] > div[aria-hidden="true"] img').first();
+    const bg = page.locator('main[data-sf-screen="home"] [data-sf-menu-primary]');
     await expect.poll(() => bg.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
     trace.result = 'ready';
   } catch (error) { trace.result = 'failed'; throw error; }
@@ -895,7 +906,7 @@ async function verifyMenuGeometry(page: Page): Promise<void> {
   const sections = page.locator('[data-sf-module="sections"]');
   await expect(sections, 'All four synthetic menu categories remain present').toHaveCount(4);
   const backdrop = page.locator('[data-sf-menu-background="custom"]');
-  const photo = backdrop.locator('img');
+  const photo = backdrop.locator('[data-sf-menu-primary]');
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   const layer = await backdrop.boundingBox();
@@ -916,7 +927,7 @@ async function verifyMenuGeometry(page: Page): Promise<void> {
       await expect.poll(() => page.evaluate(() => window.scrollY), 'The long menu actually scrolled').toBeGreaterThan(0);
     }
     const rect = await photo.boundingBox();
-    expect(rect, `The menu photo remains visible at ${position}`).not.toBeNull();
+    expect(rect, `The lead photograph remains laid out at ${position}`).not.toBeNull();
     const scrollY = await page.evaluate(() => window.scrollY);
     expect(Math.abs(rect!.x), 'Photo stays at the document left edge').toBeLessThanOrEqual(1);
     expect(Math.abs(rect!.y + scrollY), 'Photo stays at the document top').toBeLessThanOrEqual(1);
@@ -928,7 +939,7 @@ async function verifyReferenceScene(page: Page, dim: number): Promise<void> {
   const result = await page.evaluate(() => {
     const home = document.querySelector('main[data-sf-screen="home"]')!;
     const layer = home.querySelector('div[aria-hidden="true"]')!;
-    const image = layer.querySelector('img')!;
+    const image = layer.querySelector('[data-sf-menu-primary]')!;
     const photo = getComputedStyle(image), overlay = getComputedStyle(layer, '::after');
     const header = getComputedStyle(home.querySelector('header')!);
     const category = getComputedStyle(home.querySelector('[data-sf-module="categories"]')!.parentElement!);
@@ -1045,7 +1056,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     expect(first).not.toBe(f.heroMediaId);
     expect(first).toBe(firstPublish.media.id);
     stage = 'verify-first-background-companion';
-    await quality.verifyPublication(first, async () => {
+    await quality.verifyPublication(first, () => readCompanionUi(page), async () => {
       const retry = 'إعادة محاولة التحضير نفسه';
       await reveal(page, page.getByRole('button', {name:retry, exact:true}), 'other', page.getByRole('button', {name:retry, exact:true, includeHidden:true}));
       await expect(page.getByRole('button', {name:retry, exact:true}), 'Only a genuine uncertain state allows a retry').toBeEnabled();

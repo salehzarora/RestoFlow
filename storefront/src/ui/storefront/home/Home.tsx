@@ -29,7 +29,7 @@ export function Home({ resolution, locale, slug, hrefFor }: {
     <ThemeScope tokens={tokens} menuImageDim={background.dim} scenePreset={tenant.scenePreset} className={`${shell.root} ${MOTION_CLASS[view.motion]}`} dir={dirOf(locale)}>
       <StorefrontRuntime source={resolution.source} slug={slug} menuVersion={menuVersion} items={items} groups={groups} zones={zones} taxRateBp={taxRateBp} orderingEnabled={tenant.service.orderingEnabled} locale={locale} motion={view.motion} state={tenant.service.state} opensAt={tenant.hours.opens}>
         <main className={styles.page} data-sf-screen="home">
-          <MenuBackdrop background={background} />
+          <MenuBackdrop background={background} sectionCount={categories.length} itemCount={items.length} />
           <HomeChrome key={slug} tenant={tenant} locale={locale} slug={slug} language={<LanguageMenu locale={locale} hrefFor={hrefFor} />} categories={categories} items={items} cardMode={cardMode}
             announcement={modules.announcement === null || tenant.service.state !== 'open' ? null : modules.announcement.text}
             announcementSegments={modules.announcement?.segments}

@@ -1,4 +1,5 @@
 import { expect, type BrowserContext, type Page, type Response } from '@playwright/test';
+import { CompanionObserver, type CompanionUi } from './companion-observer';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -24,11 +25,8 @@ type Fixture = {
 type Json = Record<string, any>;
 export class BackgroundQuality {
     readonly views: Record<string, unknown>[] = [];
-    private readonly requests: Json[] = [];
-    private readonly responses: Promise<{
-        status: number;
-        body: Json;
-    }>[] = [];
+    private readonly publisher = new CompanionObserver();
+    private baseMediaId?: string;
     private confirmed = false;
     private retried = false;
     private readonly originalReads: {bytes:number; sha256:string}[] = [];
@@ -40,60 +38,32 @@ export class BackgroundQuality {
             .toEqual([source.bytes, source.sha256]);
     }
     observe(page: Page) {
-        const isBackground = (url: string, method: string, body: Json | null) => url === LOCAL_API + '/functions/v1/storefront-media-publish' && method === 'POST' && body?.slot === 'background';
-        page.on('request', r => {
-            if (r.url() !== LOCAL_API + '/functions/v1/storefront-media-publish' || r.method() !== 'POST')
-                return;
-            const body = r.postDataJSON();
-            if (isBackground(r.url(), r.method(), body))
-                this.requests.push(body);
-        });
-        page.on('response', r => {
-            if (r.url() !== LOCAL_API + '/functions/v1/storefront-media-publish' || r.request().method() !== 'POST')
-                return;
-            if (isBackground(r.url(), 'POST', r.request().postDataJSON())) {
-                this.responses.push(r.json().catch(() => ({})).then(body => ({ status: r.status(), body })));
-            }
-        });
+        this.publisher.attach(page, LOCAL_API + '/functions/v1/storefront-media-publish');
     }
     record(phase: string) {
         writeFileSync(resolve(this.dir, 'background-quality.json'), JSON.stringify({
             phase, data: 'authorized isolated fixture', expectedOriginal: source, expectedBase: base, expectedHigh: high,
             companionPublished: this.confirmed, explicitRetry: this.retried, originalVerifiedReads: this.originalReads, publishedReads:this.publishedReads, publisherResult:this.publisherResult,
             // Only bounded fixed-resource facts enter this receipt.
-            views: this.views,
+            publicationObserver:this.publisher.evidence(this.baseMediaId), views: this.views,
         }, null, 2));
     }
-    async verifyPublication(baseMediaId: string, retry: () => Promise<void>) {
+    async verifyPublication(baseMediaId: string, readUi: () => Promise<CompanionUi>, retry: () => Promise<void>) {
+        this.baseMediaId=baseMediaId;
         this.record('checking-companion');
-        const getSuccess = async () => {
-            const replies = await Promise.all(this.responses);
-            return replies.find(r => r.status === 200 && r.body.status === 'published' && r.body.media?.base_media_id === baseMediaId)?.body;
-        };
-        let ok = await getSuccess();
-        if (!ok) {
-            // The app already bounds its automatic retry for an unknown HTTP outcome.
-            // Only that actual state enables an explicit same-request UI retry after Save.
-            const before = this.requests.length;
-            expect(before).toBeGreaterThan(0);
-            const pending = this.requests[before - 1];
-            await retry();
-            await expect.poll(getSuccess, { timeout: 120000, message: 'The user-visible retry publishes the same verified companion' }).toBeTruthy();
-            expect(this.requests.length).toBeGreaterThan(before);
-            const replay = this.requests[before];
-            expect(replay.request_id === pending.request_id && replay.base_media_id === baseMediaId && replay.rung === pending.rung
-                && replay.base_rung === pending.base_rung, 'The actual UI retries the identical uncertain request').toBe(true);
-            this.retried = true;
-            ok = await getSuccess();
+        try {
+            const { body, replayed } = await this.publisher.verify(baseMediaId, readUi, retry);
+            const media = body.media;
+            expect(body.recipe).toBe('storefront-background-b1');
+            expect(body.rung).toBe(0);
+            expect([media.variant, media.state, media.width, media.height, media.bytes, media.content_hash])
+                .toEqual(['bg2560', 'published', high.width, high.height, high.bytes, high.sha256]);
+            this.publisherResult={ recipe:body.recipe, variant:media.variant, rung:body.rung, width:media.width, height:media.height, bytes:media.bytes, sha256:media.content_hash };
+            this.retried=replayed;
+            this.confirmed=true;
+        } finally {
+            this.record(this.confirmed?'companion-published':'checking-companion');
         }
-        const media = ok!.media;
-        expect(ok!.recipe).toBe('storefront-background-b1');
-        expect(ok!.rung).toBe(0);
-        expect([media.variant, media.state, media.width, media.height, media.bytes, media.content_hash])
-            .toEqual(['bg2560', 'published', high.width, high.height, high.bytes, high.sha256]);
-        this.publisherResult={ recipe:ok!.recipe, variant:media.variant, rung:ok!.rung, width:media.width, height:media.height, bytes:media.bytes, sha256:media.content_hash };
-        this.confirmed = true;
-        this.record('companion-published');
     }
     async privateOriginal(f: Fixture, token: string, mediaId: string) {
         const sourceReply = await fetch(LOCAL_API + '/rest/v1/rpc/get_storefront_background_source_v1', {
@@ -176,7 +146,7 @@ export class BackgroundQuality {
                     await expect(root).toHaveAttribute('data-sf-scene', scene);
                 else
                     await expect(root).not.toHaveAttribute('data-sf-scene', 'reference_dark');
-                const img = page.locator('[data-sf-menu-background="custom"] img');
+                const img = page.locator('[data-sf-menu-background="custom"] [data-sf-menu-primary]');
                 await expect(img).toHaveAttribute('src', pair.baseUrl);
                 await expect(img).toHaveAttribute('srcset', pair.baseUrl + ' 960w, ' + pair.highUrl + ' 2560w');
                 const coverWidth = Math.max(width, height * high.width / high.height);
@@ -235,7 +205,19 @@ export class BackgroundQuality {
                     const frame = await inspect();
                     expect(Math.abs(frame.y + scrollY - top.y), 'Artwork remains attached to the document').toBeLessThanOrEqual(1);
                     expect({ ...frame, y:top.y }, 'Scroll changes only the viewport position of the same selected artwork').toEqual(top);
-                    scrollFrames.push({ scrollY, imageViewportY:frame.y });
+                    const continuation = await page.locator('[data-sf-menu-continuation]').evaluate((grid, selectedSrc) => {
+                        const strips = Array.from(grid.querySelectorAll<HTMLImageElement>('[data-sf-scene-strip] > img'));
+                        const visible = strips.filter(copy => {
+                            const box = copy.parentElement!.getBoundingClientRect();
+                            return box.bottom > 0 && box.top < innerHeight;
+                        });
+                        return { visible: visible.length, count: strips.length,
+                            selected: visible.every(copy => copy.complete && copy.naturalWidth > 0 && copy.currentSrc === selectedSrc) };
+                    }, top.currentSrc);
+                    expect(continuation.visible).toBeGreaterThan(0);
+                    expect(continuation.count).toBeLessThanOrEqual(512);
+                    expect(continuation.selected).toBe(true);
+                    scrollFrames.push({ scrollY, imageViewportY:frame.y, visibleStrips:continuation.visible });
                 }
                 await page.waitForLoadState('networkidle');
                 expect(selectedResponses.length, 'No second background resource fetched on scroll').toBe(1);
