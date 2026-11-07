@@ -429,6 +429,19 @@ export async function main(argv = process.argv.slice(2), env = process.env, prin
 // main's config.toml enables, is turned off for these child processes, so the push opens no further session. The password
 // still comes only from the passfile, which here must hold exactly one active entry in total (the exact target), the URLs
 // stay passwordless with the fixed startup settings, and there is one push attempt and no retry.
+// D-067 (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-EXACT-GAP-HOSTED-PRE-COMPAT-001), after the read-only hosted check of
+// 2026-11-06: six of the seven re-created functions are on hosted in an exact legacy CRLF form of their reviewed LF body
+// (the pinned CLI recorded two October migrations from a CRLF checkout), and hosted's default privileges are not the local
+// reference's. Therefore:
+// - the state answer also gives each selected function's LF-normalized body SHA-256 (each CRLF pair replaced by one LF,
+//   nothing else), its CR, LF and CRLF-pair counts and whether a lone CR exists; all of it is in the state fingerprint,
+//   and the raw body SHA-256 stays;
+// - PRE accepts a re-created function only in its exact canonical LF form or, for the six named in legacyCrlfBefore
+//   only, in its exact reviewed legacy CRLF form (raw SHA-256, normalized SHA-256 and the three counts all pinned);
+//   normalization alone never accepts a body, and any CR in any other selected function is refused;
+// - POST accepts only the canonical LF form (the raw and the normalized SHA-256 both the POST pin, no CR);
+// - the Default ACL digest the first PRE reads is this run's baseline: never compared with a local reference, it must be
+//   read again, unchanged, by the second PRE (which both routes now run after their dry run) and by POST.
 // =====================================================================================================================
 export const EXACT_GAP_MODE = 'BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-EXACT-GAP-APPLY-001';
 export const EXACT_GAP_FLAG = '--exact-gap';
@@ -579,6 +592,36 @@ export const EXACT_GAP = deepFreeze({
     'app.audit_safe_detail': 'b571d902b1ea167848589e8a522233c1d41084599f0757b7707b07f6d2aa6c95',
     'app.owner_audit_events': '960474ccbc4e11af695d2ce642a6d06c0090f52d7fb103066e1e56bb9e650e21',
     'app.audit_category': '49e905af85b8363c355bb7a0262b5901bf1af5b63ff5a4893c3b6a08bc1b17b4',
+  },
+  // D-067 (HOSTED-PRE-COMPAT-001): the one other pre-001D form PRE accepts, for exactly these six of the seven: the exact
+  // legacy CRLF form hosted holds (the reviewed LF body with every LF written as CRLF). canonical = recreatedBefore;
+  // crlf = the SHA-256 of the raw CRLF body; lineBreaks = its CR, LF and CRLF-pair count alike. app.audit_category is
+  // accepted in canonical LF only, and POST never accepts this form.
+  legacyCrlfBefore: {
+    'app.sync_push': {
+      canonical: '3567342245d0b61c509688c5706345b78015152e9f9f8c7843b5b7f6b70da9c5',
+      crlf: 'd5114f69ba235571eddba9b98e51d37c89cdd0ae0671cb51073cbfde1ae3d0c1', lineBreaks: 910,
+    },
+    'app.pin_session_capabilities': {
+      canonical: '7f0ba8c1ac58206eb6763363bda3ddd3ea81f75c89dfb622bf4259b6f813be1e',
+      crlf: 'acde331884996f4e570b14c29f72e3dca996c2cb5227434586c6176f43ff3693', lineBreaks: 120,
+    },
+    'app.pos_order_snapshots': {
+      canonical: 'ce10e252ead728320ae798ce62c61db85d3b088e0b6b6669273dda7b37d7d15b',
+      crlf: '3caa845700d7806c10d7f2057f04bc3398527f2f350d4844a48a3c7498d70d1b', lineBreaks: 281,
+    },
+    'app.audit_action_has_detail': {
+      canonical: '9e3e215f8eb465058a6202e77d1789270e271eb7af4107bfe639f975040345f2',
+      crlf: '5129aea0b695aa7bae4f894b21a05ef70d516244fb222f5c87d27b0f692582f8', lineBreaks: 49,
+    },
+    'app.audit_safe_detail': {
+      canonical: 'b571d902b1ea167848589e8a522233c1d41084599f0757b7707b07f6d2aa6c95',
+      crlf: '500a1888b885fa580d8f1c46f8832dc707dada7c1a1817dcec56654d93a151d1', lineBreaks: 130,
+    },
+    'app.owner_audit_events': {
+      canonical: '960474ccbc4e11af695d2ce642a6d06c0090f52d7fb103066e1e56bb9e650e21',
+      crlf: '86175d5422dd57c6974ff9bf509548c085e3c281df4773e8537d7cfe80397012', lineBreaks: 204,
+    },
   },
   // The seven functions 001D re-creates keep their earlier ACL (CREATE OR REPLACE); the file sets only these bits. PRE
   // requires them to hold already (so the file's re-statement is a no-op) and POST requires all four bits unchanged.
@@ -935,6 +978,11 @@ with led as (
   select n.nspname || '.' || p.proname as name, p.prokind::text as kind,
     pg_catalog.pg_get_function_identity_arguments(p.oid) as args,
     ${sqlDigest('p.prosrc')} as src,
+    ${sqlDigest("replace(b.body, E'\\r\\n', E'\\n')")} as src_lf,
+    length(b.body) - length(replace(b.body, E'\\r', '')) as cr,
+    length(b.body) - length(replace(b.body, E'\\n', '')) as lf,
+    (length(b.body) - length(replace(b.body, E'\\r\\n', ''))) / 2 as crlf,
+    (length(b.body) - length(replace(b.body, E'\\r', ''))) > (length(b.body) - length(replace(b.body, E'\\r\\n', ''))) / 2 as lone_cr,
     p.prosecdef as secdef, coalesce(array_to_string(p.proconfig, ','), '') as config,
     p.provolatile::text as volatility, l.lanname::text as language,
     pg_catalog.pg_get_userbyid(p.proowner)::text as owner, coalesce(p.proacl::text, '') as acl,
@@ -945,6 +993,7 @@ with led as (
       where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public,
     p.proacl as proacl, p.proowner as proowner, p.oid as oid
   from pg_catalog.pg_proc p
+  cross join lateral (select coalesce(p.prosrc, '') as body) b
   join pg_catalog.pg_namespace n on n.oid = p.pronamespace
   join pg_catalog.pg_language l on l.oid = p.prolang
   where n.nspname in ('app', 'public')
@@ -994,6 +1043,7 @@ select json_build_object(
   'ledger', (select coalesce(json_agg(json_build_object('version', version, 'name', name, 'n', n, 'first', first_sha,
     'all', all_sha) order by version), '[]'::json) from led),
   'functions', (select coalesce(json_agg(json_build_object('name', name, 'args', args, 'kind', kind, 'src', src,
+    'src_lf', src_lf, 'cr', cr, 'lf', lf, 'crlf', crlf, 'lone_cr', lone_cr,
     'secdef', secdef, 'config', config, 'volatility', volatility, 'language', language, 'owner', owner, 'anon', anon,
     'authenticated', authenticated, 'service_role', service_role, 'public', public,
     'access', ${aclEntries("coalesce(proacl, pg_catalog.acldefault('f', proowner))")}) order by name, args), '[]'::json)
@@ -1019,6 +1069,7 @@ select json_build_object(
   'surfaceRelations', (select count(*) from rel where name = any (${surfRels})),
   'surface382', json_build_object(
     'functions', (select coalesce(json_agg(json_build_object('name', name, 'args', args, 'kind', kind, 'src', src,
+      'src_lf', src_lf, 'cr', cr, 'lf', lf, 'crlf', crlf, 'lone_cr', lone_cr,
       'secdef', secdef, 'config', config, 'volatility', volatility, 'language', language, 'owner', owner,
       'def', ${sqlDigest('pg_catalog.pg_get_functiondef(oid)')},
       'access', ${aclEntries("coalesce(proacl, pg_catalog.acldefault('f', proowner))")}) order by name, args), '[]'::json)
@@ -1166,6 +1217,57 @@ const surface382Problems = (state, pins) => {
   return out;
 };
 
+// D-067 (HOSTED-PRE-COMPAT-001): one selected function's line-ending facts as the state query reports them; null when one
+// is missing or malformed (the function is then refused, never guessed).
+const eolFacts = (f) => (f && typeof f === 'object' && typeof f.src === 'string' && typeof f.src_lf === 'string'
+  && [f.cr, f.lf, f.crlf].every((n) => Number.isInteger(n) && n >= 0) && typeof f.lone_cr === 'boolean'
+  ? { src: f.src, srcLf: f.src_lf, cr: f.cr, lf: f.lf, crlf: f.crlf, loneCr: f.lone_cr } : null);
+
+// D-067: the pre-001D form of one of the seven re-created functions. It passes only in its exact canonical LF form or,
+// for the six named in legacyCrlfBefore only, in its exact reviewed legacy CRLF form (raw SHA-256, LF-normalized
+// SHA-256, and CR = LF = CRLF pairs = the pinned line-break count, with no lone CR). Anything else is one refusal that
+// names its rule; the caller adds the function's name, and no body text is ever part of it. Exported for the unit tests.
+export function recreatedBodyForm(f, name, pins = EXACT_GAP) {
+  const canonical = pins.recreatedBefore[name];
+  const map = pins.legacyCrlfBefore || {};
+  const legacy = Object.hasOwn(map, name) ? map[name] : null;
+  if (typeof canonical !== 'string' || (legacy && legacy.canonical !== canonical)) {
+    throw new Refusal('internal_pin', 'a re-created function\'s canonical and legacy CRLF pins disagree');
+  }
+  const e = eolFacts(f);
+  if (!e) return { ok: false, code: 'recreated_eol', rule: 'its line-ending facts are missing or malformed' };
+  if (e.src === canonical && e.srcLf === canonical && e.cr === 0 && !e.loneCr) return { ok: true, form: 'canonical LF' };
+  if (legacy && e.src === legacy.crlf && e.srcLf === canonical && e.cr === legacy.lineBreaks && e.lf === legacy.lineBreaks
+    && e.crlf === legacy.lineBreaks && !e.loneCr) {
+    return { ok: true, form: 'legacy CRLF' };
+  }
+  if (e.loneCr) return { ok: false, code: 'recreated_eol', rule: 'a lone carriage return (a CR not followed by an LF)' };
+  if (e.cr === 0) return { ok: false, code: 'recreated_drift', rule: 'its body is not the canonical LF pin' };
+  if (!legacy) return { ok: false, code: 'recreated_eol', rule: 'carriage returns in a body accepted only in its canonical LF form' };
+  if (e.cr !== e.crlf || e.lf !== e.crlf) return { ok: false, code: 'recreated_eol', rule: 'mixed line endings (CRLF beside LF-only line breaks)' };
+  if (e.srcLf !== canonical) return { ok: false, code: 'recreated_drift', rule: 'its LF-normalized body is not the canonical pin' };
+  if (e.cr !== legacy.lineBreaks) return { ok: false, code: 'recreated_eol', rule: 'its line-break count is not the reviewed legacy CRLF form\'s' };
+  return { ok: false, code: 'recreated_eol', rule: 'its raw bytes are not the exact reviewed legacy CRLF form (the same normalized body in an unpinned raw form)' };
+}
+
+// D-067: every other selected function (a 001D function found before the apply, every #382 function and every POST
+// function) is accepted in canonical LF only, with no CR at all. The rule it breaks, or null.
+const lfOnlyRule = (f) => {
+  const e = eolFacts(f);
+  if (!e) return 'its line-ending facts are missing or malformed';
+  if (e.loneCr) return 'a lone carriage return (a CR not followed by an LF)';
+  if (e.cr !== 0) return 'carriage returns in a body accepted only in its canonical LF form';
+  return null;
+};
+const selectedName = (f, fallback) => (f && typeof f.name === 'string' && SAFE_QUALIFIED.test(f.name) ? f.name : fallback);
+const surface382Functions = (state) => (state && state.surface382 && typeof state.surface382 === 'object'
+  && Array.isArray(state.surface382.functions) ? state.surface382.functions : []);
+
+// D-067: the Default ACL digest ({count, sha256} over every pg_default_acl row) as the state query reports it. The first
+// PRE's value is this run's baseline; it is never compared with a local reference.
+const defaultAclShape = (d) => Boolean(d) && typeof d === 'object' && Number.isInteger(d.count) && d.count >= 0
+  && typeof d.sha256 === 'string' && /^[0-9a-f]{64}$/.test(d.sha256);
+
 // PRE gates on the read-only state: [code, message] for each failure (none means every gate passed).
 export function evaluateExactGapPre(state, local, pins = EXACT_GAP) {
   if (!state || !Array.isArray(state.ledger)) return [['state_unreadable', 'the read-only state could not be read']];
@@ -1209,8 +1311,14 @@ export function evaluateExactGapPre(state, local, pins = EXACT_GAP) {
     const found = state.functions.filter((f) => f.name === name);
     if (found.length !== 1) { add('recreated_missing', `${name} must exist exactly once before 001D re-creates it; found ${found.length}`); continue; }
     const f = found[0];
-    if (f.src !== pins.recreatedBefore[name] || f.owner !== pins.owner) {
-      add('recreated_drift', `${name} is not in its pinned pre-001D form (body or owner differs): a drifted or partly pre-applied body is never replaced silently`);
+    // D-067: the body in its exact canonical LF form or, for six functions only, its exact reviewed legacy CRLF form.
+    const form = recreatedBodyForm(f, name, pins);
+    if (!form.ok) {
+      const accepted = Object.hasOwn(pins.legacyCrlfBefore || {}, name) ? 'its canonical LF form or its exact reviewed legacy CRLF form' : 'its canonical LF form';
+      add(form.code, `${name}: ${form.rule}; only ${accepted} is accepted, and a drifted or partly pre-applied body is never replaced silently`);
+    }
+    if (f.owner !== pins.owner) {
+      add('recreated_drift', `${name}: its owner is not the pinned owner: a drifted or partly pre-applied function is never replaced silently`);
     }
     for (const [role, bit] of Object.entries(pins.recreated[name])) {
       if (f[role] !== bit) add('recreated_access', `${name}: EXECUTE for ${role} is ${f[role]} before 001D; the file sets ${bit}, so the hosted access differs from the pinned shape`);
@@ -1224,6 +1332,14 @@ export function evaluateExactGapPre(state, local, pins = EXACT_GAP) {
     add('surfaces_missing', `the #379 / #380 / #382 surfaces are incomplete: ${state.surfaceFunctions} of ${pins.surfaceFunctions.length} functions, ${state.surfaceRelations} of ${pins.surfaceTables.length} tables`);
   }
   problems.push(...surface382Problems(state, pins));
+  // D-067: a CR in any other selected function is refused (only six re-created functions have a legacy CRLF form).
+  const recreatedNames = new Set(pins.functions.filter((f) => f[6] === 'recreated').map((f) => f[0]));
+  for (const f of [...state.functions.filter((x) => !(x && recreatedNames.has(x.name))), ...surface382Functions(state)]) {
+    const rule = lfOnlyRule(f);
+    if (rule) add('selected_function_eol', `${selectedName(f, 'a selected function')}: ${rule}`);
+  }
+  // D-067: the Default ACL digest is this run's baseline (the second PRE and POST must read it again unchanged).
+  if (!defaultAclShape(state.defaultAcl)) add('default_acl_unreadable', 'the Default ACL digest (row count and SHA-256) is missing or malformed');
   return problems;
 }
 
@@ -1265,6 +1381,10 @@ export function evaluateExactGapPost({ pre, post, normal, list, local }, pins = 
     if (f.kind !== 'f' || f.src !== src || f.secdef !== secdef || f.config !== config || f.volatility !== volatility || f.language !== language) {
       add('post_function', `${name}: the definition differs from the reviewed migration`);
     }
+    // D-067: POST accepts only the canonical LF form: the raw (above) and the LF-normalized SHA-256 both the POST pin, no
+    // CR and no lone CR. The legacy CRLF alternative of PRE is never consulted here.
+    const eol = lfOnlyRule(f) ?? (f.src_lf !== src ? 'its LF-normalized body is not the POST pin' : null);
+    if (eol) add('post_function_eol', `${name}: ${eol}; POST accepts only the canonical LF form`);
     if (f.owner !== pins.owner) add('post_owner', `${name}: owner ${f.owner}`);
     let want = GROUP_PRIVILEGES[group];
     if (group === 'recreated') {
@@ -1308,6 +1428,12 @@ export function evaluateExactGapPost({ pre, post, normal, list, local }, pins = 
   if (!post.surface382 || typeof post.surface382 !== 'object' || !sameJson(post.surface382, pre.surface382)) {
     add('post_surface382', '#382\'s surface (its relation, functions, Storage policies or any policy on storage.objects) is not identical to PRE');
   }
+  // D-067: every #382 function stays canonical LF at POST as well.
+  for (const f of surface382Functions(post)) {
+    const rule = lfOnlyRule(f);
+    if (rule) add('post_function_eol', `${selectedName(f, 'a #382 function')}: ${rule}; POST accepts only the canonical LF form`);
+  }
+  // D-067: defaultAcl is compared with this run's own baseline, the first PRE's value (never a local reference).
   for (const key of ['otherFunctions', 'otherRelations', 'defaultAcl']) {
     if (!sameJson(post[key], pre[key])) add('post_unchanged', `${key} changed during the apply`);
   }
@@ -1388,7 +1514,11 @@ export async function exactGapMain(argv, env, print, deps = {}) {
       refuse(preProblems[0][0], `${preProblems.length} PRE gate(s) failed; nothing was pushed`);
     }
     const s = first.state;
-    say(`gr37 exact-gap: PRE (read-only session over TLS, PostgreSQL server_version_num ${s.runtime.server_version_num} and TimeZone ${s.runtime.time_zone}, as pinned): remote ledger ${s.ledger.length} versions ending ${pins.remoteTail.join(', ')}; the only gap is ${pins.missingVersion}; ${Object.keys(pins.storedStatements).join(', ')} each hold their one reviewed statement; ${s.ledger.filter((r) => r.name === null).length} earlier row(s) carry no name; no 001D object; the seven re-created functions in their pinned pre-001D form (body, owner and exact access); #379 / #380 / #382 surfaces present (${s.surfaceFunctions} functions, ${s.surfaceRelations} tables); #382's own surface as pinned (${pins.surface382.functions.length} functions, its relation and ${pins.surface382.policies.length} Storage policies: definition, owner and exact access)`);
+    say(`gr37 exact-gap: PRE (read-only session over TLS, PostgreSQL server_version_num ${s.runtime.server_version_num} and TimeZone ${s.runtime.time_zone}, as pinned): remote ledger ${s.ledger.length} versions ending ${pins.remoteTail.join(', ')}; the only gap is ${pins.missingVersion}; ${Object.keys(pins.storedStatements).join(', ')} each hold their one reviewed statement; ${s.ledger.filter((r) => r.name === null).length} earlier row(s) carry no name; no 001D object; the seven re-created functions in their pinned pre-001D form (body in its canonical LF or exact reviewed legacy CRLF form, owner and exact access); #379 / #380 / #382 surfaces present (${s.surfaceFunctions} functions, ${s.surfaceRelations} tables); #382's own surface as pinned (${pins.surface382.functions.length} functions, its relation and ${pins.surface382.policies.length} Storage policies: definition, owner and exact access)`);
+    // D-067: the form each re-created function was accepted in, and this run's Default ACL baseline (digests only).
+    const forms = pins.functions.filter((f) => f[6] === 'recreated')
+      .map(([name]) => `${name} ${recreatedBodyForm(s.functions.find((f) => f.name === name), name, pins).form}`);
+    say(`gr37 exact-gap: PRE line endings (D-067): ${forms.join('; ')}; every other selected function canonical LF. Default ACL baseline for this run (never compared with a local reference): ${s.defaultAcl.count} rows, SHA-256 ${s.defaultAcl.sha256}. First PRE state fingerprint ${stateFingerprint(s)}`);
     const dry = await d.run(cli, exactGapDryRunArgs(roUrl, args.workdir), childEnv);
     if (connectedLocally(dry.out)) refuse('cli_local_database', 'the CLI connected to its local stack, which skips TLS; nothing was pushed');
     if (dry.code !== 0) {
@@ -1401,16 +1531,36 @@ export async function exactGapMain(argv, env, print, deps = {}) {
       refuse('pending_mismatch', `the --include-all dry run must list exactly ${pins.missingFile}; it lists ${pending ? pending.length : 'an unreadable answer'}`);
     }
     say(`gr37 exact-gap: the read-only --include-all dry run lists exactly ${pins.missingFile}, the read-only set difference`);
-    if (!args.apply) { say('RESULT: CHECKED_EXACT_GAP (no --apply: nothing was pushed)'); return 0; }
-    const second = await read('re-check');
+    // D-067: the second PRE, on both routes, after the dry run. The check route proves PRE 2 equality itself; on the apply
+    // route it is the re-read immediately before the push.
+    const label = args.apply ? 're-check' : 'second PRE';
+    const when = args.apply ? 'at the re-read immediately before the push' : 'at the second PRE read, after the dry run';
+    const second = await read(label);
     if (!second.ok) { say('RESULT: PRE_READ_FAILED (STOP: preserve the evidence; nothing was pushed; no retry)'); return 3; }
+    // D-067, its review's F1: the second read's own session must be read-only, encrypted and carry the fixed startup
+    // settings, as the first one's (the fingerprint leaves the session block out).
+    const session = sessionProblems(second.state, label);
+    if (session.length) refuse(session[0][0], `${session[0][1]} (${when}); nothing was pushed`);
     // REPIN-001: the PostgreSQL runtime and TimeZone are checked again, explicitly; the fingerprint covers them too.
-    const drift = runtimeProblems(second.state, pins, 're-check');
-    if (drift.length) refuse(drift[0][0], `${drift[0][1]} (at the re-read immediately before the push); nothing was pushed`);
-    if (stateFingerprint(second.state) !== stateFingerprint(first.state)) refuse('state_changed', 'the database changed between the PRE read and the push; nothing was pushed');
+    const drift = runtimeProblems(second.state, pins, label);
+    if (drift.length) refuse(drift[0][0], `${drift[0][1]} (${when}); nothing was pushed`);
+    // D-067: the Default ACL must be this run's baseline, exactly (the fingerprint covers it too).
+    if (!defaultAclShape(second.state.defaultAcl) || !sameJson(second.state.defaultAcl, s.defaultAcl)) {
+      refuse('default_acl_changed', `the Default ACL differs from this run's baseline, read by the first PRE (${when}); nothing was pushed`);
+    }
+    if (stateFingerprint(second.state) !== stateFingerprint(first.state)) {
+      refuse('state_changed', args.apply ? 'the database changed between the PRE read and the push; nothing was pushed'
+        : 'the database changed between the first and the second PRE read; nothing was pushed');
+    }
+    const equal = `the Default ACL equals this run's baseline; state fingerprint ${stateFingerprint(second.state)} equals the first PRE's`;
+    if (!args.apply) {
+      say(`gr37 exact-gap: second PRE (read-only, after the dry run): PostgreSQL runtime and TimeZone as pinned; ${equal}`);
+      say('RESULT: CHECKED_EXACT_GAP (no --apply: nothing was pushed)');
+      return 0;
+    }
     // The last gate before the push: the local folder (migrations, config.toml, no dotenv, not linked) is re-checked.
     d.checkLocal(args.workdir);
-    say('gr37 exact-gap: re-read immediately before the push: PostgreSQL runtime and TimeZone as pinned; database unchanged; local folder unchanged');
+    say(`gr37 exact-gap: re-read immediately before the push: PostgreSQL runtime and TimeZone as pinned; database unchanged; local folder unchanged; ${equal}`);
     const started = Date.now();
     pushed = true;
     const push = await d.run(cli, exactGapPushArgs(rwUrl, args.workdir), childEnv);
@@ -1432,7 +1582,7 @@ export async function exactGapMain(argv, env, print, deps = {}) {
       say('RESULT: POSTCHECK_MISMATCH (STOP: preserve the evidence; read the ledger read-only; no retry, no repair)');
       return 4;
     }
-    say(`gr37 exact-gap: POST (read-only): remote ledger ${post.state.ledger.length} versions = the local set; ${pins.missingVersion} recorded once, as pinned (${pins.missingRow.n} statements); every earlier row unchanged; a normal dry run (no --include-all) reports the database up to date; migration list ${pins.localCount} rows, none divergent; 001D manifest: ${pins.functions.length} functions, ${pins.tables.length} tables (RLS forced, ${pins.policy.name} only), the sequence, ${pins.indexes.length} indexes and ${pins.triggers.length} triggers match, each function, table, column and the sequence with its exact pinned access; #382's surface and every storage.objects policy identical to PRE; the catalog digests of every other app / public function and relation, and of the default privileges, unchanged`);
+    say(`gr37 exact-gap: POST (read-only): remote ledger ${post.state.ledger.length} versions = the local set; ${pins.missingVersion} recorded once, as pinned (${pins.missingRow.n} statements); every earlier row unchanged; a normal dry run (no --include-all) reports the database up to date; migration list ${pins.localCount} rows, none divergent; 001D manifest: ${pins.functions.length} functions, ${pins.tables.length} tables (RLS forced, ${pins.policy.name} only), the sequence, ${pins.indexes.length} indexes and ${pins.triggers.length} triggers match, each function, table, column and the sequence with its exact pinned access; #382's surface and every storage.objects policy identical to PRE; every POST function in its canonical LF form; the catalog digests of every other app / public function and relation unchanged, and the Default ACL equal to this run's baseline`);
     say('RESULT: APPLIED_EXACT_GAP');
     return 0;
   } catch (error) {

@@ -29,6 +29,8 @@ import {
 import { selectExactGapPassfileEntry, verifyExactGapPassfile } from './bounded-db-push.mjs';
 // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-EXACT-GAP-APPLY-001-REPIN-001: the state fingerprint (runtime and #382 surface).
 import { stateFingerprint } from './bounded-db-push.mjs';
+// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-EXACT-GAP-HOSTED-PRE-COMPAT-001 (D-067): the two accepted pre-001D body forms.
+import { recreatedBodyForm } from './bounded-db-push.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 const WRAPPER = path.join(path.dirname(SELF), 'bounded-db-push.mjs');
@@ -907,13 +909,16 @@ const EG_LOCAL = (() => {
   return { files: names.length, names, versions: names.map((n) => n.slice(0, 14)) };
 })();
 const PRE_PRIVILEGES = { anon: false, authenticated: true, service_role: false, public: false };
+// D-067 (HOSTED-PRE-COMPAT-001): the line-ending facts the state query gives for a canonical LF body (raw SHA-256 =
+// LF-normalized SHA-256, no CR); `lf` is the body's line-break count.
+const lfFacts = (src, lf) => ({ src, src_lf: src, cr: 0, lf, crlf: 0, lone_cr: false });
 // REPIN-001: #382's surface as the state query answers it on the pinned shape (16 storage.objects policies, as on the
 // local reference; that digest is never pinned, only compared PRE to POST).
 function egSurface382() {
   const S = EG.surface382;
   return {
     functions: S.functions.map(([name, args, src, secdef, config, volatility, language, group, def]) => ({
-      name, args, kind: 'f', src, secdef, config, volatility, language, owner: 'postgres', def, access: S.access[group].map((e) => [...e]),
+      name, args, kind: 'f', ...lfFacts(src, 40), secdef, config, volatility, language, owner: 'postgres', def, access: S.access[group].map((e) => [...e]),
     })),
     relations: [{
       name: S.relation.name, kind: S.relation.kind, rls: S.relation.rls, force_rls: S.relation.force_rls, owner: 'postgres',
@@ -933,7 +938,7 @@ function egPreState() {
       return { version: v, name: n.slice(15, -4), n: stored ? 1 : 3, first: stored ? stored[1] : `first-${v}`, all: `all-${v}` };
     }),
     functions: EG.functions.filter((f) => f[6] === 'recreated').map(([name, , secdef, config, volatility, language]) => ({
-      name, args: 'x', kind: 'f', src: EG.recreatedBefore[name], secdef, config, volatility, language, owner: 'postgres',
+      name, args: 'x', kind: 'f', ...lfFacts(EG.recreatedBefore[name], EG.legacyCrlfBefore[name]?.lineBreaks ?? 22), secdef, config, volatility, language, owner: 'postgres',
       ...(name === 'app.audit_category' ? { anon: false, authenticated: false, service_role: false, public: false } : PRE_PRIVILEGES),
       access: EG.access.recreated[name].map((e) => [...e]),
     })),
@@ -960,7 +965,7 @@ function egPostState(original = egPreState()) {
       privileges = { anon: old.anon, authenticated: old.authenticated, service_role: old.service_role, public: old.public };
       access = old.access ?? access; // 001D keeps a re-created function's ACL (CREATE OR REPLACE)
     }
-    return { name, args: 'x', kind: 'f', src, secdef, config, volatility, language, owner: 'postgres', ...privileges, access: access.map((e) => [...e]) };
+    return { name, args: 'x', kind: 'f', ...lfFacts(src, 60), secdef, config, volatility, language, owner: 'postgres', ...privileges, access: access.map((e) => [...e]) };
   });
   const closed = { owner: 'postgres', anon: false, authenticated: false, service_role: false, public: false };
   const exact = (entries) => ({ access: entries.map((e) => [...e]), columns: [] });
@@ -1227,7 +1232,8 @@ test('exact-gap flow: without --apply it reads and dry-runs with --include-all, 
     const r = await runExactGap({ argv: ['--mode', 'local', '--workdir', wd, EXACT_GAP_FLAG, EXACT_GAP_MODE], scenario: { envelope } });
     assert.equal(r.code, 0, r.out);
     assert.match(r.out, /RESULT: CHECKED_EXACT_GAP \(no --apply: nothing was pushed\)$/);
-    assert.deepEqual(kinds(r.calls), ['version', 'query', 'dry-include-all']);
+    // D-067 (HOSTED-PRE-COMPAT-001): the check route also reads the state a second time, after its dry run.
+    assert.deepEqual(kinds(r.calls), ['version', 'query', 'dry-include-all', 'query']);
   }
 });
 
@@ -1565,8 +1571,9 @@ test('exact-gap state SQL (CR-EG-02): the full ACL of every selected object and 
     'the stored ACLs and owners come straight from pg_proc and pg_class');
   // The delta review (CR-R-01): one-line changes to the query could hide a grantee from every check above. The whole
   // query is therefore pinned to the text the live proof ran (REPIN-001: the current-main run, whose run driver records
-  // this query and its SHA-256); any change fails here and needs a new live proof before this pin moves.
-  assert.ok(sha(Buffer.from(sql, 'utf8')) === '09a3d9020dfa34cc843166ca372d1e0abe19528f7d6bbd153e2811e11684d31e',
+  // this query and its SHA-256); any change fails here and needs a new live proof before this pin moves. D-067
+  // (HOSTED-PRE-COMPAT-001) moved it once, for the line-ending facts, with its own hosted-shape live proof.
+  assert.ok(sha(Buffer.from(sql, 'utf8')) === 'c623b45d80e3128045cad929c97be6ed6f65091478a263208286369d54c724c9',
     'the state SQL is exactly the query the live proof ran');
   // REPIN-001 (the review's S382-01): #382's functions are also compared by their whole definition.
   assert.equal(sql.split("'def', encode(sha256(convert_to(coalesce(pg_catalog.pg_get_functiondef(oid), ''), 'UTF8')), 'hex'),").length - 1, 1);
@@ -1943,4 +1950,400 @@ test('exact-gap flow (REPIN-001): a #382 surface change refuses before the push;
   assert.equal(ok.code, 0, ok.out);
   assert.match(ok.out, /#379 \/ #380 \/ #382 surfaces present \(46 functions, 3 tables\); #382's own surface as pinned \(12 functions, its relation and 2 Storage policies/);
   assert.match(ok.out, /#382's surface and every storage\.objects policy identical to PRE/);
+});
+
+// =====================================================================================================================
+// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-EXACT-GAP-HOSTED-PRE-COMPAT-001 (DECISION D-067): the exact legacy CRLF PRE forms of
+// six re-created functions, POST canonical LF only, and the Default ACL as a per-run baseline (PRE 1 = PRE 2 = POST).
+// =====================================================================================================================
+const SIX = ['app.sync_push', 'app.pin_session_capabilities', 'app.pos_order_snapshots', 'app.audit_action_has_detail', 'app.audit_safe_detail',
+  'app.owner_audit_events'];
+// The authorization's values, typed here independently of the wrapper's map.
+const AUTHORIZED_CRLF = {
+  'app.sync_push': ['3567342245d0b61c509688c5706345b78015152e9f9f8c7843b5b7f6b70da9c5', 'd5114f69ba235571eddba9b98e51d37c89cdd0ae0671cb51073cbfde1ae3d0c1', 910],
+  'app.pin_session_capabilities': ['7f0ba8c1ac58206eb6763363bda3ddd3ea81f75c89dfb622bf4259b6f813be1e', 'acde331884996f4e570b14c29f72e3dca996c2cb5227434586c6176f43ff3693', 120],
+  'app.pos_order_snapshots': ['ce10e252ead728320ae798ce62c61db85d3b088e0b6b6669273dda7b37d7d15b', '3caa845700d7806c10d7f2057f04bc3398527f2f350d4844a48a3c7498d70d1b', 281],
+  'app.audit_action_has_detail': ['9e3e215f8eb465058a6202e77d1789270e271eb7af4107bfe639f975040345f2', '5129aea0b695aa7bae4f894b21a05ef70d516244fb222f5c87d27b0f692582f8', 49],
+  'app.audit_safe_detail': ['b571d902b1ea167848589e8a522233c1d41084599f0757b7707b07f6d2aa6c95', '500a1888b885fa580d8f1c46f8832dc707dada7c1a1817dcec56654d93a151d1', 130],
+  'app.owner_audit_events': ['960474ccbc4e11af695d2ce642a6d06c0090f52d7fb103066e1e56bb9e650e21', '86175d5422dd57c6974ff9bf509548c085e3c281df4773e8537d7cfe80397012', 204],
+};
+const AUDIT_CATEGORY_LF = '49e905af85b8363c355bb7a0262b5901bf1af5b63ff5a4893c3b6a08bc1b17b4';
+// The state query's line-ending facts, computed in JavaScript the way the SQL computes them: the raw SHA-256, the SHA-256
+// with each CRLF pair replaced by one LF (nothing else), the CR, LF and CRLF-pair counts, and whether a lone CR exists.
+const factsOf = (body) => {
+  const cr = body.split('\r').length - 1;
+  const crlf = body.split('\r\n').length - 1;
+  return { src: sha(Buffer.from(body, 'utf8')), src_lf: sha(Buffer.from(body.split('\r\n').join('\n'), 'utf8')), cr, lf: body.split('\n').length - 1, crlf, lone_cr: cr > crlf };
+};
+const crlfFacts = (name) => {
+  const L = EG.legacyCrlfBefore[name];
+  return { src: L.crlf, src_lf: L.canonical, cr: L.lineBreaks, lf: L.lineBreaks, crlf: L.lineBreaks, lone_cr: false };
+};
+const canonicalFacts = (name) => lfFacts(EG.recreatedBefore[name], EG.legacyCrlfBefore[name]?.lineBreaks ?? 22);
+const setFacts = (state, name, facts) => { Object.assign(state.functions.find((f) => f.name === name), facts); return state; };
+// The hosted shape the check of 2026-11-06 found: the six in their legacy CRLF form, app.audit_category canonical LF,
+// and a Default ACL that is not the local reference's (a synthetic digest, never hosted's value).
+const HOSTED_LIKE_ACL = { count: 31, sha256: sha('synthetic hosted-like default ACL baseline') };
+function egHostedShapePre() {
+  const s = egPreState();
+  for (const name of SIX) setFacts(s, name, crlfFacts(name));
+  s.defaultAcl = { ...HOSTED_LIKE_ACL };
+  return s;
+}
+const HEX64 = /[0-9a-f]{64}/;
+// The body text of each CREATE FUNCTION statement (the dollar-quoted text that becomes prosrc).
+function createdBodies(sql) {
+  const out = [];
+  for (const stmt of splitSql(sql).map(lead)) {
+    const head = /^create\s+(?:or\s+replace\s+)?function\s+([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)\s*\(/i.exec(stmt);
+    if (!head) continue;
+    const asAt = stmt.search(/\bas\s+\$([A-Za-z_][A-Za-z0-9_]*)?\$/i);
+    const tag = /\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(stmt.slice(asAt));
+    const start = asAt + tag.index + tag[0].length;
+    out.push([`${head[1]}.${head[2]}`, stmt.slice(start, stmt.indexOf(tag[0], start))]);
+  }
+  return out;
+}
+
+test('exact-gap legacy CRLF pins (D-067): exactly the six named functions, the authorization\'s values, frozen', () => {
+  const L = EG.legacyCrlfBefore;
+  assert.deepEqual(Object.keys(L).sort(), [...SIX].sort());
+  for (const name of SIX) {
+    assert.deepEqual([L[name].canonical, L[name].crlf, L[name].lineBreaks], AUTHORIZED_CRLF[name], name);
+    assert.equal(L[name].canonical, EG.recreatedBefore[name], `${name}: the canonical pin is the unchanged recreatedBefore pin`);
+    assert.notEqual(L[name].crlf, L[name].canonical, name);
+    assert.equal(EG.functions.find((f) => f[0] === name)[6], 'recreated', name);
+    assert.ok(Object.isFrozen(L[name]), name);
+  }
+  // app.audit_category is canonical LF only; its canonical pin is unchanged.
+  assert.ok(!Object.hasOwn(L, 'app.audit_category'));
+  assert.equal(EG.recreatedBefore['app.audit_category'], AUDIT_CATEGORY_LF);
+  assert.deepEqual(Object.keys(EG.recreatedBefore).filter((n) => !Object.hasOwn(L, n)), ['app.audit_category']);
+  assert.ok(Object.isFrozen(L));
+  assert.throws(() => { L['app.audit_category'] = { canonical: AUDIT_CATEGORY_LF, crlf: '0'.repeat(64), lineBreaks: 22 }; }, TypeError);
+  assert.throws(() => { L['app.sync_push'].lineBreaks = 1; }, TypeError);
+  // A map whose canonical value disagrees with recreatedBefore is an internal pin error, never a silent acceptance.
+  const bad = { ...EG, legacyCrlfBefore: { ...L, 'app.sync_push': { ...L['app.sync_push'], canonical: '0'.repeat(64) } } };
+  assert.throws(() => recreatedBodyForm(crlfFacts('app.sync_push'), 'app.sync_push', bad), refusal('internal_pin'));
+  assert.throws(() => evaluateExactGapPre(egHostedShapePre(), EG_LOCAL, bad), refusal('internal_pin'));
+});
+
+test('exact-gap legacy CRLF pins (D-067): each is the committed LF body written with CRLF line breaks', (t) => {
+  if (!inGitTree()) return t.skip('not a Git work tree');
+  const latest = new Map();
+  for (const n of gitMigrationNames().slice(0, EG.localCount).filter((x) => x !== MIGRATION)) {
+    for (const [name, body] of createdBodies(gitBlob(n).toString('utf8'))) if (name in EG.recreatedBefore) latest.set(name, body);
+  }
+  assert.equal(latest.size, 7);
+  for (const [name, body] of latest) {
+    assert.ok(!body.includes('\r'), `${name}: the committed body is LF`);
+    assert.ok(sha(Buffer.from(body, 'utf8')) === EG.recreatedBefore[name], `${name}: the canonical pin`);
+    const crlf = body.split('\n').join('\r\n');
+    if (name === 'app.audit_category') {
+      // Its CRLF form exists as bytes, but no pin accepts it.
+      assert.deepEqual(recreatedBodyForm(factsOf(crlf), name), { ok: false, code: 'recreated_eol', rule: 'carriage returns in a body accepted only in its canonical LF form' });
+      continue;
+    }
+    const L = EG.legacyCrlfBefore[name];
+    assert.ok(sha(Buffer.from(crlf, 'utf8')) === L.crlf, `${name}: the legacy CRLF pin is the committed body with CRLF line breaks`);
+    assert.equal(body.split('\n').length - 1, L.lineBreaks, `${name}: the line-break count`);
+    // The JavaScript mirror of the state query gives exactly the pinned facts for both forms.
+    assert.deepEqual(factsOf(body), canonicalFacts(name), `${name}: canonical facts`);
+    assert.deepEqual(factsOf(crlf), crlfFacts(name), `${name}: legacy CRLF facts`);
+    assert.deepEqual(recreatedBodyForm(factsOf(body), name), { ok: true, form: 'canonical LF' }, name);
+    assert.deepEqual(recreatedBodyForm(factsOf(crlf), name), { ok: true, form: 'legacy CRLF' }, name);
+    // One changed line ending, in each direction, made from the real bytes: never accepted.
+    const at = crlf.indexOf('\r\n', Math.floor(crlf.length / 2));
+    const lfAt = body.indexOf('\n', Math.floor(body.length / 2));
+    for (const [label, bytes, code, rule] of [
+      ['one CRLF written as LF (one removed CR: mixed endings)', `${crlf.slice(0, at)}${crlf.slice(at + 1)}`, 'recreated_eol', /mixed line endings/],
+      ['one LF written as CRLF in the LF body (one inserted CR: mixed endings)', `${body.slice(0, lfAt)}\r${body.slice(lfAt)}`, 'recreated_eol', /mixed line endings/],
+      ['one CRLF missing its LF (one removed LF: a lone CR)', `${crlf.slice(0, at + 1)}${crlf.slice(at + 2)}`, 'recreated_eol', /lone carriage return/],
+      ['one extra CR before a CRLF (a lone CR)', `${crlf.slice(0, at)}\r${crlf.slice(at)}`, 'recreated_eol', /lone carriage return/],
+      ['one extra LF in the CRLF body (mixed endings)', `${crlf.slice(0, at)}\n${crlf.slice(at)}`, 'recreated_eol', /mixed line endings/],
+      ['one extra LF in the LF body (a content change)', `${body.slice(0, lfAt)}\n${body.slice(lfAt)}`, 'recreated_drift', /not the canonical LF pin/],
+      ['one removed LF in the LF body (a content change)', `${body.slice(0, lfAt)}${body.slice(lfAt + 1)}`, 'recreated_drift', /not the canonical LF pin/],
+      ['every line ending CR alone (the old Mac form)', body.split('\n').join('\r'), 'recreated_eol', /lone carriage return/],
+    ]) {
+      const form = recreatedBodyForm(factsOf(bytes), name);
+      assert.equal(form.ok, false, `${name}: ${label}`);
+      assert.equal(form.code, code, `${name}: ${label}`);
+      assert.match(form.rule, rule, `${name}: ${label}`);
+    }
+  }
+});
+
+test('exact-gap PRE line endings (D-067): canonical LF for all seven and the exact legacy CRLF form for the six pass', () => {
+  assert.deepEqual(evaluateExactGapPre(egPreState(), EG_LOCAL), [], 'all seven canonical LF');
+  for (const name of SIX) {
+    assert.deepEqual(evaluateExactGapPre(setFacts(egPreState(), name, crlfFacts(name)), EG_LOCAL), [], `${name} alone in its legacy CRLF form`);
+    assert.deepEqual(recreatedBodyForm(crlfFacts(name), name), { ok: true, form: 'legacy CRLF' }, name);
+    assert.deepEqual(recreatedBodyForm(canonicalFacts(name), name), { ok: true, form: 'canonical LF' }, name);
+  }
+  assert.deepEqual(recreatedBodyForm(canonicalFacts('app.audit_category'), 'app.audit_category'), { ok: true, form: 'canonical LF' });
+  // The hosted shape: the six legacy CRLF, app.audit_category canonical LF, a Default ACL that is not the local reference's.
+  assert.deepEqual(evaluateExactGapPre(egHostedShapePre(), EG_LOCAL), []);
+  // The legacy form changes nothing else: owner and exact access stay required.
+  const hosted = (change) => { const s = egHostedShapePre(); change(s.functions.find((f) => f.name === 'app.sync_push')); return evaluateExactGapPre(s, EG_LOCAL); };
+  onlyCode(hosted((f) => { f.owner = 'supabase_admin'; }), 'recreated_drift', 'another owner beside the legacy CRLF form');
+  onlyCode(hosted((f) => { f.access.push(FIFTH()); }), 'recreated_access', 'a fifth role beside the legacy CRLF form');
+  onlyCode(hosted((f) => { f.anon = true; }), 'recreated_access', 'an anon grant beside the legacy CRLF form');
+});
+
+test('exact-gap PRE line endings (D-067): every other form is refused, naming the function and the rule only', () => {
+  const pre = (name, facts) => evaluateExactGapPre(setFacts(egHostedShapePre(), name, facts), EG_LOCAL);
+  const one = (problems, code, rule, name, label) => {
+    onlyCode(problems, code, label);
+    assert.equal(problems.length, 1, `${label}: ${JSON.stringify(problems)}`);
+    const message = problems[0][1];
+    assert.ok(message.startsWith(`${name}: `), `${label}: ${message}`);
+    assert.match(message, rule, label);
+    assert.ok(!HEX64.test(message), `${label}: no digest or body text in the refusal: ${message}`);
+  };
+  for (const name of SIX) {
+    const L = EG.legacyCrlfBefore[name];
+    const n = L.lineBreaks;
+    const c = crlfFacts(name);
+    // Each field of the accepted CRLF facts, perturbed alone (the facts are otherwise exactly the reviewed form).
+    one(pre(name, { ...c, src: '1'.repeat(64) }), 'recreated_eol', /unpinned raw form/, name, `${name}: another raw hash with the same normalized hash`);
+    one(pre(name, { ...c, src_lf: '2'.repeat(64) }), 'recreated_drift', /LF-normalized body is not the canonical pin/, name, `${name}: the CRLF raw pin with another normalized body`);
+    one(pre(name, { ...c, cr: n - 1 }), 'recreated_eol', /mixed line endings/, name, `${name}: one CR fewer`);
+    one(pre(name, { ...c, cr: n + 1, lone_cr: true }), 'recreated_eol', /lone carriage return/, name, `${name}: one inserted lone CR`);
+    one(pre(name, { ...c, lf: n + 1 }), 'recreated_eol', /mixed line endings/, name, `${name}: one inserted LF`);
+    one(pre(name, { ...c, crlf: n - 1 }), 'recreated_eol', /mixed line endings/, name, `${name}: one CRLF pair fewer`);
+    one(pre(name, { ...c, lone_cr: true }), 'recreated_eol', /lone carriage return/, name, `${name}: a lone CR flag`);
+    one(pre(name, { ...c, cr: n + 1, lf: n + 1, crlf: n + 1 }), 'recreated_eol', /line-break count/, name, `${name}: another line-break count`);
+    // Mixed endings as the SQL reports them for consistent bytes: one CRLF of the legacy form written as LF.
+    one(pre(name, { src: '3'.repeat(64), src_lf: L.canonical, cr: n - 1, lf: n, crlf: n - 1, lone_cr: false }), 'recreated_eol', /mixed line endings/, name, `${name}: mixed endings`);
+    // Generic normalization is never acceptance: a CRLF body whose normalized form is not the reviewed source.
+    one(pre(name, { src: '4'.repeat(64), src_lf: '5'.repeat(64), cr: n, lf: n, crlf: n, lone_cr: false }), 'recreated_drift', /LF-normalized body is not the canonical pin/, name, `${name}: a CRLF body of other content`);
+    // Each field of the canonical LF facts, perturbed alone.
+    const l = canonicalFacts(name);
+    one(pre(name, { ...l, src: '6'.repeat(64) }), 'recreated_drift', /not the canonical LF pin/, name, `${name}: canonical normalized hash, another raw hash`);
+    one(pre(name, { ...l, src_lf: '7'.repeat(64) }), 'recreated_drift', /not the canonical LF pin/, name, `${name}: canonical raw hash, another normalized hash`);
+    one(pre(name, { ...l, cr: 3, crlf: 3 }), 'recreated_eol', /mixed line endings/, name, `${name}: canonical hashes with CRs`);
+    one(pre(name, { ...l, lone_cr: true }), 'recreated_eol', /lone carriage return/, name, `${name}: canonical hashes with a lone CR flag`);
+  }
+  // app.audit_category: canonical LF only.
+  const A = 'app.audit_category';
+  const a = canonicalFacts(A);
+  for (const [label, facts, code, rule] of [
+    ['its CRLF form', { src: '8'.repeat(64), src_lf: AUDIT_CATEGORY_LF, cr: 22, lf: 22, crlf: 22, lone_cr: false }, 'recreated_eol', /accepted only in its canonical LF form/],
+    ['one CRLF', { src: '9'.repeat(64), src_lf: AUDIT_CATEGORY_LF, cr: 1, lf: 22, crlf: 1, lone_cr: false }, 'recreated_eol', /accepted only in its canonical LF form/],
+    ['a lone CR', { ...a, src: 'a'.repeat(64), src_lf: 'b'.repeat(64), cr: 1, lone_cr: true }, 'recreated_eol', /lone carriage return/],
+    ['another raw hash', { ...a, src: 'c'.repeat(64) }, 'recreated_drift', /not the canonical LF pin/],
+    ['canonical hashes with CRs', { ...a, cr: 2, crlf: 2 }, 'recreated_eol', /accepted only in its canonical LF form/],
+  ]) one(pre(A, facts), code, rule, A, `${A}: ${label}`);
+  // Missing or malformed facts are never guessed.
+  for (const [label, change] of [
+    ['no normalized hash', (f) => { delete f.src_lf; }], ['no CR count', (f) => { delete f.cr; }], ['a text count', (f) => { f.lf = '910'; }],
+    ['a negative count', (f) => { f.crlf = -1; }], ['a fractional count', (f) => { f.cr = 0.5; }], ['no lone-CR flag', (f) => { delete f.lone_cr; }],
+    ['a text flag', (f) => { f.lone_cr = 'false'; }], ['no raw hash', (f) => { delete f.src; }],
+  ]) {
+    const s = egHostedShapePre();
+    change(s.functions.find((f) => f.name === 'app.sync_push'));
+    one(evaluateExactGapPre(s, EG_LOCAL), 'recreated_eol', /line-ending facts are missing or malformed/, 'app.sync_push', label);
+  }
+  // A CR in any other selected function: a #382 function (its body pin fails too) or a 001D function found before 001D.
+  const s382 = egHostedShapePre();
+  Object.assign(s382.surface382.functions.find((f) => f.name === 'public.storefront_menu_v7'), { src: 'd'.repeat(64), cr: 5, crlf: 5 });
+  const p382 = evaluateExactGapPre(s382, EG_LOCAL);
+  assert.deepEqual([...new Set(codes(p382))].sort(), ['selected_function_eol', 'surface382_function']);
+  assert.match(p382.find((p) => p[0] === 'selected_function_eol')[1], /^public\.storefront_menu_v7: carriage returns in a body accepted only in its canonical LF form$/);
+  const lone382 = egHostedShapePre();
+  Object.assign(lone382.surface382.functions[0], { cr: 1, lone_cr: true });
+  assert.ok(codes(evaluateExactGapPre(lone382, EG_LOCAL)).includes('selected_function_eol'));
+  const created = egHostedShapePre();
+  created.functions.push({ ...created.functions.find((f) => f.name === 'app.audit_category'), name: 'app.card_text_canonical', cr: 2, crlf: 2 });
+  assert.deepEqual([...new Set(codes(evaluateExactGapPre(created, EG_LOCAL)))].sort(), ['partial_001d', 'selected_function_eol']);
+  const noFacts = egHostedShapePre();
+  delete noFacts.surface382.functions[2].lone_cr;
+  onlyCode(evaluateExactGapPre(noFacts, EG_LOCAL), 'selected_function_eol', 'a #382 function without its line-ending facts');
+});
+
+test('exact-gap POST line endings (D-067): only the canonical LF form; never the legacy CRLF alternative', () => {
+  const pre = egHostedShapePre();
+  const base = () => ({ pre, post: egPostState(pre), normal: UP_TO_DATE, list: LIST_OK, local: EG_LOCAL });
+  assert.deepEqual(evaluateExactGapPost(base()), [], 'the six legacy CRLF PRE bodies are re-created in canonical LF');
+  const variant = (change) => { const v = base(); change(v.post); return evaluateExactGapPost(v); };
+  const fnOf = (post, name) => post.functions.find((f) => f.name === name);
+  const pin = (name) => EG.functions.find((f) => f[0] === name)[1];
+  // A re-created function still in its PRE legacy CRLF form (001D did not replace it).
+  assert.deepEqual([...new Set(codes(variant((p) => Object.assign(fnOf(p, 'app.sync_push'), crlfFacts('app.sync_push')))))].sort(), ['post_function', 'post_function_eol']);
+  // The POST body itself in a CRLF form: the legacy alternative of PRE is never accepted at POST.
+  for (const name of [...SIX, 'app.audit_category', 'app.card_attempt_claim', 'public.card_attempt_claim']) {
+    const got = variant((p) => Object.assign(fnOf(p, name), { src: 'e'.repeat(64), src_lf: pin(name), cr: 7, lf: 7, crlf: 7, lone_cr: false }));
+    assert.deepEqual([...new Set(codes(got))].sort(), ['post_function', 'post_function_eol'], name);
+    assert.match(got.find((x) => x[0] === 'post_function_eol')[1], new RegExp(`^${name.replace('.', '\\.')}: carriage returns[^]*POST accepts only the canonical LF form$`));
+  }
+  // The raw pin with any other fact is still refused (inconsistent answers never pass).
+  onlyCode(variant((p) => Object.assign(fnOf(p, 'app.sync_push'), { src_lf: 'f'.repeat(64) })), 'post_function_eol', 'the raw pin with another normalized hash');
+  onlyCode(variant((p) => Object.assign(fnOf(p, 'app.sync_push'), { cr: 1, crlf: 1 })), 'post_function_eol', 'the raw pin with a CR count');
+  onlyCode(variant((p) => Object.assign(fnOf(p, 'app.card_text_canonical'), { lone_cr: true })), 'post_function_eol', 'the raw pin with a lone CR flag');
+  onlyCode(variant((p) => { delete fnOf(p, 'public.owner_card_attempts').crlf; }), 'post_function_eol', 'no CRLF count');
+  // A #382 function at POST: canonical LF as well (here PRE and POST hold the same CR, so only the line-ending check sees it).
+  const pre382 = egHostedShapePre();
+  Object.assign(pre382.surface382.functions[4], { cr: 3, crlf: 3 });
+  const p382 = evaluateExactGapPost({ pre: pre382, post: egPostState(pre382), normal: UP_TO_DATE, list: LIST_OK, local: EG_LOCAL });
+  onlyCode(p382, 'post_function_eol', 'a #382 function with CRs at POST');
+});
+
+test('exact-gap state SQL (D-067): every selected function\'s raw and LF-normalized digests and its line-ending counts', () => {
+  const sql = exactGapStateSql();
+  const count = (fragment) => sql.split(fragment).length - 1;
+  // The raw body digest is unchanged; the normalized one replaces each CRLF pair by one LF and nothing else.
+  assert.equal(count("encode(sha256(convert_to(coalesce(p.prosrc, ''), 'UTF8')), 'hex') as src,"), 1);
+  assert.equal(count("encode(sha256(convert_to(coalesce(replace(b.body, E'\\r\\n', E'\\n'), ''), 'UTF8')), 'hex') as src_lf,"), 1);
+  assert.equal(count("length(b.body) - length(replace(b.body, E'\\r', '')) as cr,"), 1);
+  assert.equal(count("length(b.body) - length(replace(b.body, E'\\n', '')) as lf,"), 1);
+  assert.equal(count("(length(b.body) - length(replace(b.body, E'\\r\\n', ''))) / 2 as crlf,"), 1);
+  assert.equal(count("(length(b.body) - length(replace(b.body, E'\\r', ''))) > (length(b.body) - length(replace(b.body, E'\\r\\n', ''))) / 2 as lone_cr,"), 1);
+  assert.equal(count("cross join lateral (select coalesce(p.prosrc, '') as body) b"), 1);
+  // Both selected-function lists carry all five facts beside the raw digest: the 001D manifest's names and #382's.
+  assert.equal(count("'src', src,\n    'src_lf', src_lf, 'cr', cr, 'lf', lf, 'crlf', crlf, 'lone_cr', lone_cr,"), 1);
+  assert.equal(count("'src', src,\n      'src_lf', src_lf, 'cr', cr, 'lf', lf, 'crlf', crlf, 'lone_cr', lone_cr,"), 1);
+  // The other-function digest line is unchanged (its body digest is the raw one).
+  assert.equal(count("select name || '(' || args || ')|' || kind || '|' || src || '|' || secdef::text"), 1);
+  // The Default ACL digest: every pg_default_acl row, sorted (a count and a SHA-256), outside the session block.
+  assert.ok(sql.includes("'defaultAcl', (select json_build_object('count', count(*), 'sha256', encode(sha256(convert_to(coalesce(string_agg(line, E'\\n' order by line), ''), 'UTF8')), 'hex')) from dacl)"));
+});
+
+test('exact-gap state fingerprint (D-067): it covers every line-ending fact and the Default ACL baseline', () => {
+  const base = egHostedShapePre();
+  const fp = stateFingerprint(base);
+  const changed = (change) => { const s = JSON.parse(JSON.stringify(base)); change(s); return stateFingerprint(s); };
+  for (const key of ['src', 'src_lf', 'cr', 'lf', 'crlf', 'lone_cr']) {
+    assert.notEqual(changed((s) => { const f = s.functions.find((x) => x.name === 'app.owner_audit_events'); f[key] = key === 'lone_cr' ? true : typeof f[key] === 'number' ? f[key] + 1 : '0'.repeat(64); }), fp, `re-created ${key}`);
+    assert.notEqual(changed((s) => { const f = s.surface382.functions[1]; f[key] = key === 'lone_cr' ? true : typeof f[key] === 'number' ? f[key] + 1 : '0'.repeat(64); }), fp, `#382 ${key}`);
+  }
+  // Both accepted forms of the same function are two different states (so a switch between the reads refuses).
+  assert.notEqual(changed((s) => Object.assign(s.functions.find((x) => x.name === 'app.sync_push'), canonicalFacts('app.sync_push'))), fp);
+  assert.notEqual(changed((s) => { s.defaultAcl.count += 1; }), fp, 'the Default ACL row count');
+  assert.notEqual(changed((s) => { s.defaultAcl.sha256 = '0'.repeat(64); }), fp, 'the Default ACL digest');
+});
+
+test('exact-gap Default ACL (D-067): any well-formed first-PRE value is this run\'s baseline; a malformed one is refused', () => {
+  for (const acl of [HOSTED_LIKE_ACL, { count: 27, sha256: 'd'.repeat(64) }, { count: 0, sha256: sha('') }, { count: 400, sha256: sha('another') }]) {
+    const s = egHostedShapePre();
+    s.defaultAcl = { ...acl };
+    assert.deepEqual(evaluateExactGapPre(s, EG_LOCAL), [], JSON.stringify(acl));
+  }
+  for (const [label, acl] of [
+    ['missing', undefined], ['null', null], ['a text', 'x'], ['a negative count', { count: -1, sha256: 'd'.repeat(64) }],
+    ['a text count', { count: '24', sha256: 'd'.repeat(64) }], ['a short digest', { count: 24, sha256: 'd'.repeat(63) }],
+    ['an upper-case digest', { count: 24, sha256: 'D'.repeat(64) }], ['no digest', { count: 24 }],
+  ]) {
+    const s = egHostedShapePre();
+    if (acl === undefined) delete s.defaultAcl; else s.defaultAcl = acl;
+    onlyCode(evaluateExactGapPre(s, EG_LOCAL), 'default_acl_unreadable', label);
+  }
+});
+
+test('exact-gap flow (D-067): both routes read the state twice; PRE 2 must equal PRE 1, the Default ACL included', async () => {
+  const wd = path.resolve(scratch);
+  const check = ['--mode', 'local', '--workdir', wd, EXACT_GAP_FLAG, EXACT_GAP_MODE];
+  const pre = egHostedShapePre();
+  // The hosted shape passes check mode: the forms and this run's baseline are printed (digests only), then PRE 2.
+  const ok = await runExactGap({ argv: check, scenario: { pre } });
+  assert.equal(ok.code, 0, ok.out);
+  assert.deepEqual(kinds(ok.calls), ['version', 'query', 'dry-include-all', 'query']);
+  const forms = `${SIX.map((n) => `${n} legacy CRLF`).join('; ')}; app.audit_category canonical LF`;
+  assert.ok(ok.out.includes(`PRE line endings (D-067): ${forms}; every other selected function canonical LF.`), ok.out);
+  assert.ok(ok.out.includes(`Default ACL baseline for this run (never compared with a local reference): 31 rows, SHA-256 ${HOSTED_LIKE_ACL.sha256}.`), ok.out);
+  const fp = stateFingerprint(pre);
+  assert.ok(ok.out.includes(`First PRE state fingerprint ${fp}`), ok.out);
+  assert.match(ok.out, new RegExp(`second PRE \\(read-only, after the dry run\\): PostgreSQL runtime and TimeZone as pinned; the Default ACL equals this run's baseline; state fingerprint ${fp} equals the first PRE's\\nRESULT: CHECKED_EXACT_GAP \\(no --apply: nothing was pushed\\)$`));
+  assert.ok(noLeak(ok.out), ok.out);
+  // All-LF passes too, and is reported as such.
+  const lf = await runExactGap({ argv: check });
+  assert.equal(lf.code, 0, lf.out);
+  assert.ok(lf.out.includes(`PRE line endings (D-067): ${[...SIX, 'app.audit_category'].map((n) => `${n} canonical LF`).join('; ')};`), lf.out);
+  // Between the first and the second PRE read, on both routes: another Default ACL, a malformed one, or one body switching
+  // between its two accepted forms. Nothing is pushed.
+  for (const route of ['check', 'apply']) {
+    const argv = route === 'check' ? check : undefined;
+    for (const [label, second, code] of [
+      ['another Default ACL row', { ...pre, defaultAcl: { count: 32, sha256: HOSTED_LIKE_ACL.sha256 } }, 'default_acl_changed'],
+      ['another Default ACL digest', { ...pre, defaultAcl: { count: 31, sha256: sha('another default ACL') } }, 'default_acl_changed'],
+      ['the Default ACL missing', { ...pre, defaultAcl: undefined }, 'default_acl_changed'],
+      ['app.sync_push switched to canonical LF', setFacts(JSON.parse(JSON.stringify(pre)), 'app.sync_push', canonicalFacts('app.sync_push')), 'state_changed'],
+      ['a #382 function\'s LF count', (() => { const s = JSON.parse(JSON.stringify(pre)); s.surface382.functions[0].lf += 1; return s; })(), 'state_changed'],
+    ]) {
+      const r = await runExactGap({ argv, scenario: { pre, changedBeforePush: second } });
+      assert.equal(r.code, 2, `${route} / ${label}: ${r.out}`);
+      assert.match(r.out, new RegExp(`^REFUSED ${code}:`, 'm'), `${route} / ${label}`);
+      assert.deepEqual(kinds(r.calls), ['version', 'query', 'dry-include-all', 'query'], `${route} / ${label}`);
+      assert.ok(!/RESULT: (CHECKED|APPLIED)/.test(r.out) && noLeak(r.out), r.out);
+    }
+  }
+  const late = await runExactGap({ argv: check, scenario: { pre, changedBeforePush: { ...pre, defaultAcl: { count: 30, sha256: HOSTED_LIKE_ACL.sha256 } } } });
+  assert.match(late.out, /^REFUSED default_acl_changed: the Default ACL differs from this run's baseline, read by the first PRE \(at the second PRE read, after the dry run\); nothing was pushed$/m);
+  const lateApply = await runExactGap({ scenario: { pre, changedBeforePush: { ...pre, defaultAcl: { count: 30, sha256: HOSTED_LIKE_ACL.sha256 } } } });
+  assert.match(lateApply.out, /^REFUSED default_acl_changed: the Default ACL differs from this run's baseline, read by the first PRE \(at the re-read immediately before the push\); nothing was pushed$/m);
+  // The check route's second read can fail (a STOP, nothing pushed), and its runtime is checked again.
+  const failed = await runExactGap({ argv: check, scenario: { pre, queryFailAt: 2 } });
+  assert.equal(failed.code, 3, failed.out);
+  assert.match(failed.out, /the second PRE read-only state could not be read[\s\S]*RESULT: PRE_READ_FAILED/);
+  const tz = await runExactGap({ argv: check, scenario: { pre, changedBeforePush: { ...pre, runtime: { server_version_num: '170006', time_zone: 'Asia/Jerusalem' } } } });
+  assert.match(tz.out, /^REFUSED runtime_timezone: the second PRE session reports TimeZone Asia\/Jerusalem; it must be UTC \(at the second PRE read, after the dry run\); nothing was pushed$/m);
+});
+
+test('exact-gap flow (D-067): the hosted-like Default ACL applies end to end; POST keeps the baseline and the exact access', async () => {
+  const pre = egHostedShapePre();
+  // A hosted-like baseline, the six legacy CRLF bodies and the exact final manifest: APPLIED.
+  const ok = await runExactGap({ scenario: { pre } });
+  assert.equal(ok.code, 0, ok.out);
+  assert.match(ok.out, /every POST function in its canonical LF form; the catalog digests of every other app \/ public function and relation unchanged, and the Default ACL equal to this run's baseline\nRESULT: APPLIED_EXACT_GAP$/);
+  assert.match(ok.out, /re-read immediately before the push: PostgreSQL runtime and TimeZone as pinned; database unchanged; local folder unchanged; the Default ACL equals this run's baseline/);
+  const after = async (change, label) => {
+    const post = egPostState(pre);
+    change(post);
+    const r = await runExactGap({ scenario: { pre, post } });
+    assert.equal(r.code, 4, `${label}: ${r.out}`);
+    assert.ok(/RESULT: POSTCHECK_MISMATCH/.test(r.out) && !/^REFUSED /m.test(r.out) && noLeak(r.out), `${label}: ${r.out}`);
+    return [...new Set([...r.out.matchAll(/^gr37 exact-gap: POST check ([a-z_0-9]+):/gm)].map((m) => m[1]))].sort();
+  };
+  // Another Default ACL between PRE 2 and POST: a POST mismatch, against this run's own baseline.
+  assert.deepEqual(await after((p) => { p.defaultAcl = { count: 32, sha256: HOSTED_LIKE_ACL.sha256 }; }, 'a Default ACL row added during the apply'), ['post_unchanged']);
+  assert.deepEqual(await after((p) => { p.defaultAcl = { count: 27, sha256: 'd'.repeat(64) }; }, 'the local reference\'s Default ACL at POST'), ['post_unchanged']);
+  // An extra grant that a default privilege gives a new object (the Default ACL itself unchanged): POST names the object.
+  const fn = (p, name) => p.functions.find((f) => f.name === name);
+  const rel = (p, name) => p.relations.find((r) => r.name === name);
+  assert.deepEqual(await after((p) => { const f = fn(p, 'public.card_attempt_claim'); f.authenticated = true; f.access.push(['authenticated', 'EXECUTE', false, 'postgres']); }, 'authenticated on a service-only public function'),
+    ['post_function_access', 'post_privilege']);
+  assert.deepEqual(await after((p) => { fn(p, 'app.card_attempt_resolve').access.push(FIFTH()); }, 'a fifth role on an app function'), ['post_function_access']);
+  assert.deepEqual(await after((p) => { rel(p, EG.tables[1]).access.push(['service_role', 'SELECT', false, 'postgres']); }, 'service_role on a private table'), ['post_table_access']);
+  assert.deepEqual(await after((p) => { rel(p, EG.tables[2]).columns.push(['attempt_id', 'service_role', 'SELECT', false, 'postgres']); }, 'a column grant'), ['post_column_access']);
+  assert.deepEqual(await after((p) => { rel(p, EG.sequence).access.push(['authenticated', 'USAGE', false, 'postgres']); }, 'authenticated on the revision sequence'), ['post_sequence_access']);
+});
+
+test('exact-gap flow (D-067, review F1): the second PRE\'s own session must be read-only, encrypted and carry the fixed settings', async () => {
+  const wd = path.resolve(scratch);
+  const check = ['--mode', 'local', '--workdir', wd, EXACT_GAP_FLAG, EXACT_GAP_MODE];
+  const pre = egHostedShapePre();
+  // The session block is outside the state fingerprint, so only this check sees a second read in another session.
+  for (const [route, argv, label, when] of [
+    ['check', check, 'second PRE', 'at the second PRE read, after the dry run'],
+    ['apply', undefined, 're-check', 'at the re-read immediately before the push'],
+  ]) {
+    for (const [change, code, what] of [
+      [{ read_only: 'off' }, 'session_not_read_only', 'is not read-only'],
+      [{ ssl: false }, 'session_not_tls', 'is not encrypted'],
+      [{ ssl: null }, 'session_not_tls', 'is not encrypted'],
+      [{ application_name: 'psql' }, 'session_settings', 'does not carry the fixed startup settings'],
+      [{ lock_timeout: '0' }, 'session_settings', 'does not carry the fixed startup settings'],
+      [{ statement_timeout: '0' }, 'session_settings', 'does not carry the fixed startup settings'],
+    ]) {
+      const second = { ...pre, session: { ...pre.session, ...change } };
+      assert.equal(stateFingerprint(second), stateFingerprint(pre), 'the session block is outside the fingerprint');
+      const r = await runExactGap({ argv, scenario: { pre, changedBeforePush: second } });
+      assert.equal(r.code, 2, `${route} / ${JSON.stringify(change)}: ${r.out}`);
+      assert.match(r.out, new RegExp(`^REFUSED ${code}: the ${label} session ${what} \\(${when}\\); nothing was pushed$`, 'm'), `${route} / ${JSON.stringify(change)}`);
+      assert.deepEqual(kinds(r.calls), ['version', 'query', 'dry-include-all', 'query'], `${route} / ${JSON.stringify(change)}`);
+      assert.ok(!/RESULT: (CHECKED|APPLIED)/.test(r.out) && noLeak(r.out), r.out);
+    }
+    const missing = await runExactGap({ argv, scenario: { pre, changedBeforePush: { ...pre, session: undefined } } });
+    assert.equal(missing.code, 2, `${route} / no session block: ${missing.out}`);
+    assert.match(missing.out, /^REFUSED session_not_read_only:/m);
+  }
 });

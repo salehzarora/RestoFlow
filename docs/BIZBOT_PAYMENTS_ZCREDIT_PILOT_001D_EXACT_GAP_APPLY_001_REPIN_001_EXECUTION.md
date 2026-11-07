@@ -498,3 +498,14 @@ review was requested.
     the fix-round harness's Git-backed tests, the exceptions of the AST check, N7 and N8 in run3, the prefix sizes of
     N2A and N3, the dump's line count, and a network read that runs only after this commit.
   - All are corrected here and in the evidence's own records. No code, test or proof result changed.
+
+## 11. Amended by D-067 (HOSTED-PRE-COMPAT-001, 2026-11-06)
+
+This packet's contract was merged as #385 (`64b78c3e`). The read-only hosted check of 2026-11-06 then found six of the
+seven re-created functions in an exact legacy CRLF form of their reviewed body, and hosted default privileges unlike the
+local reference. **DECISION D-067** amends that contract: PRE accepts the canonical LF form or, for those six only, the
+exact legacy CRLF form; the state query adds the line-ending facts (its SHA-256 is now `c623b45d…`); POST stays
+canonical LF only; the first PRE's Default ACL is the run's baseline, never compared with a local reference; and the
+check route reads the state a second time after its dry run. The
+[HOSTED-PRE-COMPAT-001 execution packet](BIZBOT_PAYMENTS_ZCREDIT_PILOT_001D_EXACT_GAP_HOSTED_PRE_COMPAT_001_EXECUTION.md)
+holds the details. Everything else in this packet stands.
