@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:test/test.dart';
 
+import 'support/raster_commands.dart';
+
 /// ANDROID-002: the native network (TCP/RAW 9100) ESC/POS transport actually
 /// delivers bytes to a listening socket, and fails clearly — never throws,
 /// never hangs — when the printer is unreachable.
@@ -36,9 +38,8 @@ void main() {
     });
 
     // PILOT-PRINT-FIDELITY-001: a full rasterized receipt buffer — init,
-    // ONE GS v 0 with every image row, then feed, then cut — arrives
-    // complete and IN ORDER; flush drains before close, so the body rows
-    // can never be dropped while a later trailer still prints.
+    // adjacent raster bands with every row, then feed/cut, arrive complete and
+    // in order at the loopback peer. This does not establish physical printing.
     test('a full raster receipt buffer arrives complete and ordered '
         '(image rows, then feed, then cut)', () async {
       final rasterizer = FakeReceiptRasterizer();
@@ -71,26 +72,19 @@ void main() {
 
       // Complete: every byte, byte-identical.
       expect(received, bytes);
-      // Ordered: header → payload (all rows) → feed → cut.
-      final at = _indexOfSeq(received, const [0x1D, 0x76, 0x30, 0x00]);
-      expect(at, isNonNegative);
-      final payloadEnd = at + 8 + image.widthBytes * image.heightDots;
-      expect(
-        received.sublist(at + 8, payloadEnd),
-        image.data,
-        reason: 'every raster row must arrive, in order',
-      );
-      final feedAt = _indexOfSeq(received.sublist(payloadEnd), const [
-        0x1B,
+      final commands = readRasterRun(received);
+      expect(commands, hasLength((image.heightDots + 255) ~/ 256));
+      expect(commands.every((c) => c.widthBytes == image.widthBytes), isTrue);
+      expect(commands.every((c) => c.heightDots <= 256), isTrue);
+      expect(commands.expand((c) => c.data), orderedEquals(image.data));
+      expect(received.sublist(commands.last.end), [
+        0x1b,
         0x64,
-      ]);
-      final cutAt = _indexOfSeq(received.sublist(payloadEnd), const [
-        0x1D,
+        3,
+        0x1d,
         0x56,
+        1,
       ]);
-      expect(feedAt, isNonNegative);
-      expect(cutAt, isNonNegative);
-      expect(feedAt, lessThan(cutAt));
       await transport.dispose();
       await server.close();
     });
@@ -119,18 +113,4 @@ void main() {
       await transport.dispose();
     });
   });
-}
-
-int _indexOfSeq(List<int> haystack, List<int> needle) {
-  for (var i = 0; i + needle.length <= haystack.length; i++) {
-    var ok = true;
-    for (var j = 0; j < needle.length; j++) {
-      if (haystack[i + j] != needle[j]) {
-        ok = false;
-        break;
-      }
-    }
-    if (ok) return i;
-  }
-  return -1;
 }

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_printing/restoflow_printing.dart';
@@ -319,16 +321,24 @@ void main() {
       expect(imgs, isNotEmpty);
       final last = imgs.last;
       if (profile.paginates) assertPage(last, profile);
+      // Continuous transport bands can end with only the original blank tail.
+      // Measure the complete roll bitmap; fixed labels still measure last page.
+      final data = profile.paginates
+          ? last.data
+          : Uint8List.fromList([for (final img in imgs) ...img.data]);
+      final height = profile.paginates
+          ? last.heightDots
+          : imgs.fold<int>(0, (sum, img) => sum + img.heightDots);
       final b = measureRasterInkBounds(
-        data: last.data,
+        data: data,
         widthBytes: last.widthBytes,
-        heightDots: last.heightDots,
+        heightDots: height,
       );
       expect(b.hasInk, isTrue);
       // A full blank text-line of raster sits below the last inked content.
       final tail = bottomSafeTailRows(profile);
       expect(
-        last.heightDots - 1 - b.bottom,
+        height - 1 - b.bottom,
         greaterThanOrEqualTo(tail - 6),
         reason: 'a full blank text-line tail below the footer, before the cut',
       );

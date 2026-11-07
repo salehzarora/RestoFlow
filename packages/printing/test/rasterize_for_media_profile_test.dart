@@ -21,25 +21,23 @@ void main() {
   List<PrintRasterImageLine> images(PrintDocument doc) =>
       doc.lines.whereType<PrintRasterImageLine>().toList();
 
-  test(
-    'continuous80 => ONE image at 576 dots (72 bytes/row), feed 3, one cut',
-    () async {
-      final doc = await rasterizeForMediaProfile(
-        textDoc(arLines(40)),
-        rasterizer: FakeReceiptRasterizer(),
-        profile: MediaProfile.continuous80,
-      );
-      final imgs = images(doc);
-      expect(imgs, hasLength(1), reason: 'continuous roll never paginates');
-      expect(imgs.single.widthBytes, 72, reason: '576 dots / 8');
-      expect(
-        doc.lines.whereType<PrintFeedLine>().single.lines,
-        3,
-        reason: 'continuous feed stays 3',
-      );
-      expect(doc.lines.whereType<PrintCutLine>(), hasLength(1));
-    },
-  );
+  test('continuous80 => bounded 576-dot bands, feed 3, one cut', () async {
+    final doc = await rasterizeForMediaProfile(
+      textDoc(arLines(40)),
+      rasterizer: FakeReceiptRasterizer(),
+      profile: MediaProfile.continuous80,
+    );
+    final imgs = images(doc);
+    expect(imgs.map((i) => i.heightDots), [256, 256, 256, 216]);
+    expect(imgs.every((i) => i.widthBytes == 72), isTrue);
+    expect(imgs.expand((i) => i.data), List<int>.filled(72 * 984, 0x55));
+    expect(
+      doc.lines.whereType<PrintFeedLine>().single.lines,
+      3,
+      reason: 'continuous feed stays 3',
+    );
+    expect(doc.lines.whereType<PrintCutLine>(), hasLength(1));
+  });
 
   test(
     'label50x50 => raster width is 384 (48 bytes/row), NEVER 576/72',

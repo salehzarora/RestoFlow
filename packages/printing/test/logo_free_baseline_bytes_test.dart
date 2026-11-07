@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:test/test.dart';
 
+import 'support/raster_commands.dart';
+
 /// PRINT-BRANDING-LOGO-001 §17 — NO-LOGO BYTE-LEVEL BASELINE.
 ///
 /// The branding pass touched exactly one encode-path file (`rtl_raster.dart`);
@@ -22,8 +24,9 @@ import 'package:test/test.dart';
 /// digest; those digests were recorded into
 /// `test/fixtures/logo_free_baseline.json` (which also records the baseline SHA).
 /// On this branch the JSON is present, so every digest is asserted equal — any
-/// byte drift on the no-logo path fails the build. Because the same file computed
-/// both sides, the compute logic cannot drift between capture and verify.
+/// byte drift on unchanged paths fails the build. Continuous Arabic now uses
+/// bounded raster commands: that case reconstructs the legacy image to compare
+/// its pixels and trailer against the original, unchanged golden.
 ///
 /// The digest is a self-tested pure-Dart SHA-256 of the FINAL adapter bytes (the
 /// exact payload the TCP/Bluetooth transports send — see the payload-identity
@@ -201,10 +204,34 @@ Future<PrintDocument> _layoutFor(PrintDocument doc, MediaProfile profile) =>
 /// so it round-trips through JSON canonically for a stable equality check.
 Future<Map<String, Object>> _digest(
   PrintDocument doc,
-  MediaProfile profile,
-) async {
-  final bytes = await _encodeFor(doc, profile);
-  final layout = await _layoutFor(doc, profile);
+  MediaProfile profile, {
+  bool reconstructContinuousPixels = false,
+}) async {
+  var layout = await _layoutFor(doc, profile);
+  final wireBytes = _adapter.encode(layout, _profile);
+  if (reconstructContinuousPixels) {
+    final bands = layout.lines.whereType<PrintRasterImageLine>().toList();
+    expect(bands.map((b) => b.heightDots), [256, 128]);
+    expect(layout.lines.length, bands.length + 2);
+    final pixels = Uint8List.fromList([for (final band in bands) ...band.data]);
+    final commands = readRasterRun(wireBytes);
+    expect(commands.map((c) => c.heightDots), [256, 128]);
+    expect(commands.every((c) => c.widthBytes == 72), isTrue);
+    expect(commands.expand((c) => c.data), orderedEquals(pixels));
+    expect(wireBytes.sublist(commands.last.end), [
+      0x1b,
+      0x64,
+      3,
+      0x1d,
+      0x56,
+      1,
+    ]);
+    layout = PrintDocument([
+      PrintRasterImageLine(data: pixels, widthBytes: 72, heightDots: 384),
+      ...layout.lines.skip(bands.length),
+    ], localeTag: layout.localeTag);
+  }
+  final bytes = _adapter.encode(layout, _profile);
   var feeds = 0;
   var cuts = 0;
   var images = 0;
@@ -272,12 +299,17 @@ void main() {
       ? (jsonDecode(goldenFile.readAsStringSync()) as Map<String, dynamic>)
       : null;
 
-  group('§17 no-logo encoded bytes are byte-identical to baseline', () {
+  group('§17 no-logo baseline bytes or reconstructed continuous pixels', () {
     for (final fx in _fixtures.entries) {
       for (final pf in _profiles.entries) {
         final key = '${fx.key}_${pf.key}';
         test('$key digest matches baseline', () async {
-          final digest = await _digest(fx.value(), pf.value);
+          final digest = await _digest(
+            fx.value(),
+            pf.value,
+            reconstructContinuousPixels:
+                fx.key == 'ar' && pf.value == MediaProfile.continuous80,
+          );
           if (golden == null || golden[key] == null) {
             // CAPTURE mode (baseline worktree): no golden yet — record it.
             // ignore: avoid_print
