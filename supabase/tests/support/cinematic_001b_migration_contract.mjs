@@ -11,6 +11,11 @@ export const finalFingerprint = 'a276aef4fdd30b35272939e51d649bff3dfeb70b6c806ec
 export const originalCommit = 'e71ab13dc258b5bc036b29a054e3744cb824d63e';
 export const originalFingerprint = 'b68c7d6a74dd91179042e65f038e2b1a85c58cc6efbc0e8713871f6d34669038';
 export const sha256 = (value) => createHash('sha256').update(value).digest('hex');
+// The normal database suite applies this successor. The historical #379 proof stops before it.
+export const posDutySuccessor = Object.freeze({
+  name: '20261106180840_bizbot_pos_long_shift_alerts_001.sql',
+  sha256: '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865',
+});
 
 // PostgreSQL's semicolons inside strings, quoted identifiers, nested comments
 // and dollar-quoted bodies do not end top-level statements. In particular,
@@ -203,8 +208,10 @@ export function proveMigrationSequence(sources) {
     assert.ok(!later.includes(followUpName), 'Interleaved migration between the #379 target and the 001D follow-up');
     assert.fail('Unknown migration after the #379 target');
   }
-  assert.deepEqual(later, [followUpName, ...followupMigrations.map(item => item.name)], 'Only the pinned 001D, product, scene and background migrations may follow the #379 target');
+  assert.deepEqual(later, [followUpName, ...followupMigrations.map(item => item.name), posDutySuccessor.name],
+    'Unexpected migration sequence after the #379 target');
   const bytes = new Map(sources);
+  assert.equal(sha256(bytes.get(posDutySuccessor.name)), posDutySuccessor.sha256, 'Unreviewed POS duty successor bytes');
   proveFinalMigration(bytes.get(migrationName).toString('utf8'));
   const followUp = proveFollowUpMigration(bytes.get(followUpName));
   const visualFollowups = followupMigrations.map(pin => {
@@ -218,15 +225,17 @@ export function proveMigrationSequence(sources) {
   // A renamed or copied migration cannot carry the reviewed bytes elsewhere.
   for (const [name, value] of sources) {
     const digest = sha256(value);
+    assert.ok(name === posDutySuccessor.name || digest !== posDutySuccessor.sha256, 'Reviewed POS duty bytes may appear only under their pinned name');
     for (const pin of followupMigrations) assert.ok(name === pin.name || digest !== pin.sha256, 'Reviewed visual bytes may appear only under their pinned name');
     assert.ok(name === migrationName || digest !== finalFingerprint, 'The reviewed #379 target bytes may appear only under its pinned name');
     assert.ok(name === followUpName || digest !== followUpFingerprint, 'The reviewed 001D bytes may appear only under their pinned name');
   }
   return {
+    historical_names: names.slice(0, -1),
     target_prefix: names.slice(0, index + 1),
     visual_followups: visualFollowups,
     summary: { migrations: names.length, before_target: index, predecessor: predecessorName, target: migrationName,
-      later_than_target: later, prefix_names_sha256: prefixNames, ...followUp, visual_followups: visualFollowups },
+      later_than_target: later, prefix_names_sha256: prefixNames, ...followUp, visual_followups: visualFollowups, excluded_successor: posDutySuccessor },
   };
 }
 
@@ -241,10 +250,10 @@ export function targetPrefixSources(sources, targetBytes) {
 }
 
 // PR380's scoped hosted baseline has #379 but no payment 001D history/schema.
-// Validate the complete reconciled checkout first, then omit exactly that one
-// unrelated migration for a separate production-shaped disposable-stack proof.
+// Validate the complete checkout first, then omit 001D from the historical proof's own interval.
 // This never edits a tracked file or authorizes a hosted history repair.
 export function visualReleaseSources(sources) {
-  proveMigrationSequence(sources);
-  return sources.filter(([name]) => name !== followUpName);
+  const { historical_names } = proveMigrationSequence(sources);
+  const bytes = new Map(sources);
+  return historical_names.filter(name => name !== followUpName).map(name => [name, bytes.get(name)]);
 }

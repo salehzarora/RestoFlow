@@ -8,7 +8,7 @@ import {
   migrationName, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration, requireEphemeralCi,
   statements, withoutOuterTransaction, finalFingerprint, sha256, predecessorName, predecessorVersion, prefixNamesFingerprint,
   followUpName, followUpVersion, followUpFingerprint, targetFunctions, topLevelTransactionControl, proveFollowUpMigration,
-  proveMigrationSequence, targetPrefixSources, followupMigrations, visualReleaseSources,
+  proveMigrationSequence, targetPrefixSources, followupMigrations, visualReleaseSources, posDutySuccessor,
 } from './cinematic_001b_migration_contract.mjs';
 
 test('historical migration removed exactly two outer statement lines', () => {
@@ -93,10 +93,11 @@ const refuses = (list, message) => assert.throws(() => proveMigrationSequence(li
 
 test('the sequence pins #379, payment 001D, product helpers, scene and background clarity', () => {
   assert.deepEqual(proveMigrationSequence(sources).summary, {
-    migrations: 188, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name)],
+    migrations: 189, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name), posDutySuccessor.name],
     prefix_names_sha256: prefixNamesFingerprint, follow_up_sha256: followUpFingerprint, follow_up_statements: 125,
     follow_up_no_embedded_transaction: true,
     visual_followups: followupMigrations.map(pin => ({ ...pin, version: pin.name.slice(0, 14), statements: statements(bytesOf(pin.name).toString('utf8')).length, no_embedded_transaction: true })),
+    excluded_successor: posDutySuccessor,
   });
 });
 
@@ -105,7 +106,7 @@ test('the target prefix ends at #379 and excludes 001D, which is applied only as
   assert.equal(prefix.length, 184);
   assert.deepEqual(prefix.slice(-2), [predecessorName, migrationName]);
   assert.ok(!prefix.includes(followUpName));
-  assert.deepEqual(sources.map(([name]) => name), [...prefix, followUpName, ...followupMigrations.map(item => item.name)]);
+  assert.deepEqual(sources.map(([name]) => name), [...prefix, followUpName, ...followupMigrations.map(item => item.name), posDutySuccessor.name]);
   const broken = sql('select 1;\n');
   const plan = targetPrefixSources(sources, broken);
   assert.deepEqual(plan.map(([name]) => name), prefix);
@@ -195,11 +196,11 @@ test('top-level transaction control in the 001D follow-up fails; dollar-quoted P
 });
 
 test('a second later migration fails, including any future follow-up not yet pinned', () => {
-  refuses(adding(['20261104150000_second_later.sql', sql('select 1;\n')]), 'Only the pinned 001D, product, scene and background migrations may follow the #379 target');
+  refuses(adding(['20261104150000_second_later.sql', sql('select 1;\n')]), 'Unexpected migration sequence after the #379 target');
   const future = ['20261106122400_future_follow_up.sql', '20261106122500_future_follow_up.sql'];
   assert.ok(future.every(name => name.slice(0, 14) > followupMigrations.at(-1).name.slice(0, 14)));
   refuses(adding([future[0], sql('select 1;\n')], [future[1], sql('select 2;\n')]),
-    'Only the pinned 001D, product, scene and background migrations may follow the #379 target');
+    'Unexpected migration sequence after the #379 target');
 });
 
 test('non-conforming migration names and sources fail', () => {
@@ -231,7 +232,7 @@ test('the exact #379 and 001D hashes and the reviewed sequence are pinned', () =
 
 test('all visual migrations fail closed on missing, swapped, changed, CRLF or copied bytes', () => {
   for (const pin of followupMigrations) {
-    refuses(without(sources, pin.name), 'Only the pinned 001D, product, scene and background migrations may follow the #379 target');
+    refuses(without(sources, pin.name), 'Unexpected migration sequence after the #379 target');
     const original = bytesOf(pin.name);
     for (const changed of [Buffer.concat([original, sql('-- changed\n')]), crlf(original), original.subarray(0, -1)]) {
       refuses(replacing(pin.name, changed), 'Unreviewed visual follow-up bytes');
@@ -246,19 +247,35 @@ test('all visual migrations fail closed on missing, swapped, changed, CRLF or co
   const between = '20261105025500_between_product_and_scene.sql';
   assert.ok(product.slice(0, 14) < between.slice(0, 14) && between.slice(0, 14) < scene.slice(0, 14));
   refuses(adding([between, sql('select 1;\n')]),
-    'Only the pinned 001D, product, scene and background migrations may follow the #379 target');
+    'Unexpected migration sequence after the #379 target');
 });
 
-test('production-shaped proof omits only pending payment after validating the complete reviewed checkout', () => {
+test('production-shaped proof omits pending payment and the later POS release after exact source validation', () => {
   const plan = visualReleaseSources(sources);
   assert.deepEqual(plan.map(([name]) => name), [
     ...proveMigrationSequence(sources).target_prefix, ...followupMigrations.map(item => item.name),
   ]);
   assert.ok(plan.every(([name, bytes]) => bytes === bytesOf(name)), 'Exact bytes are retained');
   assert.ok(!plan.some(([name]) => name === followUpName));
-  for (const pin of [followUpName, ...followupMigrations.map(item => item.name)]) {
+  for (const pin of [followUpName, ...followupMigrations.map(item => item.name), posDutySuccessor.name]) {
     assert.throws(() => visualReleaseSources(without(sources, pin)));
     assert.throws(() => visualReleaseSources(replacing(pin, Buffer.concat([bytesOf(pin), sql('-- changed\n')]))));
   }
   assert.throws(() => visualReleaseSources(adding(['20261104160000_unreviewed.sql', sql('select 1;\n')])));
+});
+
+test('both historical plans exclude exactly the pinned POS successor and refuse a changed, copied or later file', () => {
+  const { name, sha256: digest } = posDutySuccessor;
+  assert.equal(name, '20261106180840_bizbot_pos_long_shift_alerts_001.sql');
+  const original = bytesOf(name);
+  assert.equal(sha256(original), digest);
+  const historical = proveMigrationSequence(sources).historical_names;
+  assert.equal(historical.length, 188);
+  assert.deepEqual([...historical, name], sources.map(([entry]) => entry));
+  assert.deepEqual(visualReleaseSources(sources).map(([entry]) => entry), historical.filter(entry => entry !== followUpName));
+  refuses(without(sources, name), 'Unexpected migration sequence after the #379 target');
+  refuses(replacing(name, crlf(original)), 'Unreviewed POS duty successor bytes');
+  refuses(replacing(name, Buffer.concat([original, sql('-- changed\n')])), 'Unreviewed POS duty successor bytes');
+  refuses(replacing(sources[0][0], original), 'Reviewed POS duty bytes may appear only under their pinned name');
+  refuses(adding(['20261106190000_unknown.sql', original]), 'Unexpected migration sequence after the #379 target');
 });

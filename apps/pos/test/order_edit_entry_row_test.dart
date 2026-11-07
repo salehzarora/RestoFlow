@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart'
-    show SyncSession;
+    show
+        SyncRpcTransport,
+        SyncSession,
+        SyncTransportErrorKind,
+        SyncTransportException;
 import 'package:restoflow_domain/restoflow_domain.dart'
     show DiningTable, OrderType;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
@@ -22,7 +28,7 @@ import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/data/staff_capabilities.dart';
 import 'package:restoflow_pos/src/data/sync_cursor_store.dart';
 import 'package:restoflow_pos/src/state/discount_controller.dart'
-    show staffCapabilitiesProvider;
+    show staffCapabilitiesProvider, staffCapabilitiesRepositoryProvider;
 import 'package:restoflow_pos/src/state/order_edit_controller.dart';
 import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
@@ -120,6 +126,22 @@ class _NoDetail implements OrderDetailRepository {
       throw const PosOrderDetailException(PosOrderDetailFailure.transport);
 }
 
+class _CapabilitiesTransport implements SyncRpcTransport {
+  Object? response;
+  int calls = 0;
+
+  @override
+  Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    expect(function, 'pin_session_capabilities');
+    expect(params, {'p_pin_session_id': 'pin1', 'p_device_id': 'dev1'});
+    calls++;
+    if (response == null) {
+      throw const SyncTransportException(SyncTransportErrorKind.transient);
+    }
+    return response;
+  }
+}
+
 class _FakeOutbox extends OutboxController {
   _FakeOutbox(this.entries);
   final List<OutboxEntry> entries;
@@ -139,6 +161,7 @@ class _OfflineCached extends PosOfflineController {
 /// The real-mode scope every host needs (no network: every read is faked).
 List<Override> _realMode({
   PosStaffCapabilities? caps,
+  StaffCapabilitiesRepository? capabilitiesRepository,
   bool demo = false,
   InMemoryRecentOrdersStore? store,
   PosOrderSnapshot? byId,
@@ -156,7 +179,12 @@ List<Override> _realMode({
   orderSnapshotRepositoryProvider.overrideWithValue(_EmptyRepo(byId)),
   orderDetailRepositoryProvider.overrideWithValue(_NoDetail()),
   posVerifiedKitchenModeProvider.overrideWithValue(null),
-  staffCapabilitiesProvider.overrideWith((ref) async => caps),
+  if (capabilitiesRepository == null)
+    staffCapabilitiesProvider.overrideWith((ref) async => caps)
+  else
+    staffCapabilitiesRepositoryProvider.overrideWithValue(
+      capabilitiesRepository,
+    ),
 ];
 
 void _size(WidgetTester tester, [Size size = const Size(1400, 2400)]) {
@@ -228,6 +256,60 @@ int _indexInRow(WidgetTester tester, Finder button) {
 }
 
 void main() {
+  group('manual Orders refresh after an unreadable capability response', () {
+    for (final (role, enabled, offersEdit) in [
+      ('cashier', true, true),
+      ('cashier', false, false),
+      ('kitchen_staff', true, false),
+    ]) {
+      testWidgets('$role with branch edit $enabled', (tester) async {
+        _size(tester);
+        final store = InMemoryRecentOrdersStore();
+        await store.persist(kDemoSyncScope.key, [_discovered()]);
+        final transport = _CapabilitiesTransport();
+        await tester.pumpWidget(
+          _app(
+            _realMode(
+              store: store,
+              capabilitiesRepository: RealStaffCapabilitiesRepository(
+                transport,
+                const SyncSession(pinSessionId: 'pin1', deviceId: 'dev1'),
+              ),
+            ),
+            const RecentOrdersSheet(),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('recent-order-$_code')), findsOneWidget);
+        expect(transport.calls, 1);
+        expect(_edit(), findsNothing);
+        final recovery = Completer<Object?>();
+        transport.response = recovery.future;
+        await tester.tap(find.byKey(const Key('orders-refresh-button')));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('orders-refresh-button')));
+        await tester.pump();
+        expect(transport.calls, 2, reason: 'an in-flight probe is retained');
+        expect(_edit(), findsNothing);
+        recovery.complete({
+          'ok': true,
+          'role': role,
+          'capabilities': {'void_order': true},
+          'branch_features': {
+            'order_edit_enabled': enabled,
+            'order_edit_finished_food_manager_only': false,
+          },
+        });
+        await tester.pumpAndSettle();
+        expect(_edit(), offersEdit ? findsOneWidget : findsNothing);
+        expect(transport.calls, 2);
+        await tester.tap(find.byKey(const Key('orders-refresh-button')));
+        await tester.pumpAndSettle();
+        expect(transport.calls, 2, reason: 'a resolved gate is retained');
+        expect(_edit(), offersEdit ? findsOneWidget : findsNothing);
+      });
+    }
+  });
   setUp(() => SharedPreferences.setMockInitialValues(const {}));
 
   group('visibility through the shared assembly', () {

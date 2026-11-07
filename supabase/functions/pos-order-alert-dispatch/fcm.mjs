@@ -37,12 +37,16 @@ export function message(delivery, nowMs) {
     || !UUID.test(delivery.request_id ?? "") || !["pending", "terminal"].includes(delivery.kind)
     || !timestamp(delivery.expires_at) || !timestamp(delivery.authority_expires_at)
     || typeof delivery.fcm_token !== "string" || !/^[^\s\x00-\x1f\x7f]{20,4096}$/.test(delivery.fcm_token)) throw new Error("invalid_delivery");
+  const duty = Object.hasOwn(delivery, "consent_id");
+  if (duty && (typeof delivery.consent_id !== "string" || !UUID.test(delivery.consent_id)
+    || typeof delivery.generation !== "string")) throw new Error("invalid_shift_identity");
   const remaining = Math.floor((Math.min(Date.parse(delivery.authority_expires_at),
     delivery.kind === "pending" ? Date.parse(delivery.expires_at) : nowMs + 60_000) - nowMs) / 1000);
   if (remaining < 1) return null;
   return { message: { token: delivery.fcm_token,
-    data: { version: "1", kind: delivery.kind === "pending" ? "pending" : "cancel", request_id: delivery.request_id,
-      expires_at: delivery.expires_at, registration_id: delivery.registration_id },
+    data: { version: duty ? "2" : "1", kind: delivery.kind === "pending" ? "pending" : "cancel", request_id: delivery.request_id,
+      expires_at: delivery.expires_at, registration_id: delivery.registration_id,
+      ...(duty ? { consent_id: delivery.consent_id, generation: delivery.generation } : {}) },
     // A terminal event must never replace another request's only pending wake
     // while Android is disconnected/closed. Each kind still coalesces hints;
     // native reconciles the complete authoritative set before playing sound.

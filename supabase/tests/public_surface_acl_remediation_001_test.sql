@@ -180,6 +180,9 @@ select is(
     union all select 'pos_claim_order_alert_deliveries(integer)'
     union all select 'pos_finish_order_alert_delivery(uuid,uuid,text)'
     union all select 'pos_refresh_order_alert_token(uuid,text,text,uuid)'
+    union all select 'pos_shift_order_alert_status(uuid,uuid,text)'
+    union all select 'pos_refresh_shift_order_alert_token(uuid,uuid,text,text,uuid)'
+    union all select 'pos_revoke_shift_order_alert(uuid,uuid,text)'
     union all select regexp_replace(
       'public.submit_web_order_test_request(text,uuid,text,jsonb,uuid,uuid,uuid,uuid,timestamptz,timestamptz)'::regprocedure::text,
       '^public.', '')
@@ -190,7 +193,7 @@ select is(
     union all select 'card_attempt_mark_recording_result(uuid,uuid,text,text,text,uuid)'
     union all select 'card_attempt_mark_release_requested(uuid,uuid,text,text,uuid)'
   ) denied),
-  'D1. authenticated excludes anon-only readers, all twelve exact service-only web-request/notification wrappers and the six exact service-only card-attempt wrappers (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D)');
+  'D1. authenticated excludes anon-only readers, twelve web-request/notification wrappers, three shift-alert wrappers and six card-attempt wrappers by exact signature');
 
 -- device / pairing
 select ok(has_function_privilege('authenticated', 'public.redeem_device_pairing(text, text)', 'EXECUTE'),

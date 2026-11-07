@@ -27,6 +27,10 @@ class BackgroundOrderAlertService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS) { stopSelf(); return START_NOT_STICKY }
         val coordinator = BackgroundOrderAlertCoordinator.get(this)
+        if (!coordinator.currentWake(intent)) {
+            if (!coordinator.ownsService(this)) stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
         return try {
             val notification = coordinator.notification(true)
             if (Build.VERSION.SDK_INT >= 34) startForeground(BackgroundOrderAlertCoordinator.NOTIFICATION_ID,
@@ -102,7 +106,7 @@ class BackgroundOrderAlertMessagingService : FirebaseMessagingService() {
 class BackgroundOrderAlertStopReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action == BackgroundOrderAlertCoordinator.STOP_ALERTS) BackgroundOrderAlertCoordinator.get(context)
-            .disable(BackgroundOrderAlertRevocationReason.USER_NOTIFICATION_STOP)
+            .stopFromNotification(intent.getStringExtra("consent_id"))
     }
 }
 

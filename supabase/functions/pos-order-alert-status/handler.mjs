@@ -1,4 +1,5 @@
 import { configuration, HEX_SECRET, UUID, timestamp, object, hash, readJson, response, rpc } from "../_shared/pos-order-alert.mjs";
+import { handleDutyRequest } from "./shift-duty.mjs";
 
 export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl = globalThis.crypto, timeoutMs = 5000 } = {}) {
   return async function handler(request) {
@@ -7,6 +8,8 @@ export function createHandler({ getEnv, fetchImpl = globalThis.fetch, cryptoImpl
       // Native-only delegation: no CORS grant or cookie/session fallback.
       if (request.headers.has("origin")) return response({ ok: false, error: "origin_not_allowed" }, 403);
       const url = new URL(request.url);
+      const duty = /^\/(?:functions\/v1\/pos-order-alert-status\/|pos-order-alert-status\/)?duty\/(status|token\/refresh|revoke)$/.exec(url.pathname);
+      if (duty && !url.search) return await handleDutyRequest(request, duty[1], getEnv, fetchImpl, cryptoImpl, timeoutMs);
       const disable = url.pathname === "/disable" || url.pathname.endsWith("/pos-order-alert-status/disable");
       const status = url.pathname === "/" || url.pathname.endsWith("/pos-order-alert-status");
       const refresh = url.pathname === "/token/refresh" || url.pathname.endsWith("/pos-order-alert-status/token/refresh");

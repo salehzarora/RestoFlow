@@ -880,6 +880,14 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.widget<SwitchListTile>(toggle).value, true);
         expect(
+          find.byKey(const Key('background-alert-authorized-until')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('background-alert-clear-preference')),
+          findsNothing,
+        );
+        expect(
           find.byKey(const Key('background-order-alert-pending')),
           findsNothing,
         );
@@ -1002,6 +1010,19 @@ void main() {
         expect(find.text(l10n.posBackgroundOrderAlertsSignIn), findsOneWidget);
         expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
         expect(alerts.choices, isEmpty);
+        expect(
+          find.byKey(const Key('background-alert-authorized-until')),
+          findsNothing,
+        );
+        final clear = find.byKey(
+          const Key('background-alert-clear-preference'),
+        );
+        await tester.ensureVisible(clear);
+        await tester.tap(clear);
+        await tester.pumpAndSettle();
+        expect(alerts.choices, [false]);
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+        expect(clear, findsNothing);
         expect(inbox.decisions, isEmpty);
       },
     );
