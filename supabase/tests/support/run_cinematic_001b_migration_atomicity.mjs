@@ -252,11 +252,19 @@ end;\n$cinematic_late_failure$;\n`;
   receipt.follow_up_history_sha256 = sha256(paymentHistory);
 
   phase = 'apply_reviewed_visual_followups';
-  checked('supabase', ['migration', 'up', '--local']);
+  // Extend the verified payment workdir through the last visual migration. A root-directory
+  // migration up would apply unrelated successors as part of this historical proof.
+  for (const { name } of sequence.visual_followups) {
+    await writeFile(join(paymentWorkdir, 'supabase/migrations', name), sourceBytes.get(name));
+  }
+  const historicalSources = await readMigrationSources(join(paymentWorkdir, 'supabase/migrations'));
+  assert.deepEqual(historicalSources.map(([name]) => name), sequence.historical_names);
+  assert.ok(historicalSources.every(([name, bytes]) => bytes.equals(sourceBytes.get(name))), 'Historical workdir must retain exact reviewed bytes');
+  checked('supabase', ['migration', 'up', '--local', '--workdir', paymentWorkdir]);
   const finalHistory = JSON.parse(sql(historyQuery));
   assert.deepEqual(finalHistory.filter(row => row.version <= followUpVersion), JSON.parse(paymentHistory),
     'Payment and all earlier history rows must remain unchanged');
-  assert.deepEqual(finalHistory.map(row => row.version), versionsOf(sources.map(([name]) => name)),
+  assert.deepEqual(finalHistory.map(row => row.version), versionsOf(sequence.historical_names),
     'Each pinned migration must have exactly one history row and no others');
   assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), followupReadiness, 'Reviewed content, menu, product and background RPCs must be ready');
   receipt.followup_history_once = 'PASS';
