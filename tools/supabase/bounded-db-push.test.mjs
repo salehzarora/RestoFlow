@@ -2620,6 +2620,22 @@ test('exact-gap PRE #386 surface (D-068): its functions, relations and triggers 
   onlyCode(variant((x) => { x.triggers[3].enabled = 'D'; }), 'surface386_trigger', 'a trigger disabled');
   onlyCode(variant((x) => { x.triggers[3].enabled = 'A'; }), 'surface386_trigger', 'a trigger set to ALWAYS');
   onlyCode(variant((x) => { x.triggers[5].def = '0'.repeat(64); }), 'surface386_trigger', 'another trigger definition (its WHEN clause or function)');
+  // An answer row under an unpinned name is a malformed answer (the state query selects pinned names only): the counts refuse it.
+  onlyCode(variant((x) => { x.relations.push({ ...rel(x, 'app.pos_shift_alert_policies'), name: 'app.pos_shift_alert_other' }); }), 'surface386_relation', 'a relation under an unpinned name');
+  onlyCode(variant((x) => { x.triggers.push({ ...x.triggers[0], name: 'end_shift_alert_on_other@public.shifts' }); }), 'surface386_trigger', 'a trigger under an unpinned name');
+  // The inherited-access function is compared with its own pinned entries, never with a group's: under a pins variant whose inherited
+  // entries differ from every group, only a matching answer passes.
+  const inheritedEntries = [['postgres', 'EXECUTE', false, 'postgres'], ['service_role', 'EXECUTE', false, 'postgres']];
+  const inheritedPins = { ...EG, surface386: { ...EG.surface386, inheritedAccess: { 'app.pos_order_alert_authority': inheritedEntries } } };
+  const withInherited = (change) => {
+    const s = egPreState();
+    const f = s.surface386.functions.find((g) => g.name === 'app.pos_order_alert_authority');
+    f.access = inheritedEntries.map((e) => [...e]);
+    if (change) change(f);
+    return evaluateExactGapPre(s, EG_LOCAL, inheritedPins);
+  };
+  assert.deepEqual(withInherited(), [], 'the inherited entries are read from inheritedAccess');
+  onlyCode(withInherited((f) => { f.access = EG.surface386.access.none.map((e) => [...e]); }), 'surface386_access', 'an answer equal to the none group is refused when the inherited entries differ');
   // A missing or malformed answer.
   onlyCode(variant((x, s) => { delete s.surface386; }), 'surface386_unreadable', 'no answer');
   onlyCode(variant((x, s) => { s.surface386 = { functions: [], relations: [] }; }), 'surface386_unreadable', 'a partial answer');
