@@ -43,9 +43,18 @@ jobs:
           channel: stable
           cache: true
 
-      - uses: supabase/setup-cli@v1
+      - name: Restore the pinned Supabase CLI archive
+        uses: actions/cache@v4
         with:
-          version: 2.107.0
+          path: ${{ runner.temp }}/bizbot-ci-pinned-downloads/supabase-2.107.0-linux-amd64.tar.gz
+          key: linux-supabase-2.107.0-ea233b337be698cee5bbca0795ee3e63b9dd154948c515c03cb72f191b3d103c
+
+      - name: Verify and install the existing Supabase CLI
+        run: |
+          node --test tools/ci/prepare-pinned-downloads.test.mjs
+          node tools/ci/prepare-pinned-downloads.mjs cli
+      - name: Confirm the installed CLI version
+        run: test "$(supabase --version)" = 2.107.0
 
       - name: Record the actual PR merge checkout and enforce isolation
         run: |
@@ -102,6 +111,15 @@ jobs:
         run: |
           umask 077
           node e2e/cinematic/bootstrap.mjs > "$RUNNER_TEMP/cinematic-private/bootstrap.log" 2>&1
+
+      - name: Restore the existing pinned editor model
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/bizbot-ci-pinned-downloads/u2net-v0.0.0.onnx
+          key: linux-u2net-8d10d2f3bb75ae3b6d527c77944fc5e7dcd94b29809d47a739a7a728a912b491
+
+      - name: Verify and prepare the existing editor model
+        run: node tools/ci/prepare-pinned-downloads.mjs model
 
       - name: Build the real Dashboard and live-mode Storefront
         run: node e2e/cinematic/ci-runtime.mjs build

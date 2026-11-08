@@ -1,0 +1,91 @@
+name: POS Android contract
+
+on:
+  pull_request:
+    paths:
+      - 'apps/pos/**'
+      - 'packages/**'
+      - 'pubspec.*'
+      - 'supabase/functions/pos-order-alert-*/**'
+      - 'tools/check_pos_background_order_alerts.ps1'
+      - 'tools/ci/prepare-pinned-downloads*'
+      - 'storefront/.nvmrc'
+      - '.github/workflows/pos-android-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/pos/**'
+      - 'packages/**'
+      - 'pubspec.*'
+      - 'supabase/functions/pos-order-alert-*/**'
+      - 'tools/check_pos_background_order_alerts.ps1'
+      - 'tools/ci/prepare-pinned-downloads*'
+      - 'storefront/.nvmrc'
+      - '.github/workflows/pos-android-contract.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pos-android-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: POS Android · Kotlin compilation and duty journal
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.1.0'
+          cache-read-only: true
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.2
+          channel: stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: storefront/.nvmrc
+
+      - name: Restore the pinned Kotlin compiler bytes
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/bizbot-ci-pinned-downloads/kotlin-compiler-embeddable-2.2.20.jar
+          key: linux-kotlin-2.2.20-1c6c3f810bfe6a41abcbc34b3a2ef639f1e3f4aeed3a953a4b0974eea4f41889
+
+      - name: Verify and prepare the existing Kotlin dependency
+        run: |
+          node --test tools/ci/prepare-pinned-downloads.test.mjs
+          node tools/ci/prepare-pinned-downloads.mjs kotlin
+
+      - name: Install Android platform and org.json sources
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "sources;android-36.1"'
+
+      - name: Test state and duty journal against Android SDK org.json
+        shell: pwsh
+        run: |
+          $gradleHome = Split-Path -Parent (Split-Path -Parent (Get-Command gradle).Source)
+          ./tools/check_pos_background_order_alerts.ps1 -GradleHome $gradleHome -AndroidJsonSources "$env:ANDROID_HOME/sources/android-36.1/org/json"
+
+      - name: Resolve the POS Flutter dependencies
+        working-directory: apps/pos
+        run: flutter pub get --enforce-lockfile
+
+      # Compile the actual Android src/main coordinator, vault, bridge and
+      # service using the debug variant. No packaging, delivery or signing step.
+      - name: Compile POS Android Kotlin
+        working-directory: apps/pos/android
+        run: |
+          printf 'flutter.sdk=%s\nsdk.dir=%s\n' "$FLUTTER_ROOT" "$ANDROID_HOME" > local.properties
+          gradle --no-daemon --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g' \
+            :app:compileDebugKotlin -x :app:compileFlutterBuildDebug
+          test -z "$(find ../build -type f \( -name '*.apk' -o -name '*.aab' \) -print -quit)"

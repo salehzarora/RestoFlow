@@ -197,6 +197,68 @@ void main() {
     expect(h.bridge.revoked, isEmpty);
   });
 
+  for (final nativeAccepts in [true, false]) {
+    test(
+      'natural PIN deadline locks cashier before checking separate duty; accepts=$nativeAccepts',
+      () async {
+        final h = await _signedIn(t0);
+        final identity = h.container.read(onlineOrderInboxIdentityProvider)!;
+        final end = t0.add(const Duration(hours: 12));
+        h.container.read(boundShiftAlertProvider.notifier).state = (
+          identity: identity,
+          end: end,
+        );
+        h.bridge.retention = Completer<bool>();
+        h.session.noteAppPaused();
+        h.session.clock = () => t0.add(const Duration(hours: 8));
+        expect(h.session.endSessionIfExpired(policy), true);
+        expect(h.container.read(posSyncSessionProvider), isNull);
+        expect(h.bridge.retained, [identity]);
+        h.bridge.retention!.complete(nativeAccepts);
+        await pumpEventQueue();
+        expect(
+          h.container
+              .read(backgroundAlertInactivityLockProvider)
+              ?.nativeConfirmed,
+          nativeAccepts ? true : null,
+        );
+        if (nativeAccepts) {
+          expect(
+            h.container.read(backgroundAlertInactivityLockProvider)?.validUntil,
+            end,
+          );
+          h.session.endSession();
+          expect(
+            h.bridge.revoked.contains(
+              BackgroundAlertRevocationReason.explicitSignOut,
+            ),
+            true,
+          );
+        } else {
+          expect(h.bridge.revoked, [
+            BackgroundAlertRevocationReason.securityFailure,
+          ]);
+        }
+        expect(h.container.read(posSyncSessionProvider), isNull);
+      },
+    );
+  }
+  test(
+    'foreign duty evidence never retains native authority beyond ordinary PIN',
+    () async {
+      final h = await _signedIn(t0);
+      h.container.read(boundShiftAlertProvider.notifier).state = (
+        identity: 'other',
+        end: t0.add(const Duration(hours: 12)),
+      );
+      h.session.clock = () => t0.add(const Duration(hours: 8));
+      expect(h.session.endSessionIfExpired(policy), true);
+      expect(h.bridge.retained, isEmpty);
+      expect(h.bridge.revoked, [
+        BackgroundAlertRevocationReason.authorityExpired,
+      ]);
+    },
+  );
   for (final paused in [false, true]) {
     test('8-hour absolute expiry wins with paused=$paused', () async {
       final h = await _signedIn(t0);

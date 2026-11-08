@@ -1,0 +1,40 @@
+{
+  "issued": {
+    "ok": true,
+    "mode": "shift",
+    "shift_id": "3c18f445-8db3-e6a2-48f7-59821a24417a",
+    "consent_id": "1ae8b4a6-42f0-f26b-db95-248dbfdd351f",
+    "generation": "df0a6676-7e4a-4d66-be0d-6d245b985826",
+    "server_time": "2026-11-06T20:41:28.169066+02:00",
+    "policy_revision": "5e033ddd-b790-4547-a07f-205467e08238",
+    "registration_id": "5e30d618-95bb-4068-aaa5-ea15cda6d393",
+    "authority_expires_at": "2026-11-07T08:41:27.999174+02:00"
+  },
+  "status": {
+    "ok": true,
+    "consent_id": "1ae8b4a6-42f0-f26b-db95-248dbfdd351f",
+    "registration_id": "5e30d618-95bb-4068-aaa5-ea15cda6d393",
+    "generation": "df0a6676-7e4a-4d66-be0d-6d245b985826",
+    "server_time": "2026-11-06T20:41:28.617489+02:00",
+    "authority_expires_at": "2026-11-07T08:41:27.999174+02:00",
+    "requests": [
+      {
+        "request_id": "db79168f-11d1-4dc1-b165-26063530f7ea",
+        "expires_at": "2026-11-06T20:56:28.310884+02:00"
+      },
+      {
+        "request_id": "4cac4d9e-681c-4fa6-bac0-a9ce97f65a13",
+        "expires_at": "2026-11-06T20:56:28.321389+02:00"
+      }
+    ]
+  },
+  "wake": {
+    "version": "2",
+    "kind": "pending",
+    "request_id": "4cac4d9e-681c-4fa6-bac0-a9ce97f65a13",
+    "expires_at": "2026-11-06T20:56:28.321389+02:00",
+    "registration_id": "5e30d618-95bb-4068-aaa5-ea15cda6d393",
+    "consent_id": "1ae8b4a6-42f0-f26b-db95-248dbfdd351f",
+    "generation": "df0a6676-7e4a-4d66-be0d-6d245b985826"
+  }
+}

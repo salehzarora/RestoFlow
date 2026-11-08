@@ -18,7 +18,7 @@ import com.restoflow.pos.BackgroundOrderAlertObservation.Result as AlertResult
 class BackgroundOrderAlertJobService : JobService() {
     companion object {
         private const val JOB_ID = 38104
-        @Synchronized fun enqueue(context: Context): Boolean {
+        @Synchronized internal fun enqueue(context: Context, duty: DutyScope? = null): Boolean {
             val accepted = try {
             if (!BuildConfig.BIZBOT_BACKGROUND_ORDER_ALERTS || Build.VERSION.SDK_INT < 26) false else {
                 val scheduler = context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
@@ -27,7 +27,7 @@ class BackgroundOrderAlertJobService : JobService() {
                 scheduler.enqueue(
                     JobInfo.Builder(JOB_ID, ComponentName(context, BackgroundOrderAlertJobService::class.java))
                         .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build(),
-                    JobWorkItem(Intent())
+                    JobWorkItem(Intent().also { item -> duty?.let { item.putExtra("consent_id",it.consent).putExtra("generation",it.transport) } })
                 ) == JobScheduler.RESULT_SUCCESS
             }
             } catch (_: Exception) { false } // No permission to notify without verification.
@@ -67,7 +67,11 @@ class BackgroundOrderAlertJobService : JobService() {
                 stopCurrent(params, cancelScheduledJob = false)
                 return
             }
-            cancel = BackgroundOrderAlertCoordinator.get(this).startFallbackJob {
+            val owner = BackgroundOrderAlertCoordinator.get(this)
+            if (!work.anyCurrent { owner.currentWake(it.intent) }) {
+                work.completeRead(); readNext(params); return
+            }
+            cancel = owner.startFallbackJob {
                 if (active !== params) return@startFallbackJob
                 cancel = null
                 try { work.completeRead(); readNext(params) }

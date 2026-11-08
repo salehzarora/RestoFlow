@@ -985,16 +985,56 @@
       ]
     }
   ],
+  "supersededOfficialReservations": [
+    {
+      "versionName": "0.0.69",
+      "versionCode": 69,
+      "signing": "restoflow-production",
+      "status": "reserved - NOT planned / NOT built / NOT installed / NOT uploaded",
+      "intendedSource": "Bookkeeping reservation only after verified official v68; source and scope require separate owner approval. NOT approved for building, signing, installing or releasing.",
+      "notes": [
+        "Reserved after the verified official synchronized v68 pair for Issue #358. Code 68 is consumed; preserve its audited unmerged source, original artifacts and durable one-use receipt. No v69 build, signing, installation or release is authorized.",
+        "All earlier build-time release objects and currentOfficialRelease remain unchanged. The owner subsequently reported v67 installed on salehtablet without ADB verification or formal acceptance; v68 remains NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED.",
+        "This reservation authorizes no hosted, notification/Cron, order, device or printing action. Physical Accept/Reject and two-device background cancellation remain pending; uncertain outcomes require reconciliation, not replay/reset."
+      ]
+    }
+  ],
+  "consumedLocalQaReleases": [
+    {
+      "versionName": "0.0.77-qa.1",
+      "versionCode": 77,
+      "packageId": "com.restoflow.pos",
+      "status": "BUILT / PRODUCTION-SIGNED / VERIFIED LOCAL QA / CONSUMED / NOT INSTALLED",
+      "sourceSha": "8e6e92a5a5866ac4257bd67c9fafa11e721d3050",
+      "apkSha256": "9ff758b72efeef2993c2063fb29cab6e9226d0611552828ee54483915d05b178",
+      "notes": [
+        "The original verification-wrapper stop and later passing official verification of the same bytes are retained. No rebuild under code77."
+      ]
+    },
+    {
+      "versionName": "0.0.78-qa.1",
+      "versionCode": 78,
+      "packageId": "com.restoflow.pos.longshiftqa",
+      "status": "BUILT / PRODUCTION-SIGNED / VERIFIED ISOLATED QA / CONSUMED / INSTALLED ON OPD2480",
+      "sourceSha": "9f2c38d080fa55263afca06a8307019856ab0e2d",
+      "qaPackagingOverlaySha256": "857a48aba6e2d0739acea7d22893203474146d901c29dc8696e45ee9f5e8983d",
+      "apkSha256": "7ac89811fe0b74a85cfe617afffa49863afba90d2c0c01360575970932aa9158",
+      "notes": [
+        "Separate isolated lab package. Historical long-run human hearing remains NOT_VERIFIED. Existing QA78 artifact and evidence retained."
+      ]
+    }
+  ],
   "nextOfficialRelease": {
-    "versionName": "0.0.69",
-    "versionCode": 69,
+    "versionName": "0.0.79",
+    "versionCode": 79,
     "signing": "restoflow-production",
-    "status": "reserved - NOT planned / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "Bookkeeping reservation only after verified official v68; source and scope require separate owner approval. NOT approved for building, signing, installing or releasing.",
+    "status": "RESERVED - OWNER-APPROVED LIMITED RELEASE / NOT BUILT / NOT INSTALLED",
+    "intendedSource": "PR #386 reconciled with current main, followed by protected merge and final main CI before official build.",
     "notes": [
-      "Reserved after the verified official synchronized v68 pair for Issue #358. Code 68 is consumed; preserve its audited unmerged source, original artifacts and durable one-use receipt. No v69 build, signing, installation or release is authorized.",
-      "All earlier build-time release objects and currentOfficialRelease remain unchanged. The owner subsequently reported v67 installed on salehtablet without ADB verification or formal acceptance; v68 remains NOT INSTALLED / NOT UPLOADED / NOT DISTRIBUTED.",
-      "This reservation authorizes no hosted, notification/Cron, order, device or printing action. Physical Accept/Reject and two-device background cancellation remain pending; uncertain outcomes require reconciliation, not replay/reset."
+      "Official POS update limited to the authorized OPD2480. Same package and production certificate preserve the in-place Android update path. KDS is built by the unchanged synchronized-pair runner and retained without installation.",
+      "Fresh version survey found consumed codes through78. Canonical local reservation for79 is recorded atomically before building. The former69 reservation, currentOfficialRelease and previous release records are preserved.",
+      "12 hours from shift opening is the approved limited-rollout cap. Activation requires independent device/shift consent and owner AAL2. Branch sent-order-edit setting is unchanged.",
+      "This ledger reserves a candidate. Actual APK hashes, final merged build source, installation and physical results require their own verified release receipts."
     ]
   },
   "ownerReportedAcceptanceRecords": [

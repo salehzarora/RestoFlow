@@ -419,10 +419,18 @@ jobs:
       - name: Tests — GR-37 bounded apply wrapper (default route + one-time exact-gap mode; no database)
         run: node --test tools/supabase/bounded-db-push.test.mjs
 
-      - name: Set up Supabase CLI
-        uses: supabase/setup-cli@v1
+      - name: Restore the pinned Supabase CLI archive
+        uses: actions/cache@v4
         with:
-          version: 2.107.0
+          path: ${{ runner.temp }}/bizbot-ci-pinned-downloads/supabase-2.107.0-linux-amd64.tar.gz
+          key: linux-supabase-2.107.0-ea233b337be698cee5bbca0795ee3e63b9dd154948c515c03cb72f191b3d103c
+
+      - name: Verify and install the existing Supabase CLI
+        run: |
+          node --test tools/ci/prepare-pinned-downloads.test.mjs
+          node tools/ci/prepare-pinned-downloads.mjs cli
+      - name: Confirm the installed CLI version
+        run: test "$(supabase --version)" = 2.107.0
 
       # Docker-local stack only (GitHub runners ship Docker). DB-only: exclude every
       # non-db service (valid CLI 2.107.0 names) so only Postgres starts — `db reset`
