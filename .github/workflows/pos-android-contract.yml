@@ -8,6 +8,8 @@ on:
       - 'pubspec.*'
       - 'supabase/functions/pos-order-alert-*/**'
       - 'tools/check_pos_background_order_alerts.ps1'
+      - 'tools/ci/prepare-pinned-downloads*'
+      - 'storefront/.nvmrc'
       - '.github/workflows/pos-android-contract.yml'
   push:
     branches: [main]
@@ -17,6 +19,8 @@ on:
       - 'pubspec.*'
       - 'supabase/functions/pos-order-alert-*/**'
       - 'tools/check_pos_background_order_alerts.ps1'
+      - 'tools/ci/prepare-pinned-downloads*'
+      - 'storefront/.nvmrc'
       - '.github/workflows/pos-android-contract.yml'
 
 permissions:
@@ -47,6 +51,21 @@ jobs:
         with:
           flutter-version: 3.44.2
           channel: stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: storefront/.nvmrc
+
+      - name: Restore the pinned Kotlin compiler bytes
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/bizbot-ci-pinned-downloads/kotlin-compiler-embeddable-2.2.20.jar
+          key: linux-kotlin-2.2.20-1c6c3f810bfe6a41abcbc34b3a2ef639f1e3f4aeed3a953a4b0974eea4f41889
+
+      - name: Verify and prepare the existing Kotlin dependency
+        run: |
+          node --test tools/ci/prepare-pinned-downloads.test.mjs
+          node tools/ci/prepare-pinned-downloads.mjs kotlin
 
       - name: Install Android platform and org.json sources
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "sources;android-36.1"'
