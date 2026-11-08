@@ -138,8 +138,11 @@ refused. POST requires every earlier row, this one included, unchanged.
     — and for the one `CREATE OR REPLACE`, which the file neither grants nor revokes, the exact entries the reference
     shows;
   - each of the four relations: kind, RLS and forced-RLS state, owner, exact access, column grants, policies and the
-    SHA-256 of its catalog line (columns, constraints, policies, triggers and indexes, as the other-relation digest
-    renders them);
+    SHA-256 of its catalog line (columns, constraints, policies as their JSON list with roles by name, triggers and
+    indexes, as the other-relation digest renders them; the section 11 reviews replaced the policy roles' instance-local
+    OIDs by names and then the whole joined policy line by the policies' JSON text, one unambiguous serialization, so the
+    digest no longer embeds an instance-local role OID and no two policy sets share a line; its other renderings
+    still follow the database's settings, as the review noted for a later re-pin);
   - each of the twelve triggers: present on its table, enabled, with the SHA-256 of its definition
     (`pg_get_triggerdef`).
 - **POST** requires the whole #386 answer identical to PRE: no #386 function, relation, trigger or grant can be added,
@@ -155,10 +158,17 @@ refused. POST requires every earlier row, this one included, unchanged.
 
 Unchanged: the six exact legacy CRLF alternatives, the LF-only `app.audit_category`, the LF-only rule for every other
 selected function, the raw and normalized hashes and counts, the PRE session checks, the per-run Default ACL baseline,
-the canonical-LF-only POST and the exact final-object access. The proof: the D-067 tests and mutation set are retained
-and pass unchanged; the D-067 exports (`recreatedBodyForm`, `legacyCrlfBefore`, `recreatedBefore`, the line-ending facts
-of the state query) are byte-identical apart from the new pins; and the default-route preservation check passes
-against `28c41911`.
+the canonical-LF-only POST and the exact final-object access. The proof: the eleven D-067 tests are retained and pass
+(nine unchanged in text; two widened for the #386 block: the D-067 state-SQL test expects the line-ending facts
+fragment twice, and the D-067 fingerprint test also covers the #386 surface); the retained D-066 / D-067 mutant sets
+are re-run from their sealed evidence folders at the proof head named in §10 (`proof/RETAINED_*`), and every mutant
+whose anchor D-068 moved is reported NOT APPLIED by the retained tool and is either superseded by D-068's own mutant
+at the new value (REPIN-001's six count and digest pins, in `p3_mutants.mjs`) or re-anchored with the same intent in
+`p3_readapted_mutants.mjs` (the #386 code repeats the #382 patterns; the LF-only loop and the tails now end with
+#386; the storage.objects policies digest now reads the policies' JSON text), where each is killed; the entries
+earlier tasks had already re-anchored keep their re-anchored forms; the
+D-067 exports (`recreatedBodyForm`, `legacyCrlfBefore`, `recreatedBefore`, the line-ending facts of the state query)
+are byte-identical apart from the new pins; and the default-route preservation check passes against `28c41911`.
 
 ### 3.5 D-068
 
@@ -210,7 +220,8 @@ linked or remote target.
   is in a Windows excluded range, so its lane runs from a scratch copy that differs only in that port constant, with
   the copy's hash and diff recorded (a disclosed deviation; the committed runner's refusal is recorded too).
 - **Wrapper unit tests** on Windows (Node 22) and Linux (Node 24), the default-route preservation check, and mutation
-  checks for every new pin and gate and for the retained D-066 / D-067 sets.
+  checks for every new pin and gate, for the retained D-066 / D-067 sets as shipped (their NOT APPLIED entries
+  disclosed) and for the re-anchored intents of the mutants D-068 moved (`p3_readapted_mutants.mjs`).
 
 ## 5. The future apply runner (outside Git; design)
 
@@ -254,5 +265,153 @@ plan; and a complete SHA-256 manifest. The earlier packages are referenced by ha
 
 ## 10. Results
 
-Filled by this task's record commits once the implementation, proof, tests, reviews and package are complete; until
-then this section states only that the packet was committed before any source edit (§1 of the authorization).
+Recorded on 2026-11-08 by the task's record commit; every file named below is in the task's evidence folder
+(`evidence/BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-EXACT-GAP-POST-386-REPIN-001-20261108/`, outside Git) or in the
+sanitized package. Nothing was pushed, no PR was opened, no hosted or remote target was contacted.
+
+### 10.1 Heads, commits and digests
+
+- Base `main` `28c41911` (tree `025f55db`), 189 migrations. The branch's commits, in order: `aba21d64` (this packet,
+  before any source edit); `67cfa6b2` (the re-pin to 189 / 188 and #386's named surface, D-068); `39ce7027` (D-068,
+  the DEPLOYMENT amendment, the earlier packets' notes); `9d02bac7` (three assertions that kill the D-068 mutation
+  check's survivors); `0e2663d6` (policy roles rendered by name in the relation catalog line, review finding L2-1);
+  `fcbbdd45` (a relation's policies carried as their JSON text in the catalog line, review finding R2-01: the proof
+  head); `ce686f6f` (the policy-line properties stated exactly, review finding LENS1-1); and the record commit that
+  carries this section and the review wording corrections of §3.3, §3.4, §4 and D-068.
+- The wrapper `tools/supabase/bounded-db-push.mjs` at the final head: SHA-256 `04246a36655e34a79892fead7a1b145fbc64dbb2f6459820e9157f6e07ebc67a`
+  (unchanged since `fcbbdd45`); the tests: SHA-256 `26deaaac503ac59fcfbe030ce6903b7286a96bf4c9354048c46b8c37309d0fa3`;
+  the state query the wrapper sends: SHA-256 `d46bd6997dea978a806f02c74ce9950b22c00bfb96f6bebd07c316ad14e45cb4`
+  (pinned in the tests); the catalog-rendered #386 pins: digest `234dc90703b0c95129792c063f097da17f45dc63bc8a4661955f37fe2c76ea87`.
+- The registrations relation's definition digest moved twice under the reviews (`3eda8120…` → `92362ca0…` →
+  `e31be14384c9740c458449709ae92199dfe094c841e246905a57540909eaf8a2`), each time re-derived from a rebuilt sequential
+  reference by the identically corrected explorer; every other #386 pin (27 functions, the five renamed `*_core`
+  bodies, 12 triggers, 3 relations) is identical across the three readings (`explore/A0_*`, `A1_*`, `A2_*`).
+- Exactly the eight authorized paths differ from the base; no migration, workflow, `config.toml`, D1, cinematic,
+  payment SQL, Edge, POS, Dashboard or l10n file changed; every tracked file of the task is LF.
+
+### 10.2 Precheck (§2)
+
+`pre/PREFLIGHT.txt`: 45 checks, 0 failures — `main` `28c41911`, tree `025f55db`, 189 migrations, #386's file SHA-256
+`7bd3b894…`, 001D's `468768f8…`, the hosted shape as the accepted CHECK-002 record states it, D-068 free, the
+worktree created on the exact commit with LF bytes equal to the blobs.
+
+### 10.3 The local proof (§4): run5 at the proof head `fcbbdd45`
+
+The wrapper at the proof head is byte-identical to the final head's; the later commits touch the tests and the
+documents only.
+
+- The disposable stack: PostgreSQL 17.6 (`server_version_num` 170006), TimeZone UTC, the task's own project on a free
+  port, never a linked or remote target; the harness tools' SHA-256 are in `run5/HARNESS_SHA256.txt`.
+- **A** (sequential, 189 versions; 001D applied by the CLI, the five later files by the official-route emulation that
+  stores one statement per file) built and captured; **N1** (no gap) refused `remote_count, no_gap`; every test lane
+  PASS on A (`run5/A_validate`).
+- The negative states, each built and refused with exactly the expected codes (`run5/N*`): N2A two gaps
+  (`remote_count, gap_mismatch`); N2B a #380 file missing (`remote_count, remote_tail, gap_mismatch, later_missing`);
+  N3 a remote-only version (`remote_count, remote_only`); N4 a changed #380 statement (`stored_statement`); N5 a
+  partial 001D (`partial_001d`); N6 drifted re-created functions (`recreated_access, recreated_drift`); N7 the
+  fifth-role PRE set PASS; N8 a default-privilege change applied between PRE and POST, a `POSTCHECK_MISMATCH` as
+  expected, with its access snapshot; N9 #382 missing (`remote_count, remote_tail, gap_mismatch, later_missing,
+  surfaces_missing, surface382_function, surface382_relation, surface382_policy`); N10 a changed #382 statement
+  (`stored_statement`); N11 a #382 access drift (`surface382_access`); N12 a database TimeZone (`runtime_timezone`);
+  N13 a later remote-only version after #386 (`remote_count, remote_tail, remote_only`); N14 #382's function no longer
+  STRICT (`surface382_function`); N15 #386 missing (`remote_count, remote_tail, gap_mismatch, later_missing,
+  surface386_function, surface386_relation, surface386_trigger`); N16 a changed #386 statement (`stored_statement`);
+  N17 the same bytes under another name (`stored_name, remote_name`); N18 a #386 access drift (`surface386_access`);
+  N19 a #386 relation without forced RLS (`surface386_relation`); N20 a disabled #386 trigger (`surface386_trigger`);
+  N21 a #386 function without SECURITY DEFINER (`surface386_function`).
+- **B** (the hosted shape, 188 versions): the live gap set PASS (`run5/B_gap_live`): a caller `--include-all` and a
+  repair refused before any CLI process; a CRLF copy of 001D, a CRLF `config.toml`, a dotenv file, a linked workdir
+  and a passfile with an extra entry refused before any CLI process; a wrong CA, a host name the certificate does not
+  cover and a wrong password refused with no session; check mode `CHECKED_EXACT_GAP` with a dry run listing exactly
+  001D and the database unchanged; the one apply `APPLIED_EXACT_GAP` (POST: 189 versions, 62 functions, 6 relations,
+  12 indexes, 11 triggers, the exact pinned access; the pg-delta post-step stayed off). The B shape before and after
+  the apply PASS; B captured; every test lane PASS on B (`run5/B_validate`).
+- **B2** (B rebuilt): the live D-067 / #386 set PASS (`run5/B2_live386`): the six legacy CRLF forms accepted in check
+  mode and `app.audit_category` kept canonical; a Default ACL change and a #386 access change between PRE 1 and PRE 2
+  refused on both routes with nothing pushed; a disabled #386 trigger refused by name; a #386 access change between PRE
+  2 and POST a `POSTCHECK_MISMATCH`; every hooked state restored to the reference fingerprint.
+- **A/B**: EQUIVALENT in all 23 captured categories (`surface_386_exact` among them), the whole schema dump and the
+  state answer (`run5/COMPARISON_A_B.txt`); every runtime, access, #382 and #386 pin equals the live sequential
+  reference and the live gap database before and after the apply (`run5/PIN_CHECK.txt`).
+- Earlier runs, kept whole under `superseded/` with a note each: run1 (head `9d02bac7`, PASS end to end, superseded by
+  the wrapper corrections); run2 (`0e2663d6`, stopped when R2-01 was found); run3 (`fcbbdd45`, stopped: the CLI starts
+  the database container once more a few seconds after `db reset` has returned, so a scenario that began right after a
+  build found it not running — the build script now waits until the container is settled); run4 (`fcbbdd45`,
+  discarded: stopping run3's background shell had not ended its driver, which kept running against the same database
+  and collided with run4 — the driver now holds an exclusive run lock and stops the run on a failed build).
+
+### 10.4 Tests and mutation checks at the final head `ce686f6f`
+
+- Unit tests: Windows (Node 22) 73 tests, 73 pass, 0 fail, 0 skipped (`proof/UNIT_TESTS_WINDOWS_NODE22_ce686f6f.txt`); Linux (Node 24, the worktree mounted read-only, `--network none`) 73 tests, 64 pass, 0 fail, 9 skipped
+  at `/repo` and 73 tests, 65 pass, 0 fail, 8 skipped two levels down (the skips are by design: the Git-backed pin tests without `git` in the
+  image, and the default-wiring passfile test at `/repo`). Default-route preservation against `28c41911` (text, AST,
+  behaviour, sensitivity probes): PASS (`proof/DEFAULT_ROUTE_PRESERVATION_ce686f6f.txt`).
+- The D-068 mutation check (48 mutants over the count and digest pins, the #386 history row, the #386 surface pins,
+  the PRE gates, the POST identity, the line-ending rule and the state SQL block): 48 of 48 killed, none not applied, none survived (`proof/D068_MUTANTS_ce686f6f.txt`). The re-anchored retained
+  intents (`p3_readapted_mutants.mjs`, 13 mutants): 13 of 13 killed (`proof/D067_READAPTED_MUTANTS_ce686f6f.txt`); the battery's own verdict is `RESULT: PASS` (`proof/FINAL_CHECKS_ce686f6f.console.txt`).
+- The retained D-066 / D-067 sets, run unchanged from their sealed evidence folders (`proof/RETAINED_*_ce686f6f.txt`):
+  seven records, no survivor, no invalid and no not-counted entry; 26 NOT APPLIED entries, each one an anchor D-068 or its reviews moved (REPIN-001: C01..C06, L01, L02, G04, G05, G09, G10, G11, G12, D01, D02; CORRECTIONS-001: A16; the fix round: M04, M05, M12, M13, M19; the adapted set: A16b, M19; D-067: S02, Z03); killed: REPIN-001 31 of 47, CORRECTIONS-001 33 of 34, the fix round 13 of 18, the review set 19 of 19, the adapted set 1 of 3, D-067 54 of 56, D-067 re-anchored 7 of 7 (`proof/RETAINED_MUTANTS_ce686f6f.console.txt`). Every entry they report NOT APPLIED is either superseded by D-068's own mutant at the new value
+  (REPIN-001's C01..C06) or re-anchored with the same intent and killed (S02r, Z03r, Z03b, G04r, G05r, G10r, G11r,
+  G12r, G09r, A16br, A16cr, L01r, L02r); D01, D02, M04, M05, M12, M13, M19 and A16a keep the forms the earlier tasks
+  re-anchored, which still apply.
+
+### 10.5 The future apply runner (§5; outside Git, `tools/runner/` of the evidence folder)
+
+Every Node child starts through `process.execPath` under the proven watchdog (the APPLY-002 defect); the local recheck
+runs through Git Bash at its fixed place, validated before any lock, under the same bound and in a clean environment;
+every pinned value comes from a pins file whose shape is validated (the project reference required; rehearsal pins
+partitioned on every axis: the synthetic reference, a local origin only, no passfile and no CA for the children; real
+pins must not carry the synthetic reference and must name the GitHub repository as origin); the retired token and Work
+IDs are refused by name; a single-start lock and an exclusive apply lock; the accepted Default ACL baseline from the
+pins; the private values (the URL, the host, the reference, the passfile and CA paths in both spellings, the workdir,
+the CLI, the Node program, the scratch and evidence folders) scrubbed from every stored console and inventory and
+counted in every console, including the independent read's. Rehearsals (`rehearsal/`): r0 the stub matrix 121 scenarios, all pass (`rehearsal/R0_CORE_SCENARIOS.txt`); r1
+the real watchdog starting the real wrapper and the real final read through `process.execPath` with the private
+environment removed (each refused by its own first line, no spawn error); r2 the watchdog's process-tree kill; r3 the
+dress rehearsal of the real runner against a scratch clone with a configured stand-in wrapper: PASS in every scenario (`rehearsal/REHEARSAL_STATUS.txt`, `rehearsal/R3_*`): a passing check, the recheck, the one apply attempt and the final read refusing `GATE_REFUSED passfile_missing` (apply steps called 1); a failed check that never reaches the apply; a passing check whose recheck blocks the apply; a lock planted after a passing check that refuses the apply before any command; a second start refused on the run lock before any step; and the retired token, a missing owner record and a half-filled pins file refused before any contact. The runner's own local gates at the head: 39 PASS (`rehearsal/LOCAL_GATES_worktree_ce686f6f.txt`).
+
+### 10.6 Reviews (§7)
+
+- Round 1 (a fresh-context Claude review of `9d02bac7`, seven lenses, every finding adversarially verified): nine
+  MINOR, no MAJOR — L2-1 (the relation catalog line rendered policy roles as instance-local OIDs, and D-068 was the first
+  to pin a relation digest with a policy), D067-1 (an unevidenced "passes unchanged"), runner-1..5, L7-1, L7-2; all
+  corrected.
+- Round 2 (`0e2663d6`): the independent Codex review — R2-01 MAJOR (names joined with `+` could collide), R2-02 MAJOR
+  (rehearsal-shaped pins could still reach a real database), R2-03 MINOR and two NOTEs; the fresh-context Claude review
+  — L3-1..L3-4 and D067W-1..3 MINOR; all corrected. The first Codex invocation never started (it waited on standard
+  input in a background shell) and is recorded under `superseded/`.
+- Round 3 (`fcbbdd45`, the final wrapper and test delta): Codex — four MINOR, all in the runner and harness tools (the
+  wrapper lenses had no finding; R2-01, R2-04 and R2-05 resolved, R2-02 and R2-03 completed by this round's
+  corrections); Claude — five MINOR (LENS1-1 the test assertions, REH-1..3 the rehearsal partition, L4-1 a retained
+  mutant whose anchor the R2-01 correction moved) and one finding refuted as already corrected; a focused round 3b over
+  the corrections confirmed HC-1 (the proof-run collision, MAJOR for the proof's validity, not for the wrapper), HC-2,
+  HC-3 and REH4-1 MINOR; all corrected, and the proof was re-run as run5. NOTEs accepted without a code change, with
+  the reviewers' reasons: SET-01 (no CI signal when `main` moves), L2-2, L2-3 / PREPOST-1, PREPOST-2, L2-1-2
+  (session-dependent renderings in the catalog line, pre-existing, for the next re-pin), L2S-2 (the wrapper's own
+  temporary query folder in its redaction lists, pre-existing). The structured results and the Codex messages are in
+  `review/`.
+
+### 10.7 Package (§9)
+
+The sanitized source and review package
+`BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-EXACT-GAP-POST-386-REPIN-001-local-source-review-package.zip` is built after this
+record commit from the final head (so its SHA-256 and member count are in the task report and in the evidence folder's
+seal `SHA256SUMS.txt`, not here): the heads and trees, the eight-path patch and the files at head (the two registers by
+patch and blob hash only), D-068 as committed, the set pins and #386's surface as the wrapper exports them, the live
+proof run5 and the earlier runs under `superseded/`, the exploration and the generated pins, the tests, the
+preservation proof and every mutation record, the rehearsals, the three review rounds, the authorization, the
+preflight, the harness tools and their superseded versions, the postflight and the session-log records, and a complete
+member manifest. Its builder masks the local user-profile prefix and the hosted project reference in the runner's
+copies and the session-log records, leaves the copied earlier tools out (by digest manifest), and aborts on any
+private value; the earlier packages and seals are referenced by SHA-256 and were not modified.
+
+### 10.8 Postflight and the drift rule (§8)
+
+`origin/main` read again before this record commit: `28c41911`, unchanged (the GitHub API agreed at the preflight; the postflight reads both again). The read-only postflight runs at the final head
+after this commit and its record stays in the evidence folder (`postflight/POSTFLIGHT.txt`): `origin/main` and the
+GitHub API still at `28c41911`, no remote branch and no PR for this Work ID, the two long-open PRs untouched, the
+earlier packages and seals unchanged, the disposable stack's containers gone with its volumes kept, and no owner
+variable set in the shell. No push, no PR, no remote branch; no hosted query, check or apply; no provider, terminal,
+device, Edge, secret or payment-flag action; no private environment variable was set, read or printed by this task.
+
+Status: `LOCAL_001D_EXACT_GAP_POST_386_REPIN_READY_FOR_COMMAND_ROOM_REVIEW` / `PUSH_PR_HOSTED_CHECK_AND_APPLY_HELD`.
