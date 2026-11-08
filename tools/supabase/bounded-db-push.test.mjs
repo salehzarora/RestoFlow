@@ -1615,7 +1615,7 @@ test('exact-gap state SQL (CR-EG-02): the full ACL of every selected object and 
   // this query and its SHA-256); any change fails here and needs a new live proof before this pin moves. D-067
   // (HOSTED-PRE-COMPAT-001) moved it once, for the line-ending facts, with its own hosted-shape live proof; D-068
   // (POST-386-REPIN-001) moved it again, for the #386 surface block, with its own 189 / 188 live proof.
-  assert.ok(sha(Buffer.from(sql, 'utf8')) === 'ce3e169134d5d6b8d384057b5cbda58737f78284e940d99d93b71b71f120ec8e',
+  assert.ok(sha(Buffer.from(sql, 'utf8')) === '4b6cd0fffd1a6c20a15570a8d1be41f07d41f853011b2a1211219c4002844195',
     'the state SQL is exactly the query the live proof ran');
   // REPIN-001 (the review's S382-01): #382's functions are also compared by their whole definition; D-068: so are #386's.
   assert.equal(sql.split("'def', encode(sha256(convert_to(coalesce(pg_catalog.pg_get_functiondef(oid), ''), 'UTF8')), 'hex'),").length - 1, 2);
@@ -2568,7 +2568,7 @@ test('exact-gap #386 surface pins (D-068): the catalog renderings are the live p
     args: S.functions.map((f) => [f[0], f[1]]), def: S.functions.map((f) => [f[0], f[8]]),
     relations: S.relations.map((r) => [r.name, r.definition, r.policies]), triggers: S.triggers.map((t) => [t[0], t[1]]),
   });
-  assert.ok(sha(Buffer.from(rendered, 'utf8')) === '8d4bfaf7ea0731e42950347216b6d9f7102bee33c801decaea40ddabd32f5d3f', 'the catalog-rendered #386 pins are the live proof\'s');
+  assert.ok(sha(Buffer.from(rendered, 'utf8')) === 'df9e27e5f883424c4ad05a8059179336657e985f5a8711ee338f14b7a95b9435', 'the catalog-rendered #386 pins are the live proof\'s');
 });
 
 test('exact-gap PRE #386 surface (D-068): its functions, relations and triggers must be exactly as pinned', () => {

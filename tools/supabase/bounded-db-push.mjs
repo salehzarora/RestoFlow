@@ -829,7 +829,7 @@ export const EXACT_GAP = deepFreeze({
     relations: [
       { name: 'app.pos_order_alert_registrations', kind: 'r', rls: true, force_rls: true, policies: [{ name: 'deny_client', cmd: '*', permissive: true, roles: ['authenticated'], using: 'false', check: 'false' }],
         access: [['postgres', 'DELETE', false, 'postgres'], ['postgres', 'INSERT', false, 'postgres'], ['postgres', 'MAINTAIN', false, 'postgres'], ['postgres', 'REFERENCES', false, 'postgres'], ['postgres', 'SELECT', false, 'postgres'], ['postgres', 'TRIGGER', false, 'postgres'], ['postgres', 'TRUNCATE', false, 'postgres'], ['postgres', 'UPDATE', false, 'postgres']],
-        columns: [], definition: '3eda81200312651e7740273294f56fa079830e49910d9c48fec32a1993d55137' },
+        columns: [], definition: '92362ca0a5a01797fb722327d493206dc756db681ea5797827e60e55884a4787' },
       { name: 'app.pos_shift_alert_approvals', kind: 'r', rls: true, force_rls: true, policies: [],
         access: [['postgres', 'DELETE', false, 'postgres'], ['postgres', 'INSERT', false, 'postgres'], ['postgres', 'MAINTAIN', false, 'postgres'], ['postgres', 'REFERENCES', false, 'postgres'], ['postgres', 'SELECT', false, 'postgres'], ['postgres', 'TRIGGER', false, 'postgres'], ['postgres', 'TRUNCATE', false, 'postgres'], ['postgres', 'UPDATE', false, 'postgres']],
         columns: [], definition: 'aecdeeceb1b182cd7475595a40b5d0ec7a81d9953d674ae1276c4d719d1fb626' },
@@ -1137,7 +1137,9 @@ with led as (
       order by p.polname) as policies,
     string_agg(p.polname || ':' || p.polcmd::text || ':' || p.polpermissive::text || ':'
       || coalesce(pg_catalog.pg_get_expr(p.polqual, p.polrelid), '') || ':'
-      || coalesce(pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid), '') || ':' || array_to_string(p.polroles::oid[], '+'),
+      || coalesce(pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid), '') || ':'
+      || (select coalesce(string_agg(coalesce(r.rolname::text, 'public'), '+' order by coalesce(r.rolname::text, 'public')), '')
+        from unnest(p.polroles) u(o) left join pg_catalog.pg_roles r on r.oid = u.o),
       ',' order by p.polname) as line
   from pg_catalog.pg_policy p group by p.polrelid
 ), other_rel as (
