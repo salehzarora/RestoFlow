@@ -908,3 +908,12 @@ holds the change, its local hosted-shape proof and its review. What changed:
 
 Unchanged: the local and remote sets, the stored statements, the runtime gate, the #382 surface pins, the 001D manifest
 and its exact access pins, CR-EG-01, the default route and the one CI step.
+
+## Amended by D-068 (POST-386-REPIN-001, 2026-11-08)
+
+#386 merged on 2026-11-08 as `main` `28c41911` and added `20261108085442_bizbot_pos_long_shift_alerts_001.sql`, which
+hosted received before 001D. **DECISION D-068** re-pins the exact-gap mode to that shape — 189 local migrations and 188
+hosted versions with the one gap `20261104141959`, #386's stored history row, and #386's named surface as a PRE gate and a
+POST identity — and keeps D-066 and D-067 in substance. The
+[POST-386-REPIN-001 execution packet](BIZBOT_PAYMENTS_ZCREDIT_PILOT_001D_EXACT_GAP_POST_386_REPIN_001_EXECUTION.md) holds the
+details. Everything else in this packet stands.
