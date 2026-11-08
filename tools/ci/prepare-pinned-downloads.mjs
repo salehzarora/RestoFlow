@@ -19,7 +19,8 @@ export const artifacts = Object.freeze({
   cli: Object.freeze({
     file: 'supabase-2.107.0-linux-amd64.tar.gz', bytes: 73202139,
     sha256: 'ea233b337be698cee5bbca0795ee3e63b9dd154948c515c03cb72f191b3d103c',
-    url: 'https://api.github.com/repos/supabase/cli/releases/assets/450240354',
+    // Byte-identical trusted cache of upstream supabase/cli asset 450240354.
+    url: 'https://api.github.com/repos/salehzarora/RestoFlow/releases/assets/723666587',
   }),
   model: Object.freeze({
     file: 'u2net-v0.0.0.onnx', bytes: 175997641,

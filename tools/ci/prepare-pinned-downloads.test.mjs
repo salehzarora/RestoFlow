@@ -23,6 +23,7 @@ test('fixed model, CLI and Kotlin identities retain the approved bytes and versi
   assert.equal(artifacts.model.bytes, MODEL.bytes);
   assert.equal(artifacts.cli.sha256, 'ea233b337be698cee5bbca0795ee3e63b9dd154948c515c03cb72f191b3d103c');
   assert.equal(artifacts.cli.bytes, 73202139);
+  assert.equal(artifacts.cli.url, 'https://api.github.com/repos/salehzarora/RestoFlow/releases/assets/723666587');
   assert.equal(artifacts.kotlin.sha1, 'bb8331b7585e36ea311825b01a1c06860c055fd1');
   assert.equal(artifacts.kotlin.sha256, '1c6c3f810bfe6a41abcbc34b3a2ef639f1e3f4aeed3a953a4b0974eea4f41889');
   assert.equal(artifacts.kotlin.url, 'https://api.github.com/repos/JetBrains/kotlin/releases/assets/587886256');
