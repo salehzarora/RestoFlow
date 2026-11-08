@@ -1620,10 +1620,12 @@ test('exact-gap state SQL (CR-EG-02): the full ACL of every selected object and 
   // later re-pin cannot bring them back silently.
   assert.equal(sql.split('from unnest(p.polroles) u(o) left join pg_catalog.pg_roles r on r.oid = u.o').length - 1, 2,
     'policy roles by name: the pol CTE list and the #382 Storage-policies block');
-  assert.ok(!/polroles::oid|::oid\[\]|array_to_string\(p\.polroles/.test(sql), 'no OID rendering of policy roles in the state SQL');
+  assert.equal(sql.split('polroles').length - 1, 2, 'every mention of polroles is one of those two by-name renderings (no OID rendering of policy roles)');
   assert.equal(sql.split('pol.policies::text').length - 1, 4,
     "a relation's policies enter its catalog line (the other-relation digest, the #382 and the #386 relation digests) and the storage.objects digest as the pol CTE's JSON text");
-  assert.ok(!/string_agg\(p\.polname/.test(sql), 'no joined policy line in the state SQL');
+  assert.ok(sql.includes("order by p.polname) as policies\n  from pg_catalog.pg_policy p group by p.polrelid"), 'the pol CTE has the JSON list as its only aggregate (no joined policy line)');
+  assert.equal(sql.split('pg_catalog.pg_policy').length - 1, 2, 'pg_policy is read in the pol CTE and in the #382 Storage-policies block only');
+  assert.equal(sql.split('polname').length - 1, 5, 'every mention of polname is in those two places');
   assert.ok(sha(Buffer.from(sql, 'utf8')) === 'd46bd6997dea978a806f02c74ce9950b22c00bfb96f6bebd07c316ad14e45cb4',
     'the state SQL is exactly the query the live proof ran');
   // REPIN-001 (the review's S382-01): #382's functions are also compared by their whole definition; D-068: so are #386's.
