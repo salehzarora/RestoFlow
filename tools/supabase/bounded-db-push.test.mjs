@@ -1614,8 +1614,17 @@ test('exact-gap state SQL (CR-EG-02): the full ACL of every selected object and 
   // query is therefore pinned to the text the live proof ran (REPIN-001: the current-main run, whose run driver records
   // this query and its SHA-256); any change fails here and needs a new live proof before this pin moves. D-067
   // (HOSTED-PRE-COMPAT-001) moved it once, for the line-ending facts, with its own hosted-shape live proof; D-068
-  // (POST-386-REPIN-001) moved it again, for the #386 surface block, with its own 189 / 188 live proof.
-  assert.ok(sha(Buffer.from(sql, 'utf8')) === '4b6cd0fffd1a6c20a15570a8d1be41f07d41f853011b2a1211219c4002844195',
+  // (POST-386-REPIN-001) moved it again, for the #386 surface block, with its own 189 / 188 live proof, and twice more under
+  // its section 11 reviews: a policy's roles are rendered by name (a role OID is instance-local) and a relation's policies enter
+  // its catalog line as the pol CTE's JSON text (a joined role list could collide). Those two properties are stated here too, so a
+  // later re-pin cannot bring them back silently.
+  assert.equal(sql.split('from unnest(p.polroles) u(o) left join pg_catalog.pg_roles r on r.oid = u.o').length - 1, 2,
+    'policy roles by name: the pol CTE list and the #382 Storage-policies block');
+  assert.ok(!/polroles::oid|::oid\[\]|array_to_string\(p\.polroles/.test(sql), 'no OID rendering of policy roles in the state SQL');
+  assert.equal(sql.split('pol.policies::text').length - 1, 4,
+    "a relation's policies enter its catalog line (the other-relation digest, the #382 and the #386 relation digests) and the storage.objects digest as the pol CTE's JSON text");
+  assert.ok(!/string_agg\(p\.polname/.test(sql), 'no joined policy line in the state SQL');
+  assert.ok(sha(Buffer.from(sql, 'utf8')) === 'd46bd6997dea978a806f02c74ce9950b22c00bfb96f6bebd07c316ad14e45cb4',
     'the state SQL is exactly the query the live proof ran');
   // REPIN-001 (the review's S382-01): #382's functions are also compared by their whole definition; D-068: so are #386's.
   assert.equal(sql.split("'def', encode(sha256(convert_to(coalesce(pg_catalog.pg_get_functiondef(oid), ''), 'UTF8')), 'hex'),").length - 1, 2);
@@ -2568,7 +2577,7 @@ test('exact-gap #386 surface pins (D-068): the catalog renderings are the live p
     args: S.functions.map((f) => [f[0], f[1]]), def: S.functions.map((f) => [f[0], f[8]]),
     relations: S.relations.map((r) => [r.name, r.definition, r.policies]), triggers: S.triggers.map((t) => [t[0], t[1]]),
   });
-  assert.ok(sha(Buffer.from(rendered, 'utf8')) === 'df9e27e5f883424c4ad05a8059179336657e985f5a8711ee338f14b7a95b9435', 'the catalog-rendered #386 pins are the live proof\'s');
+  assert.ok(sha(Buffer.from(rendered, 'utf8')) === '234dc90703b0c95129792c063f097da17f45dc63bc8a4661955f37fe2c76ea87', 'the catalog-rendered #386 pins are the live proof\'s');
 });
 
 test('exact-gap PRE #386 surface (D-068): its functions, relations and triggers must be exactly as pinned', () => {

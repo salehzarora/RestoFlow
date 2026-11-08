@@ -829,7 +829,7 @@ export const EXACT_GAP = deepFreeze({
     relations: [
       { name: 'app.pos_order_alert_registrations', kind: 'r', rls: true, force_rls: true, policies: [{ name: 'deny_client', cmd: '*', permissive: true, roles: ['authenticated'], using: 'false', check: 'false' }],
         access: [['postgres', 'DELETE', false, 'postgres'], ['postgres', 'INSERT', false, 'postgres'], ['postgres', 'MAINTAIN', false, 'postgres'], ['postgres', 'REFERENCES', false, 'postgres'], ['postgres', 'SELECT', false, 'postgres'], ['postgres', 'TRIGGER', false, 'postgres'], ['postgres', 'TRUNCATE', false, 'postgres'], ['postgres', 'UPDATE', false, 'postgres']],
-        columns: [], definition: '92362ca0a5a01797fb722327d493206dc756db681ea5797827e60e55884a4787' },
+        columns: [], definition: 'e31be14384c9740c458449709ae92199dfe094c841e246905a57540909eaf8a2' },
       { name: 'app.pos_shift_alert_approvals', kind: 'r', rls: true, force_rls: true, policies: [],
         access: [['postgres', 'DELETE', false, 'postgres'], ['postgres', 'INSERT', false, 'postgres'], ['postgres', 'MAINTAIN', false, 'postgres'], ['postgres', 'REFERENCES', false, 'postgres'], ['postgres', 'SELECT', false, 'postgres'], ['postgres', 'TRIGGER', false, 'postgres'], ['postgres', 'TRUNCATE', false, 'postgres'], ['postgres', 'UPDATE', false, 'postgres']],
         columns: [], definition: 'aecdeeceb1b182cd7475595a40b5d0ec7a81d9953d674ae1276c4d719d1fb626' },
@@ -1048,6 +1048,9 @@ const columnEntries = (relation) => `(select coalesce(json_agg(json_build_array(
       where att.attrelid = ${relation} and att.attnum > 0 and not att.attisdropped) x)`;
 // One relation's whole catalog line (kind, RLS, owner, ACL, columns, constraints, policies, triggers, indexes) over the
 // rel CTE's row r: the other-relation digest's line, and (REPIN-001) the #382 relation's definition digest.
+// The policies segment is the pol CTE's JSON list as text (names, commands, permissive flags, roles by name, expressions):
+// one unambiguous serialization, the rendering PRE compares by value (D-068 review: a role OID is instance-local, and a
+// joined role list could collide).
 const relationLine = `r.name || '|' || r.kind || '|' || r.rls::text || '|' || r.force_rls::text || '|' || r.owner || '|' || r.acl
     || '|' || coalesce((select string_agg(a.attname || ':' || pg_catalog.format_type(a.atttypid, a.atttypmod) || ':'
         || a.attnotnull::text || ':' || coalesce(a.attacl::text, '') || ':' || coalesce(pg_catalog.pg_get_expr(d.adbin, d.adrelid), ''),
@@ -1057,7 +1060,7 @@ const relationLine = `r.name || '|' || r.kind || '|' || r.rls::text || '|' || r.
     || '|' || coalesce((select string_agg(co.conname || ':' || co.contype::text || ':' || pg_catalog.pg_get_constraintdef(co.oid),
         ',' order by co.conname)
       from pg_catalog.pg_constraint co where co.conrelid = r.oid), '')
-    || '|' || coalesce((select pol.line from pol where pol.polrelid = r.oid), '')
+    || '|' || coalesce((select pol.policies::text from pol where pol.polrelid = r.oid), '')
     || '|' || coalesce((select string_agg(t.tgname || ':' || t.tgenabled::text || ':' || pg_catalog.pg_get_triggerdef(t.oid),
         ',' order by t.tgname)
       from pg_catalog.pg_trigger t where t.tgrelid = r.oid and not t.tgisinternal), '')
@@ -1134,13 +1137,7 @@ with led as (
       'roles', (select coalesce(json_agg(coalesce(r.rolname::text, 'public') order by coalesce(r.rolname::text, 'public')), '[]'::json)
         from unnest(p.polroles) u(o) left join pg_catalog.pg_roles r on r.oid = u.o),
       'using', pg_catalog.pg_get_expr(p.polqual, p.polrelid), 'check', pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid))
-      order by p.polname) as policies,
-    string_agg(p.polname || ':' || p.polcmd::text || ':' || p.polpermissive::text || ':'
-      || coalesce(pg_catalog.pg_get_expr(p.polqual, p.polrelid), '') || ':'
-      || coalesce(pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid), '') || ':'
-      || (select coalesce(string_agg(coalesce(r.rolname::text, 'public'), '+' order by coalesce(r.rolname::text, 'public')), '')
-        from unnest(p.polroles) u(o) left join pg_catalog.pg_roles r on r.oid = u.o),
-      ',' order by p.polname) as line
+      order by p.polname) as policies
   from pg_catalog.pg_policy p group by p.polrelid
 ), other_rel as (
   select ${relationLine} as line
@@ -1207,7 +1204,7 @@ select json_build_object(
       from pg_catalog.pg_policy p join pg_catalog.pg_class c on c.oid = p.polrelid
       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'storage' and c.relname = 'objects' and p.polname = any (${s382Pols})),
-    'objectPolicies', (select json_build_object('count', json_array_length(pol.policies), 'sha256', ${sqlDigest('pol.line')})
+    'objectPolicies', (select json_build_object('count', json_array_length(pol.policies), 'sha256', ${sqlDigest('pol.policies::text')})
       from pol join pg_catalog.pg_class c on c.oid = pol.polrelid join pg_catalog.pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'storage' and c.relname = 'objects')),
   'surface386', json_build_object(
