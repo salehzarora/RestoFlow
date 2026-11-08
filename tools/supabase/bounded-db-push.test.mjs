@@ -498,20 +498,23 @@ test('exact-gap: the pinned constants are the authorization\'s values and cannot
   assert.equal(EG.missingVersion, '20261104141959');
   assert.equal(EG.missingFile, '20261104141959_bizbot_zcredit_001d_server_ledger.sql');
   assert.equal(EG.missingSha256, '468768f89029a0fb131869f754d5374127930b8bf05b48cd8de19d645546352e');
-  // REPIN-001 (current main 0fe8ef80): 188 local migrations; hosted holds 187, the only difference 20261104141959.
-  assert.equal(EG.localCount, 188);
-  assert.equal(EG.remoteCountBefore, 187);
-  assert.deepEqual(EG.localTail.map(([n]) => n.slice(0, 14)), ['20261104131256', '20261104141959', '20261105025413', '20261105025604', '20261105141815']);
-  assert.deepEqual(EG.remoteTail, ['20261104131256', '20261105025413', '20261105025604', '20261105141815']);
-  assert.deepEqual(EG.laterHosted, ['20261105025413', '20261105025604', '20261105141815']);
+  // POST-386-REPIN-001 (current main 28c41911, D-068): 189 local migrations; hosted holds 188, the only difference 20261104141959
+  // (REPIN-001 pinned 0fe8ef80's 188 / 187).
+  assert.equal(EG.localCount, 189);
+  assert.equal(EG.remoteCountBefore, 188);
+  assert.deepEqual(EG.localTail.map(([n]) => n.slice(0, 14)), ['20261104131256', '20261104141959', '20261105025413', '20261105025604', '20261105141815', '20261108085442']);
+  assert.deepEqual(EG.remoteTail, ['20261104131256', '20261105025413', '20261105025604', '20261105141815', '20261108085442']);
+  assert.deepEqual(EG.laterHosted, ['20261105025413', '20261105025604', '20261105141815', '20261108085442']);
   assert.deepEqual(EG.localTail.map(([n]) => n.slice(0, 14)).filter((v) => !EG.remoteTail.includes(v)), [EG.missingVersion], 'the symmetric difference of the tails');
   assert.deepEqual(EG.remoteTail.filter((v) => !EG.localTail.some(([n]) => n.startsWith(v))), []);
   assert.equal(EG.localTail.find(([n]) => n.startsWith('20261105141815'))[0], '20261105141815_bizbot_storefront_background_clarity_001_api.sql');
+  assert.equal(EG.localTail.find(([n]) => n.startsWith('20261108085442'))[0], '20261108085442_bizbot_pos_long_shift_alerts_001.sql');
   assert.deepEqual(Object.fromEntries(Object.entries(EG.storedStatements).map(([v, [, h]]) => [v, h])), {
     20261104131256: 'a276aef4fdd30b35272939e51d649bff3dfeb70b6c806ecb7c2edee94ceb263b',
     20261105025413: 'a901a709970b4629b22357743831aab687c2882fe066776dd7913b82c29c77d5',
     20261105025604: '7bfac52a707b20fdf9b67a466d84290a7565fe574850ce1e992c093d5f19b520',
     20261105141815: 'e5cf4b2840837facc5699cecb154689a7439383ac4d6650f13746d5e68bd8504',
+    20261108085442: '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865',
   });
   for (const [n, h] of EG.localTail) if (n !== MIGRATION) assert.equal(EG.storedStatements[n.slice(0, 14)][1], h, n);
   for (const [v, [name]] of Object.entries(EG.storedStatements)) assert.equal(`${v}_${name}.sql`, EG.localTail.find(([n]) => n.startsWith(v))[0], v);
@@ -533,13 +536,18 @@ test('exact-gap: the pinned constants are the authorization\'s values and cannot
     EG.access.columns, EG.runtime, EG.remoteTail, EG.laterHosted, EG.surfaceFunctions, EG.surfaceTables, EG.surface382, EG.surface382.functions,
     EG.surface382.functions[0], EG.surface382.access, EG.surface382.access.anon_service_role, EG.surface382.access.anon_service_role[0],
     EG.surface382.relation, EG.surface382.relation.access, EG.surface382.relation.columns, EG.surface382.policies, EG.surface382.policies[0],
-    EG.surface382.policies[0].roles]) {
+    EG.surface382.policies[0].roles, EG.surface386, EG.surface386.functions, EG.surface386.functions[0], EG.surface386.access,
+    EG.surface386.access.service_role, EG.surface386.access.service_role[0], EG.surface386.inheritedAccess,
+    EG.surface386.inheritedAccess['app.pos_order_alert_authority'], EG.surface386.relations, EG.surface386.relations[0],
+    EG.surface386.relations[0].policies, EG.surface386.relations[0].access, EG.surface386.relations[0].columns, EG.surface386.triggers,
+    EG.surface386.triggers[0]]) {
     assert.ok(Object.isFrozen(value));
   }
   assert.throws(() => { EG.localCount = 1; }, TypeError);
   assert.throws(() => { EG.functions.push(['x']); }, TypeError);
   assert.throws(() => { EG.runtime.serverVersionNum = '160004'; }, TypeError);
   assert.throws(() => { EG.surface382.policies[1].using = 'true'; }, TypeError);
+  assert.throws(() => { EG.surface386.triggers[0][1] = 'x'; }, TypeError);
 });
 
 test('exact-gap: the 001D manifest pins equal the committed migration bytes', (t) => {
@@ -592,7 +600,7 @@ test('exact-gap: the 001D manifest pins equal the committed migration bytes', (t
   assert.equal(objects.filter((s) => s.trim()).length, EG.missingRow.n);
 });
 
-test('exact-gap: the re-created functions\' pre-001D pins are their latest definitions in the other 187 files', (t) => {
+test('exact-gap: the re-created functions\' pre-001D pins are their latest definitions in the other 188 files', (t) => {
   if (!inGitTree()) return t.skip('not a Git work tree');
   const names = gitMigrationNames().slice(0, EG.localCount);
   const latest = new Map();
@@ -600,8 +608,8 @@ test('exact-gap: the re-created functions\' pre-001D pins are their latest defin
     for (const [name, src] of createdFunctions(gitBlob(n).toString('utf8'))) if (name in EG.recreatedBefore) latest.set(name, src);
   }
   assert.deepEqual(Object.fromEntries([...latest].sort()), Object.fromEntries(Object.entries(EG.recreatedBefore).sort()));
-  // The files after 001D (#380's two and #382's one) define none of 001D's functions, so the out-of-order apply overrides
-  // no newer body.
+  // The files after 001D (#380's two, #382's one and #386's one) define none of 001D's functions, so the out-of-order apply
+  // overrides no newer body.
   assert.deepEqual(names.filter((x) => x > MIGRATION).map((n) => n.slice(0, 14)), EG.laterHosted);
   const touched = new Set(EG.functions.map((f) => f[0]));
   for (const n of names.filter((x) => x > MIGRATION)) {
@@ -609,7 +617,7 @@ test('exact-gap: the re-created functions\' pre-001D pins are their latest defin
   }
 });
 
-test('exact-gap: the local-set pins equal the 188 oldest committed migrations; the surfaces their files', (t) => {
+test('exact-gap: the local-set pins equal the 189 oldest committed migrations; the surfaces their files', (t) => {
   if (!inGitTree()) return t.skip('not a Git work tree');
   const names = gitMigrationNames().slice(0, EG.localCount);
   assert.equal(names.length, EG.localCount);
@@ -617,7 +625,8 @@ test('exact-gap: the local-set pins equal the 188 oldest committed migrations; t
   assert.equal(sha(Buffer.from(names.map((n) => `${n} ${sha(gitBlob(n))}`).join('\n'), 'utf8')), EG.localBytesSha256);
   assert.deepEqual(names.slice(-EG.localTail.length), EG.localTail.map(([n]) => n));
   for (const [n, h] of EG.localTail) assert.ok(sha(gitBlob(n)) === h, n);
-  const surface = names.filter((n) => EG.remoteTail.includes(n.slice(0, 14))).map((n) => gitBlob(n).toString('utf8'));
+  // The #379 / #380 / #382 surfaces: the four earlier later-hosted files (#386's surface has its own pins, surface386).
+  const surface = names.filter((n) => EG.remoteTail.includes(n.slice(0, 14)) && n.slice(0, 14) !== EG.surface386.version).map((n) => gitBlob(n).toString('utf8'));
   assert.deepEqual([...new Set(surface.flatMap(createdFunctionNames))].sort(), [...EG.surfaceFunctions]);
   const tables = [...new Set(surface.flatMap((s) => splitSql(s).map(lead).map((x) => /^create\s+table\s+([a-z_]+\.[a-z_0-9]+)/i.exec(x)).filter(Boolean).map((m) => m[1])))].sort();
   assert.deepEqual(tables, [...EG.surfaceTables]);
@@ -868,7 +877,8 @@ test('exact-gap state SQL: one read-only statement over pinned names only', () =
   assert.ok(/^\s*with\s+led\s+as\s*\(/i.test(bare) && /as state;\s*$/.test(bare));
   assert.ok(!/\b(insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|copy|call|do|vacuum|analyze|lock|set|reset|begin|commit|rollback|execute|prepare|listen|notify|refresh|cluster|reindex|comment|security|returning)\b/i.test(bare), 'no write, DDL, transaction or session command');
   for (const name of [...EG.functions.map((f) => f[0]), ...EG.tables, EG.sequence, ...EG.indexes, ...EG.triggers, ...EG.surfaceFunctions, ...EG.surfaceTables,
-    ...EG.surface382.functions.map((f) => f[0]), EG.surface382.relation.name, ...EG.surface382.policies.map((p) => p.name)]) {
+    ...EG.surface382.functions.map((f) => f[0]), EG.surface382.relation.name, ...EG.surface382.policies.map((p) => p.name),
+    ...EG.surface386.functions.map((f) => f[0]), ...EG.surface386.relations.map((r) => r.name), ...EG.surface386.triggers.map((t) => t[0])]) {
     assert.ok(sql.includes(`'${name}'`), name);
   }
   assert.ok(sql.includes('supabase_migrations.schema_migrations') && sql.includes('statements[1]'));
@@ -880,6 +890,12 @@ test('exact-gap state SQL: one read-only statement over pinned names only', () =
   assert.throws(() => exactGapStateSql(s382({ policies: [{ ...EG.surface382.policies[0], table: 'storage.buckets' }] })), refusal('internal_pin'));
   assert.throws(() => exactGapStateSql(s382({ relation: { ...EG.surface382.relation, name: 'app.x; drop' } })), refusal('internal_pin'));
   assert.throws(() => exactGapStateSql(s382({ functions: [['public.x(', 'a', 'b', true, '', 's', 'sql', 'none']] })), refusal('internal_pin'));
+  // D-068: the #386 names are pinned constants of the same shapes; a trigger is name@schema.table.
+  const s386 = (change) => ({ ...EG, surface386: { ...EG.surface386, ...change } });
+  assert.throws(() => exactGapStateSql(s386({ functions: [['app.x; drop', 'a', 'b', true, '', 'v', 'plpgsql', 'none', 'd']] })), refusal('internal_pin'));
+  assert.throws(() => exactGapStateSql(s386({ relations: [{ ...EG.surface386.relations[0], name: "app.x'; drop" }] })), refusal('internal_pin'));
+  assert.throws(() => exactGapStateSql(s386({ triggers: [['x@y; drop', 'd']] })), refusal('internal_pin'));
+  assert.throws(() => exactGapStateSql(s386({ triggers: [['end_shift_alert_on_shift@shifts', 'd']] })), refusal('internal_pin'), 'an unqualified table');
   // The runtime is read outside the session block (so the state fingerprint covers it).
   assert.ok(sql.includes("'runtime', json_build_object('server_version_num', current_setting('server_version_num'), 'time_zone', current_setting('TimeZone')),"));
 });
@@ -928,6 +944,22 @@ function egSurface382() {
     objectPolicies: { count: 16, sha256: 'c'.repeat(64) },
   };
 }
+// D-068 (POST-386-REPIN-001): #386's surface as the state query answers it on the pinned shape.
+function egSurface386() {
+  const S = EG.surface386;
+  const accessOf = (name, group) => (group === 'inherited' ? S.inheritedAccess[name] : S.access[group]).map((e) => [...e]);
+  return {
+    functions: S.functions.map(([name, args, src, secdef, config, volatility, language, group, def]) => ({
+      name, args, kind: 'f', ...lfFacts(src, 30), secdef, config, volatility, language, owner: 'postgres', def, access: accessOf(name, group),
+    })),
+    relations: S.relations.map((r) => ({
+      name: r.name, kind: r.kind, rls: r.rls, force_rls: r.force_rls, owner: 'postgres',
+      policies: r.policies.map((p) => ({ name: p.name, cmd: p.cmd, permissive: p.permissive, roles: [...p.roles], using: p.using, check: p.check })),
+      access: r.access.map((e) => [...e]), columns: [], definition: r.definition,
+    })),
+    triggers: S.triggers.map(([name, def]) => ({ name, enabled: 'O', def })),
+  };
+}
 function egPreState() {
   return {
     session: { user: 'postgres', read_only: 'on', lock_timeout: '5s', statement_timeout: '1min', application_name: APPLICATION_NAME, server_version_num: '170006', ssl: true },
@@ -943,7 +975,7 @@ function egPreState() {
       access: EG.access.recreated[name].map((e) => [...e]),
     })),
     relations: [], indexes: [], triggers: [], cardRelations: 0, cardFunctions: 0,
-    surfaceFunctions: EG.surfaceFunctions.length, surfaceRelations: EG.surfaceTables.length, surface382: egSurface382(),
+    surfaceFunctions: EG.surfaceFunctions.length, surfaceRelations: EG.surfaceTables.length, surface382: egSurface382(), surface386: egSurface386(),
     otherFunctions: { count: 577, sha256: 'f'.repeat(64) }, otherRelations: { count: 97, sha256: 'e'.repeat(64) },
     defaultAcl: { count: 27, sha256: 'd'.repeat(64) },
   };
@@ -989,7 +1021,15 @@ test('exact-gap PRE gates: the hosted shape passes; every other shape is named',
   has(variant((s) => { s.ledger = s.ledger.filter((r) => r.version !== EG_LOCAL.versions[5]); }), 'gap_mismatch', 'remote_count');
   has(variant((s) => { s.ledger = egPostState().ledger.filter((r) => r.version !== EG_LOCAL.versions[5]); }), 'gap_mismatch');
   has(variant((s) => { s.ledger.splice(0, 0, { version: '20250101000000', name: 'stray', n: 1, first: 'x', all: 'y' }); }), 'remote_only', 'remote_count');
-  has(variant((s) => { s.ledger.push({ version: '20261106000000', name: 'later', n: 1, first: 'x', all: 'y' }); }), 'remote_only', 'remote_tail', 'remote_count');
+  has(variant((s) => { s.ledger.push({ version: '20261109000000', name: 'later', n: 1, first: 'x', all: 'y' }); }), 'remote_only', 'remote_tail', 'remote_count');
+  // D-068: #386's version is the fourth later-hosted migration and the remote tail's newest.
+  has(variant((s) => { s.ledger = s.ledger.filter((r) => r.version !== '20261108085442'); }), 'later_missing', 'remote_tail', 'gap_mismatch', 'remote_count');
+  has(variant((s) => { s.ledger.find((r) => r.version === '20261108085442').first = '0'.repeat(64); }), 'stored_statement');
+  has(variant((s) => { s.ledger.find((r) => r.version === '20261108085442').n = 78; }), 'stored_statement');
+  has(variant((s) => { s.ledger.find((r) => r.version === '20261108085442').name = 'bizbot_pos_long_shift_alerts_001b'; }), 'stored_name');
+  has(variant((s) => { s.ledger.find((r) => r.version === '20261108085442').name = null; }), 'stored_name');
+  has(variant((s) => { s.ledger = s.ledger.filter((r) => r.version !== '20261108085442'); s.ledger.push({ version: '20261108085443', name: 'other', n: 1, first: 'x', all: 'y' }); }),
+    'remote_only', 'remote_tail', 'later_missing', 'gap_mismatch');
   has(variant((s) => { s.ledger.find((r) => r.version === '20261105025413').first = '0'.repeat(64); }), 'stored_statement');
   has(variant((s) => { s.ledger.find((r) => r.version === '20261105025604').n = 4; }), 'stored_statement');
   has(variant((s) => { s.ledger.find((r) => r.version === '20261104131256').name = 'renamed'; }), 'stored_name');
@@ -1548,35 +1588,37 @@ test('exact-gap state SQL (CR-EG-02): the full ACL of every selected object and 
   const sql = exactGapStateSql();
   const bare = sql.replace(/--[^\n]*/g, ' ').replace(/'(?:[^']|'')*'/g, "''");
   assert.equal((bare.match(/;/g) || []).length, 1, 'still exactly one statement');
-  // REPIN-001: each expression appears exactly twice, once for the 001D objects and once for #382's.
+  // REPIN-001: each expression appeared exactly twice, once for the 001D objects and once for #382's; D-068 adds #386's
+  // functions and relations: three times.
   const count = (fragment) => sql.split(fragment).length - 1;
-  assert.equal(count("pg_catalog.aclexplode(coalesce(proacl, pg_catalog.acldefault('f', proowner)))"), 2, 'functions: the stored ACL, NULL resolved');
-  assert.equal(count("pg_catalog.aclexplode(coalesce(r.relacl, pg_catalog.acldefault(case when r.kind = 'S' then 's'::\"char\" else 'r'::\"char\" end, r.relowner)))"), 2,
+  assert.equal(count("pg_catalog.aclexplode(coalesce(proacl, pg_catalog.acldefault('f', proowner)))"), 3, 'functions: the stored ACL, NULL resolved');
+  assert.equal(count("pg_catalog.aclexplode(coalesce(r.relacl, pg_catalog.acldefault(case when r.kind = 'S' then 's'::\"char\" else 'r'::\"char\" end, r.relowner)))"), 3,
     'relations: the stored ACL, NULL resolved');
-  assert.ok(count('from pg_catalog.pg_attribute att cross join lateral pg_catalog.aclexplode(att.attacl) a') === 2
-    && count('where att.attrelid = r.oid and att.attnum > 0 and not att.attisdropped') === 2, 'columns: every live column of the relation');
-  // REPIN-001: the 001D functions and relations, plus #382's functions and relation (each with its access; the
-  // relations also with their column grants).
-  assert.equal((sql.match(/json_build_array\(x\.grantee, x\.privilege, x\.grantable, x\.grantor\)/g) || []).length, 4, 'function and relation entries');
-  assert.equal((sql.match(/json_build_array\(x\.col, x\.grantee, x\.privilege, x\.grantable, x\.grantor\)/g) || []).length, 2, 'column entries');
+  assert.ok(count('from pg_catalog.pg_attribute att cross join lateral pg_catalog.aclexplode(att.attacl) a') === 3
+    && count('where att.attrelid = r.oid and att.attnum > 0 and not att.attisdropped') === 3, 'columns: every live column of the relation');
+  // REPIN-001 and D-068: the 001D functions and relations, plus #382's functions and relation and #386's functions and
+  // relations (each with its access; the relations also with their column grants).
+  assert.equal((sql.match(/json_build_array\(x\.grantee, x\.privilege, x\.grantable, x\.grantor\)/g) || []).length, 6, 'function and relation entries');
+  assert.equal((sql.match(/json_build_array\(x\.col, x\.grantee, x\.privilege, x\.grantable, x\.grantor\)/g) || []).length, 3, 'column entries');
   const grantee = "case when a.grantee = 0 then 'PUBLIC' else pg_catalog.pg_get_userbyid(a.grantee)::text end as grantee";
   const rest = 'a.privilege_type::text as privilege, a.is_grantable as grantable, pg_catalog.pg_get_userbyid(a.grantor)::text as grantor';
-  assert.equal(sql.split(grantee).length - 1, 6, 'every entry names its grantee, PUBLIC for 0 (functions, relations, columns)');
-  assert.equal(sql.split(rest).length - 1, 6, 'every entry carries its privilege, grant option and grantor');
-  assert.equal((sql.match(/order by x\.grantee collate "C", x\.privilege collate "C", x\.grantable, x\.grantor collate "C"/g) || []).length, 4, 'a byte-order sort');
-  assert.equal((sql.match(/order by x\.col collate "C", x\.grantee collate "C", x\.privilege collate "C", x\.grantable, x\.grantor collate "C"/g) || []).length, 2, 'a byte-order sort');
-  assert.equal((sql.match(/'access', \(select/g) || []).length, 4, 'functions and relations carry their access');
-  assert.equal((sql.match(/'columns', \(select/g) || []).length, 2, 'relations carry their column grants');
+  assert.equal(sql.split(grantee).length - 1, 9, 'every entry names its grantee, PUBLIC for 0 (functions, relations, columns)');
+  assert.equal(sql.split(rest).length - 1, 9, 'every entry carries its privilege, grant option and grantor');
+  assert.equal((sql.match(/order by x\.grantee collate "C", x\.privilege collate "C", x\.grantable, x\.grantor collate "C"/g) || []).length, 6, 'a byte-order sort');
+  assert.equal((sql.match(/order by x\.col collate "C", x\.grantee collate "C", x\.privilege collate "C", x\.grantable, x\.grantor collate "C"/g) || []).length, 3, 'a byte-order sort');
+  assert.equal((sql.match(/'access', \(select/g) || []).length, 6, 'functions and relations carry their access');
+  assert.equal((sql.match(/'columns', \(select/g) || []).length, 3, 'relations carry their column grants');
   assert.ok(sql.includes('p.proacl as proacl, p.proowner as proowner') && sql.includes('c.relacl as relacl, c.relowner as relowner'),
     'the stored ACLs and owners come straight from pg_proc and pg_class');
   // The delta review (CR-R-01): one-line changes to the query could hide a grantee from every check above. The whole
   // query is therefore pinned to the text the live proof ran (REPIN-001: the current-main run, whose run driver records
   // this query and its SHA-256); any change fails here and needs a new live proof before this pin moves. D-067
-  // (HOSTED-PRE-COMPAT-001) moved it once, for the line-ending facts, with its own hosted-shape live proof.
-  assert.ok(sha(Buffer.from(sql, 'utf8')) === 'c623b45d80e3128045cad929c97be6ed6f65091478a263208286369d54c724c9',
+  // (HOSTED-PRE-COMPAT-001) moved it once, for the line-ending facts, with its own hosted-shape live proof; D-068
+  // (POST-386-REPIN-001) moved it again, for the #386 surface block, with its own 189 / 188 live proof.
+  assert.ok(sha(Buffer.from(sql, 'utf8')) === 'ce3e169134d5d6b8d384057b5cbda58737f78284e940d99d93b71b71f120ec8e',
     'the state SQL is exactly the query the live proof ran');
-  // REPIN-001 (the review's S382-01): #382's functions are also compared by their whole definition.
-  assert.equal(sql.split("'def', encode(sha256(convert_to(coalesce(pg_catalog.pg_get_functiondef(oid), ''), 'UTF8')), 'hex'),").length - 1, 1);
+  // REPIN-001 (the review's S382-01): #382's functions are also compared by their whole definition; D-068: so are #386's.
+  assert.equal(sql.split("'def', encode(sha256(convert_to(coalesce(pg_catalog.pg_get_functiondef(oid), ''), 'UTF8')), 'hex'),").length - 1, 2);
   assert.ok(sql.includes('p.proacl as proacl, p.proowner as proowner, p.oid as oid'));
 });
 
@@ -1949,7 +1991,7 @@ test('exact-gap flow (REPIN-001): a #382 surface change refuses before the push;
   const ok = await runExactGap({});
   assert.equal(ok.code, 0, ok.out);
   assert.match(ok.out, /#379 \/ #380 \/ #382 surfaces present \(46 functions, 3 tables\); #382's own surface as pinned \(12 functions, its relation and 2 Storage policies/);
-  assert.match(ok.out, /#382's surface and every storage\.objects policy identical to PRE/);
+  assert.match(ok.out, /#382's surface, every storage\.objects policy and #386's surface identical to PRE/);
 });
 
 // =====================================================================================================================
@@ -2199,9 +2241,10 @@ test('exact-gap state SQL (D-067): every selected function\'s raw and LF-normali
   assert.equal(count("(length(b.body) - length(replace(b.body, E'\\r\\n', ''))) / 2 as crlf,"), 1);
   assert.equal(count("(length(b.body) - length(replace(b.body, E'\\r', ''))) > (length(b.body) - length(replace(b.body, E'\\r\\n', ''))) / 2 as lone_cr,"), 1);
   assert.equal(count("cross join lateral (select coalesce(p.prosrc, '') as body) b"), 1);
-  // Both selected-function lists carry all five facts beside the raw digest: the 001D manifest's names and #382's.
+  // Every selected-function list carries all five facts beside the raw digest: the 001D manifest's names, #382's and (D-068)
+  // #386's.
   assert.equal(count("'src', src,\n    'src_lf', src_lf, 'cr', cr, 'lf', lf, 'crlf', crlf, 'lone_cr', lone_cr,"), 1);
-  assert.equal(count("'src', src,\n      'src_lf', src_lf, 'cr', cr, 'lf', lf, 'crlf', crlf, 'lone_cr', lone_cr,"), 1);
+  assert.equal(count("'src', src,\n      'src_lf', src_lf, 'cr', cr, 'lf', lf, 'crlf', crlf, 'lone_cr', lone_cr,"), 2);
   // The other-function digest line is unchanged (its body digest is the raw one).
   assert.equal(count("select name || '(' || args || ')|' || kind || '|' || src || '|' || secdef::text"), 1);
   // The Default ACL digest: every pg_default_acl row, sorted (a count and a SHA-256), outside the session block.
@@ -2215,7 +2258,12 @@ test('exact-gap state fingerprint (D-067): it covers every line-ending fact and 
   for (const key of ['src', 'src_lf', 'cr', 'lf', 'crlf', 'lone_cr']) {
     assert.notEqual(changed((s) => { const f = s.functions.find((x) => x.name === 'app.owner_audit_events'); f[key] = key === 'lone_cr' ? true : typeof f[key] === 'number' ? f[key] + 1 : '0'.repeat(64); }), fp, `re-created ${key}`);
     assert.notEqual(changed((s) => { const f = s.surface382.functions[1]; f[key] = key === 'lone_cr' ? true : typeof f[key] === 'number' ? f[key] + 1 : '0'.repeat(64); }), fp, `#382 ${key}`);
+    assert.notEqual(changed((s) => { const f = s.surface386.functions[2]; f[key] = key === 'lone_cr' ? true : typeof f[key] === 'number' ? f[key] + 1 : '0'.repeat(64); }), fp, `#386 ${key}`);
   }
+  // D-068: the #386 surface is inside the fingerprint as well (a relation's definition, a trigger's definition, an access entry).
+  assert.notEqual(changed((s) => { s.surface386.relations[0].definition = '0'.repeat(64); }), fp, '#386 relation');
+  assert.notEqual(changed((s) => { s.surface386.triggers[0].def = '0'.repeat(64); }), fp, '#386 trigger');
+  assert.notEqual(changed((s) => { s.surface386.functions[0].access.push(FIFTH()); }), fp, '#386 access');
   // Both accepted forms of the same function are two different states (so a switch between the reads refuses).
   assert.notEqual(changed((s) => Object.assign(s.functions.find((x) => x.name === 'app.sync_push'), canonicalFacts('app.sync_push'))), fp);
   assert.notEqual(changed((s) => { s.defaultAcl.count += 1; }), fp, 'the Default ACL row count');
@@ -2346,4 +2394,302 @@ test('exact-gap flow (D-067, review F1): the second PRE\'s own session must be r
     assert.equal(missing.code, 2, `${route} / no session block: ${missing.out}`);
     assert.match(missing.out, /^REFUSED session_not_read_only:/m);
   }
+});
+
+// =====================================================================================================================
+// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-EXACT-GAP-POST-386-REPIN-001 (DECISION D-068): the exact-gap mode re-pinned to main
+// 28c41911 (189 local migrations, 188 hosted versions, the one gap 20261104141959) and #386's named surface as a PRE gate
+// and a POST identity.
+// =====================================================================================================================
+const CORE_RENAMES = [
+  ['app.pos_register_order_alert', 'app.pos_register_order_alert_core'], ['app.pos_order_alert_status', 'app.pos_order_alert_status_core'],
+  ['app.pos_disable_order_alert', 'app.pos_disable_order_alert_core'], ['app.pos_refresh_order_alert_token', 'app.pos_refresh_order_alert_token_core'],
+  ['app.pos_claim_order_alert_deliveries', 'app.pos_claim_order_alert_deliveries_core'],
+];
+// The two files that patch app.pos_register_order_alert's body in place (they read its definition, edit the text and execute
+// it), so the renamed core body is not the latest static definition of the name.
+const PATCH_FILES = ['20261027011255_bizbot_pos_alert_observation_conflict_reference_001.sql', '20261027142721_bizbot_pos_alert_observation_validated_pin_001.sql'];
+
+test('exact-gap 189 / 188 (D-068): the exact positive case and the four count pins', () => {
+  assert.equal(EG_LOCAL.files, 189);
+  assert.equal(egPreState().ledger.length, 188);
+  assert.equal(egPostState().ledger.length, 189);
+  assert.deepEqual(evaluateExactGapPre(egPreState(), EG_LOCAL), []);
+  const pre = egPreState();
+  assert.deepEqual(evaluateExactGapPost({ pre, post: egPostState(pre), normal: UP_TO_DATE, list: LIST_OK, local: EG_LOCAL }), []);
+  // A wrong hosted count on either side of 188 (a version too few, a version too many) is named with its count.
+  const fewer = egPreState();
+  fewer.ledger = fewer.ledger.filter((r) => r.version !== EG_LOCAL.versions[7]);
+  assert.ok(codes(evaluateExactGapPre(fewer, EG_LOCAL)).includes('remote_count'));
+  assert.match(evaluateExactGapPre(fewer, EG_LOCAL).find((p) => p[0] === 'remote_count')[1], /must hold 188 versions; it holds 187/);
+  const more = egPreState();
+  more.ledger.push({ version: '20260101999999', name: 'extra', n: 1, first: 'x', all: 'y' });
+  assert.match(evaluateExactGapPre(more, EG_LOCAL).find((p) => p[0] === 'remote_count')[1], /must hold 188 versions; it holds 189/);
+  // A wrong local count is the local folder's own gate (checkExactGapMigrations), named with the pinned 189.
+  const files = { ...Object.fromEntries(Array.from({ length: 183 }, (_, i) => [`20260101${String(i).padStart(6, '0')}_prefix_${i}.sql`, `select ${i};\n`])),
+    ...Object.fromEntries(EG.localTail.map(([n], i) => [n, `select ${1000 + i};\n`])) };
+  const pins = syntheticFolderPins(files);
+  assert.equal(pins.localCount, 189);
+  assert.equal(checkExactGapMigrations(exactGapFolder(pins, files), pins).files, 189);
+  const without = (name) => Object.fromEntries(Object.entries(files).filter(([n]) => n !== name));
+  for (const [set, label] of [[without('20260101000005_prefix_5.sql'), '188 files'], [{ ...files, '20260101999999_prefix_x.sql': 'x' }, '190 files']]) {
+    assert.throws(() => checkExactGapMigrations(exactGapFolder(pins, set), pins), (e) => e?.code === 'local_count' && /exactly 189 migrations/.test(e.message), label);
+  }
+  // A local folder without #386's file, or with a file after it, fails the tail gate before any contact.
+  assert.throws(() => checkExactGapMigrations(exactGapFolder(pins, { ...without('20261108085442_bizbot_pos_long_shift_alerts_001.sql'), '20260101999999_prefix_x.sql': 'x' }), pins), refusal('local_tail'));
+  assert.throws(() => checkExactGapMigrations(exactGapFolder(pins, { ...without('20260101000005_prefix_5.sql'), '20261109000000_after_386.sql': 'x' }), pins), refusal('local_tail'));
+});
+
+test('exact-gap #386 surface pins (D-068): they equal the committed #386 migration bytes', (t) => {
+  if (!inGitTree()) return t.skip('not a Git work tree');
+  const S = EG.surface386;
+  const file = EG.localTail.find(([n]) => n.startsWith(S.version))[0];
+  assert.equal(file, '20261108085442_bizbot_pos_long_shift_alerts_001.sql');
+  const bytes = gitBlob(file);
+  assert.ok(sha(bytes) === EG.storedStatements[S.version][1], 'the stored-statement pin is the file');
+  assert.ok(sha(bytes) === EG.localTail.find(([n]) => n === file)[1]);
+  const sql = bytes.toString('utf8');
+  const pinned = new Map(S.functions.map((f) => [f[0], f]));
+  assert.equal(pinned.size, S.functions.length, 'one pin per name');
+  // The 23 functions the file creates or replaces: body, security definer, config, volatility and language from the bytes.
+  const created = createdFunctions(sql);
+  assert.equal(created.length, 23);
+  for (const [name, src, secdef, config, volatility, language] of created) {
+    const p = pinned.get(name);
+    assert.ok(p, name);
+    assert.deepEqual(p.slice(2, 7), [src, secdef, config, volatility, language], name);
+  }
+  // Their identity arguments, as pg_get_function_identity_arguments prints them: timestamptz spelled out, defaults left out.
+  const identity = (params) => params.replace(/\btimestamptz\b/g, 'timestamp with time zone').replace(/\s+default\s+[^,]+/gi, '');
+  for (const [name, params] of createdFunctionArgs(sql)) assert.equal(pinned.get(name)[1], identity(params), name);
+  // The one CREATE OR REPLACE keeps the earlier access (the file neither grants nor revokes it): the inherited group.
+  const replaced = splitSql(sql).map(lead).filter((s) => /^create\s+or\s+replace\s+function/i.test(s)).map((s) => /function\s+([a-z_]+\.[a-z_0-9]+)/i.exec(s)[1]);
+  assert.deepEqual(replaced, ['app.pos_order_alert_authority']);
+  assert.deepEqual(S.functions.filter((f) => f[7] === 'inherited').map((f) => f[0]), replaced);
+  assert.deepEqual(Object.keys(S.inheritedAccess), replaced);
+  assert.deepEqual(S.inheritedAccess['app.pos_order_alert_authority'], EG.access.functions.none, 'its earlier access: the owner only');
+  // The five renames: new names, the same arguments, and each revoked from every client role.
+  const renames = splitSql(sql).map((s) => /^\s*alter\s+function\s+app\.([a-z_0-9]+)\s*\(([^)]*)\)\s+rename\s+to\s+([a-z_0-9]+)\s*;/i.exec(s.replace(/--[^\n]*\n/g, '\n')))
+    .filter(Boolean).map((m) => ({ oldName: `app.${m[1]}`, newName: `app.${m[3]}`, args: m[2].replace(/\s+/g, '') }));
+  assert.deepEqual(renames.map((r) => [r.oldName, r.newName]), CORE_RENAMES);
+  assert.equal(created.length + renames.length, S.functions.length);
+  const sets = grantSets(sql);
+  const GROUP = {
+    'revoke all from public,anon,authenticated,service_role': 'none',
+    'revoke all from public,anon,authenticated,service_role;grant execute to authenticated': 'authenticated',
+    'revoke all from public,anon,authenticated,service_role;grant execute to service_role': 'service_role',
+  };
+  for (const [name, , , , , , , group] of S.functions) {
+    if (group === 'inherited') { assert.ok(!sets.has(name), `${name} is neither granted nor revoked`); continue; }
+    assert.equal(GROUP[(sets.get(name) || []).join(';')] ?? 'unexpected', group, name);
+  }
+  for (const r of renames) assert.equal(pinned.get(r.newName)[7], 'none', r.newName);
+  // Each group's exact entries are the owner plus exactly the granted role, EXECUTE, without grant option, granted by the owner.
+  assert.deepEqual(Object.keys(S.access).sort(), ['authenticated', 'none', 'service_role']);
+  const roles = { none: [], authenticated: ['authenticated'], service_role: ['service_role'] };
+  for (const [group, entries] of Object.entries(S.access)) {
+    assert.deepEqual(entries.map((e) => e[0]).sort(), [...roles[group], EG.owner].sort(), group);
+    for (const e of entries) assert.deepEqual(e.slice(1), ['EXECUTE', false, EG.owner], group);
+  }
+  // The renamed functions keep the earlier body (a rename keeps prosrc). Four bodies are the latest static definitions of
+  // the original names in the earlier files; app.pos_register_order_alert's was patched in place by two later files, so its
+  // pin is the live proof's value, which must differ from the last static definition, and both patch files must name it.
+  const earlier = gitMigrationNames().filter((n) => n < file);
+  const latest = new Map();
+  for (const n of earlier) for (const [name, src] of createdFunctions(gitBlob(n).toString('utf8'))) if (renames.some((r) => r.oldName === name)) latest.set(name, src);
+  for (const r of renames) {
+    const pin = pinned.get(r.newName);
+    assert.ok(latest.has(r.oldName), r.oldName);
+    if (r.oldName === 'app.pos_register_order_alert') {
+      assert.notEqual(pin[2], latest.get(r.oldName), 'patched in place after its last static definition');
+      for (const n of PATCH_FILES) {
+        assert.ok(earlier.includes(n), n);
+        const patch = gitBlob(n).toString('utf8');
+        assert.ok(/'app\.pos_register_order_alert\(uuid,text,text,uuid,uuid,text\)'::regprocedure/.test(patch) && /pg_get_functiondef/.test(patch) && /\bexecute\b/i.test(patch), n);
+      }
+    } else {
+      assert.equal(pin[2], latest.get(r.oldName), r.newName);
+    }
+  }
+  // The relations: the three tables the file creates, locked down in its DO block (row level security enabled and forced,
+  // every privilege revoked from PUBLIC and the client roles, no policy), and the one table it alters; the pins.
+  const stmts = splitSql(sql).map(lead).map((s) => s.replace(/\s+/g, ' ').trim());
+  const tables = stmts.map((s) => /^create table ([a-z_]+\.[a-z_0-9]+)/i.exec(s)).filter(Boolean).map((m) => m[1]).sort();
+  assert.deepEqual(tables, ['app.pos_shift_alert_approvals', 'app.pos_shift_alert_consents', 'app.pos_shift_alert_policies']);
+  const altered = stmts.map((s) => /^alter table ([a-z_]+\.[a-z_0-9]+) add column/i.exec(s)).filter(Boolean).map((m) => m[1]);
+  assert.deepEqual(altered, ['app.pos_order_alert_registrations']);
+  assert.deepEqual(S.relations.map((r) => r.name), [...tables, ...altered].sort());
+  const loop = /foreach\s+t\s+in\s+array\s+array\[([^\]]+)\]\s+loop([\s\S]*?)end\s+loop;/i.exec(sql);
+  assert.ok(loop, 'the lockdown loop');
+  assert.deepEqual(loop[1].split(',').map((s) => `app.${s.trim().replace(/^'|'$/g, '')}`).sort(), tables);
+  assert.ok(/enable row level security/.test(loop[2]) && /force row level security/.test(loop[2]) && /revoke all on app\.%I from public,anon,authenticated,service_role/.test(loop[2]));
+  assert.equal((sql.match(/create\s+policy/gi) || []).length, 0, 'no policy statement');
+  assert.ok(!stmts.some((s) => /^grant /i.test(s) && /on (table )?app\./i.test(s) && !/on function/i.test(s)), 'no table grant');
+  const denyClient = { name: EG.policy.name, cmd: EG.policy.cmd, permissive: EG.policy.permissive, roles: [...EG.policy.roles], using: EG.policy.using, check: EG.policy.check };
+  for (const r of S.relations) {
+    assert.deepEqual([r.kind, r.rls, r.force_rls], ['r', true, true], r.name);
+    assert.deepEqual(r.access, EG.access.table, `${r.name}: the owner's PostgreSQL 17 privileges only`);
+    assert.deepEqual([...r.columns], [], r.name);
+    assert.ok(/^[0-9a-f]{64}$/.test(r.definition), r.name);
+    // The three new tables have no policy; the altered one keeps its earlier deny_client policy (the project's standard one).
+    assert.deepEqual(r.policies.map((p) => ({ ...p, roles: [...p.roles] })), tables.includes(r.name) ? [] : [denyClient], r.name);
+  }
+  // The indexes (twelve, on the consents table and the altered registrations table) and the triggers (twelve, each an
+  // AFTER UPDATE trigger on another table that executes the file's trigger function).
+  const indexes = stmts.map((s) => /^create (?:unique )?index ([a-z_0-9]+) on ([a-z_]+\.[a-z_0-9]+)/i.exec(s)).filter(Boolean).map((m) => [m[1], m[2]]);
+  assert.equal(indexes.length, 12);
+  assert.deepEqual([...new Set(indexes.map((i) => i[1]))].sort(), ['app.pos_order_alert_registrations', 'app.pos_shift_alert_consents']);
+  const triggers = stmts.map((s) => /^create trigger ([a-z_0-9]+) after update on ([a-z_]+\.[a-z_0-9]+) for each row when .* execute function app\.end_pos_shift_alert_bindings\(\);$/i.exec(s))
+    .filter(Boolean).map((m) => `${m[1]}@${m[2]}`).sort();
+  assert.equal(triggers.length, 12);
+  assert.deepEqual(S.triggers.map((x) => x[0]), triggers);
+  for (const [, def] of S.triggers) assert.ok(/^[0-9a-f]{64}$/.test(def));
+  assert.equal((sql.match(/create\s+(?:or\s+replace\s+)?trigger/gi) || []).length, 12, 'no other trigger statement');
+  // #386's objects are not part of the #379 / #380 / #382 surfaces (they have their own pins) and not of the 001D manifest.
+  for (const [name] of S.functions) assert.ok(!EG.surfaceFunctions.includes(name) && !EG.functions.some((f) => f[0] === name), name);
+  for (const r of S.relations) assert.ok(!EG.surfaceTables.includes(r.name) && !EG.tables.includes(r.name), r.name);
+});
+
+test('exact-gap #386 surface pins (D-068): the catalog renderings are the live proof\'s, and each is one distinct digest', () => {
+  const S = EG.surface386;
+  // The whole-definition digests (pg_get_functiondef), the relations' catalog-line digests and the triggers' definition
+  // digests are PostgreSQL 17.6 renderings, which the migration bytes cannot give. They are the values the current-main
+  // sequential reference and the hosted-shape gap database both showed (the run's pin check). This digest over every
+  // catalog-rendered pin fails on any change of one of them, so a pin can only move together with a new live proof.
+  for (const f of S.functions) assert.ok(f.length === 9 && /^[0-9a-f]{64}$/.test(f[8]), f[0]);
+  assert.equal(new Set(S.functions.map((f) => f[8])).size, S.functions.length);
+  assert.equal(new Set(S.functions.map((f) => f[2])).size, S.functions.length, 'every body is distinct');
+  assert.equal(new Set(S.relations.map((r) => r.definition)).size, S.relations.length);
+  assert.equal(new Set(S.triggers.map((t) => t[1])).size, S.triggers.length);
+  assert.equal(S.functions.length, 28);
+  assert.equal(S.relations.length, 4);
+  assert.equal(S.triggers.length, 12);
+  const rendered = JSON.stringify({
+    args: S.functions.map((f) => [f[0], f[1]]), def: S.functions.map((f) => [f[0], f[8]]),
+    relations: S.relations.map((r) => [r.name, r.definition, r.policies]), triggers: S.triggers.map((t) => [t[0], t[1]]),
+  });
+  assert.ok(sha(Buffer.from(rendered, 'utf8')) === '8d4bfaf7ea0731e42950347216b6d9f7102bee33c801decaea40ddabd32f5d3f', 'the catalog-rendered #386 pins are the live proof\'s');
+});
+
+test('exact-gap PRE #386 surface (D-068): its functions, relations and triggers must be exactly as pinned', () => {
+  assert.deepEqual(evaluateExactGapPre(egPreState(), EG_LOCAL), []);
+  const variant = (change) => { const s = egPreState(); change(s.surface386, s); return evaluateExactGapPre(s, EG_LOCAL); };
+  const fn = (x, name) => x.functions.find((f) => f.name === name);
+  // Functions: presence, identity and definition.
+  onlyCode(variant((x) => { x.functions = x.functions.filter((f) => f.name !== 'app.pos_register_order_alert_core'); }), 'surface386_function', 'a renamed core function missing');
+  onlyCode(variant((x) => { x.functions = x.functions.filter((f) => f.name !== 'public.set_pos_shift_alert_policy'); }), 'surface386_function', 'a public wrapper missing');
+  onlyCode(variant((x) => { x.functions.push({ ...fn(x, 'app.pos_shift_alert_owner'), args: 'p_branch text' }); }), 'surface386_function', 'an extra overload');
+  onlyCode(variant((x) => { x.functions.push({ ...fn(x, 'app.pos_shift_alert_owner'), name: 'app.pos_shift_alert_owner_v2' }); }), 'surface386_function', 'a row under an unpinned name (a malformed answer)');
+  for (const [label, change] of [
+    ['another identity', (f) => { f.args = 'p_pin uuid'; }], ['another body', (f) => { f.src = '0'.repeat(64); }],
+    ['another whole definition (another result type, strictness, cost or rows)', (f) => { f.def = '0'.repeat(64); }], ['no definition answer', (f) => { delete f.def; }],
+    ['no longer SECURITY DEFINER', (f) => { f.secdef = false; }], ['another config', (f) => { f.config = ''; }],
+    ['another volatility', (f) => { f.volatility = 's'; }], ['another language', (f) => { f.language = 'sql'; }],
+    ['a procedure', (f) => { f.kind = 'p'; }], ['another owner', (f) => { f.owner = 'supabase_admin'; }],
+  ]) onlyCode(variant((x) => change(fn(x, 'app.pos_shift_alert_human'))), 'surface386_function', label);
+  // The renamed core function's body is pinned too (the preserved earlier body).
+  onlyCode(variant((x) => { fn(x, 'app.pos_register_order_alert_core').src = EG.surface386.functions.find((f) => f[0] === 'app.pos_register_order_alert')[2]; }), 'surface386_function', 'the core body replaced by the wrapper body');
+  // Functions: exact access.
+  onlyCode(variant((x) => { fn(x, 'public.set_pos_shift_alert_policy').access.push(FIFTH()); }), 'surface386_access', 'a fifth role on a public wrapper');
+  onlyCode(variant((x) => { fn(x, 'app.pos_register_order_alert_core').access.push(['authenticated', 'EXECUTE', false, 'postgres']); }), 'surface386_access', 'a client grant on a renamed core function');
+  onlyCode(variant((x) => { fn(x, 'app.pos_order_alert_authority').access.push(['service_role', 'EXECUTE', false, 'postgres']); }), 'surface386_access', 'a grant on the inherited-access function');
+  onlyCode(variant((x) => { const f = fn(x, 'public.pos_shift_order_alert_status'); f.access = f.access.filter((e) => e[0] !== 'service_role'); }), 'surface386_access', 'a removed grant');
+  onlyCode(variant((x) => { const f = fn(x, 'app.set_pos_shift_alert_policy'); f.access = f.access.map((e) => (e[0] === 'authenticated' ? [e[0], e[1], e[2], 'supabase_admin'] : e)); }), 'surface386_access', 'a changed grantor');
+  onlyCode(variant((x) => { const f = fn(x, 'app.pos_revoke_shift_order_alert'); f.access = f.access.map((e) => (e[0] === 'service_role' ? [e[0], e[1], true, e[3]] : e)); }), 'surface386_access', 'WITH GRANT OPTION');
+  onlyCode(variant((x) => { fn(x, 'app.pos_shift_alert_owner').access = 'postgres=X/postgres'; }), 'surface386_access', 'a malformed access answer');
+  // The relations.
+  const rel = (x, name) => x.relations.find((r) => r.name === name);
+  onlyCode(variant((x) => { x.relations = x.relations.filter((r) => r.name !== 'app.pos_shift_alert_consents'); }), 'surface386_relation', 'a table missing');
+  onlyCode(variant((x) => { x.relations.push({ ...rel(x, 'app.pos_shift_alert_policies') }); }), 'surface386_relation', 'a table twice');
+  for (const [label, change] of [
+    ['another definition (a column, constraint, index or trigger)', (r) => { r.definition = '0'.repeat(64); }], ['RLS not forced', (r) => { r.force_rls = false; }],
+    ['RLS off', (r) => { r.rls = false; }], ['another owner', (r) => { r.owner = 'supabase_admin'; }], ['another kind', (r) => { r.kind = 'p'; }],
+    ['a policy added', (r) => { r.policies.push({ name: 'open', cmd: 'r', permissive: true, roles: ['authenticated'], using: 'true', check: null }); }],
+  ]) onlyCode(variant((x) => change(rel(x, 'app.pos_shift_alert_policies'))), 'surface386_relation', label);
+  for (const [label, change] of [
+    ['the deny_client policy removed', (r) => { r.policies = []; }], ['the deny_client policy opened', (r) => { r.policies[0].using = 'true'; }],
+    ['the deny_client policy for another role', (r) => { r.policies[0].roles = ['anon']; }], ['the deny_client policy restrictive', (r) => { r.policies[0].permissive = false; }],
+    ['the deny_client policy for one command', (r) => { r.policies[0].cmd = 'r'; }], ['a duplicate policy', (r) => { r.policies.push({ ...r.policies[0] }); }],
+  ]) onlyCode(variant((x) => change(rel(x, 'app.pos_order_alert_registrations'))), 'surface386_relation', label);
+  onlyCode(variant((x) => { rel(x, 'app.pos_shift_alert_consents').access.push(FIFTH('SELECT')); }), 'surface386_access', 'a fifth role on a table');
+  onlyCode(variant((x) => { const r = rel(x, 'app.pos_shift_alert_approvals'); r.access = r.access.filter((e) => e[1] !== 'MAINTAIN'); }), 'surface386_access', 'a removed owner privilege');
+  onlyCode(variant((x) => { rel(x, 'app.pos_order_alert_registrations').columns.push(['duty_consent_id', 'anon', 'SELECT', false, 'postgres']); }), 'surface386_access', 'a column grant');
+  // The triggers.
+  onlyCode(variant((x) => { x.triggers = x.triggers.filter((t) => t.name !== 'end_shift_alert_on_shift@public.shifts'); }), 'surface386_trigger', 'a trigger missing');
+  onlyCode(variant((x) => { x.triggers.push({ ...x.triggers[0] }); }), 'surface386_trigger', 'a trigger twice');
+  onlyCode(variant((x) => { x.triggers[3].enabled = 'D'; }), 'surface386_trigger', 'a trigger disabled');
+  onlyCode(variant((x) => { x.triggers[3].enabled = 'A'; }), 'surface386_trigger', 'a trigger set to ALWAYS');
+  onlyCode(variant((x) => { x.triggers[5].def = '0'.repeat(64); }), 'surface386_trigger', 'another trigger definition (its WHEN clause or function)');
+  // A missing or malformed answer.
+  onlyCode(variant((x, s) => { delete s.surface386; }), 'surface386_unreadable', 'no answer');
+  onlyCode(variant((x, s) => { s.surface386 = { functions: [], relations: [] }; }), 'surface386_unreadable', 'a partial answer');
+  // D-067: a CR in a #386 function is refused as in every other selected function.
+  const crlf = variant((x) => { Object.assign(fn(x, 'public.set_pos_shift_alert_policy'), { cr: 3, crlf: 3, lone_cr: false }); });
+  assert.deepEqual(codes(crlf), ['selected_function_eol']);
+  assert.match(crlf[0][1], /^public\.set_pos_shift_alert_policy: carriage returns in a body accepted only in its canonical LF form$/);
+});
+
+test('exact-gap POST #386 surface (D-068): identical to PRE', () => {
+  const pre = egPreState();
+  const base = () => ({ pre, post: egPostState(pre), normal: UP_TO_DATE, list: LIST_OK, local: EG_LOCAL });
+  assert.deepEqual(evaluateExactGapPost(base()), []);
+  const variant = (change) => { const v = base(); change(v.post.surface386, v.post); return evaluateExactGapPost(v); };
+  for (const [label, change] of [
+    ['a fifth role on a #386 function', (x) => { x.functions[0].access.push(FIFTH()); }],
+    ['a #386 function removed', (x) => { x.functions.pop(); }],
+    ['a #386 overload added', (x) => { x.functions.push({ ...x.functions[0], args: 'x' }); }],
+    ['a #386 body changed', (x) => { x.functions[3].src = '0'.repeat(64); }],
+    ['a #386 whole definition changed (another result type)', (x) => { x.functions[5].def = '0'.repeat(64); }],
+    ['a #386 relation changed', (x) => { x.relations[0].definition = 'f'.repeat(64); }],
+    ['a #386 relation grant', (x) => { x.relations[0].access.push(FIFTH('SELECT')); }],
+    ['a #386 column grant', (x) => { x.relations[0].columns.push(['duty_consent_id', 'anon', 'SELECT', false, 'postgres']); }],
+    ['a #386 policy added', (x) => { x.relations[1].policies.push({ name: 'open', cmd: 'r', permissive: true, roles: ['anon'], using: 'true', check: null }); }],
+    ['a #386 trigger disabled', (x) => { x.triggers[0].enabled = 'D'; }],
+    ['a #386 trigger changed', (x) => { x.triggers[1].def = '0'.repeat(64); }],
+    ['a #386 trigger removed', (x) => { x.triggers.pop(); }],
+    ['no answer', (x, p) => { delete p.surface386; }],
+    ['a malformed answer', (x, p) => { p.surface386 = 'x'; }],
+  ]) onlyCode(variant(change), 'post_surface386', label);
+  // D-067: a #386 function in CRLF at POST is named by the line-ending rule as well as by the identity.
+  const eol = variant((x) => { Object.assign(x.functions[2], { cr: 2, crlf: 2 }); });
+  assert.deepEqual(codes(eol).sort(), ['post_function_eol', 'post_surface386']);
+});
+
+test('exact-gap flow (D-068): a #386 surface change refuses before the push; a POST #386 difference is a STOP after it', async () => {
+  const pre = egPreState();
+  const with386 = (state, change) => { const s = JSON.parse(JSON.stringify(state)); change(s.surface386); return s; };
+  // Between the first and the second PRE read: the state fingerprint covers the whole #386 surface.
+  for (const [label, change] of [
+    ['a fifth role on a #386 function', (x) => { x.functions.find((f) => f.name === 'public.set_pos_shift_alert_policy').access.push(FIFTH()); }],
+    ['a #386 relation changed', (x) => { x.relations[2].definition = '0'.repeat(64); }],
+    ['a #386 trigger disabled', (x) => { x.triggers[4].enabled = 'D'; }],
+  ]) {
+    const r = await runExactGap({ scenario: { changedBeforePush: with386(pre, change) } });
+    assert.equal(r.code, 2, `${label}: ${r.out}`);
+    assert.match(r.out, /^REFUSED state_changed:/m, label);
+    assert.deepEqual(kinds(r.calls), ['version', 'query', 'dry-include-all', 'query'], label);
+    assert.ok(noLeak(r.out), r.out);
+  }
+  // At the first read the PRE gate refuses, before the dry run.
+  const first = await runExactGap({ scenario: { pre: with386(pre, (x) => { x.triggers[0].enabled = 'D'; }) } });
+  assert.equal(first.code, 2, first.out);
+  // The pinned triggers are ordered by name: the first is end_shift_alert_on_branch on public.branches.
+  assert.match(first.out, /^gr37 exact-gap: PRE gate surface386_trigger: end_shift_alert_on_branch@public\.branches: disabled/m);
+  assert.match(first.out, /^REFUSED surface386_trigger:/m);
+  assert.deepEqual(kinds(first.calls), ['version', 'query']);
+  // After the push: a #386 difference is a POSTCHECK_MISMATCH (exit 4), never a refusal.
+  const post = egPostState(pre);
+  post.surface386.functions[0].access.push(FIFTH());
+  const after = await runExactGap({ scenario: { post } });
+  assert.equal(after.code, 4, after.out);
+  assert.match(after.out, /POST check post_surface386: #386's surface[\s\S]*RESULT: POSTCHECK_MISMATCH/);
+  assert.ok(!/^REFUSED /m.test(after.out) && noLeak(after.out), after.out);
+  // A passing run names #386's surface in its PRE and POST lines, and the five stored statements.
+  const ok = await runExactGap({});
+  assert.equal(ok.code, 0, ok.out);
+  assert.match(ok.out, /remote ledger 188 versions ending 20261104131256, 20261105025413, 20261105025604, 20261105141815, 20261108085442; the only gap is 20261104141959; 20261104131256, 20261105025413, 20261105025604, 20261105141815, 20261108085442 each hold their one reviewed statement/);
+  assert.match(ok.out, /#386's own surface as pinned \(28 functions, 4 relations and 12 triggers: definition, owner and exact access\)/);
+  assert.match(ok.out, /local folder = the pinned main set: 189 migrations \(names and bytes\), ending 20261104131256, 20261104141959, 20261105025413, 20261105025604, 20261105141815, 20261108085442/);
+  assert.match(ok.out, /POST \(read-only\): remote ledger 189 versions = the local set[\s\S]*migration list 189 rows, none divergent/);
+  assert.match(ok.out, /#382's surface, every storage\.objects policy and #386's surface identical to PRE/);
 });
