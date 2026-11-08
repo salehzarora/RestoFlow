@@ -13,7 +13,7 @@ export const originalFingerprint = 'b68c7d6a74dd91179042e65f038e2b1a85c58cc6efbc
 export const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 // The normal database suite applies this successor. The historical #379 proof stops before it.
 export const posDutySuccessor = Object.freeze({
-  name: '20261106180840_bizbot_pos_long_shift_alerts_001.sql',
+  name: '20261108085442_bizbot_pos_long_shift_alerts_001.sql',
   sha256: '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865',
 });
 

@@ -51,3 +51,9 @@ this rollout. The historical incident remains `UNKNOWN`.
 The lab sender was invoked explicitly after each test request and resolution. The
 existing automatic trigger's source contract was reviewed separately. Production
 trigger operation requires verification during the authorized rollout.
+
+The official Supabase application recorded migration version `20261108085442`.
+The repository filename follows that recorded version. Its SQL bytes retain SHA-256
+`7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865`,
+matching the reviewed source formerly named `20261106180840_bizbot_pos_long_shift_alerts_001.sql`.
+Historical QA78 receipts keep their original tested filename and source identity.

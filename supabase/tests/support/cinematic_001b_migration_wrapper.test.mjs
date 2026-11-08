@@ -266,7 +266,7 @@ test('production-shaped proof omits pending payment and the later POS release af
 
 test('both historical plans exclude exactly the pinned POS successor and refuse a changed, copied or later file', () => {
   const { name, sha256: digest } = posDutySuccessor;
-  assert.equal(name, '20261106180840_bizbot_pos_long_shift_alerts_001.sql');
+  assert.equal(name, '20261108085442_bizbot_pos_long_shift_alerts_001.sql');
   const original = bytesOf(name);
   assert.equal(sha256(original), digest);
   const historical = proveMigrationSequence(sources).historical_names;
