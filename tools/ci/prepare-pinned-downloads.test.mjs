@@ -25,6 +25,7 @@ test('fixed model, CLI and Kotlin identities retain the approved bytes and versi
   assert.equal(artifacts.cli.bytes, 73202139);
   assert.equal(artifacts.kotlin.sha1, 'bb8331b7585e36ea311825b01a1c06860c055fd1');
   assert.equal(artifacts.kotlin.sha256, '1c6c3f810bfe6a41abcbc34b3a2ef639f1e3f4aeed3a953a4b0974eea4f41889');
+  assert.equal(artifacts.kotlin.url, 'https://api.github.com/repos/JetBrains/kotlin/releases/assets/587886256');
   assert.ok(Object.isFrozen(artifacts) && Object.values(artifacts).every(Object.isFrozen));
 });
 

@@ -30,7 +30,7 @@ export const artifacts = Object.freeze({
     file: 'kotlin-compiler-embeddable-2.2.20.jar', bytes: 56907103,
     sha256: '1c6c3f810bfe6a41abcbc34b3a2ef639f1e3f4aeed3a953a4b0974eea4f41889',
     sha1: 'bb8331b7585e36ea311825b01a1c06860c055fd1',
-    url: 'https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-compiler-embeddable/2.2.20/kotlin-compiler-embeddable-2.2.20.jar',
+    url: 'https://api.github.com/repos/JetBrains/kotlin/releases/assets/587886256',
   }),
 });
 const cliMembers = Object.freeze([
