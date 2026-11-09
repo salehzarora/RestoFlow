@@ -65,12 +65,36 @@ const samples = new Set(['burger', 'fries-cup', 'platter', 'drink', 'burger-high
 const operations = new Set(['save-source', 'original-read']);
 // Exact literals from menu_upsert_item and get_storefront_product_original_v1.
 const responseCodes = new Set(['permission_denied', 'source_not_found', '42501']);
+// Publisher-reply lifecycle diagnostic. Each observed product publisher reply
+// keeps bounded facts only: per-run ordinals, a fixed variant label, a bounded
+// HTTP status, the fixed stage/sample labels current at each observation, the
+// finished() promise state and the independent browser request flags. Request
+// objects and the application request id stay in memory and are never written.
+// Reading rule: Playwright resolves finished() only on requestfinished and
+// rejects it only when the page closes, so in a timed-out run the reply that
+// never finished reads finishedPromise 'rejected' at 'publication-counts' with
+// requestFinished false; 'pending' appears only when another failure ends the
+// test while replies are still in flight.
+// Bounds: fourteen logical publishes (7 x w480 + 7 x w960), each at most five
+// ladder rungs x two attempts under one request id, give 140 replies; 192
+// leaves room for restart_required re-publishes. Overflow is always reported.
+export const PUBLISHER_REPLY_LIMITS = Object.freeze({ replies: 192, groups: 32 });
+// Elapsed-event evidence: integer milliseconds on a monotonic clock from the
+// reply's observation to its first requestfinished / requestfailed event,
+// clamped to 0..3,600,000; null until that event, or when no valid duration can
+// be measured. Evidence only; no verdict is derived from it.
+export const PUBLISHER_ELAPSED_MAX_MS = 3_600_000;
+const monotonicNow = () => (typeof performance === 'object' && performance !== null
+  && typeof performance.now === 'function') ? performance.now() : NaN;
+const publisherVariants = new Set(['w480', 'w960']);
+const boundedStatus = status => Number.isInteger(status) && status >= 100 && status <= 599 ? status : null;
+const identityKey = key => (typeof key === 'object' && key !== null) || typeof key === 'function';
 
 function responseFacts(status, body) {
   const record = body !== null && typeof body === 'object' && !Array.isArray(body);
   const code = record ? body.error ?? body.code : undefined;
   return {
-    httpStatus: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
+    httpStatus: boundedStatus(status),
     envelopeOk: record && typeof body.ok === 'boolean' ? body.ok : null,
     responseCode: !record ? 'unclassified' : code === undefined || code === null ? 'missing'
       : responseCodes.has(code) ? code : 'unclassified',
@@ -83,11 +107,53 @@ export async function captureProductResponse(progress, operation, status, readBo
   progress.recordResponse(operation, status, body);
 }
 
-export function createProductProgress() {
+export function createProductProgress({ now = monotonicNow } = {}) {
   let current = { stage: 'fixture', sample: null };
   const completed = [];
   const responses = new Map();
   let passed = false;
+  // Publisher reply state: bounded records, request identity and request-id
+  // grouping. Dropped replies and unassignable groups are counted explicitly.
+  const replies = [];
+  const repliesByRequest = new Map();
+  const groupsByRequestId = new Map();
+  const startClocks = new Map(); // record -> clock reading at observation; never serialized
+  let observedReplies = 0, groupOverflow = 0;
+  const stageNow = () => current?.stage ?? null;
+  // A clock failure never throws and never invents a duration.
+  const readClock = () => {
+    try {
+      const value = now();
+      return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    } catch { return null; }
+  };
+  const elapsedSince = start => {
+    const end = readClock();
+    if (typeof start !== 'number' || end === null) return null;
+    return Math.min(PUBLISHER_ELAPSED_MAX_MS, Math.max(0, Math.round(end - start)));
+  };
+  const groupOrdinal = requestId => {
+    if (typeof requestId !== 'string' || requestId === '') return null;
+    const known = groupsByRequestId.get(requestId);
+    if (known !== undefined) return known;
+    if (groupsByRequestId.size >= PUBLISHER_REPLY_LIMITS.groups) { groupOverflow += 1; return null; }
+    const ordinal = groupsByRequestId.size + 1;
+    groupsByRequestId.set(requestId, ordinal);
+    return ordinal;
+  };
+  // Only the first settlement counts; handlers assign fixed values and never throw.
+  const settle = (record, state) => {
+    if (record.finishedPromise !== 'pending') return;
+    record.finishedPromise = state;
+    record.finishedPromiseStage = stageNow();
+  };
+  const markRequest = (requestKey, flag, stageField, elapsedField) => {
+    const record = identityKey(requestKey) ? repliesByRequest.get(requestKey) : undefined;
+    if (!record || record[flag]) return;
+    record[flag] = true;
+    record[stageField] = stageNow();
+    record[elapsedField] = elapsedSince(startClocks.get(record));
+  };
   return {
     advance(stage, sample = current?.sample ?? null) {
       if (passed || !stages.has(stage) || (sample !== null && !samples.has(sample))) {
@@ -109,13 +175,68 @@ export function createProductProgress() {
       // Keep the first observation for each fixed sample/operation pair.
       if (!responses.has(key)) responses.set(key, { operation, sample, ...responseFacts(status, body) });
     },
+    // Never throws: every input is reduced to a fixed label, a bounded integer
+    // or a boolean before it is retained. The caller's finished() promise is
+    // only observed; its own chain, accounting and rejection path are untouched.
+    observePublisherReply(requestKey, facts) {
+      observedReplies += 1;
+      if (replies.length >= PUBLISHER_REPLY_LIMITS.replies) return;
+      const input = facts !== null && typeof facts === 'object' ? facts : {};
+      const record = {
+        ordinal: observedReplies,
+        group: groupOrdinal(input.groupKey),
+        variant: publisherVariants.has(input.variant) ? input.variant : 'other',
+        httpStatus: boundedStatus(input.status),
+        stage: stageNow(),
+        sample: current?.sample ?? null,
+        finishedPromise: 'pending',
+        finishedPromiseStage: null,
+        requestFinished: false,
+        requestFinishedStage: null,
+        requestFinishedAfterMs: null,
+        requestFailed: false,
+        requestFailedStage: null,
+        requestFailedAfterMs: null,
+      };
+      replies.push(record);
+      startClocks.set(record, readClock());
+      if (identityKey(requestKey) && !repliesByRequest.has(requestKey)) repliesByRequest.set(requestKey, record);
+      const finished = input.finished;
+      if (identityKey(finished) && typeof finished.then === 'function') {
+        try {
+          finished.then(() => settle(record, 'fulfilled'), () => settle(record, 'rejected'));
+        } catch { /* A hostile thenable must not break the browser event handler. */ }
+      }
+    },
+    markPublisherRequestFinished(requestKey) {
+      markRequest(requestKey, 'requestFinished', 'requestFinishedStage', 'requestFinishedAfterMs');
+    },
+    markPublisherRequestFailed(requestKey) {
+      markRequest(requestKey, 'requestFailed', 'requestFailedStage', 'requestFailedAfterMs');
+    },
     snapshot() {
+      const counts = { pending: 0, fulfilled: 0, rejected: 0, requestFinished: 0, requestFailed: 0 };
+      for (const record of replies) {
+        counts[record.finishedPromise] += 1;
+        if (record.requestFinished) counts.requestFinished += 1;
+        if (record.requestFailed) counts.requestFailed += 1;
+      }
       return {
         status: passed ? 'PASS' : 'FAIL',
         failedStage: current?.stage ?? null,
         sample: current?.sample ?? null,
         completedStages: completed.map(entry => ({ ...entry })),
         responses: [...responses.values()].map(entry => ({ ...entry })),
+        publisherReplies: {
+          limits: { ...PUBLISHER_REPLY_LIMITS },
+          observed: observedReplies,
+          recorded: replies.length,
+          droppedReplies: observedReplies - replies.length,
+          groupOverflow,
+          truncated: observedReplies > replies.length || groupOverflow > 0,
+          counts,
+          replies: replies.map(record => ({ ...record })),
+        },
       };
     },
   };
