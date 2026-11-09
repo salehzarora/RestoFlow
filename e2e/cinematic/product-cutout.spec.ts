@@ -230,11 +230,24 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
   page.on('response', response => {
     if (post(response, '/functions/v1/storefront-media-publish')) {
       const body = response.request().postDataJSON();
-      if (body.slot === 'product') publishedReplies.push(response.finished().then(() => {
-        publisherCalls.push({ variant: body.variant, status: response.status() });
-      }));
+      if (body.slot === 'product') {
+        const finished = response.finished();
+        publishedReplies.push(finished.then(() => {
+          publisherCalls.push({ variant: body.variant, status: response.status() });
+        }));
+        // Diagnostic only: the same finished() promise is observed for its
+        // settlement state. The wait, its accounting and its rejection path
+        // above are unchanged; the request object and request id stay in memory.
+        progress.observePublisherReply(response.request(), {
+          variant: body.variant, status: response.status(), groupKey: body.request_id, finished,
+        });
+      }
     }
   });
+  // The browser request lifecycle is recorded independently of finished(),
+  // which Playwright resolves only on requestfinished and rejects only on close.
+  page.on('requestfinished', request => progress.markPublisherRequestFinished(request));
+  page.on('requestfailed', request => progress.markPublisherRequestFailed(request));
   advance('login');
   const token = await login(page, fixture.ownerA.email, fixture.ownerA.password);
   advance('baseline-invariants');

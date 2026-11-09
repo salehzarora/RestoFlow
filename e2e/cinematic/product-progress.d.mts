@@ -65,14 +65,35 @@ export type ProductResponseFacts = {
   httpStatus: number | null; envelopeOk: boolean | null;
   responseCode: 'permission_denied' | 'source_not_found' | '42501' | 'missing' | 'unclassified';
 };
+export type PublisherVariant = 'w480' | 'w960' | 'other';
+export type PublisherPromiseState = 'pending' | 'fulfilled' | 'rejected';
+export type PublisherReplyFacts = {
+  ordinal: number; group: number | null; variant: PublisherVariant; httpStatus: number | null;
+  stage: ProductStage | null; sample: ProductSample | null;
+  finishedPromise: PublisherPromiseState; finishedPromiseStage: ProductStage | null;
+  requestFinished: boolean; requestFinishedStage: ProductStage | null;
+  requestFailed: boolean; requestFailedStage: ProductStage | null;
+};
+export type PublisherReplyReceipt = {
+  limits: { replies: number; groups: number };
+  observed: number; recorded: number; droppedReplies: number; groupOverflow: number; truncated: boolean;
+  counts: { pending: number; fulfilled: number; rejected: number; requestFinished: number; requestFailed: number };
+  replies: PublisherReplyFacts[];
+};
+export type PublisherReplyObservation = { variant?: unknown; status?: unknown; groupKey?: unknown; finished?: unknown };
+export const PUBLISHER_REPLY_LIMITS: { readonly replies: 128; readonly groups: 32 };
 export type ProductProgress = {
   advance(stage: ProductStage, sample?: ProductSample | null): void;
   complete(): void;
   recordResponse(operation: ProductOperation, status: unknown, body: unknown): void;
+  observePublisherReply(requestKey: unknown, facts: PublisherReplyObservation | null | undefined): void;
+  markPublisherRequestFinished(requestKey: unknown): void;
+  markPublisherRequestFailed(requestKey: unknown): void;
   snapshot(): {
     status: 'PASS' | 'FAIL'; failedStage: ProductStage | null; sample: ProductSample | null;
     completedStages: { stage: ProductStage; sample: ProductSample | null }[];
     responses: ProductResponseFacts[];
+    publisherReplies: PublisherReplyReceipt;
   };
 };
 export function createProductProgress(): ProductProgress;

@@ -1,6 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { captureProductResponse, createProductProgress } from './product-progress.mjs';
+import { PUBLISHER_REPLY_LIMITS, captureProductResponse, createProductProgress } from './product-progress.mjs';
+
+// Synthetic deferred promises and plain objects stand in for Playwright's
+// response.finished() promise and Request objects; no browser or service runs.
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((fulfil, fail) => { resolve = fulfil; reject = fail; });
+  return { promise, resolve, reject };
+}
+const settled = () => new Promise(resolve => setImmediate(resolve));
+const pendingForever = () => new Promise(() => {});
+const emptyPublisherReplies = () => ({
+  limits: { replies: PUBLISHER_REPLY_LIMITS.replies, groups: PUBLISHER_REPLY_LIMITS.groups },
+  observed: 0, recorded: 0, droppedReplies: 0, groupOverflow: 0, truncated: false,
+  counts: { pending: 0, fulfilled: 0, rejected: 0, requestFinished: 0, requestFailed: 0 }, replies: [],
+});
+function* stringValues(value) {
+  if (typeof value === 'string') yield value;
+  else if (Array.isArray(value)) for (const item of value) yield* stringValues(item);
+  else if (value !== null && typeof value === 'object') for (const item of Object.values(value)) yield* stringValues(item);
+}
 
 test('a thrown assertion retains its fixed stage and completed history in finally', () => {
   const progress = createProductProgress();
@@ -15,7 +35,7 @@ test('a thrown assertion retains its fixed stage and completed history in finall
   assert.deepEqual(receipt, {
     status: 'FAIL', failedStage: 'save-source-result', sample: 'burger',
     completedStages: [{ stage: 'fixture', sample: null }, { stage: 'login', sample: null }],
-    responses: [],
+    responses: [], publisherReplies: emptyPublisherReplies(),
   });
 });
 
@@ -30,6 +50,7 @@ test('unknown stages and secret-bearing sample values cannot escape in receipts 
   assert.equal(JSON.stringify(progress.snapshot()).includes(secret), false);
   assert.deepEqual(progress.snapshot(), {
     status: 'FAIL', failedStage: 'fixture', sample: null, completedStages: [], responses: [],
+    publisherReplies: emptyPublisherReplies(),
   });
 });
 
@@ -127,4 +148,213 @@ test('a high-res rendering failure cannot be mistaken for the preceding successf
   assert.equal(receipt.failedStage, 'highres-original-render');
   assert.equal(receipt.sample, 'burger-highres');
   assert.deepEqual(receipt.completedStages.at(-1), { stage: 'highres-cutout-render', sample: 'burger-highres' });
+});
+
+test('publisher replies settle to pending, fulfilled or rejected while the baseline wait keeps its own rejection', async () => {
+  const progress = createProductProgress();
+  progress.advance('publish-selection', 'platter');
+  const replies = [deferred(), deferred(), deferred()];
+  const keys = replies.map(() => ({}));
+  // The spec's own accounting, composed exactly as product-cutout.spec.ts does.
+  const publisherCalls = [];
+  const publishedReplies = replies.map((reply, index) => {
+    const pushed = reply.promise.then(() => { publisherCalls.push({ variant: 'w480', status: 200 }); });
+    progress.observePublisherReply(keys[index], { variant: 'w480', status: 200, groupKey: `publish-${index}`, finished: reply.promise });
+    return pushed;
+  });
+  assert.deepEqual(progress.snapshot().publisherReplies.replies.map(reply => reply.finishedPromise), ['pending', 'pending', 'pending']);
+  assert.deepEqual(publisherCalls, []);
+  replies[0].resolve(null);
+  await settled();
+  assert.equal(progress.snapshot().publisherReplies.replies[0].finishedPromise, 'fulfilled');
+  assert.equal(progress.snapshot().publisherReplies.replies[0].finishedPromiseStage, 'publish-selection');
+  assert.equal(publisherCalls.length, 1, 'accounting still happens at fulfilment, not at observation');
+  progress.advance('publication-counts', null);
+  const closeReason = new Error('secret-target-closed-reason');
+  replies[1].reject(closeReason);
+  await assert.rejects(Promise.all(publishedReplies), error => error === closeReason);
+  await settled();
+  const receipt = progress.snapshot().publisherReplies;
+  assert.deepEqual(receipt.replies.map(reply => [reply.finishedPromise, reply.finishedPromiseStage]),
+    [['fulfilled', 'publish-selection'], ['rejected', 'publication-counts'], ['pending', null]]);
+  assert.deepEqual(receipt.counts, { pending: 1, fulfilled: 1, rejected: 1, requestFinished: 0, requestFailed: 0 });
+  assert.equal(publisherCalls.length, 1);
+  assert.equal(JSON.stringify(progress.snapshot()).includes('secret-target-closed-reason'), false);
+});
+
+test('a failed browser request is recorded while its finished promise stays pending', async () => {
+  const progress = createProductProgress();
+  progress.advance('publish-selection', 'drink');
+  const request = {};
+  progress.observePublisherReply(request, { variant: 'w960', status: 200, groupKey: 'publish-a', finished: pendingForever() });
+  progress.advance('selection-readback');
+  progress.markPublisherRequestFailed(request);
+  await settled();
+  const expected = { ordinal: 1, group: 1, variant: 'w960', httpStatus: 200, stage: 'publish-selection', sample: 'drink',
+    finishedPromise: 'pending', finishedPromiseStage: null, requestFinished: false, requestFinishedStage: null,
+    requestFailed: true, requestFailedStage: 'selection-readback' };
+  assert.deepEqual(progress.snapshot().publisherReplies.replies, [expected]);
+  // Repeated, unknown or primitive keys change nothing.
+  progress.advance('close-product');
+  progress.markPublisherRequestFailed(request);
+  progress.markPublisherRequestFinished({});
+  progress.markPublisherRequestFailed('publish-a');
+  progress.markPublisherRequestFinished(undefined);
+  assert.deepEqual(progress.snapshot().publisherReplies.replies, [expected]);
+  assert.deepEqual(progress.snapshot().publisherReplies.counts,
+    { pending: 1, fulfilled: 0, rejected: 0, requestFinished: 0, requestFailed: 1 });
+});
+
+test('requestfinished is observed independently of the finished promise', async () => {
+  const progress = createProductProgress();
+  progress.advance('registration-proof', 'burger');
+  const early = { key: {}, reply: deferred() }, late = { key: {}, reply: deferred() };
+  progress.observePublisherReply(early.key, { variant: 'w480', status: 200, groupKey: 'publish-early', finished: early.reply.promise });
+  progress.observePublisherReply(late.key, { variant: 'w960', status: 202, groupKey: 'publish-late', finished: late.reply.promise });
+  const reply = index => progress.snapshot().publisherReplies.replies[index];
+  // Browser event first, promise still pending.
+  progress.markPublisherRequestFinished(early.key);
+  assert.deepEqual([reply(0).requestFinished, reply(0).requestFinishedStage, reply(0).finishedPromise], [true, 'registration-proof', 'pending']);
+  early.reply.resolve(null);
+  await settled();
+  assert.deepEqual([reply(0).requestFinished, reply(0).finishedPromise, reply(0).requestFailed], [true, 'fulfilled', false]);
+  // Promise first with no browser event observed is representable as well.
+  late.reply.resolve(null);
+  await settled();
+  assert.deepEqual([reply(1).finishedPromise, reply(1).requestFinished, reply(1).requestFinishedStage, reply(1).requestFailed],
+    ['fulfilled', false, null, false]);
+  progress.advance('selected-private-read');
+  progress.markPublisherRequestFinished(late.key);
+  progress.markPublisherRequestFailed(late.key);
+  assert.deepEqual([reply(1).requestFinished, reply(1).requestFinishedStage, reply(1).requestFailed, reply(1).requestFailedStage],
+    [true, 'selected-private-read', true, 'selected-private-read']);
+  assert.deepEqual(progress.snapshot().publisherReplies.counts,
+    { pending: 0, fulfilled: 2, rejected: 0, requestFinished: 2, requestFailed: 1 });
+});
+
+test('retry grouping maps the application request id to a per-run ordinal and never serializes it', () => {
+  const progress = createProductProgress();
+  const requestId = 'c0ffee00-1111-4222-8333-444455556666';
+  const observations = [
+    [requestId, 'w480', 202], [requestId, 'w480', 200], ['d15c0000-2222-4333-8444-555566667777', 'w960', 200],
+    [undefined, 'w960', 200], [42, 'w480', 200], ['', 'w480', 200], [requestId, 'w480', 503],
+  ];
+  for (const [groupKey, variant, status] of observations) {
+    progress.observePublisherReply({}, { variant, status, groupKey, finished: pendingForever() });
+  }
+  const receipt = progress.snapshot().publisherReplies;
+  assert.deepEqual(receipt.replies.map(reply => reply.group), [1, 1, 2, null, null, null, 1]);
+  assert.deepEqual(receipt.replies.map(reply => reply.ordinal), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(receipt.replies.map(reply => reply.httpStatus), [202, 200, 200, 200, 200, 200, 503]);
+  assert.equal(receipt.groupOverflow, 0);
+  const text = JSON.stringify(progress.snapshot());
+  assert.equal(text.includes(requestId), false);
+  assert.equal(text.includes('d15c0000'), false);
+  // Every string in the receipt is a short fixed label: no identifier, digest or free text.
+  for (const value of stringValues(progress.snapshot())) {
+    assert.ok(value.length <= 32 && /^[A-Za-z0-9_-]+$/.test(value), 'free-form string leaked into the receipt');
+  }
+});
+
+test('publisher reply facts keep only fixed labels, bounded status and current stage labels', () => {
+  const progress = createProductProgress();
+  progress.advance('publish-selection', 'fries-cup');
+  const last = () => progress.snapshot().publisherReplies.replies.at(-1);
+  for (const [variant, expected] of [['w480', 'w480'], ['w960', 'w960'], ['bg2560', 'other'], [undefined, 'other'],
+    [{ secret: 'variant' }, 'other'], ['W480', 'other']]) {
+    progress.observePublisherReply({}, { variant, status: 200, groupKey: 'publish-v', finished: pendingForever() });
+    assert.equal(last().variant, expected);
+  }
+  for (const [status, expected] of [[200, 200], [202, 202], [503, 503], [99, null], [600, null], [200.5, null],
+    ['200', null], [NaN, null], [null, null], [undefined, null]]) {
+    progress.observePublisherReply({}, { variant: 'w480', status, groupKey: 'publish-s', finished: pendingForever() });
+    assert.equal(last().httpStatus, expected);
+  }
+  progress.observePublisherReply({}, undefined);
+  progress.observePublisherReply({}, null);
+  for (const reply of progress.snapshot().publisherReplies.replies.slice(-2)) {
+    assert.deepEqual([reply.variant, reply.httpStatus, reply.group, reply.finishedPromise, reply.stage, reply.sample],
+      ['other', null, null, 'pending', 'publish-selection', 'fries-cup']);
+  }
+  const text = JSON.stringify(progress.snapshot());
+  assert.equal(text.includes('bg2560'), false);
+  assert.equal(text.includes('secret'), false);
+  assert.equal(text.includes('W480'), false);
+  // After completion no stage is current; labels become null rather than an invented value.
+  progress.advance('success-evidence', null);
+  progress.complete();
+  progress.observePublisherReply({}, { variant: 'w960', status: 200, groupKey: 'publish-late', finished: pendingForever() });
+  assert.deepEqual([last().stage, last().sample, last().variant], [null, null, 'w960']);
+});
+
+test('reply records and the grouping map are bounded with explicit overflow', () => {
+  const { replies: maxReplies, groups: maxGroups } = PUBLISHER_REPLY_LIMITS;
+  const progress = createProductProgress();
+  for (let index = 0; index < maxReplies + 3; index += 1) {
+    progress.observePublisherReply({}, { variant: 'w480', status: 200, groupKey: `publish-${index % 4}`, finished: pendingForever() });
+  }
+  const receipt = progress.snapshot().publisherReplies;
+  assert.deepEqual([receipt.observed, receipt.recorded, receipt.droppedReplies, receipt.groupOverflow, receipt.truncated],
+    [maxReplies + 3, maxReplies, 3, 0, true]);
+  assert.equal(receipt.replies.length, maxReplies);
+  assert.equal(receipt.replies.at(-1).ordinal, maxReplies);
+  assert.deepEqual(receipt.limits, { replies: maxReplies, groups: maxGroups });
+
+  const grouped = createProductProgress();
+  for (let index = 0; index < maxGroups + 2; index += 1) {
+    grouped.observePublisherReply({}, { variant: 'w960', status: 200, groupKey: `publish-${index}`, finished: pendingForever() });
+  }
+  grouped.observePublisherReply({}, { variant: 'w960', status: 200, groupKey: 'publish-0', finished: pendingForever() });
+  const groupedReceipt = grouped.snapshot().publisherReplies;
+  assert.deepEqual(groupedReceipt.replies.slice(maxGroups - 1).map(reply => reply.group), [maxGroups, null, null, 1]);
+  assert.deepEqual([groupedReceipt.groupOverflow, groupedReceipt.droppedReplies, groupedReceipt.truncated], [2, 0, true]);
+  assert.deepEqual(emptyPublisherReplies().truncated, false);
+});
+
+test('publisher reply snapshots are immutable copies', async () => {
+  const progress = createProductProgress();
+  progress.advance('publish-selection', 'burger');
+  const key = {}, reply = deferred();
+  progress.observePublisherReply(key, { variant: 'w480', status: 200, groupKey: 'publish-a', finished: reply.promise });
+  const before = progress.snapshot();
+  const frozen = JSON.stringify(before);
+  reply.resolve(null);
+  progress.markPublisherRequestFinished(key);
+  progress.observePublisherReply({}, { variant: 'w960', status: 200, groupKey: 'publish-b', finished: pendingForever() });
+  await settled();
+  assert.equal(JSON.stringify(before), frozen, 'later events never alter an earlier receipt');
+  before.publisherReplies.replies[0].finishedPromise = 'secret-state';
+  before.publisherReplies.replies.push({ variant: 'secret-variant' });
+  before.publisherReplies.counts.pending = 99;
+  before.publisherReplies.limits.replies = 1;
+  const after = progress.snapshot().publisherReplies;
+  assert.equal(JSON.stringify(after).includes('secret'), false);
+  assert.deepEqual([after.recorded, after.limits.replies, after.counts],
+    [2, PUBLISHER_REPLY_LIMITS.replies, { pending: 1, fulfilled: 1, rejected: 0, requestFinished: 1, requestFailed: 0 }]);
+});
+
+test('observer inputs never throw and the observer adds no unhandled rejection', async () => {
+  const progress = createProductProgress();
+  const rejections = [];
+  const record = reason => { rejections.push(reason); };
+  process.on('unhandledRejection', record);
+  try {
+    assert.doesNotThrow(() => {
+      progress.observePublisherReply(undefined, undefined);
+      progress.observePublisherReply(null, { finished: 'not-a-promise' });
+      progress.observePublisherReply({}, { finished: { then() { throw new Error('hostile thenable'); } } });
+      progress.observePublisherReply({}, { finished: { then(fulfil, fail) { fail(new Error('synchronous rejection')); fulfil(null); fail(new Error('again')); } } });
+      progress.markPublisherRequestFinished(null);
+      progress.markPublisherRequestFailed(Symbol('request'));
+    });
+    const observerOnly = Promise.reject(new Error('rejection seen only by the observer'));
+    progress.observePublisherReply({}, { variant: 'w480', status: 200, groupKey: 'publish-r', finished: observerOnly });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.deepEqual(rejections, []);
+    assert.deepEqual(progress.snapshot().publisherReplies.replies.map(reply => reply.finishedPromise),
+      ['pending', 'pending', 'pending', 'rejected', 'rejected']);
+    assert.equal(JSON.stringify(progress.snapshot()).includes('hostile'), false);
+  } finally {
+    process.off('unhandledRejection', record);
+  }
 });
