@@ -409,6 +409,16 @@ const gitBlob = (file) => {
   assert.equal(r.status, 0, `HEAD:${MIGRATIONS}/${file} is not committed`);
   return r.stdout;
 };
+// The committed bytes of any path at HEAD (shallow CI has HEAD; a Windows working copy may be CRLF-converted).
+const gitBlobAt = (rel) => {
+  const r = spawnSync('git', ['-C', REPO, 'cat-file', 'blob', `HEAD:${rel}`], { maxBuffer: 1 << 24 });
+  assert.equal(r.status, 0, `HEAD:${rel} is not committed`);
+  return r.stdout;
+};
+// The historical config.toml the exact-gap mode pinned (main 46612618 at the 001D apply, SHA-256 447beeba...), kept as an
+// immutable committed fixture since BIZBOT-PAYMENTS-ZCREDIT-PILOT-001E-P2-INTEGRATION-001 added [functions.pos-card-charge] to
+// the live supabase/config.toml. The wrapper's pin is unchanged; the fixture is what the historical proofs compare it with.
+const HISTORICAL_CONFIG = 'tools/supabase/fixtures/exact_gap_historical_config.toml';
 const gitMigrationNames = () => {
   const r = spawnSync('git', ['-C', REPO, 'ls-tree', '--name-only', `HEAD:${MIGRATIONS}`], { encoding: 'utf8', maxBuffer: 1 << 26 });
   assert.equal(r.status, 0);
@@ -630,15 +640,30 @@ test('exact-gap: the local-set pins equal the 189 oldest committed migrations; t
   assert.deepEqual([...new Set(surface.flatMap(createdFunctionNames))].sort(), [...EG.surfaceFunctions]);
   const tables = [...new Set(surface.flatMap((s) => splitSql(s).map(lead).map((x) => /^create\s+table\s+([a-z_]+\.[a-z_0-9]+)/i.exec(x)).filter(Boolean).map((m) => m[1])))].sort();
   assert.deepEqual(tables, [...EG.surfaceTables]);
-  // The workdir's other CLI inputs: main's config.toml bytes; the dotenv files main ships are only .env.example.
-  const config = spawnSync('git', ['-C', REPO, 'cat-file', 'blob', 'HEAD:supabase/config.toml'], { maxBuffer: 1 << 24 });
-  assert.equal(config.status, 0);
-  assert.equal(sha(config.stdout), EG.configSha256);
+  // The workdir's other CLI inputs: the historical config.toml bytes the mode pinned, read as the fixture's committed blob (the
+  // live supabase/config.toml moved on with P2); the dotenv files main ships are only .env.example.
+  assert.equal(sha(gitBlobAt(HISTORICAL_CONFIG)), EG.configSha256);
   for (const tree of ['HEAD', 'HEAD:supabase']) {
     const r = spawnSync('git', ['-C', REPO, 'ls-tree', '--name-only', tree], { encoding: 'utf8' });
     assert.equal(r.status, 0);
     assert.deepEqual(r.stdout.split('\n').filter((n) => /^\.env(?:\.|$)/i.test(n)).filter((n) => !EG.allowedDotenv.includes(n)), [], tree);
   }
+});
+
+test('exact-gap local folder: the 189 pinned committed blobs with the historical config pass the gate; only the live config.toml swapped in refuses local_config', (t) => {
+  if (!inGitTree()) return t.skip('not a Git work tree');
+  // The actual pinned set: the 189 oldest committed migrations (G1, added by P2 after them, is outside the pinned set).
+  const names = gitMigrationNames().slice(0, EG.localCount);
+  assert.equal(names.length, EG.localCount);
+  const files = Object.fromEntries(names.map((n) => [n, gitBlob(n)]));
+  const historical = gitBlobAt(HISTORICAL_CONFIG);
+  assert.equal(sha(historical), EG.configSha256);
+  assert.equal(checkExactGapMigrations(exactGapFolder(EG, files, { 'supabase/config.toml': historical }), EG).files, EG.localCount);
+  // The live config.toml (P2 added [functions.pos-card-charge]) differs from the pinned bytes. With the same 189 files, the
+  // gate refuses on the config alone, so a count refusal cannot mask this check.
+  const live = gitBlobAt('supabase/config.toml');
+  assert.notEqual(sha(live), EG.configSha256);
+  assert.throws(() => checkExactGapMigrations(exactGapFolder(EG, files, { 'supabase/config.toml': live }), EG), refusal('local_config'));
 });
 
 test('exact-gap arguments: one flag with its one Work ID; a caller\'s --include-all or repair is refused by name', () => {
