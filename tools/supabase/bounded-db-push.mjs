@@ -393,33 +393,35 @@ export async function main(argv = process.argv.slice(2), env = process.env, prin
 
 // =====================================================================================================================
 // One-time exact-gap mode: BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-EXACT-GAP-APPLY-001 (DECISION D-066), re-pinned to main
-// 0fe8ef80 by its REPIN-001.
-// Hosted received #379's 20261104131256, then #380's 20261105025413 and 20261105025604 and #382's 20261105141815
-// through the official Supabase migration operation before 001D, so the frozen 20261104141959 now sorts before the hosted
+// 0fe8ef80 by its REPIN-001 and, after #386, to main 28c41911 by POST-386-REPIN-001 (DECISION D-068).
+// Hosted received #379's 20261104131256, then #380's 20261105025413 and 20261105025604, #382's 20261105141815 and
+// #386's 20261108085442 through the official Supabase migration operation before 001D, so the frozen 20261104141959 now sorts before the hosted
 // latest. The default route above refuses that (001D is not the newest local file, and the CLI's normal dry run asks for
 // --include-all). This mode admits exactly that one gap and nothing else:
 // - every value it checks is pinned below; the caller only selects the mode, with
 //   `--exact-gap BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-EXACT-GAP-APPLY-001`, and a caller's --include-all or repair is
 //   refused;
-// - the local folder must be exactly the pinned 188-file main set (names and bytes), ending with the pinned tail; the
+// - the local folder must be exactly the pinned 189-file main set (names and bytes), ending with the pinned tail; the
 //   workdir's other CLI inputs are pinned too: supabase/config.toml has main's bytes, no dotenv file other than
 //   .env.example sits in the workdir or its supabase/ folder, and the workdir is not linked to a project;
 // - a read-only session (default_transaction_read_only=on) must find exactly the pinned hosted shape: the PostgreSQL
-//   runtime the access pins were derived on (server_version_num 170006) with TimeZone UTC, 187 versions, the one gap
-//   20261104141959, no remote-only version, the four versions hosted received through the official operation each
+//   runtime the access pins were derived on (server_version_num 170006) with TimeZone UTC, 188 versions, the one gap
+//   20261104141959, no remote-only version, the five versions hosted received through the official operation each
 //   holding its single stored statement with its pinned SHA-256, no 001D object, the seven functions 001D re-creates
 //   still in their pinned pre-001D form (body, owner, the EXECUTE bits the file sets and their exact access: every
 //   grantee, privilege, grant option and grantor), the #379 / #380 / #382 surfaces present, and #382's own surface (its
 //   relation, functions and Storage policies) exactly as pinned from the sequential reference (each function's whole
-//   definition, the relation's catalog line, the policies' expressions, owners and exact access);
+//   definition, the relation's catalog line, the policies' expressions, owners and exact access), and (D-068) #386's own
+//   surface (its 28 functions, four relations and twelve triggers) exactly as pinned from the sequential reference;
 // - the CLI's --include-all is added internally, to a read-only dry run that must list exactly 001D (cross-checked
 //   against the read-only version sets), and then to the one push, which runs only after the state is re-read unchanged
 //   (its PostgreSQL runtime and TimeZone checked again) and the local folder is checked again;
-// - POST, read-only: the ledger equals the local set (188 versions) with every earlier row unchanged and the 001D row as
+// - POST, read-only: the ledger equals the local set (189 versions) with every earlier row unchanged and the 001D row as
 //   pinned; a normal dry run (no --include-all) reports the database up to date; `migration list` shows no divergence
 //   and the CLI gives no repair advice; the 001D manifest (derived from the migration bytes) matches, with the exact
 //   access (every grantee, privilege, grant option and grantor) of every 001D function, table, column and the sequence
-//   as pinned from the sequential reference; #382's surface, and every policy on storage.objects, are identical to PRE;
+//   as pinned from the sequential reference; #382's surface, every policy on storage.objects and #386's surface are
+//   identical to PRE;
 //   and the catalog digests of every other function of the app and public schemas (identity, body, security definer,
 //   config, volatility, language, owner, ACL), of every other relation there (kind, RLS, owner, ACL, columns,
 //   constraints, policies, triggers, indexes) and of every default privilege are unchanged. Nothing else is compared:
@@ -460,8 +462,8 @@ const deepFreeze = (value) => {
   return value;
 };
 
-// Generated from the base main commit 0fe8ef80 (188 migrations) by REPIN-001's rp_gen_pins.mjs, the adapted
-// gen_wrapper_pins.mjs (the corrected source was pinned to ad8c3caf's 187); the unit tests re-derive the 001D and #382
+// Generated from the base main commit 28c41911 (189 migrations) by POST-386-REPIN-001's p3_gen_pins.mjs (REPIN-001's
+// rp_gen_pins.mjs adapted; before it 0fe8ef80's 188 and ad8c3caf's 187); the unit tests re-derive the 001D, #382 and #386
 // parts from the committed migration bytes.
 // functions: [schema.name, SHA-256 of the dollar-quoted body (= prosrc), security definer, proconfig, volatility,
 // language, EXECUTE group]; the groups are the file's own GRANT / REVOKE sets.
@@ -471,10 +473,10 @@ export const EXACT_GAP = deepFreeze({
   missingFile: MIGRATION,
   missingSha256: MIGRATION_SHA256,
   missingName: 'bizbot_zcredit_001d_server_ledger',
-  localCount: 188,
-  remoteCountBefore: 187,
-  localNamesSha256: 'f48235ae46c59e022736c95227491a6700eecaa177f5027416ca37c7308ce3c9',
-  localBytesSha256: 'fe389ae90cfd71530050d945a6254f37ff266923e74d08961f448b8e3a2bf962',
+  localCount: 189,
+  remoteCountBefore: 188,
+  localNamesSha256: '756219a502df025420b5a129887b9802b1cc410a0254b4e10a69634c45c5b78d',
+  localBytesSha256: '0fae2d5a0a5a53e5cba1215c07fdf52faaca6940755cea1429056943d41f8358',
   // main's supabase/config.toml (the pinned CLI reads it during the push); the only dotenv files main itself ships.
   configSha256: '447beeba30b17a739beede822807a9f0b19590e9e31abd4605b0ffc06a9a6bd7',
   allowedDotenv: ['.env.example'],
@@ -491,15 +493,17 @@ export const EXACT_GAP = deepFreeze({
     ['20261105025413_bizbot_storefront_visual_parity_product_media.sql', 'a901a709970b4629b22357743831aab687c2882fe066776dd7913b82c29c77d5'],
     ['20261105025604_bizbot_storefront_visual_parity_scene.sql', '7bfac52a707b20fdf9b67a466d84290a7565fe574850ce1e992c093d5f19b520'],
     ['20261105141815_bizbot_storefront_background_clarity_001_api.sql', 'e5cf4b2840837facc5699cecb154689a7439383ac4d6650f13746d5e68bd8504'],
+    ['20261108085442_bizbot_pos_long_shift_alerts_001.sql', '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865'],
   ],
-  remoteTail: ['20261104131256', '20261105025413', '20261105025604', '20261105141815'],
-  laterHosted: ['20261105025413', '20261105025604', '20261105141815'],
+  remoteTail: ['20261104131256', '20261105025413', '20261105025604', '20261105141815', '20261108085442'],
+  laterHosted: ['20261105025413', '20261105025604', '20261105141815', '20261108085442'],
   // version -> [stored name, SHA-256 of the ONE stored statement]: the official operation stores the whole file once.
   storedStatements: {
     '20261104131256': ['bizbot_storefront_cinematic_001b_appearance', 'a276aef4fdd30b35272939e51d649bff3dfeb70b6c806ecb7c2edee94ceb263b'],
     '20261105025413': ['bizbot_storefront_visual_parity_product_media', 'a901a709970b4629b22357743831aab687c2882fe066776dd7913b82c29c77d5'],
     '20261105025604': ['bizbot_storefront_visual_parity_scene', '7bfac52a707b20fdf9b67a466d84290a7565fe574850ce1e992c093d5f19b520'],
     '20261105141815': ['bizbot_storefront_background_clarity_001_api', 'e5cf4b2840837facc5699cecb154689a7439383ac4d6650f13746d5e68bd8504'],
+    '20261108085442': ['bizbot_pos_long_shift_alerts_001', '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865'],
   },
   owner: 'postgres',
   tables: ['app.card_payments_pilot_revisions', 'app.payment_terminals', 'app.card_provider_attempts', 'app.card_provider_private_events',
@@ -743,6 +747,114 @@ export const EXACT_GAP = deepFreeze({
         using: "((bucket_id = 'storefront-media'::text) AND app.can_access_storefront_background_object_v1(name, false))", check: null },
     ],
   },
+  // D-068 (POST-386-REPIN-001): #386's own surface (20261108085442_bizbot_pos_long_shift_alerts_001.sql), exactly as observed on
+  // the current-main sequential reference database A (PostgreSQL 17.6), the same definitions the file's bytes give. functions: as
+  // surface382 ([schema.name, identity arguments, SHA-256 of the dollar-quoted body (= prosrc), security definer, proconfig,
+  // volatility, language, EXECUTE group, SHA-256 of pg_get_functiondef]); the groups are the file's own GRANT / REVOKE sets
+  // ('none': the owner only; 'inherited': the one CREATE OR REPLACE the file neither grants nor revokes keeps its earlier access,
+  // pinned per function in inheritedAccess). The five *_core functions are the file's renames of the earlier functions: a rename
+  // keeps the body, and the file revokes them from every client role; four bodies are the latest static definitions in the
+  // earlier files, and app.pos_register_order_alert_core's also carries the in-database patches of 20261027011255 and
+  // 20261027142721. relations: the three tables the file creates and the one it alters (kind, RLS, forced RLS, owner, policies,
+  // exact access, column grants and the SHA-256 of the catalog line the other-relation digest uses). triggers: [name@schema.table,
+  // SHA-256 of pg_get_triggerdef], each required enabled. PRE requires all of it; POST requires it, byte for byte, identical to PRE.
+  surface386: {
+    version: '20261108085442',
+    functions: [
+      ['app.approve_pos_shift_alert_end', 'p_shift_id uuid, p_policy_revision uuid, p_approved_until timestamp with time zone', 'b8c6351593c9430f3fba27280b8395f71c374807cb42cf6fd36c2ef01b1e24df', true, 'search_path=""', 'v', 'plpgsql', 'authenticated',
+        'bb9a5a887032cc8128f6f0a1f6263ee515940a3ae9f64210b851f02b4801f40b'],
+      ['app.end_pos_shift_alert_bindings', '', '36a2c9343895045c9e750f184ecef09306961e37f23b9b3dcb3229dc50b59e73', true, 'search_path=""', 'v', 'plpgsql', 'none',
+        '058b4ca03ce335764857e3695f87fea733689fbdcd99eabadab4be24e188e20b'],
+      ['app.pos_claim_order_alert_deliveries', 'p_limit integer', '31374c4731041a09792068cb9ec63619c9d72594d688e68e0834c0db892bfa92', true, 'search_path=""', 'v', 'plpgsql', 'service_role',
+        '318b3272e5fc7ec1a6893c901aaa012695b676918fa08b61482b83028bf08e1e'],
+      ['app.pos_claim_order_alert_deliveries_core', 'p_limit integer', '064444341ea9f6e4d9aad0451a0911a539c77b3191a4aa85d9d7d42a07aefa29', true, 'search_path=""', 'v', 'plpgsql', 'none',
+        '8c98b99c87bcee2e6c47f96d3938d6893ca32e182367239234d3bc0c9a535afa'],
+      ['app.pos_disable_order_alert', 'p_installation_id uuid, p_status_secret_hash text', 'f6f9acc79bf2c894790b528452a6abd3e17d2563a5a62016b47ed1ef1f0d1927', true, 'search_path=""', 'v', 'plpgsql', 'service_role',
+        '6f537c08c64efbd34639b1c9d874f58a00a82618dfe3dd99088bc489732e016a'],
+      ['app.pos_disable_order_alert_core', 'p_installation_id uuid, p_status_secret_hash text', '5bdb2d754351a0390893967e7fbd58a58e98c4317e551c669f71eb32d1fe7f76', true, 'search_path=""', 'v', 'plpgsql', 'none',
+        'e7eb08d17f2a916bf6414331b562292b6a08288e8f5048edde882e74e494ecbe'],
+      ['app.pos_order_alert_authority', 'p_registration app.pos_order_alert_registrations', '698fa45e86ba7a8bdc7cccf9cf23bbccd5b2feefac4e6aab9ff0123fd996a2fa', true, 'search_path=""', 's', 'sql', 'inherited',
+        '462c38c566a63a51cbf532c07f26987e2320d02553f0b724f320ab13488aeb0f'],
+      ['app.pos_order_alert_status', 'p_installation_id uuid, p_status_secret_hash text', 'baad78917b21a37437720ece786b8178ae2dac1283b39389a0aba2ecacebd980', true, 'search_path=""', 's', 'sql', 'service_role',
+        'aa916efb43b4e8dab3076818ba2591543dd0523ca8d22619db187c34691ac283'],
+      ['app.pos_order_alert_status_core', 'p_installation_id uuid, p_status_secret_hash text', '678b3ebb7eacd88c231b7c4fc9f0976b8b96b83830978272a5980de04b36806d', true, 'search_path=""', 's', 'plpgsql', 'none',
+        '29f43dfe3219fc4699bca6c03f0993b22e4bd046e5f763ca4ea8796ffa0bd217'],
+      ['app.pos_preview_shift_order_alert', 'p_installation_id uuid, p_device_id uuid, p_pin_session_id uuid, p_device_session_token text, p_consent_id uuid, p_revoke_hash text', '17a85888dc0fece1151333394a0afee011482764c245ca1ff44751de3b01a461', true, 'search_path=""', 'v', 'plpgsql', 'authenticated',
+        'fb806f6d636478ea4f57c82f6d706ea16b13649fda6c2d098a7b41fa157865b4'],
+      ['app.pos_refresh_order_alert_token', 'p_installation_id uuid, p_status_secret_hash text, p_fcm_token text, p_expected_generation uuid', 'e0e105ed4fa378779782749d3bf62429b4119dd233ecfc467ae03ab0f0e2caf9', true, 'search_path=""', 'v', 'plpgsql', 'service_role',
+        'a331fb8748206baebb567bebf37973035793c15bfe333bbf08097014423862d6'],
+      ['app.pos_refresh_order_alert_token_core', 'p_installation_id uuid, p_status_secret_hash text, p_fcm_token text, p_expected_generation uuid', '3a125cd7df3c4826af45f533a2284ac81f9438e56566e150b87e37b2ff76183d', true, 'search_path=""', 'v', 'plpgsql', 'none',
+        'a8f0c0ddf615f88b5711b6eeeac5a761790d62dd26e4cf9888380a438aa31167'],
+      ['app.pos_refresh_shift_order_alert_token', 'p_installation_id uuid, p_consent_id uuid, p_status_secret_hash text, p_fcm_token text, p_expected_generation uuid', 'a4b02051390d1364b7eee0163b40faaabda6610a442e61dac020690581390465', true, 'search_path=""', 'v', 'plpgsql', 'service_role',
+        '165d24c573cc6a82f8753f7127acf8c7a6be4dc3aa8bbf30c997c0fd55016946'],
+      ['app.pos_register_order_alert', 'p_installation_id uuid, p_fcm_token text, p_status_secret text, p_device_id uuid, p_pin_session_id uuid, p_device_session_token text', '9875377b9777bf89249b18620683238580f0abf099de47a6b5ae1fb6324735b6', true, 'search_path=""', 'v', 'plpgsql', 'authenticated',
+        '72578d436ca210e5486e23548394d761f0588d376dc1b6bca0fa4262fa568eaa'],
+      ['app.pos_register_order_alert_core', 'p_installation_id uuid, p_fcm_token text, p_status_secret text, p_device_id uuid, p_pin_session_id uuid, p_device_session_token text', 'bb4be534418b864bb183aafb190ff35ecabdd8bc23454e1d0c1ebcd2c87b39a1', true, 'search_path=""', 'v', 'plpgsql', 'none',
+        '08d663e94bd6bf11e4d1d733c4370bd2568feb5929f5f9044812a3894be8067a'],
+      ['app.pos_register_shift_order_alert', 'p_installation_id uuid, p_device_id uuid, p_pin_session_id uuid, p_device_session_token text, p_consent_id uuid, p_shift_id uuid, p_policy_revision uuid, p_expected_deadline timestamp with time zone, p_status_secret text, p_fcm_token text, p_consent jsonb', '2cb6dd95bb22c24cb605c9934fb3ae068c90e5c8a4735b25f01d9a2fefff3a7e', true, 'search_path=""', 'v', 'plpgsql', 'authenticated',
+        '8fc7f8a8942520f2db20ec3c17f17527d7616f6fa0a05c8b11bdb7e81a7f96d4'],
+      ['app.pos_revoke_shift_order_alert', 'p_installation_id uuid, p_consent_id uuid, p_revoke_hash text', 'a9796d4a732163aa48daebf8a4d64faf5301431992a297379c089a1c8d6d77d3', true, 'search_path=""', 'v', 'plpgsql', 'service_role',
+        'b6eb5763e13f69f405c60bb1602ccbb5e157e5b06fab2f99667fc1958a0de3e8'],
+      ['app.pos_shift_alert_human', 'p_pin uuid, p_device uuid, p_token text', '49d1924bd5340ed36b998af1a345830be60726ed75d127584e527e60e7eab186', true, 'search_path=""', 'v', 'plpgsql', 'none',
+        'e52ea8a4aeba7312c711489ff1424d54584a28723bb09bff705d167fbe202709'],
+      ['app.pos_shift_alert_owner', 'p_branch uuid', '8376a538982f8d6b7bd2510a8c67c4c04762328913174b190a8cd510cc2282ed', true, 'search_path=""', 'v', 'plpgsql', 'none',
+        'e2ab961f2fc7fd4eb832fc882d8d3cdf67b3066704d28cadeafdef4291cf725a'],
+      ['app.pos_shift_order_alert_status', 'p_installation_id uuid, p_consent_id uuid, p_status_secret_hash text', '900d6342877eecafc8ac5650a4db6731eb84f27103e39eb134ad6e26afe8bd82', true, 'search_path=""', 's', 'plpgsql', 'service_role',
+        'c20db322a21e8d3a9329ab9ca25444c20ece574b3b97bbc4a2ec20ab92e9afee'],
+      ['app.set_pos_shift_alert_policy', 'p_branch_id uuid, p_expected_revision uuid, p_enabled jsonb, p_cap_minutes integer', 'ce6fb91c4942b3d9d8d7670b03192a04cc45d8fabef3b72e49cf7420c921586a', true, 'search_path=""', 'v', 'plpgsql', 'authenticated',
+        '59ee769e015f1a2c3dd9daf184dba7b584f6cfd615d12f57716880adfabe06cf'],
+      ['public.approve_pos_shift_alert_end', 'p_shift_id uuid, p_policy_revision uuid, p_approved_until timestamp with time zone', '3ed5bc800174dd227ffc4d3c6f684e31e6fff6a17e2199115b5f3ef0180e64e2', false, 'search_path=""', 'v', 'sql', 'authenticated',
+        '6e7f8e5cab22b107142cf0acfc963fb9e77a80ba86500cfad43a17de485cc982'],
+      ['public.pos_preview_shift_order_alert', 'p_installation_id uuid, p_device_id uuid, p_pin_session_id uuid, p_device_session_token text, p_consent_id uuid, p_revoke_hash text', '5970b27fbd733497cc9827ec671efbc9392ff9c0e8aee910d232e0138407182f', false, 'search_path=""', 'v', 'sql', 'authenticated',
+        'e00e7f1e645dfcd49be4054c5564303fabb93688d9eefccfa6f9d737f833bb47'],
+      ['public.pos_refresh_shift_order_alert_token', 'p_installation_id uuid, p_consent_id uuid, p_status_secret_hash text, p_fcm_token text, p_expected_generation uuid', '14ed4dee7d7306160eb8dc0a0627407e0053ff3ef999aa7ef2a3c46935ee9463', false, 'search_path=""', 'v', 'sql', 'service_role',
+        '9ca2f750b06e60bc894559872044dd2378f34c1f633780f0c4abb7d3c5d68f51'],
+      ['public.pos_register_shift_order_alert', 'p_installation_id uuid, p_device_id uuid, p_pin_session_id uuid, p_device_session_token text, p_consent_id uuid, p_shift_id uuid, p_policy_revision uuid, p_expected_deadline timestamp with time zone, p_status_secret text, p_fcm_token text, p_consent jsonb', '58b9d6a9b80304b3c53fa12b7f46175880d0c8e65bf3ff6adb8fa2cab6e3e1f8', false, 'search_path=""', 'v', 'sql', 'authenticated',
+        'b74372d2341655475f9bfb96ccf6aaf8711e36485e941168e00c5891c4ac49d1'],
+      ['public.pos_revoke_shift_order_alert', 'p_installation_id uuid, p_consent_id uuid, p_revoke_hash text', 'f5e4f52e64e9fcfec13041ed0c810392f52d1334df5f98b457e37848147882b0', false, 'search_path=""', 'v', 'sql', 'service_role',
+        '1a396bb7dd0f33d86c199832205ee2ce8c195b15150eac2a9de28b7b8147245d'],
+      ['public.pos_shift_order_alert_status', 'p_installation_id uuid, p_consent_id uuid, p_status_secret_hash text', '6f65af600b8994cad4af5dc84e8b44b9e426edd4ba21ddcd78d3ae44a314ee61', false, 'search_path=""', 's', 'sql', 'service_role',
+        'da670530522e54e94fd2b66d28dfabe17b0b472e26c0b01d8b0edf9f15f549ab'],
+      ['public.set_pos_shift_alert_policy', 'p_branch_id uuid, p_expected_revision uuid, p_enabled jsonb, p_cap_minutes integer', 'd237a56e236a50bc059d57ff221221bfc422900d0b394744c34775c20aba7d71', false, 'search_path=""', 'v', 'sql', 'authenticated',
+        'eb50774e3fb29d747ec122809f303744b3e52e91cf739aa9c73ae20b0e037a13'],
+    ],
+    access: {
+      none: [['postgres', 'EXECUTE', false, 'postgres']],
+      authenticated: [['authenticated', 'EXECUTE', false, 'postgres'], ['postgres', 'EXECUTE', false, 'postgres']],
+      service_role: [['postgres', 'EXECUTE', false, 'postgres'], ['service_role', 'EXECUTE', false, 'postgres']],
+    },
+    inheritedAccess: {
+      'app.pos_order_alert_authority': [['postgres', 'EXECUTE', false, 'postgres']],
+    },
+    relations: [
+      { name: 'app.pos_order_alert_registrations', kind: 'r', rls: true, force_rls: true, policies: [{ name: 'deny_client', cmd: '*', permissive: true, roles: ['authenticated'], using: 'false', check: 'false' }],
+        access: [['postgres', 'DELETE', false, 'postgres'], ['postgres', 'INSERT', false, 'postgres'], ['postgres', 'MAINTAIN', false, 'postgres'], ['postgres', 'REFERENCES', false, 'postgres'], ['postgres', 'SELECT', false, 'postgres'], ['postgres', 'TRIGGER', false, 'postgres'], ['postgres', 'TRUNCATE', false, 'postgres'], ['postgres', 'UPDATE', false, 'postgres']],
+        columns: [], definition: 'e31be14384c9740c458449709ae92199dfe094c841e246905a57540909eaf8a2' },
+      { name: 'app.pos_shift_alert_approvals', kind: 'r', rls: true, force_rls: true, policies: [],
+        access: [['postgres', 'DELETE', false, 'postgres'], ['postgres', 'INSERT', false, 'postgres'], ['postgres', 'MAINTAIN', false, 'postgres'], ['postgres', 'REFERENCES', false, 'postgres'], ['postgres', 'SELECT', false, 'postgres'], ['postgres', 'TRIGGER', false, 'postgres'], ['postgres', 'TRUNCATE', false, 'postgres'], ['postgres', 'UPDATE', false, 'postgres']],
+        columns: [], definition: 'aecdeeceb1b182cd7475595a40b5d0ec7a81d9953d674ae1276c4d719d1fb626' },
+      { name: 'app.pos_shift_alert_consents', kind: 'r', rls: true, force_rls: true, policies: [],
+        access: [['postgres', 'DELETE', false, 'postgres'], ['postgres', 'INSERT', false, 'postgres'], ['postgres', 'MAINTAIN', false, 'postgres'], ['postgres', 'REFERENCES', false, 'postgres'], ['postgres', 'SELECT', false, 'postgres'], ['postgres', 'TRIGGER', false, 'postgres'], ['postgres', 'TRUNCATE', false, 'postgres'], ['postgres', 'UPDATE', false, 'postgres']],
+        columns: [], definition: '520545f61fae81c90ff363645f2a1a96cfe682543d9864933c926fefd8e962ed' },
+      { name: 'app.pos_shift_alert_policies', kind: 'r', rls: true, force_rls: true, policies: [],
+        access: [['postgres', 'DELETE', false, 'postgres'], ['postgres', 'INSERT', false, 'postgres'], ['postgres', 'MAINTAIN', false, 'postgres'], ['postgres', 'REFERENCES', false, 'postgres'], ['postgres', 'SELECT', false, 'postgres'], ['postgres', 'TRIGGER', false, 'postgres'], ['postgres', 'TRUNCATE', false, 'postgres'], ['postgres', 'UPDATE', false, 'postgres']],
+        columns: [], definition: 'd02586267603b2c1678e28e23c92c1afd7bd518abda6b18e1d2b2e0eefa5ec29' },
+    ],
+    triggers: [
+      ['end_shift_alert_on_branch@public.branches', '66ce7c745e9c8cd01b5ef02ccff07793710d31b859585241b5978b0ae9940b89'],
+      ['end_shift_alert_on_device@public.devices', '1638aab312343dbf9b3f46c8cfacee64be066c334a36f801b7e9cf4a0b0c764b'],
+      ['end_shift_alert_on_employee@public.employee_profiles', '819704d446a514c74b5ee54b9c2ab765a28a66d4b7db1a048cd60140e9a31308'],
+      ['end_shift_alert_on_online_policy@app.online_order_settings', '3c6ef5dfb14adb67a55e41aa3d8b3f32748b15057e452ca97514531e3eb436d2'],
+      ['end_shift_alert_on_organization@public.organizations', '809f82465e51cee0e7125ffc1e56efbec20f3a35cfa0fe7433de28cbf355ac55'],
+      ['end_shift_alert_on_pairing@public.device_pairings', 'dd586cc3b84dcdc6f5a4e556b7956f0ee94d021b19c7182caf3218571127e63d'],
+      ['end_shift_alert_on_person@public.app_users', '7b1ef516c7e6941a8ceb85862cdb3242a63d160256012d39682e680549c1ea8e'],
+      ['end_shift_alert_on_pin@public.pin_sessions', '7b5f473aad9ccf268d0bcaa05f6121b729bf598e32f72113c024c5fddf2215fc'],
+      ['end_shift_alert_on_restaurant@public.restaurants', 'a201e9d873af50da863c84280330cdd327552f7c79640c0bce0d6b74a880cfe9'],
+      ['end_shift_alert_on_role@public.memberships', '29552a5b195e618d74ae5c39a18442811916696692144349c635a8df434073ba'],
+      ['end_shift_alert_on_session@public.device_sessions', '8cc5134ca51cff54f5f8006e63538ce7cd9afe170101fa5107a0a502a596ef2f'],
+      ['end_shift_alert_on_shift@public.shifts', 'a8af540470790c0e2d693314e8561c3b64b704eb5e4f4d3aced1761accbc0e45'],
+    ],
+  },
 });
 
 export const buildReadOnlyDbUrl = ({ user, host, port, database }) =>
@@ -792,7 +904,7 @@ export function parseExactGapArgs(argv) {
   return { ...parseArgs([...argv.slice(0, at), ...argv.slice(at + 2)]), exactGap: EXACT_GAP_MODE };
 }
 
-// The whole local folder: exactly the pinned 188-file main set (names and bytes), ending with the pinned tail.
+// The whole local folder: exactly the pinned 189-file main set (names and bytes), ending with the pinned tail.
 export function checkExactGapMigrations(workdir, pins = EXACT_GAP) {
   const dir = path.join(workdir, 'supabase', 'migrations');
   let files;
@@ -909,6 +1021,8 @@ export function verifyCa(raw, mode, workdir, { repoRoot = path.resolve(path.dirn
 
 const SAFE_QUALIFIED = /^[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$/;
 const SAFE_AT = /^[a-z_][a-z0-9_]*@[a-z_][a-z0-9_]*$/;
+// D-068: a trigger on a schema-qualified table (#386's triggers sit on public and app tables).
+const SAFE_AT_QUALIFIED = /^[a-z_][a-z0-9_]*@[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$/;
 const textArray = (items, shape) => {
   if (!items.length || items.some((s) => !shape.test(s))) throw new Refusal('internal_pin', 'a pinned name has an unexpected shape');
   return `array[${items.map((s) => `'${s}'`).join(', ')}]::text[]`;
@@ -934,6 +1048,9 @@ const columnEntries = (relation) => `(select coalesce(json_agg(json_build_array(
       where att.attrelid = ${relation} and att.attnum > 0 and not att.attisdropped) x)`;
 // One relation's whole catalog line (kind, RLS, owner, ACL, columns, constraints, policies, triggers, indexes) over the
 // rel CTE's row r: the other-relation digest's line, and (REPIN-001) the #382 relation's definition digest.
+// The policies segment is the pol CTE's JSON list as text (names, commands, permissive flags, roles by name, expressions):
+// one unambiguous serialization, the rendering PRE compares by value (D-068 review: a role OID is instance-local, and a
+// joined role list could collide).
 const relationLine = `r.name || '|' || r.kind || '|' || r.rls::text || '|' || r.force_rls::text || '|' || r.owner || '|' || r.acl
     || '|' || coalesce((select string_agg(a.attname || ':' || pg_catalog.format_type(a.atttypid, a.atttypmod) || ':'
         || a.attnotnull::text || ':' || coalesce(a.attacl::text, '') || ':' || coalesce(pg_catalog.pg_get_expr(d.adbin, d.adrelid), ''),
@@ -943,7 +1060,7 @@ const relationLine = `r.name || '|' || r.kind || '|' || r.rls::text || '|' || r.
     || '|' || coalesce((select string_agg(co.conname || ':' || co.contype::text || ':' || pg_catalog.pg_get_constraintdef(co.oid),
         ',' order by co.conname)
       from pg_catalog.pg_constraint co where co.conrelid = r.oid), '')
-    || '|' || coalesce((select pol.line from pol where pol.polrelid = r.oid), '')
+    || '|' || coalesce((select pol.policies::text from pol where pol.polrelid = r.oid), '')
     || '|' || coalesce((select string_agg(t.tgname || ':' || t.tgenabled::text || ':' || pg_catalog.pg_get_triggerdef(t.oid),
         ',' order by t.tgname)
       from pg_catalog.pg_trigger t where t.tgrelid = r.oid and not t.tgisinternal), '')
@@ -966,6 +1083,10 @@ export function exactGapStateSql(pins = EXACT_GAP) {
   const s382Rels = textArray([pins.surface382.relation.name], SAFE_QUALIFIED);
   const s382Pols = textArray(pins.surface382.policies.map((p) => p.name), SAFE_NAME);
   if (pins.surface382.policies.some((p) => p.table !== 'storage.objects')) throw new Refusal('internal_pin', 'a pinned #382 policy is not on storage.objects');
+  // D-068 (POST-386-REPIN-001): #386's own surface, by name only (an extra overload or a duplicate under a pinned name is part of the answer).
+  const s386Fns = textArray([...new Set(pins.surface386.functions.map((f) => f[0]))], SAFE_QUALIFIED);
+  const s386Rels = textArray(pins.surface386.relations.map((r) => r.name), SAFE_QUALIFIED);
+  const s386Trgs = textArray(pins.surface386.triggers.map((t) => t[0]), SAFE_AT_QUALIFIED);
   const lines = "string_agg(line, E'\\n' order by line)";
   return `-- GR-37 exact-gap state (${EXACT_GAP_MODE}): read-only catalog facts and digests, never row data
 with led as (
@@ -1016,11 +1137,7 @@ with led as (
       'roles', (select coalesce(json_agg(coalesce(r.rolname::text, 'public') order by coalesce(r.rolname::text, 'public')), '[]'::json)
         from unnest(p.polroles) u(o) left join pg_catalog.pg_roles r on r.oid = u.o),
       'using', pg_catalog.pg_get_expr(p.polqual, p.polrelid), 'check', pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid))
-      order by p.polname) as policies,
-    string_agg(p.polname || ':' || p.polcmd::text || ':' || p.polpermissive::text || ':'
-      || coalesce(pg_catalog.pg_get_expr(p.polqual, p.polrelid), '') || ':'
-      || coalesce(pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid), '') || ':' || array_to_string(p.polroles::oid[], '+'),
-      ',' order by p.polname) as line
+      order by p.polname) as policies
   from pg_catalog.pg_policy p group by p.polrelid
 ), other_rel as (
   select ${relationLine} as line
@@ -1087,9 +1204,25 @@ select json_build_object(
       from pg_catalog.pg_policy p join pg_catalog.pg_class c on c.oid = p.polrelid
       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'storage' and c.relname = 'objects' and p.polname = any (${s382Pols})),
-    'objectPolicies', (select json_build_object('count', json_array_length(pol.policies), 'sha256', ${sqlDigest('pol.line')})
+    'objectPolicies', (select json_build_object('count', json_array_length(pol.policies), 'sha256', ${sqlDigest('pol.policies::text')})
       from pol join pg_catalog.pg_class c on c.oid = pol.polrelid join pg_catalog.pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'storage' and c.relname = 'objects')),
+  'surface386', json_build_object(
+    'functions', (select coalesce(json_agg(json_build_object('name', name, 'args', args, 'kind', kind, 'src', src,
+      'src_lf', src_lf, 'cr', cr, 'lf', lf, 'crlf', crlf, 'lone_cr', lone_cr,
+      'secdef', secdef, 'config', config, 'volatility', volatility, 'language', language, 'owner', owner,
+      'def', ${sqlDigest('pg_catalog.pg_get_functiondef(oid)')},
+      'access', ${aclEntries("coalesce(proacl, pg_catalog.acldefault('f', proowner))")}) order by name, args), '[]'::json)
+      from fn where name = any (${s386Fns})),
+    'relations', (select coalesce(json_agg(json_build_object('name', r.name, 'kind', r.kind, 'rls', r.rls,
+      'force_rls', r.force_rls, 'owner', r.owner,
+      'policies', coalesce((select pol.policies from pol where pol.polrelid = r.oid), '[]'::json),
+      'access', ${aclEntries(relationAcl)}, 'columns', ${columnEntries('r.oid')}, 'definition', ${sqlDigest(relationLine)}) order by r.name), '[]'::json)
+      from rel r where r.name = any (${s386Rels})),
+    'triggers', (select coalesce(json_agg(json_build_object('name', t.tgname || '@' || n.nspname || '.' || c.relname, 'enabled', t.tgenabled::text,
+      'def', ${sqlDigest('pg_catalog.pg_get_triggerdef(t.oid)')}) order by t.tgname, n.nspname, c.relname), '[]'::json)
+      from pg_catalog.pg_trigger t join pg_catalog.pg_class c on c.oid = t.tgrelid join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where not t.tgisinternal and n.nspname in ('app', 'public') and (t.tgname || '@' || n.nspname || '.' || c.relname) = any (${s386Trgs}))),
   'otherFunctions', (select json_build_object('count', count(*), 'sha256', ${sqlDigest(lines)}) from other_fn),
   'otherRelations', (select json_build_object('count', count(*), 'sha256', ${sqlDigest(lines)}) from other_rel),
   'defaultAcl', (select json_build_object('count', count(*), 'sha256', ${sqlDigest(lines)}) from dacl)
@@ -1217,6 +1350,69 @@ const surface382Problems = (state, pins) => {
   return out;
 };
 
+// D-068 (POST-386-REPIN-001): #386's own surface, exactly as pinned from the current-main sequential reference; [code, message]
+// each. Functions: exactly one per pinned name, with the pinned identity, body, attributes, whole definition, owner and exact
+// access (the group's entries, or the per-function entries of the inherited one). Relations: exactly the pinned ones, each
+// with the pinned kind, RLS, forced RLS, owner, policies, exact access, column grants and catalog-line digest. Triggers:
+// exactly the pinned ones, each enabled with the pinned definition digest.
+const samePolicyList = (got, want) => Array.isArray(got) && got.length === want.length
+  && want.every((w) => got.filter((g) => g && g.name === w.name).length === 1 && samePolicy({ table: w.table, ...got.find((g) => g.name === w.name) }, w));
+const surface386Problems = (state, pins) => {
+  const s = state.surface386;
+  const p = pins.surface386;
+  if (!s || typeof s !== 'object' || !Array.isArray(s.functions) || !Array.isArray(s.relations) || !Array.isArray(s.triggers)) {
+    return [['surface386_unreadable', 'the #386 surface answer is missing or malformed']];
+  }
+  const out = [];
+  if (s.functions.length !== p.functions.length) {
+    out.push(['surface386_function', `#386 must have exactly ${p.functions.length} functions under its pinned names; found ${s.functions.length}`]);
+  }
+  for (const [name, args, src, secdef, config, volatility, language, group, def] of p.functions) {
+    const found = s.functions.filter((f) => f && f.name === name);
+    if (found.length !== 1) { out.push(['surface386_function', `${name}: ${found.length} definitions`]); continue; }
+    const f = found[0];
+    if (f.args !== args || f.kind !== 'f' || f.src !== src || f.secdef !== secdef || f.config !== config || f.volatility !== volatility
+      || f.language !== language || f.def !== def || f.owner !== pins.owner) {
+      out.push(['surface386_function', `${name}: the identity, definition or owner differs from the pinned sequential reference`]);
+    }
+    const want = group === 'inherited' ? p.inheritedAccess[name] : p.access[group];
+    if (!sameAccess(f.access, want)) {
+      out.push(['surface386_access', `${name}: the exact access differs from the pinned sequential reference (${accessDiff(f.access, want)})`]);
+    }
+  }
+  if (s.relations.length !== p.relations.length) {
+    out.push(['surface386_relation', `#386 must have exactly ${p.relations.length} relations under its pinned names; found ${s.relations.length}`]);
+  }
+  for (const want of p.relations) {
+    const rows = s.relations.filter((r) => r && r.name === want.name);
+    if (rows.length !== 1) { out.push(['surface386_relation', `${want.name} must exist exactly once; found ${rows.length}`]); continue; }
+    const r = rows[0];
+    if (r.kind !== want.kind || r.rls !== want.rls || r.force_rls !== want.force_rls || r.owner !== pins.owner || r.definition !== want.definition
+      || !samePolicyList(r.policies, want.policies.map((x) => ({ table: want.name, ...x })))) {
+      out.push(['surface386_relation', `${want.name}: the definition, RLS, policies or owner differs from the pinned sequential reference`]);
+    }
+    if (!sameAccess(r.access, want.access)) {
+      out.push(['surface386_access', `${want.name}: the exact access differs from the pinned sequential reference (${accessDiff(r.access, want.access)})`]);
+    }
+    if (!sameAccess(r.columns, want.columns)) {
+      out.push(['surface386_access', `${want.name}: a column grant differs from the pinned sequential reference (${accessDiff(r.columns, want.columns)})`]);
+    }
+  }
+  if (s.triggers.length !== p.triggers.length) {
+    out.push(['surface386_trigger', `#386 must have exactly ${p.triggers.length} triggers under its pinned names; found ${s.triggers.length}`]);
+  }
+  for (const [name, def] of p.triggers) {
+    const rows = s.triggers.filter((t) => t && t.name === name);
+    if (rows.length !== 1) { out.push(['surface386_trigger', `${name}: ${rows.length} triggers`]); continue; }
+    if (rows[0].enabled !== 'O' || rows[0].def !== def) {
+      out.push(['surface386_trigger', `${name}: disabled, or its definition differs from the pinned sequential reference`]);
+    }
+  }
+  return out;
+};
+const surface386Functions = (state) => (state && state.surface386 && typeof state.surface386 === 'object'
+  && Array.isArray(state.surface386.functions) ? state.surface386.functions : []);
+
 // D-067 (HOSTED-PRE-COMPAT-001): one selected function's line-ending facts as the state query reports them; null when one
 // is missing or malformed (the function is then refused, never guessed).
 const eolFacts = (f) => (f && typeof f === 'object' && typeof f.src === 'string' && typeof f.src_lf === 'string'
@@ -1332,9 +1528,11 @@ export function evaluateExactGapPre(state, local, pins = EXACT_GAP) {
     add('surfaces_missing', `the #379 / #380 / #382 surfaces are incomplete: ${state.surfaceFunctions} of ${pins.surfaceFunctions.length} functions, ${state.surfaceRelations} of ${pins.surfaceTables.length} tables`);
   }
   problems.push(...surface382Problems(state, pins));
-  // D-067: a CR in any other selected function is refused (only six re-created functions have a legacy CRLF form).
+  problems.push(...surface386Problems(state, pins));
+  // D-067: a CR in any other selected function is refused (only six re-created functions have a legacy CRLF form); D-068 adds
+  // #386's functions to the selected ones.
   const recreatedNames = new Set(pins.functions.filter((f) => f[6] === 'recreated').map((f) => f[0]));
-  for (const f of [...state.functions.filter((x) => !(x && recreatedNames.has(x.name))), ...surface382Functions(state)]) {
+  for (const f of [...state.functions.filter((x) => !(x && recreatedNames.has(x.name))), ...surface382Functions(state), ...surface386Functions(state)]) {
     const rule = lfOnlyRule(f);
     if (rule) add('selected_function_eol', `${selectedName(f, 'a selected function')}: ${rule}`);
   }
@@ -1433,6 +1631,15 @@ export function evaluateExactGapPost({ pre, post, normal, list, local }, pins = 
     const rule = lfOnlyRule(f);
     if (rule) add('post_function_eol', `${selectedName(f, 'a #382 function')}: ${rule}; POST accepts only the canonical LF form`);
   }
+  // D-068 (POST-386-REPIN-001): #386's whole surface (its functions, relations and triggers, with their exact access) is identical
+  // to PRE (which required the pins): nothing added, removed or changed; and every #386 function stays canonical LF.
+  if (!post.surface386 || typeof post.surface386 !== 'object' || !sameJson(post.surface386, pre.surface386)) {
+    add('post_surface386', '#386\'s surface (its functions, relations, triggers or their exact access) is not identical to PRE');
+  }
+  for (const f of surface386Functions(post)) {
+    const rule = lfOnlyRule(f);
+    if (rule) add('post_function_eol', `${selectedName(f, 'a #386 function')}: ${rule}; POST accepts only the canonical LF form`);
+  }
   // D-067: defaultAcl is compared with this run's own baseline, the first PRE's value (never a local reference).
   for (const key of ['otherFunctions', 'otherRelations', 'defaultAcl']) {
     if (!sameJson(post[key], pre[key])) add('post_unchanged', `${key} changed during the apply`);
@@ -1514,7 +1721,7 @@ export async function exactGapMain(argv, env, print, deps = {}) {
       refuse(preProblems[0][0], `${preProblems.length} PRE gate(s) failed; nothing was pushed`);
     }
     const s = first.state;
-    say(`gr37 exact-gap: PRE (read-only session over TLS, PostgreSQL server_version_num ${s.runtime.server_version_num} and TimeZone ${s.runtime.time_zone}, as pinned): remote ledger ${s.ledger.length} versions ending ${pins.remoteTail.join(', ')}; the only gap is ${pins.missingVersion}; ${Object.keys(pins.storedStatements).join(', ')} each hold their one reviewed statement; ${s.ledger.filter((r) => r.name === null).length} earlier row(s) carry no name; no 001D object; the seven re-created functions in their pinned pre-001D form (body in its canonical LF or exact reviewed legacy CRLF form, owner and exact access); #379 / #380 / #382 surfaces present (${s.surfaceFunctions} functions, ${s.surfaceRelations} tables); #382's own surface as pinned (${pins.surface382.functions.length} functions, its relation and ${pins.surface382.policies.length} Storage policies: definition, owner and exact access)`);
+    say(`gr37 exact-gap: PRE (read-only session over TLS, PostgreSQL server_version_num ${s.runtime.server_version_num} and TimeZone ${s.runtime.time_zone}, as pinned): remote ledger ${s.ledger.length} versions ending ${pins.remoteTail.join(', ')}; the only gap is ${pins.missingVersion}; ${Object.keys(pins.storedStatements).join(', ')} each hold their one reviewed statement; ${s.ledger.filter((r) => r.name === null).length} earlier row(s) carry no name; no 001D object; the seven re-created functions in their pinned pre-001D form (body in its canonical LF or exact reviewed legacy CRLF form, owner and exact access); #379 / #380 / #382 surfaces present (${s.surfaceFunctions} functions, ${s.surfaceRelations} tables); #382's own surface as pinned (${pins.surface382.functions.length} functions, its relation and ${pins.surface382.policies.length} Storage policies: definition, owner and exact access); #386's own surface as pinned (${pins.surface386.functions.length} functions, ${pins.surface386.relations.length} relations and ${pins.surface386.triggers.length} triggers: definition, owner and exact access)`);
     // D-067: the form each re-created function was accepted in, and this run's Default ACL baseline (digests only).
     const forms = pins.functions.filter((f) => f[6] === 'recreated')
       .map(([name]) => `${name} ${recreatedBodyForm(s.functions.find((f) => f.name === name), name, pins).form}`);
@@ -1582,7 +1789,7 @@ export async function exactGapMain(argv, env, print, deps = {}) {
       say('RESULT: POSTCHECK_MISMATCH (STOP: preserve the evidence; read the ledger read-only; no retry, no repair)');
       return 4;
     }
-    say(`gr37 exact-gap: POST (read-only): remote ledger ${post.state.ledger.length} versions = the local set; ${pins.missingVersion} recorded once, as pinned (${pins.missingRow.n} statements); every earlier row unchanged; a normal dry run (no --include-all) reports the database up to date; migration list ${pins.localCount} rows, none divergent; 001D manifest: ${pins.functions.length} functions, ${pins.tables.length} tables (RLS forced, ${pins.policy.name} only), the sequence, ${pins.indexes.length} indexes and ${pins.triggers.length} triggers match, each function, table, column and the sequence with its exact pinned access; #382's surface and every storage.objects policy identical to PRE; every POST function in its canonical LF form; the catalog digests of every other app / public function and relation unchanged, and the Default ACL equal to this run's baseline`);
+    say(`gr37 exact-gap: POST (read-only): remote ledger ${post.state.ledger.length} versions = the local set; ${pins.missingVersion} recorded once, as pinned (${pins.missingRow.n} statements); every earlier row unchanged; a normal dry run (no --include-all) reports the database up to date; migration list ${pins.localCount} rows, none divergent; 001D manifest: ${pins.functions.length} functions, ${pins.tables.length} tables (RLS forced, ${pins.policy.name} only), the sequence, ${pins.indexes.length} indexes and ${pins.triggers.length} triggers match, each function, table, column and the sequence with its exact pinned access; #382's surface, every storage.objects policy and #386's surface identical to PRE; every POST function in its canonical LF form; the catalog digests of every other app / public function and relation unchanged, and the Default ACL equal to this run's baseline`);
     say('RESULT: APPLIED_EXACT_GAP');
     return 0;
   } catch (error) {
