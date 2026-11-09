@@ -79,6 +79,13 @@ const responseCodes = new Set(['permission_denied', 'source_not_found', '42501']
 // ladder rungs x two attempts under one request id, give 140 replies; 192
 // leaves room for restart_required re-publishes. Overflow is always reported.
 export const PUBLISHER_REPLY_LIMITS = Object.freeze({ replies: 192, groups: 32 });
+// Elapsed-event evidence: integer milliseconds on a monotonic clock from the
+// reply's observation to its first requestfinished / requestfailed event,
+// clamped to 0..3,600,000; null until that event, or when no valid duration can
+// be measured. Evidence only; no verdict is derived from it.
+export const PUBLISHER_ELAPSED_MAX_MS = 3_600_000;
+const monotonicNow = () => (typeof performance === 'object' && performance !== null
+  && typeof performance.now === 'function') ? performance.now() : NaN;
 const publisherVariants = new Set(['w480', 'w960']);
 const boundedStatus = status => Number.isInteger(status) && status >= 100 && status <= 599 ? status : null;
 const identityKey = key => (typeof key === 'object' && key !== null) || typeof key === 'function';
@@ -100,7 +107,7 @@ export async function captureProductResponse(progress, operation, status, readBo
   progress.recordResponse(operation, status, body);
 }
 
-export function createProductProgress() {
+export function createProductProgress({ now = monotonicNow } = {}) {
   let current = { stage: 'fixture', sample: null };
   const completed = [];
   const responses = new Map();
@@ -110,8 +117,21 @@ export function createProductProgress() {
   const replies = [];
   const repliesByRequest = new Map();
   const groupsByRequestId = new Map();
+  const startClocks = new Map(); // record -> clock reading at observation; never serialized
   let observedReplies = 0, groupOverflow = 0;
   const stageNow = () => current?.stage ?? null;
+  // A clock failure never throws and never invents a duration.
+  const readClock = () => {
+    try {
+      const value = now();
+      return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    } catch { return null; }
+  };
+  const elapsedSince = start => {
+    const end = readClock();
+    if (typeof start !== 'number' || end === null) return null;
+    return Math.min(PUBLISHER_ELAPSED_MAX_MS, Math.max(0, Math.round(end - start)));
+  };
   const groupOrdinal = requestId => {
     if (typeof requestId !== 'string' || requestId === '') return null;
     const known = groupsByRequestId.get(requestId);
@@ -127,11 +147,12 @@ export function createProductProgress() {
     record.finishedPromise = state;
     record.finishedPromiseStage = stageNow();
   };
-  const markRequest = (requestKey, flag, stageField) => {
+  const markRequest = (requestKey, flag, stageField, elapsedField) => {
     const record = identityKey(requestKey) ? repliesByRequest.get(requestKey) : undefined;
     if (!record || record[flag]) return;
     record[flag] = true;
     record[stageField] = stageNow();
+    record[elapsedField] = elapsedSince(startClocks.get(record));
   };
   return {
     advance(stage, sample = current?.sample ?? null) {
@@ -172,10 +193,13 @@ export function createProductProgress() {
         finishedPromiseStage: null,
         requestFinished: false,
         requestFinishedStage: null,
+        requestFinishedAfterMs: null,
         requestFailed: false,
         requestFailedStage: null,
+        requestFailedAfterMs: null,
       };
       replies.push(record);
+      startClocks.set(record, readClock());
       if (identityKey(requestKey) && !repliesByRequest.has(requestKey)) repliesByRequest.set(requestKey, record);
       const finished = input.finished;
       if (identityKey(finished) && typeof finished.then === 'function') {
@@ -184,8 +208,12 @@ export function createProductProgress() {
         } catch { /* A hostile thenable must not break the browser event handler. */ }
       }
     },
-    markPublisherRequestFinished(requestKey) { markRequest(requestKey, 'requestFinished', 'requestFinishedStage'); },
-    markPublisherRequestFailed(requestKey) { markRequest(requestKey, 'requestFailed', 'requestFailedStage'); },
+    markPublisherRequestFinished(requestKey) {
+      markRequest(requestKey, 'requestFinished', 'requestFinishedStage', 'requestFinishedAfterMs');
+    },
+    markPublisherRequestFailed(requestKey) {
+      markRequest(requestKey, 'requestFailed', 'requestFailedStage', 'requestFailedAfterMs');
+    },
     snapshot() {
       const counts = { pending: 0, fulfilled: 0, rejected: 0, requestFinished: 0, requestFailed: 0 };
       for (const record of replies) {

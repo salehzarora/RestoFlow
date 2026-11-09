@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PUBLISHER_REPLY_LIMITS, captureProductResponse, createProductProgress } from './product-progress.mjs';
+import { PUBLISHER_ELAPSED_MAX_MS, PUBLISHER_REPLY_LIMITS, captureProductResponse, createProductProgress } from './product-progress.mjs';
 
 // Synthetic deferred promises and plain objects stand in for Playwright's
 // response.finished() promise and Request objects; no browser or service runs.
@@ -11,6 +11,8 @@ function deferred() {
 }
 const settled = () => new Promise(resolve => setImmediate(resolve));
 const pendingForever = () => new Promise(() => {});
+// A controlled monotonic clock: successive readings, then the last one repeats.
+const clockFrom = readings => { let index = 0; return () => (index < readings.length ? readings[index++] : readings.at(-1)); };
 const emptyPublisherReplies = () => ({
   limits: { replies: PUBLISHER_REPLY_LIMITS.replies, groups: PUBLISHER_REPLY_LIMITS.groups },
   observed: 0, recorded: 0, droppedReplies: 0, groupOverflow: 0, truncated: false,
@@ -183,7 +185,7 @@ test('publisher replies settle to pending, fulfilled or rejected while the basel
 });
 
 test('a failed browser request is recorded while its finished promise stays pending', async () => {
-  const progress = createProductProgress();
+  const progress = createProductProgress({ now: clockFrom([100, 1334.6]) });
   progress.advance('publish-selection', 'drink');
   const request = {};
   progress.observePublisherReply(request, { variant: 'w960', status: 200, groupKey: 'publish-a', finished: pendingForever() });
@@ -191,8 +193,9 @@ test('a failed browser request is recorded while its finished promise stays pend
   progress.markPublisherRequestFailed(request);
   await settled();
   const expected = { ordinal: 1, group: 1, variant: 'w960', httpStatus: 200, stage: 'publish-selection', sample: 'drink',
-    finishedPromise: 'pending', finishedPromiseStage: null, requestFinished: false, requestFinishedStage: null,
-    requestFailed: true, requestFailedStage: 'selection-readback' };
+    finishedPromise: 'pending', finishedPromiseStage: null,
+    requestFinished: false, requestFinishedStage: null, requestFinishedAfterMs: null,
+    requestFailed: true, requestFailedStage: 'selection-readback', requestFailedAfterMs: 1235 };
   assert.deepEqual(progress.snapshot().publisherReplies.replies, [expected]);
   // Repeated, unknown or primitive keys change nothing.
   progress.advance('close-product');
@@ -435,4 +438,105 @@ test('observer state is settled by the time the awaiting continuation runs, with
   assert.deepEqual([receipt.publisherReplies.replies[1].finishedPromise, receipt.publisherReplies.replies[1].finishedPromiseStage],
     ['rejected', 'publication-counts']);
   assert.deepEqual(receipt.publisherReplies.counts, { pending: 0, fulfilled: 1, rejected: 1, requestFinished: 0, requestFailed: 0 });
+});
+
+test('elapsed event milliseconds come from a monotonic clock, first event wins and values are clamped', () => {
+  const progress = createProductProgress({ now: clockFrom([1000, 2000, 3000, 1234.6, 1500, 3_700_000, 2990, 9000]) });
+  progress.advance('publish-selection', 'burger');
+  const a = {}, b = {}, c = {};
+  progress.observePublisherReply(a, { variant: 'w480', status: 200, groupKey: 'publish-a', finished: pendingForever() }); // 1000
+  progress.observePublisherReply(b, { variant: 'w960', status: 200, groupKey: 'publish-b', finished: pendingForever() }); // 2000
+  progress.observePublisherReply(c, { variant: 'w480', status: 202, groupKey: 'publish-c', finished: pendingForever() }); // 3000
+  progress.markPublisherRequestFinished(a); // 1234.6: 234.6 ms rounds to 235
+  progress.markPublisherRequestFinished(a); // first event wins: no clock read, no change
+  progress.markPublisherRequestFailed(a);   // 1500: 500 ms
+  progress.markPublisherRequestFailed(b);   // 3_700_000: clamped to the maximum
+  progress.markPublisherRequestFinished(c); // 2990: a backwards reading clamps to 0
+  const replies = progress.snapshot().publisherReplies.replies;
+  assert.equal(PUBLISHER_ELAPSED_MAX_MS, 3_600_000);
+  assert.deepEqual(replies.map(reply => [reply.requestFinishedAfterMs, reply.requestFailedAfterMs]),
+    [[235, 500], [null, PUBLISHER_ELAPSED_MAX_MS], [0, null]]);
+  assert.deepEqual(replies.map(reply => [reply.requestFinished, reply.requestFailed]), [[true, true], [false, true], [true, false]]);
+  progress.markPublisherRequestFinished(a);
+  assert.equal(progress.snapshot().publisherReplies.replies[0].requestFinishedAfterMs, 235);
+  for (const value of stringValues(progress.snapshot())) {
+    assert.ok(value.length <= 32 && /^[A-Za-z0-9_-]+$/.test(value), 'free-form string leaked into the receipt');
+  }
+});
+
+test('an unavailable or invalid clock records the event without inventing a duration', () => {
+  for (const now of [() => { throw new Error('no monotonic clock'); }, () => NaN, () => Infinity, () => '1000', () => undefined,
+    'not-a-function']) {
+    const progress = createProductProgress({ now });
+    progress.advance('publish-selection', 'drink');
+    const request = {};
+    assert.doesNotThrow(() => {
+      progress.observePublisherReply(request, { variant: 'w480', status: 200, groupKey: 'publish-a', finished: pendingForever() });
+      progress.markPublisherRequestFinished(request);
+      progress.markPublisherRequestFailed(request);
+    });
+    const [reply] = progress.snapshot().publisherReplies.replies;
+    assert.deepEqual([reply.requestFinished, reply.requestFinishedStage, reply.requestFinishedAfterMs, reply.requestFailed, reply.requestFailedAfterMs],
+      [true, 'publish-selection', null, true, null]);
+    assert.equal(JSON.stringify(progress.snapshot()).includes('monotonic'), false);
+  }
+  // A clock that becomes valid only after the observation cannot produce a duration either.
+  const late = createProductProgress({ now: clockFrom([NaN, 5000]) });
+  const lateRequest = {};
+  late.observePublisherReply(lateRequest, { variant: 'w480', status: 200, groupKey: 'publish-a', finished: pendingForever() });
+  late.markPublisherRequestFinished(lateRequest);
+  assert.equal(late.snapshot().publisherReplies.replies[0].requestFinishedAfterMs, null);
+  // A clock that fails only at the event (valid start, invalid end) records the event with a null duration.
+  let lateCalls = 0;
+  const lateThrow = () => { lateCalls += 1; if (lateCalls === 1) return 1000; throw new Error('clock lost'); };
+  for (const now of [clockFrom([1000, NaN]), clockFrom([1000, Infinity]), clockFrom([1000, undefined]), lateThrow]) {
+    const progress = createProductProgress({ now });
+    const request = {};
+    progress.observePublisherReply(request, { variant: 'w480', status: 200, groupKey: 'publish-a', finished: pendingForever() });
+    assert.doesNotThrow(() => progress.markPublisherRequestFinished(request));
+    const [reply] = progress.snapshot().publisherReplies.replies;
+    assert.deepEqual([reply.requestFinished, reply.requestFinishedAfterMs], [true, null]);
+  }
+  // The default clock is performance.now, never the wall clock.
+  const ownNow = Object.getOwnPropertyDescriptor(performance, 'now');
+  const originalDateNow = Date.now;
+  try {
+    performance.now = clockFrom([1000, 1300]);
+    Date.now = () => { throw new Error('wall clock consulted'); };
+    const pinned = createProductProgress();
+    const pinnedRequest = {};
+    pinned.observePublisherReply(pinnedRequest, { variant: 'w480', status: 200, groupKey: 'publish-a', finished: pendingForever() });
+    pinned.markPublisherRequestFinished(pinnedRequest);
+    assert.equal(pinned.snapshot().publisherReplies.replies[0].requestFinishedAfterMs, 300);
+  } finally {
+    if (ownNow) Object.defineProperty(performance, 'now', ownNow); else delete performance.now;
+    Date.now = originalDateNow;
+  }
+  // Unstubbed, the default clock yields bounded non-negative integers.
+  const real = createProductProgress();
+  const realRequest = {};
+  real.observePublisherReply(realRequest, { variant: 'w480', status: 200, groupKey: 'publish-a', finished: pendingForever() });
+  real.markPublisherRequestFinished(realRequest);
+  const measured = real.snapshot().publisherReplies.replies[0].requestFinishedAfterMs;
+  assert.ok(Number.isInteger(measured) && measured >= 0 && measured <= PUBLISHER_ELAPSED_MAX_MS);
+});
+
+test('elapsed values in a returned snapshot never change, and the acceptance chain stays untouched', async () => {
+  const progress = createProductProgress({ now: clockFrom([10, 250, 400]) });
+  progress.advance('publish-selection', 'platter');
+  const request = {}, reply = deferred();
+  const publisherCalls = [];
+  const pushed = reply.promise.then(() => { publisherCalls.push({ variant: 'w480', status: 200 }); });
+  progress.observePublisherReply(request, { variant: 'w480', status: 200, groupKey: 'publish-a', finished: reply.promise }); // 10
+  const before = progress.snapshot();
+  progress.markPublisherRequestFinished(request); // 250: 240 ms
+  const after = progress.snapshot();
+  assert.deepEqual([before.publisherReplies.replies[0].requestFinishedAfterMs, after.publisherReplies.replies[0].requestFinishedAfterMs], [null, 240]);
+  after.publisherReplies.replies[0].requestFinishedAfterMs = 999_999_999;
+  assert.equal(progress.snapshot().publisherReplies.replies[0].requestFinishedAfterMs, 240);
+  reply.resolve(null);
+  await Promise.all([pushed]);
+  assert.deepEqual(publisherCalls, [{ variant: 'w480', status: 200 }]);
+  assert.equal(progress.snapshot().publisherReplies.replies[0].finishedPromise, 'fulfilled');
+  assert.equal(before.publisherReplies.replies[0].finishedPromise, 'pending');
 });

@@ -72,8 +72,10 @@ export type PublisherReplyFacts = {
   ordinal: number; group: number | null; variant: PublisherVariant; httpStatus: number | null;
   stage: ProductStage | null; sample: ProductSample | null;
   finishedPromise: PublisherPromiseState; finishedPromiseStage: ProductStage | null;
-  requestFinished: boolean; requestFinishedStage: ProductStage | null;
-  requestFailed: boolean; requestFailedStage: ProductStage | null;
+  // *AfterMs: integer milliseconds on a monotonic clock from the reply's observation to its first such event,
+  // clamped to 0..PUBLISHER_ELAPSED_MAX_MS; null until the event or when no valid duration could be measured.
+  requestFinished: boolean; requestFinishedStage: ProductStage | null; requestFinishedAfterMs: number | null;
+  requestFailed: boolean; requestFailedStage: ProductStage | null; requestFailedAfterMs: number | null;
 };
 export type PublisherReplyReceipt = {
   limits: { replies: number; groups: number };
@@ -85,6 +87,9 @@ export type PublisherReplyReceipt = {
 };
 export type PublisherReplyObservation = { variant?: unknown; status?: unknown; groupKey?: unknown; finished?: unknown };
 export const PUBLISHER_REPLY_LIMITS: { readonly replies: 192; readonly groups: 32 };
+export const PUBLISHER_ELAPSED_MAX_MS: 3600000;
+// now: a monotonic clock in milliseconds (defaults to performance.now); test seam only, never a timer.
+export type ProductProgressOptions = { now?: () => number };
 export type ProductProgress = {
   advance(stage: ProductStage, sample?: ProductSample | null): void;
   complete(): void;
@@ -99,6 +104,6 @@ export type ProductProgress = {
     publisherReplies: PublisherReplyReceipt;
   };
 };
-export function createProductProgress(): ProductProgress;
+export function createProductProgress(options?: ProductProgressOptions): ProductProgress;
 export function captureProductResponse(progress: ProductProgress, operation: ProductOperation,
   status: unknown, readBody: () => Promise<unknown>): Promise<void>;
