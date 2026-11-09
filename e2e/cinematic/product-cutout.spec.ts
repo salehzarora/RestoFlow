@@ -238,6 +238,9 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
         // Diagnostic only: the same finished() promise is observed for its
         // settlement state. The wait, its accounting and its rejection path
         // above are unchanged; the request object and request id stay in memory.
+        // In a timed-out run the page closes before the receipt is written, so
+        // the reply that never finished reads 'rejected' at 'publication-counts'
+        // with requestFinished false, never 'pending'.
         progress.observePublisherReply(response.request(), {
           variant: body.variant, status: response.status(), groupKey: body.request_id, finished,
         });

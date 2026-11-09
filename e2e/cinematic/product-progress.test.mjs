@@ -358,3 +358,81 @@ test('observer inputs never throw and the observer adds no unhandled rejection',
     process.off('unhandledRejection', record);
   }
 });
+
+test('only the first settlement of a finished promise counts', () => {
+  const progress = createProductProgress();
+  progress.advance('publish-selection', 'burger');
+  // Synchronous thenables settle twice on purpose; a real promise cannot.
+  const rejectThenFulfil = { then(fulfil, fail) { fail(new Error('first')); progress.advance('selection-readback'); fulfil(null); } };
+  progress.observePublisherReply({}, { variant: 'w480', status: 200, groupKey: 'publish-a', finished: rejectThenFulfil });
+  const fulfilThenReject = { then(fulfil, fail) { fulfil(null); fail(new Error('late')); } };
+  progress.observePublisherReply({}, { variant: 'w960', status: 200, groupKey: 'publish-b', finished: fulfilThenReject });
+  assert.deepEqual(progress.snapshot().publisherReplies.replies.map(reply => [reply.finishedPromise, reply.finishedPromiseStage]),
+    [['rejected', 'publish-selection'], ['fulfilled', 'selection-readback']]);
+  assert.equal(JSON.stringify(progress.snapshot()).includes('first'), false);
+});
+
+test('request correlation uses object identity only and keeps the first record of a repeated request object', () => {
+  const progress = createProductProgress();
+  progress.advance('registration-proof', 'platter');
+  // Equal primitive keys are never correlation keys.
+  progress.observePublisherReply('request-a', { variant: 'w480', status: 200, groupKey: 'publish-a', finished: pendingForever() });
+  progress.markPublisherRequestFinished('request-a');
+  progress.observePublisherReply(undefined, { variant: 'w480', status: 200, groupKey: 'publish-b', finished: pendingForever() });
+  progress.markPublisherRequestFailed(undefined);
+  // The same request object observed twice keeps its first record.
+  const request = {};
+  progress.observePublisherReply(request, { variant: 'w960', status: 202, groupKey: 'publish-c', finished: pendingForever() });
+  progress.observePublisherReply(request, { variant: 'w960', status: 200, groupKey: 'publish-c', finished: pendingForever() });
+  progress.markPublisherRequestFinished(request);
+  const receipt = progress.snapshot().publisherReplies;
+  assert.deepEqual(receipt.replies.map(reply => [reply.requestFinished, reply.requestFailed]),
+    [[false, false], [false, false], [true, false], [false, false]]);
+  assert.deepEqual([receipt.counts.requestFinished, receipt.counts.requestFailed], [1, 0]);
+});
+
+test('dropped replies never consume a group slot', () => {
+  const { replies: maxReplies, groups: maxGroups } = PUBLISHER_REPLY_LIMITS;
+  const progress = createProductProgress();
+  // Fill every reply slot using exactly the available group slots, then offer dropped replies with new ids.
+  for (let index = 0; index < maxReplies; index += 1) {
+    progress.observePublisherReply({}, { variant: 'w480', status: 200, groupKey: `publish-${index % maxGroups}`, finished: pendingForever() });
+  }
+  assert.equal(progress.snapshot().publisherReplies.groupOverflow, 0);
+  for (let index = 0; index < 3; index += 1) {
+    progress.observePublisherReply({}, { variant: 'w480', status: 200, groupKey: `dropped-${index}`, finished: pendingForever() });
+  }
+  const receipt = progress.snapshot().publisherReplies;
+  assert.deepEqual([receipt.observed, receipt.recorded, receipt.droppedReplies, receipt.groupOverflow, receipt.truncated],
+    [maxReplies + 3, maxReplies, 3, 0, true]);
+});
+
+test('observer state is settled by the time the awaiting continuation runs, without an extra tick', async () => {
+  const progress = createProductProgress();
+  progress.advance('publish-selection', 'drink');
+  const good = deferred(), stuck = deferred();
+  // The spec's composition: the pushed chain is registered before the observer.
+  const chains = [good, stuck].map((reply, index) => {
+    const pushed = reply.promise.then(() => {});
+    progress.observePublisherReply({}, { variant: 'w480', status: 200, groupKey: `publish-${index}`, finished: reply.promise });
+    return pushed;
+  });
+  good.resolve(null);
+  await chains[0];
+  assert.equal(progress.snapshot().publisherReplies.replies[0].finishedPromise, 'fulfilled');
+  progress.advance('publication-counts', null);
+  const closeReason = new Error('page closed');
+  let receipt;
+  try {
+    stuck.reject(closeReason);
+    await Promise.all(chains);
+    assert.fail('the wait must reject');
+  } catch (error) {
+    assert.equal(error, closeReason);
+  } finally {
+    receipt = progress.snapshot();
+  }
+  assert.deepEqual([receipt.publisherReplies.replies[1].finishedPromise, receipt.publisherReplies.replies[1].finishedPromiseStage],
+    ['rejected', 'publication-counts']);
+  assert.deepEqual(receipt.publisherReplies.counts, { pending: 0, fulfilled: 1, rejected: 1, requestFinished: 0, requestFailed: 0 });
+});

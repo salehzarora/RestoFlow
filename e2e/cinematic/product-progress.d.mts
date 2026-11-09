@@ -68,6 +68,7 @@ export type ProductResponseFacts = {
 export type PublisherVariant = 'w480' | 'w960' | 'other';
 export type PublisherPromiseState = 'pending' | 'fulfilled' | 'rejected';
 export type PublisherReplyFacts = {
+  // group is the per-run ordinal of one logical publish: its ladder rungs and single retry share one request id.
   ordinal: number; group: number | null; variant: PublisherVariant; httpStatus: number | null;
   stage: ProductStage | null; sample: ProductSample | null;
   finishedPromise: PublisherPromiseState; finishedPromiseStage: ProductStage | null;
@@ -76,12 +77,14 @@ export type PublisherReplyFacts = {
 };
 export type PublisherReplyReceipt = {
   limits: { replies: number; groups: number };
+  // observed counts every reply offered; recorded is bounded by limits.replies; groupOverflow counts
+  // replies (not request ids) that received no group because limits.groups was already reached.
   observed: number; recorded: number; droppedReplies: number; groupOverflow: number; truncated: boolean;
   counts: { pending: number; fulfilled: number; rejected: number; requestFinished: number; requestFailed: number };
   replies: PublisherReplyFacts[];
 };
 export type PublisherReplyObservation = { variant?: unknown; status?: unknown; groupKey?: unknown; finished?: unknown };
-export const PUBLISHER_REPLY_LIMITS: { readonly replies: 128; readonly groups: 32 };
+export const PUBLISHER_REPLY_LIMITS: { readonly replies: 192; readonly groups: 32 };
 export type ProductProgress = {
   advance(stage: ProductStage, sample?: ProductSample | null): void;
   complete(): void;

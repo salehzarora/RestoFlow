@@ -70,7 +70,15 @@ const responseCodes = new Set(['permission_denied', 'source_not_found', '42501']
 // HTTP status, the fixed stage/sample labels current at each observation, the
 // finished() promise state and the independent browser request flags. Request
 // objects and the application request id stay in memory and are never written.
-export const PUBLISHER_REPLY_LIMITS = Object.freeze({ replies: 128, groups: 32 });
+// Reading rule: Playwright resolves finished() only on requestfinished and
+// rejects it only when the page closes, so in a timed-out run the reply that
+// never finished reads finishedPromise 'rejected' at 'publication-counts' with
+// requestFinished false; 'pending' appears only when another failure ends the
+// test while replies are still in flight.
+// Bounds: fourteen logical publishes (7 x w480 + 7 x w960), each at most five
+// ladder rungs x two attempts under one request id, give 140 replies; 192
+// leaves room for restart_required re-publishes. Overflow is always reported.
+export const PUBLISHER_REPLY_LIMITS = Object.freeze({ replies: 192, groups: 32 });
 const publisherVariants = new Set(['w480', 'w960']);
 const boundedStatus = status => Number.isInteger(status) && status >= 100 && status <= 599 ? status : null;
 const identityKey = key => (typeof key === 'object' && key !== null) || typeof key === 'function';
