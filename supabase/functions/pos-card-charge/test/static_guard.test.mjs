@@ -102,7 +102,7 @@ test("the timing constants and byte caps are pinned and fit the start deadline a
   assert.equal(POLL_MIN_INTERVAL_MS, 3_000);
   // 001D stamps start_deadline_at at the claim's INSERT, up to one RPC deadline before its answer: the claim's
   // tail, the commit budget and one finish call end before it. The interval is read from the migration.
-  const migration = await read(new URL("supabase/migrations/20261023225657_bizbot_zcredit_001d_server_ledger.sql", REPO));
+  const migration = await read(new URL("supabase/migrations/20261104141959_bizbot_zcredit_001d_server_ledger.sql", REPO));
   const deadline = /provider_query_key, provider_duplicate_key, retention_until, start_deadline_at\)[\s\S]*?clock_timestamp\(\) \+ interval '(\d+) seconds'\)\n\s+on conflict/.exec(migration);
   assert.ok(deadline, "the claim's start_deadline_at expression");
   const deadlineMs = BigInt(deadline[1]) * 1_000n;

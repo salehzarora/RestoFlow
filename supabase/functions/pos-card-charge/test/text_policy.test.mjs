@@ -26,7 +26,7 @@ import { assertionStatement, evaluate, evaluateInsert, evaluateIs, evaluateResul
 test.after(async () => { await settleAll(); assert.deepEqual(blocked, []); assert.deepEqual(stray, []); });
 
 const ROOT = new URL("../../../", import.meta.url);
-const MIGRATION = new URL("migrations/20261023225657_bizbot_zcredit_001d_server_ledger.sql", ROOT);
+const MIGRATION = new URL("migrations/20261104141959_bizbot_zcredit_001d_server_ledger.sql", ROOT);
 const FIELD_RULES = new URL("tests/bizbot_zcredit_001d_field_rules_test.sql", ROOT);
 const FUNCTION_SOURCE = new URL("../lib/text_policy.mjs", import.meta.url);
 const read = async (url) => (await readFile(url, "utf8")).replace(/\r\n/g, "\n");

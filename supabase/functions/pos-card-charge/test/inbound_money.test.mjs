@@ -66,7 +66,7 @@ test("D-064 direct: a sign, an exponent, a third fraction digit, a tenth integer
 });
 
 test("D-064 parity: every canonical output is a JSON string that passes the finish rule read from the migration", async () => {
-  const migration = await read(new URL("supabase/migrations/20261027211023_bizbot_zcredit_001e_drop_evidence_001.sql", REPO));
+  const migration = await read(new URL("supabase/migrations/20261109143313_bizbot_zcredit_001e_drop_evidence_001.sql", REPO));
   const rule = /when 'provider_amount', 'tip_amount' then\n\s+if v_text is null or v_text !~ '([^']+)' then v_rule := 'format'; end if;/
     .exec(migration);
   assert.ok(rule, "the finish rule of the amount and the tip");

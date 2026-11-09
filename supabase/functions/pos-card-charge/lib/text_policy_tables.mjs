@@ -1,4 +1,4 @@
-// GENERATED from supabase/migrations/20261023225657_bizbot_zcredit_001d_server_ledger.sql
+// GENERATED from supabase/migrations/20261104141959_bizbot_zcredit_001d_server_ledger.sql
 // (app.card_safe_text_failure, DECISION D-059 point 4): the seven class constants verbatim in
 // PostgreSQL escape syntax and the 17 Space_Separator trim code points of c_trim. Do not edit by
 // hand; test/text_policy.test.mjs re-reads the migration and fails on any difference.

@@ -324,7 +324,7 @@ async function g1Migration() {
 
 test("static cross-check: the G1 migration's closed lists are the adapter's runtime reply-key table", async () => {
   const migration = await g1Migration();
-  const old = await repoText("supabase/migrations/20261023225657_bizbot_zcredit_001d_server_ledger.sql");
+  const old = await repoText("supabase/migrations/20261104141959_bizbot_zcredit_001d_server_ledger.sql");
   const handler = await repoText("supabase/functions/pos-card-charge/handler.mjs");
   // The runtime table, not a parse of its source (review ADP-1): a key added in any shape is bound here.
   const keys = Object.keys(REPLY_KEY_TABLE).sort();
