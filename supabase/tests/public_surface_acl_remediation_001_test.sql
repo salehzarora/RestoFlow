@@ -168,7 +168,10 @@ select is(
     where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
       and not has_function_privilege('authenticated', p.oid, 'EXECUTE')),
   (select string_agg(identity, ', ' order by identity) from (
+    -- UX-002 v8 explicitly grants anon AND authenticated. The older readers
+    -- remain anon-only; keep the authenticated-denied set exact by identity.
     select identity from sec001_allowlist
+      where identity <> 'storefront_menu_v8(text)'
     union all select 'submit_web_order_request(text,uuid,text,jsonb)'
     union all select 'submit_web_order_live_request(text,uuid,text,jsonb)'
     union all select 'submit_web_order_platform_request(text,uuid,text,jsonb)'
