@@ -1,5 +1,5 @@
 /* Explicit site-theme scope; existing scene/background recipes are untouched. */
-.light.light{color-scheme:light;--bg:#ffffff;--sf:#ffffff;--sf2:#f5f6f7;--tx:#202124;--tx2:#5c6268;--tx3:#5c6268;--hair:#d8dce0;--hair2:#bfc5cb;--hero:#fff;--onhero:#202124;--onhero2:#5c6268;--sceneGlass:#fff;--sceneGlassSoft:#f5f6f7;--sceneLine:#bfc5cb;background:var(--bg);color:var(--tx)}
+.light.light{color-scheme:light;--bg:#ffffff;--sf:#ffffff;--sf2:#f5f6f7;--tx:#202124;--tx2:#5c6268;--tx3:#5c6268;--hair:#d8dce0;--hair2:#bfc5cb;--hero:#fff;--onhero:#202124;--onhero2:#5c6268;--sceneGlass:#fff;--sceneGlassSoft:#f5f6f7;--sceneLine:#bfc5cb}
 .dark{color-scheme:dark}
 .legacy{}
 .light :global([data-sf-screen="home"]),.light :global([data-sf-screen="intro"]){background:var(--bg)}

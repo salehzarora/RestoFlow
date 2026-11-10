@@ -59,22 +59,23 @@ class StorefrontSiteThemePalette {
         : const Color(0xff151513);
   }
 
-  static Color _mix(Color a, Color b, double amount) {
+  static Color _mix(Color a, Color b, double blendFraction) {
     final first = storefrontHexToRgb(storefrontFormatColor(a));
     final second = storefrontHexToRgb(storefrontFormatColor(b));
     return storefrontParseColor(
       storefrontRgbToHex([
-        for (var i = 0; i < 3; i++) first[i] + (second[i] - first[i]) * amount,
+        for (var i = 0; i < 3; i++)
+          first[i] + (second[i] - first[i]) * blendFraction,
       ]),
     )!;
   }
 
-  static Color _darkSurface(Color background, double amount) {
-    final candidate = _mix(background, Colors.white, amount);
+  static Color _darkSurface(Color background, double blendFraction) {
+    final candidate = _mix(background, Colors.white, blendFraction);
     return storefrontContrast('#ffffff', storefrontFormatColor(candidate)) >=
             kStorefrontContrastAa
         ? candidate
-        : _mix(background, Colors.black, amount);
+        : _mix(background, Colors.black, blendFraction);
   }
 
   static Color _readableInk(Color background) {

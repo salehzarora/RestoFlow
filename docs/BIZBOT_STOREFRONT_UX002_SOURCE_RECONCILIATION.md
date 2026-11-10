@@ -2,7 +2,7 @@
 
 ## Preserved identity and additional scope
 
-Base main: `46612618512b4a586eafdde1c153a63a6c8d92de`. The preserved local candidate is tree `7e9eea17bfe9aa01ddccc4a61337b8bedc33f188`, not a commit. All49 working files and the original reports/patch/ZIP were copied and hash-verified before reconciliation. The continuation changes documentation only; application, tests and migration bytes remain identical to that reviewed tree. Final commit/tree and actual CI checkout identities are recorded in the publication receipt, not inferred from old local executions.
+Base main: `46612618512b4a586eafdde1c153a63a6c8d92de`. The preserved local candidate is tree `7e9eea17bfe9aa01ddccc4a61337b8bedc33f188`, not a commit. All49 working files and the original reports/patch/ZIP were copied and hash-verified before reconciliation. Initial publication commit `9da7f862ea0495c2d92c7809f09739ab44317810`, tree `a909d821c4a348f423ba2e90bfbdae3393ab85f0`, changed documentation only relative to that candidate. Subsequent demonstrated CI corrections are listed below; evidence for the initial tree is not silently attributed to the corrected source. Final commit/tree and actual CI checkout identities are recorded in the publication receipt.
 
 ## Next source attribution, corrected
 
@@ -17,6 +17,16 @@ PASS: a fresh full-repository export of tree7e9eea17, using `git -c core.autocrl
 The first separate export materialized CRLF under Git's system core.autocrlf setting; npm ci passed, but its Python output observer stopped while printing the Next Unicode banner to a cp1252 terminal. That attempt/log is preserved as a harness failure, not an application failure or PASS. The owned process state was reconciled before a second fresh raw-Git export and UTF-8-safe observer completed the clean proof. No existing dependency directory was reused. Full evidence: `clean-install-build-7e9eea/EXPORT-IDENTITY.json` and `attempt2-raw-git-export/RECEIPT.json`, npm-ci.log and fixture-production-build.log in the reconciliation evidence directory.
 
 The owner preview and its installed modules/build output are untouched. Existing visual/contract reviews remain evidence for unchanged application bytes; they do not substitute for final-head full CI, database or real-service execution.
+
+## Demonstrated CI corrections after initial publication
+
+The first runs, CI42860194941 and integration42860194978, tested synthetic merge `dfbd7d3b9741a9a598d98138ef95213407f3d530` with treea909d821. Their original logs and sanitized source artifact are retained, including all failures.
+
+- The fixed money-name heuristic correctly matched its `amount` pattern, but the two matching `double amount` parameters were color interpolation fractions. Only those private parameter names and their uses change to `blendFraction`; types, constants and arithmetic are identical. The unchanged whole-tree guard passes after the rename, as do the five focused theme tests including32 palette vectors and analysis. No financial code or guard is changed.
+- The full ephemeral database ran340 files /14,029 assertions and failed15 exact-surface expectations in six suites. Fourteen diagnostics have exactly one extra full identity, `storefront_menu_v8(text)`; the final conjunction checks the same sets and unchanged no-PUBLIC-EXECUTE condition. The approved v8 reader is now enumerated literally in11 expected sets; count prose changes from nine to ten. Equality predicates, test plans, real catalog queries, procedure/overload/DEFINER/PUBLIC negative controls and actual grants are unchanged. No predicate derives its expected set from the catalog. This is affected contract-test maintenance, independently reviewed outside the58 reserved Claude paths; final-head full DB execution remains required.
+- The initial Linux output showed Search CSS68,905raw /14,005Brotli against the unchanged14,000B limit, reproduced exactly in a separate local build. Only redundant private journey/site-theme declarations are removed or factored: foundation-supplied paint, identical physical/logical width under the supported horizontal RTL/LTR mode, common field font/radius, and FooterCta-parent paint already supplied by its unchanged shared class. No shared file is modified. Final local measurements are68,791raw /13,993Brotli for all four Search locale paths, with ONLY7B compressed headroom; this is a tight pass, not a claim of generous capacity or a performance redesign. All36 direct-load routes pass audit/first-load,31 output regressions and33 source/theme checks pass. Package/lock and all other exported source blobs remain unchanged in that CSS-only proof. Final-head Linux CI remains authoritative for the combined correction.
+
+These corrections do not modify the reviewed migration bytes, dependency files, payment/shared flow files, the historical cinematic harness, D-067/D-068 or CI budgets/configuration. The known historical sequence refusal remains a separate unresolved gate. Correction-specific hashes, review and executions are retained in the reconciliation evidence directory; final CI must execute the corrected source.
 
 ## Coordination status
 
