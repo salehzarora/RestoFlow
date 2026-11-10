@@ -1938,11 +1938,11 @@ select is(
                               where qn.nspname = split_part(x.sig, '.', 1) and q.proname = 'card_attempt_finish')), '; ' order by x.ord)
      from (values (1, 'app.card_attempt_finish(uuid,uuid,uuid,text,text,bigint,text,text,text,jsonb,text)'),
                   (2, 'public.card_attempt_finish(uuid,uuid,uuid,text,text,bigint,text,text,text,jsonb,text)')) x(ord, sig)),
-  'app.card_attempt_finish(uuid,uuid,uuid,text,text,bigint,text,text,text,jsonb,text) md5=99040d865e5bcd17f66e40ffe5f956b0 '
+  'app.card_attempt_finish(uuid,uuid,uuid,text,text,bigint,text,text,text,jsonb,text) md5=da9dba46112091dc8dcf1b44cd5619a5 '
   || 'acl={postgres=X/postgres,service_role=X/postgres} overloads=1; '
   || 'public.card_attempt_finish(uuid,uuid,uuid,text,text,bigint,text,text,text,jsonb,text) md5=f87c0fc5231d6418f437879f45a0b1bb '
   || 'acl={postgres=X/postgres,service_role=X/postgres} overloads=1',
-  'SA-135 C2 (packet 13.4, the provider-fact exception): card_attempt_finish keeps its signature, ACL and definition on both layers - the app body and the public wrapper are byte-identical to C1 (CR-normalized md5 99040d86... / f87c0fc5..., captured on the pre-C2 clone), ACL {postgres=X/postgres,service_role=X/postgres}, one overload each: it gained no caller binding and no support check');
+  'SA-135 C2 (packet 13.4, the provider-fact exception; its app-body md5 and this wording updated by BIZBOT-PAYMENTS-ZCREDIT-PILOT-001E-DROP-EVIDENCE-001, D-062): card_attempt_finish keeps its signature, ACL and one overload on both layers and gained no caller binding and no support check; the public wrapper is byte-identical to C1 (CR-normalized md5 f87c0fc5..., captured on the pre-C2 clone) and the app body is the C2 body plus exactly the three D-062 dropped-field blocks (CR-normalized md5 da9dba46...; with those blocks removed it is the C2 body 99040d86..., proven block by block by G1-004..G1-006 of bizbot_zcredit_001e_drop_evidence_test.sql), ACL {postgres=X/postgres,service_role=X/postgres}');
 
 select is(
   (select format('identity=(%s) overloads=%s acl=%s comment_lines=%s key_line=%s c2_md5=%s without_c2_lines_md5=%s',

@@ -5,6 +5,10 @@
 // the target-only apply run in disposable workdirs that hold exactly the prefix
 // ending at the #379 target; the one reviewed follow-up (001D) is then applied
 // alone from an exact disposable prefix, then the pinned product, scene and background follow-ups.
+// BIZBOT-STOREFRONT-CINEMATIC-P2-G1-PIN-001: the two reviewed successors after them (the #386
+// POS duty migration and the P2 G1 payment migration) are pinned by the contract, applied whenever the
+// complete directory is applied (the normal database suite, and the stack start before this runner
+// resets it), and excluded from every historical plan built here.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
@@ -273,11 +277,13 @@ end;\n$cinematic_late_failure$;\n`;
   receipt.after_schema_sha256 = sha256(schemaSnapshot());
   receipt.after_history_sha256 = sha256(sql(historyQuery));
 
-  // Hosted #381 source is merged, but its unrelated payment migration is not
-  // applied. Prove that exact rollout shape afresh without changing payment.
-  // The separate full db-tests job still runs every payment suite/concurrency
-  // assertion against all migrations; the real UI lifecycle below uses this
-  // production-shaped stack. Both are identified separately in the receipt.
+  // The historical #379 / PR380 regression fixture: #379 and its visual follow-ups
+  // applied, the payment migration 001D omitted. It reproduces that historical shape
+  // afresh without changing payment (001D has since been applied on hosted, 2026-11-09;
+  // the two pinned later successors are omitted here as well). The separate full
+  // db-tests job still runs every payment suite/concurrency assertion against all
+  // migrations; the real UI lifecycle below uses this historical fixture stack. Both
+  // are identified separately in the receipt; the phase name and receipt keys are unchanged.
   phase = 'prove_scoped_visual_release_without_pending_payment';
   checked('supabase', ['db', 'reset', '--local', '--version', migrationVersion, '--no-seed', '--yes']);
   assert.deepEqual(JSON.parse(sql(historyVersionsQuery)), versionsOf(sequence.target_prefix));

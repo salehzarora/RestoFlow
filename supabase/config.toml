@@ -461,3 +461,13 @@ verify_jwt = false
 [functions.pos-web-order-decision]
 enabled = true
 verify_jwt = false
+
+# BIZBOT-PAYMENTS-ZCREDIT-PILOT-001E: the card-present provider adapter (API_CONTRACT
+# 4.55). The caller JWT is mandatory and is verified by PostgREST inside the read-only
+# context proof; the service-role key is read by the ledger module only, after that
+# proof. Native Android POS only (no Origin, no CORS). Dark by default: no provider
+# request without POS_CARD_PAYMENTS_ENABLED=true, a valid POS_CARD_PROVIDER_CONFIG and a
+# vendor wire profile. Not deployed by the ticket that adds it (DEPLOYMENT 18.3).
+[functions.pos-card-charge]
+enabled = true
+verify_jwt = false
