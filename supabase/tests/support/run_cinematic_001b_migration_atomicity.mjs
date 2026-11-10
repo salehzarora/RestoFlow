@@ -6,8 +6,9 @@
 // ending at the #379 target; the one reviewed follow-up (001D) is then applied
 // alone from an exact disposable prefix, then the pinned product, scene and background follow-ups.
 // BIZBOT-STOREFRONT-CINEMATIC-P2-G1-PIN-001: the two reviewed successors after them (the #386
-// POS duty migration and the P2 G1 payment migration) are pinned by the contract, applied by the
-// normal database suite only, and excluded from every historical plan built here.
+// POS duty migration and the P2 G1 payment migration) are pinned by the contract, applied whenever the
+// complete directory is applied (the normal database suite, and the stack start before this runner
+// resets it), and excluded from every historical plan built here.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';

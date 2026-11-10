@@ -100,7 +100,10 @@ test('the sequence pins #379, payment 001D, product helpers, scene, background c
     prefix_names_sha256: prefixNamesFingerprint, follow_up_sha256: followUpFingerprint, follow_up_statements: 125,
     follow_up_no_embedded_transaction: true,
     visual_followups: followupMigrations.map(pin => ({ ...pin, version: pin.name.slice(0, 14), statements: statements(bytesOf(pin.name).toString('utf8')).length, no_embedded_transaction: true })),
-    excluded_successors: excludedSuccessors,
+    excluded_successors: [
+      { label: 'POS duty', name: '20261108085442_bizbot_pos_long_shift_alerts_001.sql', sha256: '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865' },
+      { label: 'G1', name: '20261109143313_bizbot_zcredit_001e_drop_evidence_001.sql', sha256: '1ac9a99048c0755a982d197099a7aed27d802a67ea02b38254b79453b92bad95' },
+    ],
   });
 });
 
@@ -141,6 +144,7 @@ test('a missing target, predecessor or 001D follow-up fails', () => {
 
 test('reordered and duplicate versions fail', () => {
   const swapped = [...sources];
+  assert.deepEqual([sources[183][0], sources[184][0]], [migrationName, followUpName]);
   [swapped[183], swapped[184]] = [swapped[184], swapped[183]];
   refuses(swapped, 'Migration versions must be strictly ascending');
   refuses([...sources].reverse(), 'Migration versions must be strictly ascending');
@@ -272,12 +276,16 @@ test('the historical #379 / PR380 fixture plan omits 001D and both pinned succes
   ]);
   assert.ok(plan.every(([name, bytes]) => bytes === bytesOf(name)), 'Exact bytes are retained');
   assert.ok(!plan.some(([name]) => name === followUpName || successorNames.includes(name)));
+  const missingMessage = (pin) => (pin === followUpName ? 'Missing the reviewed 001D follow-up migration' : 'Unexpected migration sequence after the #379 target');
+  const changedMessage = (pin) => (pin === followUpName ? 'Unreviewed 001D follow-up bytes'
+    : followupMigrations.some(item => item.name === pin) ? 'Unreviewed visual follow-up bytes'
+      : `Unreviewed ${excludedSuccessors.find(item => item.name === pin).label} successor bytes`);
   for (const pin of [followUpName, ...followupMigrations.map(item => item.name), ...successorNames]) {
-    assert.throws(() => visualReleaseSources(without(sources, pin)));
-    assert.throws(() => visualReleaseSources(replacing(pin, Buffer.concat([bytesOf(pin), sql('-- changed\n')]))));
+    assert.throws(() => visualReleaseSources(without(sources, pin)), failsWith(missingMessage(pin)));
+    assert.throws(() => visualReleaseSources(replacing(pin, Buffer.concat([bytesOf(pin), sql('-- changed\n')]))), failsWith(changedMessage(pin)));
   }
-  assert.throws(() => visualReleaseSources(adding(['20261104160000_unreviewed.sql', sql('select 1;\n')])));
-  assert.throws(() => visualReleaseSources(adding(['20261110000000_unreviewed_after_g1.sql', sql('select 1;\n')])));
+  assert.throws(() => visualReleaseSources(adding(['20261104160000_unreviewed.sql', sql('select 1;\n')])), failsWith('Unexpected migration sequence after the #379 target'));
+  assert.throws(() => visualReleaseSources(adding(['20261110000000_unreviewed_after_g1.sql', sql('select 1;\n')])), failsWith('Unexpected migration sequence after the #379 target'));
 });
 
 test('both pinned successors carry their exact identities and are excluded from both historical plans', () => {
@@ -323,6 +331,7 @@ test('each pinned successor fails closed when missing, modified, CRLF-converted,
     // The reviewed bytes copied under another name: in the prefix, or as an extra later file.
     refuses(replacing(sources[0][0], original), `Reviewed ${label} bytes may appear only under their pinned name`);
     refuses(adding(['20261110000000_copied_successor.sql', original]), 'Unexpected migration sequence after the #379 target');
+    refuses(adding(['20261106190000_unknown.sql', original]), 'Unexpected migration sequence after the #379 target');
     refuses(adding([`${name.slice(0, 15)}duplicate.sql`, sql('select 1;\n')]), 'Duplicate migration version');
   }
 });
@@ -350,8 +359,10 @@ test('historical plan builders reject invalid complete inputs before producing a
     assert.throws(() => targetPrefixSources(replacing(name, changed), broken), failsWith(`Unreviewed ${label} successor bytes`));
     assert.throws(() => visualReleaseSources(replacing(name, changed)), failsWith(`Unreviewed ${label} successor bytes`));
     assert.throws(() => visualReleaseSources(replacing(sources[0][0], bytesOf(name))), failsWith(`Reviewed ${label} bytes may appear only under their pinned name`));
+    assert.throws(() => targetPrefixSources(replacing(sources[0][0], bytesOf(name)), broken), failsWith(`Reviewed ${label} bytes may appear only under their pinned name`));
   }
   assert.throws(() => targetPrefixSources(adding(['20261110000000_unknown_after_g1.sql', broken]), broken), failsWith('Unexpected migration sequence after the #379 target'));
   assert.throws(() => visualReleaseSources(adding(['20261109000000_between_successors.sql', broken])), failsWith('Unexpected migration sequence after the #379 target'));
+  assert.throws(() => targetPrefixSources(adding(['20261109000000_between_successors.sql', broken]), broken), failsWith('Unexpected migration sequence after the #379 target'));
   assert.throws(() => visualReleaseSources(adding(['20261110000000_unknown_after_g1.sql', broken])), failsWith('Unexpected migration sequence after the #379 target'));
 });
