@@ -1,0 +1,550 @@
+{
+  "purpose": "Dashboard sample parity with actual Storefront explicit mode builder; no saved value rewriting",
+  "sourceSha256": "a3d7392d6647991847eb62088790b5d8e30b31b467485955dae0fd406ef48257",
+  "vectors": [
+    {
+      "siteTheme": "light",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#292929",
+        "accent": "#ff8000",
+        "text": "#ffffff",
+        "buttonText": "#000000"
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#ff8000",
+        "buttonText": "#000000",
+        "selection": "#fff4e8"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#292929",
+        "accent": "#ff8000",
+        "text": "#ffffff",
+        "buttonText": "#000000"
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#ff8000",
+        "buttonText": "#000000",
+        "selection": "#fff4e8"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#292929",
+        "accent": "#ff8000",
+        "text": "#ffffff",
+        "buttonText": "#000000"
+      },
+      "expected": {
+        "background": "#292929",
+        "text": "#ffffff",
+        "accent": "#ff8000",
+        "buttonText": "#000000",
+        "selection": "#42362b"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#292929",
+        "accent": "#ff8000",
+        "text": "#ffffff",
+        "buttonText": "#000000"
+      },
+      "expected": {
+        "background": "#151515",
+        "text": "#ffffff",
+        "accent": "#ff8000",
+        "buttonText": "#000000",
+        "selection": "#302519"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#292929",
+        "accent": "#777777",
+        "text": "#ffffff",
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#777777",
+        "buttonText": "#000000",
+        "selection": "#f3f3f3"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#292929",
+        "accent": "#777777",
+        "text": "#ffffff",
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#777777",
+        "buttonText": "#000000",
+        "selection": "#f3f3f3"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#292929",
+        "accent": "#777777",
+        "text": "#ffffff",
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#292929",
+        "text": "#ffffff",
+        "accent": "#777777",
+        "buttonText": "#000000",
+        "selection": "#353535"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#292929",
+        "accent": "#777777",
+        "text": "#ffffff",
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#151515",
+        "text": "#ffffff",
+        "accent": "#777777",
+        "buttonText": "#000000",
+        "selection": "#242424"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#ffffff",
+        "accent": "#eeeeee",
+        "text": "#ffffff",
+        "buttonText": "#ffffff"
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#eeeeee",
+        "buttonText": "#0B1512",
+        "selection": "#fdfdfd"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#ffffff",
+        "accent": "#eeeeee",
+        "text": "#ffffff",
+        "buttonText": "#ffffff"
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#eeeeee",
+        "buttonText": "#0B1512",
+        "selection": "#fdfdfd"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#ffffff",
+        "accent": "#eeeeee",
+        "text": "#ffffff",
+        "buttonText": "#ffffff"
+      },
+      "expected": {
+        "background": "#151513",
+        "text": "#ffffff",
+        "accent": "#eeeeee",
+        "buttonText": "#0B1512",
+        "selection": "#2f2f2d"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#ffffff",
+        "accent": "#eeeeee",
+        "text": "#ffffff",
+        "buttonText": "#ffffff"
+      },
+      "expected": {
+        "background": "#151515",
+        "text": "#ffffff",
+        "accent": "#eeeeee",
+        "buttonText": "#0B1512",
+        "selection": "#2f2f2f"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#13322a",
+        "accent": "#006bb3",
+        "text": "#101010",
+        "buttonText": "#ffffff"
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#101010",
+        "accent": "#006bb3",
+        "buttonText": "#ffffff",
+        "selection": "#e8f2f8"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#13322a",
+        "accent": "#006bb3",
+        "text": "#101010",
+        "buttonText": "#ffffff"
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#101010",
+        "accent": "#006bb3",
+        "buttonText": "#ffffff",
+        "selection": "#e8f2f8"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#13322a",
+        "accent": "#006bb3",
+        "text": "#101010",
+        "buttonText": "#ffffff"
+      },
+      "expected": {
+        "background": "#13322a",
+        "text": "#ffffff",
+        "accent": "#006bb3",
+        "buttonText": "#ffffff",
+        "selection": "#183d3c"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#13322a",
+        "accent": "#006bb3",
+        "text": "#101010",
+        "buttonText": "#ffffff"
+      },
+      "expected": {
+        "background": "#151515",
+        "text": "#ffffff",
+        "accent": "#006bb3",
+        "buttonText": "#ffffff",
+        "selection": "#19232a"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#757575",
+        "accent": "#777777",
+        "text": "#f7f2ea",
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#777777",
+        "buttonText": "#000000",
+        "selection": "#f3f3f3"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#757575",
+        "accent": "#777777",
+        "text": "#f7f2ea",
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#777777",
+        "buttonText": "#000000",
+        "selection": "#f3f3f3"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#757575",
+        "accent": "#777777",
+        "text": "#f7f2ea",
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#757575",
+        "text": "#ffffff",
+        "accent": "#777777",
+        "buttonText": "#000000",
+        "selection": "#727272"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#757575",
+        "accent": "#777777",
+        "text": "#f7f2ea",
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#151515",
+        "text": "#f7f2ea",
+        "accent": "#777777",
+        "buttonText": "#000000",
+        "selection": "#242424"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#123",
+        "accent": "#fc0",
+        "text": null,
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#ffcc00",
+        "buttonText": "#0B1512",
+        "selection": "#fffae8"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#123",
+        "accent": "#fc0",
+        "text": null,
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#ffcc00",
+        "buttonText": "#0B1512",
+        "selection": "#fffae8"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#123",
+        "accent": "#fc0",
+        "text": null,
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#112233",
+        "text": "#ffffff",
+        "accent": "#ffcc00",
+        "buttonText": "#0B1512",
+        "selection": "#2d3834"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#123",
+        "accent": "#fc0",
+        "text": null,
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#151515",
+        "text": "#ffffff",
+        "accent": "#ffcc00",
+        "buttonText": "#0B1512",
+        "selection": "#302c19"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": null,
+      "brand": {
+        "primary": "invalid",
+        "accent": "invalid",
+        "text": null,
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#e4ad83",
+        "buttonText": "#0B1512",
+        "selection": "#fdf8f4"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "invalid",
+        "accent": "invalid",
+        "text": null,
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#202124",
+        "accent": "#e4ad83",
+        "buttonText": "#0B1512",
+        "selection": "#fdf8f4"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": null,
+      "brand": {
+        "primary": "invalid",
+        "accent": "invalid",
+        "text": null,
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#151513",
+        "text": "#ffffff",
+        "accent": "#e4ad83",
+        "buttonText": "#0B1512",
+        "selection": "#2e2923"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "invalid",
+        "accent": "invalid",
+        "text": null,
+        "buttonText": null
+      },
+      "expected": {
+        "background": "#151515",
+        "text": "#ffffff",
+        "accent": "#e4ad83",
+        "buttonText": "#0B1512",
+        "selection": "#2e2925"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#123027",
+        "accent": "#ffffff",
+        "text": "#222222",
+        "buttonText": "#222222"
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#222222",
+        "accent": "#ffffff",
+        "buttonText": "#222222",
+        "selection": "#ffffff"
+      }
+    },
+    {
+      "siteTheme": "light",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#123027",
+        "accent": "#ffffff",
+        "text": "#222222",
+        "buttonText": "#222222"
+      },
+      "expected": {
+        "background": "#ffffff",
+        "text": "#222222",
+        "accent": "#ffffff",
+        "buttonText": "#222222",
+        "selection": "#ffffff"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": null,
+      "brand": {
+        "primary": "#123027",
+        "accent": "#ffffff",
+        "text": "#222222",
+        "buttonText": "#222222"
+      },
+      "expected": {
+        "background": "#123027",
+        "text": "#ffffff",
+        "accent": "#ffffff",
+        "buttonText": "#222222",
+        "selection": "#2e4840"
+      }
+    },
+    {
+      "siteTheme": "dark",
+      "scenePreset": "reference_dark",
+      "brand": {
+        "primary": "#123027",
+        "accent": "#ffffff",
+        "text": "#222222",
+        "buttonText": "#222222"
+      },
+      "expected": {
+        "background": "#151515",
+        "text": "#ffffff",
+        "accent": "#ffffff",
+        "buttonText": "#222222",
+        "selection": "#303030"
+      }
+    }
+  ]
+}

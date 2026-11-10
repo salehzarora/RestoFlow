@@ -126,3 +126,27 @@
 @media (prefers-reduced-motion: reduce) {
  .host, .host *, .host *::before, .host *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* UX-002: one modal scroll owner on phones; the action follows the fields. */
+@media(max-width:640px){
+ .sheet{inset-block:0;min-block-size:100dvh;max-block-size:100dvh;display:block;overflow-y:auto;overscroll-behavior:contain;transform:none;border-radius:0;scroll-padding-block:20px}
+ .media{block-size:125px;background:var(--sf2)}
+ .mediaImg{object-fit:contain;object-position:center}
+ .body{max-block-size:none;overflow:visible}
+ .head{position:static;padding:20px 22px}
+ .close{inline-size:46px;block-size:46px}
+ .group{gap:14px;padding-block-end:24px}
+ .groupName{font-size:17px}.option{min-block-size:58px;border-radius:13px}
+ .optionName{font-size:13px}.delta{font-size:11px}
+ .noteField{max-block-size:none;overflow:hidden;resize:none;font-size:16px;line-height:1.7;scroll-margin-block:20px}
+ .foot{position:static;gap:12px;flex-wrap:wrap;padding:18px 22px max(22px,env(safe-area-inset-bottom))}
+ .step{inline-size:44px;block-size:46px}.step::after{display:none}
+ .quantityOption>.stepper .step{inline-size:44px;block-size:44px}
+ .cta{min-block-size:54px;border-radius:14px;font-size:15px}
+ .toast{inset-block-end:20px}
+}
+
+@media(max-width:640px){.options,.options[role="radiogroup"]{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Full groups still enforce the existing limit; their labels remain legible. */
+.optionFull{opacity:1}.optionFull .optionName{color:var(--tx2)}

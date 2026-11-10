@@ -1,10 +1,11 @@
 /**
  * THE LIVE READ CLIENT - server-only, no SDK.
  *
- * WHAT IT DOES. POSTs `{p_slug}` to `<origin>/rest/v1/rpc/storefront_menu_v7`
+ * WHAT IT DOES. POSTs `{p_slug}` to `<origin>/rest/v1/rpc/storefront_menu_v8`
  * with the PUBLISHABLE anon key from SERVER environment (never `NEXT_PUBLIC_`),
  * with one shared 5 s deadline, and decodes the response for the requested RPC.
- * During a staggered rollout, an explicitly missing v7 function permits a v6 read.
+ * During a staggered rollout, an explicitly missing v8 permits v7, then only an
+ * explicitly missing v7 permits v6. All reads share the original deadline.
  * Each is the same request a direct PostgREST caller could make
  * with the same key, so the site adds caching only and no authority.
  *
@@ -23,7 +24,7 @@
  * fixture is never a substitute for a live tenant (packet §4.3 failure contract).
  */
 
-import { decodeStorefrontMenuV6, decodeStorefrontMenuV7, type StorefrontMenuV7Envelope } from './decodeContentV1';
+import { decodeStorefrontMenuV6, decodeStorefrontMenuV7, decodeStorefrontMenuV8, type StorefrontMenuV8Envelope } from './decodeContentV1';
 
 const TIMEOUT_MS = 5000;
 
@@ -48,7 +49,7 @@ export function liveConfig(env: NodeJS.ProcessEnv = process.env): LiveConfig {
 /** The exact request the read makes, exposed so a test can assert its shape. */
 export function storefrontMenuRequest(config: LiveConfig, slug: string): { readonly url: string; readonly init: RequestInit } {
   return {
-    url: `${config.url}/rest/v1/rpc/storefront_menu_v7`,
+    url: `${config.url}/rest/v1/rpc/storefront_menu_v8`,
     init: {
       method: 'POST',
       headers: {
@@ -63,14 +64,14 @@ export function storefrontMenuRequest(config: LiveConfig, slug: string): { reado
   };
 }
 
-/** Only the missing public v7 RPC permits a v6 read during a staggered rollout. */
-async function missingMenuV7(response: Response): Promise<boolean> {
+/** Only an exact missing requested RPC permits its legacy read. */
+async function missingMenu(response: Response, version: 7 | 8): Promise<boolean> {
   if (response.status !== 404) return false;
   try {
     const body = await response.json();
     return (body?.code === 'PGRST202' &&
-      body.message === 'Could not find the function public.storefront_menu_v7(p_slug) in the schema cache') ||
-      (body?.code === '42883' && body.message === 'function public.storefront_menu_v7(text) does not exist');
+      body.message === `Could not find the function public.storefront_menu_v${version}(p_slug) in the schema cache`) ||
+      (body?.code === '42883' && body.message === `function public.storefront_menu_v${version}(text) does not exist`);
   } catch {
     return false;
   }
@@ -82,19 +83,24 @@ async function missingMenuV7(response: Response): Promise<boolean> {
  * ISR keeps the last good document for a cached URL and a never-cached URL
  * gets the framework error page, never a fabricated menu.
  */
-export async function fetchStorefrontMenu(slug: string, config?: LiveConfig): Promise<StorefrontMenuV7Envelope> {
+export async function fetchStorefrontMenu(slug: string, config?: LiveConfig): Promise<StorefrontMenuV8Envelope> {
   if (typeof window !== 'undefined') {
     throw new Error('storefront live client is server-only');
   }
   const cfg = config ?? liveConfig();
   const { url, init } = storefrontMenuRequest(cfg, slug);
   const response = await fetch(url, init);
-  if (response.ok) return decodeStorefrontMenuV7(await response.json());
-  if (await missingMenuV7(response)) {
-    // Both reads share the original deadline and the same publishable credentials.
-    const fallback = await fetch(`${cfg.url}/rest/v1/rpc/storefront_menu_v6`, init);
-    if (fallback.ok) return decodeStorefrontMenuV6(await fallback.json());
-    throw new Error(`storefront_menu: HTTP ${fallback.status}`);
+  if (response.ok) return decodeStorefrontMenuV8(await response.json());
+  if (await missingMenu(response, 8)) {
+    // All reads share the original deadline, slug and publishable credentials.
+    const v7 = await fetch(`${cfg.url}/rest/v1/rpc/storefront_menu_v7`, init);
+    if (v7.ok) return decodeStorefrontMenuV7(await v7.json());
+    if (await missingMenu(v7, 7)) {
+      const v6 = await fetch(`${cfg.url}/rest/v1/rpc/storefront_menu_v6`, init);
+      if (v6.ok) return decodeStorefrontMenuV6(await v6.json());
+      throw new Error(`storefront_menu: HTTP ${v6.status}`);
+    }
+    throw new Error(`storefront_menu: HTTP ${v7.status}`);
   }
   throw new Error(`storefront_menu: HTTP ${response.status}`);
 }

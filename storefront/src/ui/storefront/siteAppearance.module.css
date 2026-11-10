@@ -1,0 +1,8 @@
+/* Explicit site-theme scope; existing scene/background recipes are untouched. */
+.light.light{color-scheme:light;--bg:#ffffff;--sf:#ffffff;--sf2:#f5f6f7;--tx:#202124;--tx2:#5c6268;--tx3:#5c6268;--hair:#d8dce0;--hair2:#bfc5cb;--hero:#fff;--onhero:#202124;--onhero2:#5c6268;--sceneGlass:#fff;--sceneGlassSoft:#f5f6f7;--sceneLine:#bfc5cb;background:var(--bg);color:var(--tx)}
+.dark{color-scheme:dark}
+.legacy{}
+.light :global([data-sf-screen="home"]),.light :global([data-sf-screen="intro"]){background:var(--bg)}
+.light :global([data-sf-screen="intro"])>header{background:var(--bg)}
+.light :global([data-sf-module="announce"]){background:var(--sf2);color:var(--tx);border-color:var(--hair2)}
+.light :global([data-sf-module="announce"]) button{color:var(--tx2)}

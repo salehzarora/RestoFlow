@@ -1,0 +1,31 @@
+/* Scoped adapter. No shared flow, FooterCta or payment selectors are changed. */
+.journey{flex:1;min-inline-size:0;inline-size:100%;background:var(--bg);color:var(--tx)}
+.journey.journey :global([data-sf-screen]){width:min(720px,100%);inline-size:min(720px,100%);min-block-size:100svh;max-block-size:none;margin:0 auto;overflow:visible;border:0;border-radius:0;background:var(--bg);box-shadow:none;line-height:1.8}
+.journey.journey :global([data-sf-screen])>header{position:static;border-block-end:1px solid var(--hair2);background:var(--bg)}
+.journey.journey :global([data-sf-screen])>div{overflow:visible;max-block-size:none}
+.journey.journey :global([data-sf-screen])>div:has(>[data-sf-cta]){position:static;inset:auto;margin-block-start:auto;padding:18px 22px max(22px,env(safe-area-inset-bottom));border-block-start:1px solid var(--hair2);background:var(--bg)}
+.journey.journey :global([data-sf-cta]){min-block-size:54px;padding:14px 18px;border-radius:14px;font-size:16px;line-height:1.7}
+.journey.journey :global([data-sf-back]){inline-size:46px;block-size:46px;flex:none}
+.journey.journey :global([data-sf-screen])>header>div{gap:12px;padding:18px 22px}
+.journey.journey :global([data-sf-steps]){padding:0 22px 18px}
+.journey.journey :global([data-sf-screen])>div:has([data-sf-field]){gap:22px;padding:24px 22px}
+.journey input,.journey select{min-block-size:54px;font-size:16px;border-radius:13px}
+.journey textarea{min-block-size:92px;font-size:16px;line-height:1.8;border-radius:13px;max-block-size:none;overflow:hidden;resize:none}
+.journey input,.journey textarea,.journey select{scroll-margin-block:24px}
+.journey label{line-height:1.8}
+.journey.journey :global([data-sf-stepper]){block-size:46px;gap:0;border-radius:12px}
+.journey.journey :global([data-sf-stepper]) button{inline-size:44px;min-inline-size:44px;block-size:44px}
+.journey.journey :global([data-sf-stepper]) button::after{display:none}
+.journey.journey :global([data-sf-cart-line]){gap:14px;padding-block:22px}
+.journey.journey :global([data-sf-cart-line]) button,.journey.journey :global([data-sf-edit]){min-block-size:44px;padding-inline:8px;font-size:13px}
+.journey.journey :global([data-sf-cart-line])>div{grid-template-columns:max-content minmax(0,1fr);row-gap:9px}
+.journey.journey :global([data-sf-cart-line])>div>div:last-child>span:last-child{grid-column:1/-1;grid-row:5;justify-content:flex-end}
+.journey.journey :global([data-sf-block]){padding:18px 0;border:0;border-radius:0;border-block-end:1px solid var(--hair2);background:var(--bg);gap:12px}
+.journey.journey :global([data-sf-block])>div{font-size:15px;line-height:1.8}
+.journey.journey :global([data-sf-field])[aria-invalid=true]{border-color:var(--bad);background:var(--badbg)}
+@media(max-width:365px){.journey.journey :global([data-sf-screen])>header>div{padding-inline:16px}.journey.journey :global([data-sf-screen])>div:has([data-sf-field]){padding-inline:16px}.journey.journey :global([data-sf-screen])>div:has(>[data-sf-cta]){padding-inline:16px}.journey.journey :global([data-sf-cta]){font-size:15px}}
+
+.journey.journey :global([data-sf-screen="checkout"]) :global([role="radiogroup"]):has(>:only-child){grid-template-columns:1fr}
+.journey.journey :global([data-sf-screen="review"])>div:first-of-type>div:first-child{border:0;padding:0;background:transparent}
+
+.journey.journey :global([data-sf-banner="truth-notice"]){background:var(--sf2);color:var(--tx2);border:1px solid var(--hair2)}

@@ -39,7 +39,7 @@ import { fetchStorefrontMenu, liveConfig, type LiveConfig } from './client';
 import type { StorefrontMenuOk } from './decode';
 import type { StorefrontMenuV2Ok } from './decodeHomeContent';
 import type { StorefrontMenuV3Ok } from './decodeFeaturedItems';
-import type { StorefrontMenuV4Ok, StorefrontMenuV7Ok } from './decodeContentV1';
+import type { StorefrontMenuV4Ok, StorefrontMenuV8Ok } from './decodeContentV1';
 import { iconPathFor } from './icons';
 import { liveOrderingEnabled, orderEndpointOrigin } from './ordering';
 
@@ -81,7 +81,7 @@ export function nextOpenParts(iso: string | null, timeZone: string): NextOpenAt 
   }
 }
 
-export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok | StorefrontMenuV4Ok | StorefrontMenuV7Ok, origin: string): StorefrontResolution {
+export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok | StorefrontMenuV4Ok | StorefrontMenuV8Ok, origin: string): StorefrontResolution {
   const r = envelope.restaurant;
   const home = 'home_content' in envelope ? envelope.home_content : null;
   const featured = new Set('featured_item_ids' in envelope ? envelope.featured_item_ids : []);
@@ -120,6 +120,7 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
     ...(backgroundImages ? { menuBackgroundVariants: backgroundImages.variants.map(v => ({ ...v, url: mediaUrl(v.url, origin)! })) } : {}),
     ...(content?.appearance?.menu_background_dim === undefined ? {} : { menuBackgroundDim: content.appearance.menu_background_dim }),
     ...(content?.appearance?.scene_preset === undefined ? {} : { scenePreset: content.appearance.scene_preset }),
+    ...(content?.appearance?.site_theme === undefined ? {} : { siteTheme: content.appearance.site_theme }),
     currency: 'ILS',
   };
 

@@ -15,6 +15,7 @@ import 'storefront_models.dart';
 import 'storefront_sources.dart';
 import 'storefront_scene_preset_dialog.dart';
 import 'storefront_settings_group.dart';
+import 'storefront_site_theme_preview.dart';
 
 /// A read acknowledgment from the actual parent editor. A completed Future is
 /// not evidence that the profile and its media were both refreshed.
@@ -540,6 +541,71 @@ class _ContentState extends State<StorefrontContentSection> {
               _changeAppearance(field, text.isEmpty ? null : text),
         ),
       ),
+    );
+  }
+
+  Widget _siteTheme() {
+    final appearance = _draft?['appearance'] as Map?;
+    final selected = appearance?['site_theme'] as String?;
+    final mediaId = appearance?['menu_background_media_id'] as String?;
+    final rows = (_media?.rows ?? <StorefrontContentMediaRow>[]).where(
+      (row) => row.media.isLive,
+    );
+    final image =
+        rows.where((row) => row.media.id == mediaId).firstOrNull ??
+        rows
+            .where((row) => row.media.inUse.contains(StorefrontSlot.hero))
+            .firstOrNull;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: DropdownButtonFormField<String>(
+            key: ValueKey('content-appearance.site_theme-$_generation'),
+            initialValue: selected ?? '',
+            isExpanded: true,
+            decoration: InputDecoration(labelText: c('siteTheme')),
+            items: [
+              DropdownMenuItem(value: '', child: Text(c('siteThemeLegacy'))),
+              DropdownMenuItem(
+                value: 'light',
+                child: Text(c('siteThemeLight')),
+              ),
+              DropdownMenuItem(value: 'dark', child: Text(c('siteThemeDark'))),
+            ],
+            onChanged: _editable
+                ? (value) {
+                    final next = value == '' ? null : value;
+                    if (next != selected) _changeAppearance('site_theme', next);
+                  }
+                : null,
+          ),
+        ),
+        Text(c('siteThemeHelp')),
+        if (selected != null) ...[
+          const SizedBox(height: 12),
+          StorefrontSiteThemePreview(
+            siteTheme: selected,
+            scenePreset: appearance?['scene_preset'] as String?,
+            sample: StorefrontColorSample(
+              background: widget.colorSample.background,
+              accent: widget.colorSample.accent,
+              text: appearance?['text_color'] as String?,
+              buttonText: appearance?['button_text_color'] as String?,
+            ),
+            backgroundUrl: image == null
+                ? null
+                : widget.publicUrlFor?.call(image.media.objectKey),
+            dim: appearance?['menu_background_dim'] as int? ?? 15,
+          ),
+          Text(
+            c('siteThemeRetained'),
+            key: const Key('content-site-theme-retained'),
+          ),
+        ],
+        const SizedBox(height: 12),
+      ],
     );
   }
 
@@ -1788,6 +1854,7 @@ class _ContentState extends State<StorefrontContentSection> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _siteTheme(),
                 Text(c('appearanceHelp')),
                 _appearanceColor('text_color', 'appearanceTextColor'),
                 _appearanceColor(

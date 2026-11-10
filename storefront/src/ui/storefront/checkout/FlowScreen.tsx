@@ -15,8 +15,7 @@ import { dirOf, type Locale } from '@/i18n/locales';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
 import type { MotionMode, ServiceState, StorefrontResolution } from '@/source/types';
-import { ThemeScope } from '../ThemeScope';
-import shell from '../storefront.module.css';
+import { JourneyAppearance } from './JourneyAppearance';
 import type { FlowScreenName } from './FlowRuntime';
 import { FlowEntry } from './FlowEntry';
 import { orderMessages } from '@/i18n/orders';
@@ -43,11 +42,7 @@ export function FlowScreen({
   const state: ServiceState = tenant.service.state;
 
   return (
-    <ThemeScope
-      tokens={tokens}
-      className={`${shell.root}`}
-      dir={dirOf(locale)}
-    >
+    <JourneyAppearance tenant={tenant} legacyTokens={tokens} dir={dirOf(locale)} payment={screen === 'payment'}>
       <FlowEntry
         source={resolution.source}
         orderCopy={resolution.source === 'live' ? orderMessages(locale) : undefined}
@@ -74,6 +69,6 @@ export function FlowScreen({
           orderingEnabled: tenant.service.orderingEnabled,
         }}
       />
-    </ThemeScope>
+    </JourneyAppearance>
   );
 }

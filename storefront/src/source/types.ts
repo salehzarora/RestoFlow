@@ -18,6 +18,8 @@ export type Minor = number;
 export type BasisPoints = number;
 
 export type Preset = 'dark' | 'light';
+/** Explicit whole-site presentation opt-in; absent/null preserves legacy preset routing. */
+export type SiteTheme = 'light' | 'dark';
 
 export type ServiceState = 'open' | 'closed' | 'paused';
 export type FontFamily = 'rubik' | 'alexandria' | 'system';
@@ -109,6 +111,8 @@ export interface Tenant {
   readonly menuBackgroundDim?: number | null;
   /** Explicit scene opt-in; omitted/null retains the existing merchant look. */
   readonly scenePreset?: 'reference_dark' | null;
+  /** Versioned merchant choice, separate from legacy visual_preset and scene selection. */
+  readonly siteTheme?: SiteTheme | null;
   readonly currency: 'ILS';
 }
 

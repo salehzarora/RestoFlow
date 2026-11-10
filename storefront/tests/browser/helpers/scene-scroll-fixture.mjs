@@ -1,7 +1,7 @@
 // Synthetic v7 input for the real Next menu. Server fetches stay inside this test process.
 import { syntheticV4Envelope } from '../../support/content-envelope.mjs';
 
-const logical = 'https://oqmevrndtivqxgyvcmwy.supabase.co/rest/v1/rpc/storefront_menu_v7';
+const logical = 'https://oqmevrndtivqxgyvcmwy.supabase.co/rest/v1/rpc/storefront_menu_v8';
 const prefix = '/storage/v1/object/public/storefront-media/' + '0'.repeat(32) + '/';
 const image = letter => prefix + letter.repeat(64) + '.webp';
 const id = n => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');

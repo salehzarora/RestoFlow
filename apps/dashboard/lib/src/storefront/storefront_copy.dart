@@ -171,6 +171,35 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
       'تأكد أن لون النص واضح وسهل القراءة فوق لون الخلفية.',
       'יש לוודא שהטקסט קריא על גבי צבע הרקע.',
     ],
+    'siteTheme': ['Site appearance', 'مظهر الموقع', 'מראה האתר'],
+    'siteThemeLegacy': [
+      'Keep existing appearance (legacy)',
+      'إبقاء المظهر الحالي (توافق سابق)',
+      'שמירת המראה הקיים (תאימות קודמת)',
+    ],
+    'siteThemeLight': ['Light / white', 'فاتح / أبيض', 'בהיר / לבן'],
+    'siteThemeDark': ['Dark', 'داكن', 'כהה'],
+    'siteThemeHelp': [
+      'Choose one appearance for the customer journey. This changes the content draft only; Save content saves it for this branch. Keeping the existing appearance does not migrate current settings.',
+      'اختر مظهرًا موحدًا لرحلة الزبون. الاختيار يعدّل مسودة المحتوى فقط؛ حفظ المحتوى يحفظه لهذا الفرع. إبقاء المظهر الحالي لا يغيّر تفسير الإعدادات القديمة.',
+      'בחרו מראה אחיד למסע הלקוח. הבחירה משנה רק את טיוטת התוכן; שמירת התוכן שומרת לסניף זה. שמירת המראה הקיים אינה משנה את פירוש ההגדרות הקודמות.',
+    ],
+    'siteThemePreview': [
+      'Draft appearance sample',
+      'عينة مظهر المسودة',
+      'דוגמת מראה הטיוטה',
+    ],
+    'siteThemeRetained': [
+      'The background image, dimming, scene and brand colors are retained. Light hides the scene visually; Dark restores the same choices. This sample is not the full Storefront preview.',
+      'الصورة والتعتيم والمشهد وألوان العلامة محفوظة. الفاتح يخفي المشهد بصريًا؛ الداكن يعيد الاختيارات نفسها. هذه عينة وليست معاينة المتجر الكاملة.',
+      'תמונת הרקע, העמעום, הסצנה וצבעי המותג נשמרים. בהיר מסתיר את הסצנה חזותית; כהה מחזיר את אותן בחירות. זו דוגמה ולא תצוגת החנות המלאה.',
+    ],
+    'siteThemeContrastNotice': [
+      'A saved custom text color has insufficient contrast in this mode. The sample uses readable ink without changing the saved value.',
+      'تخصيص نص محفوظ لا يتباين مع هذا المظهر؛ المعاينة بلون قراءة افتراضي دون تعديل القيمة المحفوظة.',
+      'צבע טקסט מותאם שמור אינו קריא במראה זה. הדוגמה משתמשת בטקסט קריא בלי לשנות את הערך השמור.',
+    ],
+    'siteThemeSampleField': ['Your name', 'الاسم الكامل', 'שם מלא'],
     'appearanceHelp': [
       'Choose colors visually. HEX entry is optional under Advanced. Apply updates your draft; Save publishes it.',
       'اختر الألوان بصريًا. إدخال HEX اختياري ضمن متقدم. التطبيق يعدّل المسودة؛ الحفظ ينشرها.',

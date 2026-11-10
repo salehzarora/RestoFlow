@@ -21,7 +21,7 @@
  * Field errors appear after a blocked continuation attempt. The phone error
  * has no persistent format guidance or example and never rewrites the draft.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { CheckoutDraft } from './CheckoutDraftProvider';
 import {
   FIELD_LIMITS,
@@ -150,6 +150,28 @@ export function DetailsScreen({
   const [touched, setTouched] = useState(false);
   const [focusTick, setFocusTick] = useState(0);
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  // Presentation only: one document scroll, including retained notes after a resize.
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    const grow = () => {
+      for (const field of body.querySelectorAll('textarea')) {
+        field.style.height = 'auto';
+        field.style.height = `${Math.max(92, field.scrollHeight)}px`;
+      }
+    };
+    grow();
+    if (typeof ResizeObserver === 'undefined') return;
+    let width = body.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (body.clientWidth === width) return;
+      width = body.clientWidth;
+      grow();
+    });
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, [draft.orderNotes, draft.deliveryNotes, draft.service]);
 
   const available = { pickup: tenant.pickupEnabled, delivery: tenant.deliveryEnabled };
   const v: CheckoutValidation = validateCheckout(draft, quote, available, pickupCopy !== undefined);
