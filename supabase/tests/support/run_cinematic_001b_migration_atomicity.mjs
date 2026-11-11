@@ -5,8 +5,8 @@
 // the target-only apply run in disposable workdirs that hold exactly the prefix
 // ending at the #379 target; the one reviewed follow-up (001D) is then applied
 // alone from an exact disposable prefix, then the pinned product, scene and background follow-ups.
-// BIZBOT-STOREFRONT-CINEMATIC-P2-G1-PIN-001: the two reviewed successors after them (the #386
-// POS duty migration and the P2 G1 payment migration) are pinned by the contract, applied whenever the
+// BIZBOT-STOREFRONT-CINEMATIC-P2-G1-PIN-001: the three reviewed successors after them (the #386
+// POS duty migration, the P2 G1 payment migration and the site theme) are pinned by the contract, applied whenever the
 // complete directory is applied (the normal database suite, and the stack start before this runner
 // resets it), and excluded from every historical plan built here.
 import assert from 'node:assert/strict';
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import {
   migrationName, migrationVersion, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration,
   requireEphemeralCi, sha256, predecessorVersion, followUpName, followUpVersion, targetFunctions, proveMigrationSequence,
-  targetPrefixSources, visualReleaseSources,
+  targetPrefixSources, visualReleaseSources, siteThemeSuccessor, siteThemeReleaseSources,
 } from './cinematic_001b_migration_contract.mjs';
 
 requireEphemeralCi(process.env); // Must precede subprocesses, including Docker.
@@ -94,6 +94,13 @@ const followupReadiness = Object.fromEntries(['content_v3', 'menu_v6', 'derivati
   'menu_v7', 'background', 'background_source', 'background_stage', 'background_finalize',
   'original', 'register', 'source', 'stage', 'finalize', 'select'].map(name => [name, true]));
 const noFollowupReadiness = Object.fromEntries(Object.keys(followupReadiness).map(name => [name, false]));
+const siteThemeReadinessQuery = `select json_build_object(
+  'content_v4', to_regprocedure('public.get_restaurant_storefront_content_v4(uuid,uuid)') is not null,
+  'menu_v8', to_regprocedure('public.storefront_menu_v8(text)') is not null)::text;`;
+const siteThemeGrantsQuery = `select json_build_object(
+  'content_v4_authenticated', has_function_privilege('authenticated', 'public.get_restaurant_storefront_content_v4(uuid,uuid)', 'EXECUTE'),
+  'menu_v8_anon', has_function_privilege('anon', 'public.storefront_menu_v8(text)', 'EXECUTE'),
+  'menu_v8_authenticated', has_function_privilege('authenticated', 'public.storefront_menu_v8(text)', 'EXECUTE'))::text;`;
 const historyVersionsQuery = "select coalesce(jsonb_agg(version order by version),'[]'::jsonb)::text from supabase_migrations.schema_migrations;";
 const historyThroughTargetQuery = `select coalesce(jsonb_agg(to_jsonb(h) order by version),'[]'::jsonb)::text
   from supabase_migrations.schema_migrations h where version <= '${migrationVersion}';`;
@@ -280,10 +287,10 @@ end;\n$cinematic_late_failure$;\n`;
   // The historical #379 / PR380 regression fixture: #379 and its visual follow-ups
   // applied, the payment migration 001D omitted. It reproduces that historical shape
   // afresh without changing payment (001D has since been applied on hosted, 2026-11-09;
-  // the two pinned later successors are omitted here as well). The separate full
+  // the three pinned later successors are omitted here as well). The separate full
   // db-tests job still runs every payment suite/concurrency assertion against all
-  // migrations; the real UI lifecycle below uses this historical fixture stack. Both
-  // are identified separately in the receipt; the phase name and receipt keys are unchanged.
+  // migrations; the real UI lifecycle uses the later site-theme extension of this
+  // historical fixture. Both stacks are identified separately in the receipt; the phase name and receipt keys are unchanged.
   phase = 'prove_scoped_visual_release_without_pending_payment';
   checked('supabase', ['db', 'reset', '--local', '--version', migrationVersion, '--no-seed', '--yes']);
   assert.deepEqual(JSON.parse(sql(historyVersionsQuery)), versionsOf(sequence.target_prefix));
@@ -313,6 +320,52 @@ end;\n$cinematic_late_failure$;\n`;
   assert.ok(finalSources.length === sources.length && finalSources.every(([name, bytes], index) =>
     name === sources[index][0] && bytes.equals(sources[index][1])), 'Every tracked migration source must remain byte-identical');
   receipt.tracked_migration_sources_unchanged = 'PASS';
+
+  // BIZBOT-STOREFRONT-MOBILE-ORDERING-UX-002: extend only the exact visual stack
+  // with the acknowledged theme; no payment, POS duty or G1 is applied here.
+  phase = 'apply_reviewed_site_theme';
+  assert.deepEqual(JSON.parse(sql(siteThemeReadinessQuery)), { content_v4: false, menu_v8: false },
+    'The new site-theme readers must be absent before the separate theme phase');
+  const beforeSiteThemeLegacyReaders = sql(legacyReadersQuery);
+  const siteThemePlan = siteThemeReleaseSources(sources);
+  await writeFile(join(releaseWorkdir, 'supabase/migrations', siteThemeSuccessor.name), sourceBytes.get(siteThemeSuccessor.name));
+  const themeWritten = await readMigrationSources(join(releaseWorkdir, 'supabase/migrations'));
+  assert.deepEqual(themeWritten.map(([name]) => name), siteThemePlan.map(([name]) => name),
+    'The theme workdir must contain exactly the visual-release plan followed by site theme');
+  assert.ok(themeWritten.every(([name, bytes]) => bytes.equals(sourceBytes.get(name))),
+    'The theme workdir must retain exact reviewed bytes');
+  checked('supabase', ['migration', 'up', '--local', '--workdir', releaseWorkdir]);
+  const siteThemeVersion = siteThemeSuccessor.name.slice(0, 14);
+  const siteThemeHistory = JSON.parse(sql(historyQuery));
+  assert.deepEqual(siteThemeHistory.map(row => row.version), versionsOf(siteThemePlan.map(([name]) => name)),
+    'The current lifecycle history must contain exactly the visual-release plan and site theme');
+  assert.equal(siteThemeHistory.filter(row => row.version === siteThemeVersion).length, 1,
+    'The site-theme migration must have exactly one history row');
+  assert.deepEqual(siteThemeHistory.filter(row => row.version !== siteThemeVersion), releaseHistory,
+    'Every history row preceding site theme must remain unchanged');
+  const siteThemeReadiness = JSON.parse(sql(siteThemeReadinessQuery));
+  assert.deepEqual(siteThemeReadiness, { content_v4: true, menu_v8: true }, 'The new current lifecycle readers must exist');
+  const siteThemeGrants = JSON.parse(sql(siteThemeGrantsQuery));
+  assert.deepEqual(siteThemeGrants, { content_v4_authenticated: true, menu_v8_anon: true, menu_v8_authenticated: true },
+    'The current lifecycle readers must retain their reviewed EXECUTE grants');
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), followupReadiness,
+    'Every reviewed visual follow-up must remain ready after site theme');
+  assert.equal(sql("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname in ('card_provider_attempts','card_provider_private_events','card_payments_pilot_revisions','payment_terminals','card_attempt_identity_tombstones');"), '0',
+    'The unrelated pending payment schema must remain absent after site theme');
+  const afterSiteThemeLegacyReaders = sql(legacyReadersQuery);
+  assert.equal(afterSiteThemeLegacyReaders, beforeSiteThemeLegacyReaders,
+    'All six legacy reader definitions, ACLs and owners must remain byte-identical across site theme');
+  receipt.site_theme_release = { status: 'PASS', applied_version: siteThemeVersion,
+    migration_versions: siteThemeHistory.map(row => row.version), prior_history_unchanged: true,
+    legacy_readers_before_sha256: sha256(beforeSiteThemeLegacyReaders), legacy_readers_after_sha256: sha256(afterSiteThemeLegacyReaders),
+    followup_readiness_unchanged: true, pending_payment_schema_absent: true,
+    readiness: siteThemeReadiness, grants: siteThemeGrants,
+    schema_sha256: sha256(schemaSnapshot()), history_sha256: sha256(sql(historyQuery)),
+    ready_for_real_service_lifecycle: true, lifecycle_stack: 'post_site_theme_release',
+    scoped_visual_release_describes: 'historical_pre_site_theme_stack' };
+  const finalSiteThemeSources = await readMigrationSources(migrationsDirectory);
+  assert.ok(finalSiteThemeSources.length === sources.length && finalSiteThemeSources.every(([name, bytes], index) =>
+    name === sources[index][0] && bytes.equals(sources[index][1])), 'Every tracked migration source must remain byte-identical');
   receipt.status = 'PASS';
   phase = 'complete';
 } catch (error) {

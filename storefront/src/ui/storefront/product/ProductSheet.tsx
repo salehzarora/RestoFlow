@@ -109,6 +109,26 @@ export function ProductSheet({
   const noteRef = useRef<HTMLTextAreaElement | null>(null);
   const groupRefs = useRef(new Map<string, HTMLElement>());
 
+  // Presentation only: notes grow inside the sheet's single scroll owner.
+  useLayoutEffect(() => {
+    const field = noteRef.current;
+    if (!field) return;
+    const grow = () => {
+      field.style.height = 'auto';
+      field.style.height = `${Math.max(92, field.scrollHeight)}px`;
+    };
+    grow();
+    if (typeof ResizeObserver === 'undefined') return;
+    let width = field.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (field.clientWidth === width) return;
+      width = field.clientWidth;
+      grow();
+    });
+    observer.observe(field);
+    return () => observer.disconnect();
+  }, [note]);
+
   const unmet = useMemo(() => unmetGroups(groups, selections), [groups, selections]);
   const invalidNote = live && (!validOrderNotes(note, MAX_NOTE) || /[\x7f-\x9f]/u.test(note));
   const blocked = unmet.length > 0 || invalidNote;

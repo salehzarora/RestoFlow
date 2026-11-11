@@ -1,6 +1,6 @@
 /** v4, v5 and v6 are separate strict wire boundaries. Server drift normalization is NOT
  * decoder repair. No network, environment, v3 endpoint retry or fixture path. */
-import type { HeroFormat, ImageFit, CardLayout, FontFamily, ImageVariant } from '../types';
+import type { HeroFormat, ImageFit, CardLayout, FontFamily, ImageVariant, SiteTheme } from '../types';
 import { contentTextValid, heroFormatValid } from '../../content/unicode';
 import { EnvelopeError, type StorefrontMenuFailure } from './decode';
 import { decodeStorefrontMenuV3, type StorefrontMenuV3Ok } from './decodeFeaturedItems';
@@ -16,6 +16,8 @@ export interface WireAppearance {
   readonly menu_background_url?:string|null;
   readonly menu_background_dim?:number|null;
   readonly scene_preset?:'reference_dark'|null;
+  /** Only the explicitly versioned v8 decoder accepts this key. */
+  readonly site_theme?:SiteTheme|null;
 }
 export interface WireContentV1 {
   readonly schema:1;
@@ -143,6 +145,27 @@ export function decodeStorefrontMenuV7(raw: unknown): StorefrontMenuV7Envelope {
         aspectError > Math.max(high.width, high.height)) return reject(field);
   }
   return { ...decoded, menu_background_images_v1: { base_url: baseUrl, variants } };
+}
+
+export type StorefrontMenuV8Ok = StorefrontMenuV7Ok;
+export type StorefrontMenuV8Envelope = StorefrontMenuV8Ok | StorefrontMenuFailure;
+
+/** v8 alone adds the optional merchant whole-site choice; old strict decoders stay unchanged. */
+export function decodeStorefrontMenuV8(raw: unknown): StorefrontMenuV8Envelope {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return reject('envelope');
+  const envelope = raw as Record<string, unknown>;
+  const content = envelope.content_v1;
+  if (typeof content !== 'object' || content === null || Array.isArray(content)) return decodeStorefrontMenuV7(raw);
+  const document = content as Record<string, unknown>;
+  const appearance = document.appearance;
+  if (typeof appearance !== 'object' || appearance === null || Array.isArray(appearance) || !Object.hasOwn(appearance, 'site_theme')) {
+    return decodeStorefrontMenuV7(raw);
+  }
+  const { site_theme: value, ...legacyAppearance } = appearance as Record<string, unknown>;
+  const site_theme = value === null ? null : choice<SiteTheme>(value, ['light', 'dark'], 'appearance.site_theme');
+  const decoded = decodeStorefrontMenuV7({ ...envelope, content_v1: { ...document, appearance: legacyAppearance } });
+  if (!decoded.ok || decoded.content_v1.appearance === undefined) return reject('appearance.site_theme');
+  return { ...decoded, content_v1: { ...decoded.content_v1, appearance: { ...decoded.content_v1.appearance, site_theme } } };
 }
 
 function decodeContent(raw:unknown,allowAppearance:boolean,allowScene=false):StorefrontMenuV5Envelope{

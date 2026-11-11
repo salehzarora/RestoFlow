@@ -48,7 +48,7 @@ select plan(62);
 -- literal, so any further anon-callable or DEFINER public function fails here
 -- until it is enumerated in its own migration + suite (D-037 point 2).
 create temp table sec001_allowlist (identity text primary key);
-insert into sec001_allowlist values ('storefront_menu(text)'), ('storefront_menu_v2(text)'), ('storefront_menu_v3(text)'), ('storefront_menu_v4(text)'), ('storefront_menu_v5(text)'), ('storefront_menu_v6(text)'), ('storefront_menu_v7(text)'),
+insert into sec001_allowlist values ('storefront_menu(text)'), ('storefront_menu_v2(text)'), ('storefront_menu_v3(text)'), ('storefront_menu_v4(text)'), ('storefront_menu_v5(text)'), ('storefront_menu_v6(text)'), ('storefront_menu_v7(text)'), ('storefront_menu_v8(text)'),
   ('storefront_seo_page_v1(text)'), ('storefront_seo_discovery_v1(text,integer,integer)');
 
 -- ----------------------------------------------------------------------------
@@ -168,7 +168,10 @@ select is(
     where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
       and not has_function_privilege('authenticated', p.oid, 'EXECUTE')),
   (select string_agg(identity, ', ' order by identity) from (
+    -- UX-002 v8 explicitly grants anon AND authenticated. The older readers
+    -- remain anon-only; keep the authenticated-denied set exact by identity.
     select identity from sec001_allowlist
+      where identity <> 'storefront_menu_v8(text)'
     union all select 'submit_web_order_request(text,uuid,text,jsonb)'
     union all select 'submit_web_order_live_request(text,uuid,text,jsonb)'
     union all select 'submit_web_order_platform_request(text,uuid,text,jsonb)'

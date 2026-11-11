@@ -27,7 +27,7 @@ export function Intro({ tenant, locale, campaign, motion = 'full' }: {
   const stateLabel = service.state === 'open' ? m.openNow : service.state === 'closed' ? m.closed : m.paused;
   const stateTone = service.state === 'open' ? styles.stateOpen : service.state === 'closed' ? styles.stateClosed : styles.statePaused;
   return <main className={`${styles.page} ${MOTION_CLASS[motion]}`} data-sf-screen="intro">
-    <SceneBackdrop image={tenant.heroImage} />
+    {tenant.siteTheme === 'light' ? null : <SceneBackdrop image={tenant.heroImage} />}
     <header className={styles.header}>
       <div className={`${styles.inner} ${styles.headerInner}`}>
         <BrandLockup tenant={tenant} />

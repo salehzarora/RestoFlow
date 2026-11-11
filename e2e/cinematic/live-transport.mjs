@@ -38,7 +38,7 @@ export function createMenuTransport(nativeFetch, { anonKey, slug }, evidence = {
       headers = new Headers(init?.headers ?? input?.headers);
       text = typeof init?.body === 'string' ? init.body : input instanceof Request ? await input.clone().text() : '';
       signal = init?.signal ?? input?.signal;
-      if (u.pathname !== '/rest/v1/rpc/storefront_menu_v7' || method !== 'POST' ||
+      if (u.pathname !== '/rest/v1/rpc/storefront_menu_v8' || method !== 'POST' ||
           JSON.stringify([...headers.keys()].sort()) !== JSON.stringify(['accept', 'apikey', 'authorization', 'content-type']) ||
           headers.get('accept') !== 'application/json' || headers.get('content-type') !== 'application/json' ||
           headers.get('apikey') !== anonKey || headers.get('authorization') !== `Bearer ${anonKey}` ||
@@ -48,7 +48,7 @@ export function createMenuTransport(nativeFetch, { anonKey, slug }, evidence = {
     // Pass the untouched request body and local anon headers to real PostgREST.
     // Return its Response directly: status, headers and body are not rewritten.
     // No fallback can pass the logical hosted URL to native fetch.
-    return nativeFetch(`${LOCAL_API}/rest/v1/rpc/storefront_menu_v7`, {
+    return nativeFetch(`${LOCAL_API}/rest/v1/rpc/storefront_menu_v8`, {
       method: 'POST', headers, body: text, signal, redirect: 'error',
     });
   };

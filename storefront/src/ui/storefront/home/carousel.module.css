@@ -8,6 +8,7 @@
 .slide[data-position="previous"]:dir(rtl){transform:translateX(calc(var(--center) + var(--orbit-shift))) translateY(-12px) scale(.57)}
 .slide[data-position="next"]:dir(rtl){transform:translateX(calc(var(--center) - var(--orbit-shift))) translateY(-12px) scale(.57)}
 .slide[data-position="away"]{transform:translateX(var(--center)) translateY(-20px) scale(.35);opacity:0;pointer-events:none;visibility:hidden;z-index:0}
+.stage[data-sf-dragging] .slide,.stage[data-sf-settling] .slide{transition:none}
 .slide:disabled{cursor:default;filter:saturate(.4);opacity:.7}
 .slide:focus-visible,.controls button:focus-visible,.add:focus-visible{outline:2px solid var(--ring);outline-offset:-3px;border-radius:16px}
 .noImage{display:grid;place-items:center;height:100%;font-size:80px;font-weight:800;color:var(--tx3)}

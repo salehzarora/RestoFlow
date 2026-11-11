@@ -28,11 +28,13 @@ import { dirOf, type Locale } from '@/i18n/locales';
 import { storefrontMessages } from '@/i18n/storefront';
 import { checkoutPath, menuPath } from '@/routes/routes';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
+import { buildSiteTheme, siteThemeClass } from '@/theme/buildSiteTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
 import type { StorefrontResolution } from '@/source/types';
 import { StorefrontRuntime } from '../StorefrontRuntime';
 import { ThemeScope } from '../ThemeScope';
 import shell from '../storefront.module.css';
+import appearance from '../siteAppearance.module.css';
 import home from '../home/home.module.css';
 import { AsideSlot } from '../cart/CartRuntime';
 import { SearchScreen } from './SearchScreen';
@@ -50,16 +52,17 @@ export function Search({
   const preset: Preset = resolution.preset;
   const m = storefrontMessages(locale);
   const { tenant, categories, items } = view;
-  const tokens = buildTheme(preset, {
+  const legacyTokens = buildTheme(preset, {
     primary: sanitizePrimary(tenant.brand.primary),
     accent: sanitizeAccent(tenant.brand.accent, preset),
     fontFamily: tenant.brand.fontFamily,
   });
+  const tokens = buildSiteTheme(tenant, legacyTokens);
 
   return (
     <ThemeScope
       tokens={tokens}
-      className={`${shell.root}`}
+      className={`${shell.root} ${appearance[siteThemeClass(tenant.siteTheme)]}`}
       dir={dirOf(locale)}
     >
       {/* No dock slot here: the approved dock condition is menu-only

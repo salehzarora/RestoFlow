@@ -24,6 +24,7 @@ const storefrontAppearanceOptionalKeys = {
   'menu_background_media_id',
   'menu_background_dim',
   'scene_preset',
+  'site_theme',
 };
 const storefrontFontFamilies = {'rubik', 'alexandria', 'system'};
 final storefrontAppearanceHex = RegExp(r'^#[0-9A-Fa-f]{6}$');
@@ -89,6 +90,7 @@ bool contentFieldPath(Object? value) => const {
   'appearance.menu_background_media_id',
   'appearance.menu_background_dim',
   'appearance.scene_preset',
+  'appearance.site_theme',
 }.contains(value);
 
 Object? _freeze(Object? value) => switch (value) {
@@ -151,6 +153,13 @@ class StorefrontContentDocument {
       if (dim != null && (dim is! int || dim < 0 || dim > 80)) {
         throw const StorefrontDecodeException(
           'appearance.menu_background_dim',
+          'presentation_invalid',
+        );
+      }
+      final siteTheme = appearance['site_theme'];
+      if (siteTheme != null && siteTheme != 'light' && siteTheme != 'dark') {
+        throw const StorefrontDecodeException(
+          'appearance.site_theme',
           'presentation_invalid',
         );
       }

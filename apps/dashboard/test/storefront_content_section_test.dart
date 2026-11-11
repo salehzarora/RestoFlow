@@ -209,6 +209,122 @@ Future<void> edit(WidgetTester tester, String key, String text) async {
 }
 
 void main() {
+  testWidgets(
+    'site theme keeps legacy unset until an explicit content save and retains other draft appearance',
+    (tester) async {
+      final repo = ContentRepo();
+      final appearance = <String, Object?>{
+        'text_color': '#ffffff',
+        'button_text_color': '#000000',
+        'font_family': 'alexandria',
+        'menu_background_media_id': null,
+        'menu_background_dim': 0,
+        'scene_preset': 'reference_dark',
+      };
+      repo.doc = StorefrontContentDocument.fromJson(
+        repo.doc.editableCopy()..['appearance'] = appearance,
+      );
+      await mount(tester, repo, locale: 'ar');
+      final theme = find.byWidgetPredicate(
+        (widget) =>
+            widget is DropdownButtonFormField<String> &&
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'content-appearance.site_theme-',
+            ),
+      );
+      expect(repo.calls, isEmpty);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('content-save')))
+            .onPressed,
+        isNull,
+      );
+      expect(find.text('مظهر الموقع'), findsOneWidget);
+      // Opening and selecting the existing legacy choice does not manufacture a write.
+      tester.widget<DropdownButtonFormField<String>>(theme).onChanged!('');
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('content-save')))
+            .onPressed,
+        isNull,
+      );
+      tester.widget<DropdownButtonFormField<String>>(theme).onChanged!('light');
+      await tester.pumpAndSettle();
+      expect(repo.calls, isEmpty);
+      expect(
+        find.byKey(const Key('content-site-theme-contrast-notice')),
+        findsOneWidget,
+      );
+      tester
+          .widget<FilledButton>(find.byKey(const Key('content-save')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(repo.calls, hasLength(1));
+      expect(repo.calls.single.expectedVersion, 3);
+      expect(repo.calls.single.expectedBranchId, branch);
+      expect(repo.doc.json['appearance'], {
+        ...appearance,
+        'site_theme': 'light',
+      });
+      tester.widget<DropdownButtonFormField<String>>(theme).onChanged!('dark');
+      await tester.pumpAndSettle();
+      tester
+          .widget<FilledButton>(find.byKey(const Key('content-save')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(repo.doc.json['appearance'], {
+        ...appearance,
+        'site_theme': 'dark',
+      });
+      tester.widget<DropdownButtonFormField<String>>(theme).onChanged!('');
+      await tester.pumpAndSettle();
+      tester
+          .widget<FilledButton>(find.byKey(const Key('content-save')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(repo.doc.json['appearance'], {...appearance, 'site_theme': null});
+      expect(repo.calls, hasLength(3));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'unrelated content edit omits unselected site theme and disabled editor cannot change it',
+    (tester) async {
+      final repo = ContentRepo();
+      await mount(tester, repo);
+      await edit(
+        tester,
+        'content-hero-headline',
+        'Existing independently saved content',
+      );
+      tester
+          .widget<FilledButton>(find.byKey(const Key('content-save')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(
+        repo.calls.single.document.json.containsKey('appearance'),
+        isFalse,
+      );
+      await mount(tester, repo, enabled: false);
+      final theme = find.byWidgetPredicate(
+        (widget) =>
+            widget is DropdownButtonFormField<String> &&
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'content-appearance.site_theme-',
+            ),
+      );
+      expect(
+        tester.widget<DropdownButtonFormField<String>>(theme).onChanged,
+        isNull,
+      );
+      expect(repo.calls, hasLength(1));
+    },
+  );
+
   testWidgets('folding content keeps drafts and the original retry identity', (
     tester,
   ) async {

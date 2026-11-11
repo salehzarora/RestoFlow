@@ -134,7 +134,7 @@ export function requireEphemeralCi(env) {
 // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001D-CINEMATIC-PROOF-001: the exact reviewed
 // migration sequence. The #379 target must follow its exact predecessor and the
 // exact 183-migration prefix of main 0df86dcb, then 001D, the reviewed PR380 product and scene migrations, the background
-// clarity contract, and then exactly the two reviewed successors pinned in `excludedSuccessors`
+// clarity contract, and then exactly the three reviewed successors pinned in `excludedSuccessors`
 // (BIZBOT-STOREFRONT-CINEMATIC-P2-G1-PIN-001), in that order. Anything else is refused
 // until a reviewed change extends this pin: it is not a generic mechanism.
 export const predecessorName = '20261102015942_bizbot_storefront_seo_discovery_001.sql';
@@ -154,15 +154,21 @@ export const followupMigrations = Object.freeze([
 ]);
 // BIZBOT-STOREFRONT-CINEMATIC-P2-G1-PIN-001: the reviewed migrations after the visual
 // follow-ups, pinned by name and raw-byte SHA-256 in this exact order: the #386 POS duty
-// migration and the P2 G1 payment migration. The normal database suite applies both; the
+// migration, the P2 G1 payment migration and the site-theme migration. The normal database suite applies all three; the
 // historical #379 proofs (the atomicity / follow-up plan and the visual-release plan) stop
 // before the first of them. Nothing is discovered from the directory: a later migration is
 // refused until a reviewed change adds its own pin here.
+// BIZBOT-STOREFRONT-MOBILE-ORDERING-UX-002: one exact acknowledged successor;
+// its separate lifecycle plan below applies only this file after the visual release.
+export const siteThemeSuccessor = Object.freeze({ label: 'site theme',
+  name: '20261110150043_bizbot_storefront_site_theme_001.sql',
+  sha256: '98195ffeece9ca1058409537b691db17ccde013a55c67964c18dcc95e86b3e72' });
 export const excludedSuccessors = Object.freeze([
   Object.freeze({ label: 'POS duty', name: '20261108085442_bizbot_pos_long_shift_alerts_001.sql',
     sha256: '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865' }),
   Object.freeze({ label: 'G1', name: '20261109143313_bizbot_zcredit_001e_drop_evidence_001.sql',
     sha256: '1ac9a99048c0755a982d197099a7aed27d802a67ea02b38254b79453b92bad95' }),
+  siteThemeSuccessor,
 ]);
 
 export const targetFunctions = [
@@ -240,7 +246,7 @@ export function proveMigrationSequence(sources) {
     assert.ok(name === followUpName || digest !== followUpFingerprint, 'The reviewed 001D bytes may appear only under their pinned name');
   }
   // The historical plans end before the first pinned successor. The exact sequence proved above puts that
-  // boundary right after the last visual follow-up: the complete listing minus the two pinned successors.
+  // boundary right after the last visual follow-up: the complete listing minus the three pinned successors.
   const historicalEnd = names.indexOf(excludedSuccessors[0].name);
   assert.equal(historicalEnd, names.length - excludedSuccessors.length, 'The pinned successors must be the final migrations');
   return {
@@ -265,11 +271,21 @@ export function targetPrefixSources(sources, targetBytes) {
 
 // The historical #379 / PR380 regression fixture: #379 and its visual follow-ups applied, the payment
 // migration 001D not yet applied. It reproduces that historical shape only (001D has since been applied
-// on hosted); the two pinned successors lie outside the historical interval as well.
+// on hosted); the three pinned successors lie outside the historical interval as well.
 // Validate the complete checkout first, then omit 001D from the historical proof's own interval.
 // This never edits a tracked file or authorizes a hosted history repair.
 export function visualReleaseSources(sources) {
   const { historical_names } = proveMigrationSequence(sources);
   const bytes = new Map(sources);
   return historical_names.filter(name => name !== followUpName).map(name => [name, bytes.get(name)]);
+}
+
+// A separate, current lifecycle stack: the exact 187-file visual release followed
+// by only the acknowledged site-theme migration. The historical plans above are
+// unchanged. Validate the complete directory before producing this 188-file plan;
+// 001D, POS duty and G1 are never included or applied by this phase.
+export function siteThemeReleaseSources(sources) {
+  const visual = visualReleaseSources(sources);
+  const bytes = new Map(sources);
+  return [...visual, [siteThemeSuccessor.name, bytes.get(siteThemeSuccessor.name)]];
 }

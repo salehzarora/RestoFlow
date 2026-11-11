@@ -33,6 +33,7 @@ const L = {
   advanced: 'متقدم', apply: 'تطبيق على المسودة', cancel: 'إلغاء',
   saturation: 'التشبع / السطوع', hue: 'درجة اللون',
   scenePreview: 'معاينة مظهر المشهد', sceneReference: 'مرجع داكن محايد', sceneLegacy: 'استخدام مشهد العلامة',
+  siteThemeLegacy: 'إبقاء المظهر الحالي (توافق سابق)', siteThemeLight: 'فاتح / أبيض', siteThemeDark: 'داكن',
 };
 type Obj = Record<string, any>;
 type Fixture = {
@@ -104,6 +105,11 @@ async function guardBrowser(context: BrowserContext) {
       return;
     }
     if (u.protocol !== 'http:' || !origins.has(u.origin) || u.username || u.password) {
+      violation = true;
+      await route.abort('blockedbyclient');
+      return;
+    }
+    if (route.request().method() === 'POST' && u.pathname === '/functions/v1/web-order-submit') {
       violation = true;
       await route.abort('blockedbyclient');
       return;
@@ -902,6 +908,94 @@ async function renderMenu(page: Page, f: Fixture, image: string, dim: number | n
     trace.result = 'ready';
   } catch (error) { trace.result = 'failed'; throw error; }
 }
+type SiteTheme = 'light' | 'dark';
+type RetainedMenuAppearance = { primary: string; accent: string; font: string; scene: string | null };
+type SiteThemeRenderTrace = {
+  mode: SiteTheme; result: 'pending' | 'ready' | 'failed'; navigations: number;
+  samples: { ms: number; httpStatus: number | null; hydrated: boolean; modeMatches: boolean; surfacesMatch: boolean; imageMatches: boolean; dimMatches: boolean; brandMatches: boolean; sceneMatches: boolean }[];
+};
+const siteThemeRenderTraces = new WeakMap<BrowserContext, SiteThemeRenderTrace[]>();
+async function renderSiteThemeMenu(page: Page, f: Fixture, mode: SiteTheme, image: string, dim: number, retained: RetainedMenuAppearance): Promise<void> {
+  const route = `${STOREFRONT}/s/${f.ownerA.slug}/menu`;
+  localUrl(route);
+  const expectedImage = logicalMediaUrl(image);
+  const trace: SiteThemeRenderTrace = { mode, result: 'pending', navigations: 0, samples: [] };
+  const traces = siteThemeRenderTraces.get(page.context()) ?? [];
+  traces.push(trace);
+  siteThemeRenderTraces.set(page.context(), traces);
+  const started = Date.now();
+  let hydrated = false, reloadAt = 0, httpStatus: number | null = null;
+  try {
+    // Keep the existing bounded ISR/hydration behavior. The legacy image check
+    // above stays unchanged: explicit Light deliberately has no scene image.
+    await expect.poll(async () => {
+      if (trace.navigations === 0 || (hydrated && Date.now() >= reloadAt)) {
+        const remaining = Math.max(1, 100_000 - (Date.now() - started));
+        const response = await page.goto(route, { waitUntil: 'domcontentloaded', timeout: Math.min(30_000, remaining) });
+        httpStatus = response?.status() ?? null;
+        trace.navigations++;
+        hydrated = false;
+        reloadAt = Date.now() + 5000;
+      }
+      const sample = await page.evaluate(({ mode, expectedImage, dim, retained }) => {
+        const roots = document.querySelectorAll<HTMLElement>('[data-sf-root]');
+        const root = roots.length === 1 ? roots[0] : null;
+        const home = root?.querySelector<HTMLElement>('main[data-sf-screen="home"]');
+        const style = root ? getComputedStyle(root) : null;
+        const value = (name: string) => style?.getPropertyValue(name).trim() ?? '';
+        const images = home?.querySelectorAll<HTMLImageElement>('[data-sf-menu-primary]');
+        const backgrounds = home?.querySelectorAll('[data-sf-menu-background="custom"]');
+        const normalizeFont = (font: string) => font.replaceAll('"', '').replaceAll("'", '').replaceAll(' ', '');
+        const bg = value('--bg'), ink = value('--tx');
+        const luminance = (hex: string) => {
+          if (!/^#[0-9a-f]{6}$/i.test(hex)) return NaN;
+          const rgb = [1, 3, 5].map(i => Number.parseInt(hex.slice(i, i + 2), 16) / 255)
+            .map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4);
+          return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+        };
+        const a = luminance(bg), b = luminance(ink);
+        const contrast = (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+        return {
+          hydrated: Boolean(home && root?.style.getPropertyValue('--bg') && root.style.getPropertyValue('--font')),
+          modeMatches: style?.colorScheme === mode,
+          surfacesMatch: contrast >= 4.5 && bg === (mode === 'light' ? '#ffffff' : retained.primary)
+            && (mode === 'dark' || Boolean(home && getComputedStyle(home).backgroundColor === 'rgb(255, 255, 255)')),
+          imageMatches: mode === 'light' ? images?.length === 0 && backgrounds?.length === 0
+            : images?.length === 1 && backgrounds?.length === 1 && images[0].getAttribute('src') === expectedImage
+              && images[0].complete && images[0].naturalWidth > 0,
+          dimMatches: value('--menu-image-dim') === String(dim / 100),
+          brandMatches: value('--acc') === retained.accent && value('--font') === retained.font
+            && normalizeFont(style?.fontFamily ?? '') === normalizeFont(retained.font),
+          sceneMatches: (root?.getAttribute('data-sf-scene') ?? null) === retained.scene,
+        };
+      }, { mode, expectedImage, dim, retained });
+      hydrated = sample.hydrated;
+      const entry = { ms: Date.now() - started, httpStatus, ...sample };
+      if (trace.samples.length < 120) trace.samples.push(entry);
+      else trace.samples[119] = entry;
+      return httpStatus === 200 && Object.values(sample).every(Boolean);
+    }, { timeout: 100_000, intervals: [100, 250, 500, 1000] }).toBe(true);
+    await expect(page.locator('[data-sf-root]')).toHaveAttribute('dir', 'rtl');
+    trace.result = 'ready';
+  } catch (error) { trace.result = 'failed'; throw error; }
+}
+function withoutSiteTheme(document: Obj): Obj {
+  const copy = structuredClone(document);
+  if (copy.appearance) delete copy.appearance.site_theme;
+  return copy;
+}
+async function publicThemeMenu(f: Fixture, name: 'storefront_menu_v7' | 'storefront_menu_v8'): Promise<Obj> {
+  const response = await fetch(`${API}/rest/v1/rpc/${name}`, {
+    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000),
+    headers: { apikey: f.anonKey, Authorization: `Bearer ${f.anonKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_slug: f.ownerA.slug }),
+  });
+  expect(response.status, 'Versioned anonymous theme menu read succeeds').toBe(200);
+  const result = await response.json() as Obj;
+  expect(result.ok).toBe(true);
+  expect(result.restaurant.slug).toBe(f.ownerA.slug);
+  return result;
+}
 async function verifyMenuGeometry(page: Page): Promise<void> {
   const sections = page.locator('[data-sf-module="sections"]');
   await expect(sections, 'All four synthetic menu categories remain present').toHaveCount(4);
@@ -993,11 +1087,12 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
   } = { fieldsBeforeSubmit: null, request: null, response: null };
   const uploadDiagnostics: UploadDiagnostics[] = [];
   const nextUpload = () => { const diagnostics = new UploadDiagnostics(); uploadDiagnostics.push(diagnostics); return diagnostics; };
-  let draftWrites = 0;
+  let draftWrites = 0, profileWrites = 0;
   page.on('request', request => {
     const url = new URL(request.url());
     if (url.origin === API && request.method() === 'POST' &&
         ['/rest/v1/rpc/set_restaurant_storefront_profile', '/rest/v1/rpc/set_restaurant_storefront_content_v1'].includes(url.pathname)) draftWrites++;
+    if (url.origin === API && request.method() === 'POST' && url.pathname === '/rest/v1/rpc/set_restaurant_storefront_profile') profileWrites++;
   });
   try {
     await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' });
@@ -1074,6 +1169,76 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     const menu = await context.newPage();
     await renderMenu(menu, f, firstUrl, 15);
     stages.push(stage);
+
+    stage = 'site-theme-baseline';
+    const themeBaseline = await rpc(f, token, 'get_restaurant_storefront_content_v4');
+    const profileBaseline = (await rpc(f, token, 'get_restaurant_storefront_profile')).profile;
+    const retainedMenu = await menu.locator('[data-sf-root]').evaluate(root => {
+      const style = getComputedStyle(root);
+      return { primary: style.getPropertyValue('--bg').trim(), accent: style.getPropertyValue('--acc').trim(),
+        font: style.getPropertyValue('--font').trim(), scene: root.getAttribute('data-sf-scene') };
+    });
+    expect(themeBaseline.document.appearance.site_theme ?? null, 'Synthetic fixture starts with legacy appearance').toBeNull();
+    let themeVersion: number = themeBaseline.version;
+    let selectedTheme: string = L.siteThemeLegacy;
+    await openFoldedGroup(page, 'content');
+    for (const [mode, label] of [['light', L.siteThemeLight], ['dark', L.siteThemeDark], [null, L.siteThemeLegacy]] as const) {
+      stage = mode === null ? 'site-theme-restore-legacy' : `site-theme-${mode}-save-reload`;
+      const writesBefore = draftWrites, profileWritesBefore = profileWrites;
+      const dropdown = page.getByRole('button', { name: selectedTheme, exact: false });
+      await reveal(page, dropdown, 'field', page.getByRole('button', { name: selectedTheme, exact: false, includeHidden: true }));
+      await expect(dropdown, 'One actual site appearance dropdown is available').toHaveCount(1);
+      await selectRevealedDropdown(page, selectedTheme, label);
+      selectedTheme = label;
+      expect(draftWrites, 'Choosing site appearance changes only the unsaved draft').toBe(writesBefore);
+      const pending = await rpc(f, token, 'get_restaurant_storefront_content_v4');
+      expect(pending.version, 'A dropdown selection does not advance server CAS').toBe(themeVersion);
+      if (mode === 'light') expect(pending.document).toEqual(themeBaseline.document);
+      else expect(pending.document.appearance.site_theme).toBe(mode === 'dark' ? 'light' : 'dark');
+      const saved = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_content_v1')));
+      const writer = await responseAfterAction(saved, () => saveContent(page));
+      const submitted = writer.request().postDataJSON();
+      expect(submitted.p_expected_version, 'The UI writer uses the current CAS version').toBe(themeVersion);
+      expect(submitted.p_expected_storefront_branch_id, 'The UI writer retains the selected branch').toBe(f.ownerA.branchId);
+      expect(submitted.p_document.appearance.site_theme).toBe(mode);
+      expect(withoutSiteTheme(submitted.p_document), 'Theme selection preserves every other draft field').toEqual(withoutSiteTheme(themeBaseline.document));
+      expect(draftWrites, 'One content Save issues exactly one write').toBe(writesBefore + 1);
+      expect(profileWrites, 'Site appearance never saves the independent profile').toBe(profileWritesBefore);
+      await openEditor(page, true, 'content');
+      const reloaded = page.getByRole('button', { name: label, exact: false });
+      await reveal(page, reloaded, 'field', page.getByRole('button', { name: label, exact: false, includeHidden: true }));
+      await expect(reloaded, 'The actual reloaded Dashboard retains its saved appearance').toHaveCount(1);
+      const readback = await rpc(f, token, 'get_restaurant_storefront_content_v4');
+      expect(readback.restaurant_id).toBe(f.ownerA.restaurantId);
+      expect(readback.storefront_branch_id).toBe(f.ownerA.branchId);
+      expect(readback.version).toBe(++themeVersion);
+      expect(readback.document.appearance.site_theme).toBe(mode);
+      expect(withoutSiteTheme(readback.document), 'Background, dimming, scene, font, custom colours and content are retained').toEqual(withoutSiteTheme(themeBaseline.document));
+      const profileAfter = (await rpc(f, token, 'get_restaurant_storefront_profile')).profile;
+      expect(profileAfter.version, 'Content and profile share the same CAS version').toBe(themeVersion);
+      // The existing profile row trigger updates metadata on a content save.
+      // All actual settings remain equal; only version/updated_at may advance.
+      expect({ ...profileAfter, version: profileBaseline.version, updated_at: profileBaseline.updated_at },
+        'Content theme Save preserves the independent profile settings').toEqual(profileBaseline);
+      const [v8, v7] = await Promise.all([publicThemeMenu(f, 'storefront_menu_v8'), publicThemeMenu(f, 'storefront_menu_v7')]);
+      expect(v8.content_v1.appearance.site_theme).toBe(mode);
+      const v8Projection = structuredClone(v8);
+      delete v8Projection.content_v1.appearance.site_theme;
+      v8Projection.server_ts = v7.server_ts;
+      expect(v8Projection, 'V8 extends V7 only by the explicit site-theme field').toEqual(v7);
+      await verifyReadCompatibility(f, token);
+      await invariants(f, token);
+      if (mode !== null) {
+        await renderSiteThemeMenu(menu, f, mode, firstUrl, 15, retainedMenu);
+        await screenshot(menu, resolve(out, `storefront-site-theme-${mode}-test-data.png`));
+        await screenshot(page, resolve(out, `dashboard-site-theme-${mode}-test-data.png`));
+      }
+      stages.push(stage);
+    }
+    // Restore the historical layout/state before the unchanged picker and scene
+    // acceptance phases. Restoring legacy is a real UI save, never an API write.
+    await openEditor(page, true);
+    await renderMenu(menu, f, firstUrl, 15);
 
     // Both profile and content pickers use the actual sheet, draft, writer and
     // reread path. Preview and Cancel never issue a persistence request.
@@ -1321,7 +1486,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await quality.privateOriginal(f, token, first);
     quality.complete();
     await network.check();
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
+    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], siteThemeRenders: siteThemeRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
   } catch (error) {
     const statuses = stages.includes('login') ? await editorStatus(page).catch(() => ['unreadable']) : [];
     const failureCapture = stages.includes('login')
@@ -1329,7 +1494,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
       login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
       controlReveal: error instanceof ControlRevealError ? error.samples : null,
-      controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
+      controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], siteThemeRenders: siteThemeRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
   }
 });

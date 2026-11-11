@@ -1,7 +1,7 @@
 /** Approved design, composed over the existing tenant and order runtime. */
 import { dirOf, type Locale } from '@/i18n/locales';
 import { storefrontMessages } from '@/i18n/storefront';
-import { buildCinematicTheme } from '@/theme/buildCinematicTheme';
+import { buildSiteTheme, siteThemeClass } from '@/theme/buildSiteTheme';
 import { MenuBackdrop } from './MenuBackdrop';
 import { menuBackground } from './menuBackground';
 import { cartPath, checkoutPath } from '@/routes/routes';
@@ -14,6 +14,7 @@ import { HomeChrome } from './HomeChrome';
 import { StorefrontRuntime } from '../StorefrontRuntime';
 import shell from '../storefront.module.css';
 import styles from './home.module.css';
+import appearance from '../siteAppearance.module.css';
 
 const MOTION_CLASS = { calm: '', full: styles.motionFull, lively: `${styles.motionFull} ${styles.motionLively}` } as const;
 
@@ -23,13 +24,13 @@ export function Home({ resolution, locale, slug, hrefFor }: {
   const { view, groups, zones, taxRateBp, menuVersion } = resolution;
   const { tenant, modules, categories, items, cardMode } = view;
   const m = storefrontMessages(locale);
-  const tokens = buildCinematicTheme(tenant.brand, tenant.scenePreset);
+  const tokens = buildSiteTheme(tenant);
   const background = menuBackground(tenant, tenant.scenePreset);
   return (
-    <ThemeScope tokens={tokens} menuImageDim={background.dim} scenePreset={tenant.scenePreset} className={`${shell.root} ${MOTION_CLASS[view.motion]}`} dir={dirOf(locale)}>
+    <ThemeScope tokens={tokens} menuImageDim={background.dim} scenePreset={tenant.scenePreset} className={`${shell.root} ${appearance[siteThemeClass(tenant.siteTheme)]} ${MOTION_CLASS[view.motion]}`} dir={dirOf(locale)}>
       <StorefrontRuntime source={resolution.source} slug={slug} menuVersion={menuVersion} items={items} groups={groups} zones={zones} taxRateBp={taxRateBp} orderingEnabled={tenant.service.orderingEnabled} locale={locale} motion={view.motion} state={tenant.service.state} opensAt={tenant.hours.opens}>
         <main className={styles.page} data-sf-screen="home">
-          <MenuBackdrop background={background} sectionCount={categories.length} itemCount={items.length} />
+          {tenant.siteTheme === 'light' ? null : <MenuBackdrop background={background} sectionCount={categories.length} itemCount={items.length} />}
           <HomeChrome key={slug} tenant={tenant} locale={locale} slug={slug} language={<LanguageMenu locale={locale} hrefFor={hrefFor} />} categories={categories} items={items} cardMode={cardMode}
             announcement={modules.announcement === null || tenant.service.state !== 'open' ? null : modules.announcement.text}
             announcementSegments={modules.announcement?.segments}
@@ -40,7 +41,7 @@ export function Home({ resolution, locale, slug, hrefFor }: {
           />
           {items.length === 0 || modules.promo === null ? null : <PromoBanner promo={modules.promo} m={m} />}
           {items.length === 0 || modules.story === null ? null : <StoryCard story={modules.story} />}
-          <SiteFooter tenant={tenant} m={m} sceneImage={background.image} />
+          <SiteFooter tenant={tenant} m={m} sceneImage={tenant.siteTheme === 'light' ? null : background.image} />
           <DockSlot locale={locale} motion={view.motion} state={tenant.service.state} opensAt={tenant.hours.opens} cartHref={cartPath(locale, slug)} />
         </main>
       </StorefrontRuntime>

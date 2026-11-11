@@ -152,6 +152,11 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
         <div className={styles.headerActions}><RestaurantContact publicPhone={tenant.phone} label={m.callRestaurant} iconOnly className={styles.headerPhone} />{language}<button className={styles.cartTrigger} data-sf-cart-trigger="" type="button" onClick={() => setCartOpen(true)}><TrolleyIcon /><span>{m.yourChoices}</span><b>{count}</b></button></div>
       </div>
     </header>
+    <div className={styles.orderStatus} data-sf-order-status="">
+      <span>{tenant.service.state === 'open' ? m.openNow : tenant.service.state === 'closed' ? m.closed : m.paused}</span>
+      <span>{tenant.service.pickupEnabled ? m.pickup : m.pickupOff}</span>
+      <span>{tenant.service.deliveryEnabled ? m.delivery : m.deliveryOff}</span>
+    </div>
     {hero}
     {announcement === null || dismissed ? null : <div className={styles.announce} data-sf-module="announce" role="status"><span aria-hidden="true">✦</span><span dir="auto">{announcementSegments?.length ? announcementSegments.map((segment, index) => <Fragment key={index}>{index ? <span aria-hidden="true"> ✦ </span> : null}<TenantText>{segment}</TenantText></Fragment>) : <TenantText>{announcement}</TenantText>}</span><span aria-hidden="true">✦</span><button className={styles.announceClose} type="button" aria-label={m.close} onClick={() => { setDismissed(true); markAnnouncementDismissed(slug); }}><CloseIcon /></button></div>}
     {notice}

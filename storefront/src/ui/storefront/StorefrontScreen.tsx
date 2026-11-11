@@ -1,13 +1,14 @@
 /** Welcome composition; tenant colours are validated by the cinematic theme. */
 import { dirOf, type Locale } from '@/i18n/locales';
 import type { Preset } from '@/theme/buildTheme';
-import { buildCinematicTheme } from '@/theme/buildCinematicTheme';
+import { buildSiteTheme, siteThemeClass } from '@/theme/buildSiteTheme';
 import type { CampaignModule, MotionMode, Tenant } from '@/source/types';
 import { storefrontPath } from '@/routes/routes';
 import { Intro } from './Intro';
 import { IntroGate } from './IntroGate';
 import { ThemeScope } from './ThemeScope';
 import shell from './storefront.module.css';
+import appearance from './siteAppearance.module.css';
 
 export function StorefrontScreen({
   tenant,
@@ -26,10 +27,10 @@ export function StorefrontScreen({
   campaign?: CampaignModule;
   motion?: MotionMode;
 }) {
-  const tokens = buildCinematicTheme(tenant.brand, tenant.scenePreset);
+  const tokens = buildSiteTheme(tenant);
 
   return (
-    <ThemeScope tokens={tokens} scenePreset={tenant.scenePreset} className={`${shell.root}`} dir={dirOf(locale)}>
+    <ThemeScope tokens={tokens} scenePreset={tenant.scenePreset} className={`${shell.root} ${appearance[siteThemeClass(tenant.siteTheme)]}`} dir={dirOf(locale)}>
       <IntroGate slug={slug} homeHref={`${storefrontPath(locale, slug)}/menu`}>
         <Intro tenant={tenant} locale={locale} campaign={campaign} motion={motion} />
       </IntroGate>

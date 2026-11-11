@@ -97,9 +97,9 @@ class SupabaseStorefrontContentRepository
   final SyncRpcTransport _transport;
   final String organizationId, restaurantId;
   final int Function() _nonce;
-  // Installed with the scene migration. No fallback: an older backend can
-  // return a valid legacy document without supporting scene-preset writes.
-  static const readFunction = 'get_restaurant_storefront_content_v3';
+  // The v4 management read negotiates explicit site-theme support. No
+  // fallback: a legacy read cannot prove support for the new write field.
+  static const readFunction = 'get_restaurant_storefront_content_v4';
   static const writeFunction = 'set_restaurant_storefront_content_v1';
   static const mediaFunction = 'list_storefront_content_media_v2';
   Map<String, dynamic> get _scope => {

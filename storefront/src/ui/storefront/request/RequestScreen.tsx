@@ -13,10 +13,12 @@
  */
 import { dirOf, type Locale } from '@/i18n/locales';
 import { buildTheme, type Preset } from '@/theme/buildTheme';
+import { buildSiteTheme, siteThemeClass } from '@/theme/buildSiteTheme';
 import { sanitizeAccent, sanitizePrimary } from '@/theme/sanitize';
 import type { MotionMode, Tenant } from '@/source/types';
 import { ThemeScope } from '../ThemeScope';
 import shell from '../storefront.module.css';
+import appearance from '../siteAppearance.module.css';
 import { RequestRuntime } from './RequestRuntime';
 import type { ContentLocale } from './message';
 
@@ -40,14 +42,15 @@ export function RequestScreen({
   /** The root's font set class (two preloads, one on demand); the page binds it. */
   fontClass: string;
 }) {
-  const tokens = buildTheme(preset, {
+  const legacyTokens = buildTheme(preset, {
     primary: sanitizePrimary(tenant.brand.primary),
     accent: sanitizeAccent(tenant.brand.accent, preset),
     fontFamily: tenant.brand.fontFamily,
   });
+  const tokens = buildSiteTheme(tenant, legacyTokens);
 
   return (
-    <ThemeScope tokens={tokens} className={`${shell.root} ${fontClass}`} dir={dirOf(locale)}>
+    <ThemeScope tokens={tokens} className={`${shell.root} ${appearance[siteThemeClass(tenant.siteTheme)]} ${fontClass}`} dir={dirOf(locale)}>
       <RequestRuntime
         locale={locale}
         requestRef={requestRef}

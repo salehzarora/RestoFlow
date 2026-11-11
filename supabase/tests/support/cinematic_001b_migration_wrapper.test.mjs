@@ -9,6 +9,7 @@ import {
   statements, withoutOuterTransaction, finalFingerprint, sha256, predecessorName, predecessorVersion, prefixNamesFingerprint,
   followUpName, followUpVersion, followUpFingerprint, targetFunctions, topLevelTransactionControl, proveFollowUpMigration,
   proveMigrationSequence, targetPrefixSources, followupMigrations, visualReleaseSources, excludedSuccessors,
+  siteThemeSuccessor, siteThemeReleaseSources,
 } from './cinematic_001b_migration_contract.mjs';
 
 test('historical migration removed exactly two outer statement lines', () => {
@@ -94,15 +95,16 @@ const refuses = (list, message) => assert.throws(() => proveMigrationSequence(li
 const successorNames = excludedSuccessors.map(item => item.name);
 const [posDutySuccessor, g1Successor] = excludedSuccessors;
 
-test('the sequence pins #379, payment 001D, product helpers, scene, background clarity and both later successors', () => {
+test('the sequence pins #379, payment 001D, product helpers, scene, background clarity and three later successors', () => {
   assert.deepEqual(proveMigrationSequence(sources).summary, {
-    migrations: 190, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name), ...successorNames],
+    migrations: 191, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name), ...successorNames],
     prefix_names_sha256: prefixNamesFingerprint, follow_up_sha256: followUpFingerprint, follow_up_statements: 125,
     follow_up_no_embedded_transaction: true,
     visual_followups: followupMigrations.map(pin => ({ ...pin, version: pin.name.slice(0, 14), statements: statements(bytesOf(pin.name).toString('utf8')).length, no_embedded_transaction: true })),
     excluded_successors: [
       { label: 'POS duty', name: '20261108085442_bizbot_pos_long_shift_alerts_001.sql', sha256: '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865' },
       { label: 'G1', name: '20261109143313_bizbot_zcredit_001e_drop_evidence_001.sql', sha256: '1ac9a99048c0755a982d197099a7aed27d802a67ea02b38254b79453b92bad95' },
+      { label: 'site theme', name: '20261110150043_bizbot_storefront_site_theme_001.sql', sha256: '98195ffeece9ca1058409537b691db17ccde013a55c67964c18dcc95e86b3e72' },
     ],
   });
 });
@@ -268,7 +270,7 @@ test('all visual migrations fail closed on missing, swapped, changed, CRLF or co
     'Unexpected migration sequence after the #379 target');
 });
 
-test('the historical #379 / PR380 fixture plan omits 001D and both pinned successors after exact source validation', () => {
+test('the historical #379 / PR380 fixture plan omits 001D and three pinned successors after exact source validation', () => {
   const plan = visualReleaseSources(sources);
   assert.equal(plan.length, 187);
   assert.deepEqual(plan.map(([name]) => name), [
@@ -288,10 +290,11 @@ test('the historical #379 / PR380 fixture plan omits 001D and both pinned succes
   assert.throws(() => visualReleaseSources(adding(['20261110000000_unreviewed_after_g1.sql', sql('select 1;\n')])), failsWith('Unexpected migration sequence after the #379 target'));
 });
 
-test('both pinned successors carry their exact identities and are excluded from both historical plans', () => {
+test('three pinned successors carry their exact identities and are excluded from both historical plans', () => {
   assert.deepEqual(excludedSuccessors.map(pin => [pin.label, pin.name, pin.sha256]), [
     ['POS duty', '20261108085442_bizbot_pos_long_shift_alerts_001.sql', '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865'],
     ['G1', '20261109143313_bizbot_zcredit_001e_drop_evidence_001.sql', '1ac9a99048c0755a982d197099a7aed27d802a67ea02b38254b79453b92bad95'],
+    ['site theme', '20261110150043_bizbot_storefront_site_theme_001.sql', '98195ffeece9ca1058409537b691db17ccde013a55c67964c18dcc95e86b3e72'],
   ]);
   assert.ok(Object.isFrozen(excludedSuccessors) && excludedSuccessors.every(pin => Object.isFrozen(pin)));
   for (const pin of excludedSuccessors) assert.equal(sha256(bytesOf(pin.name)), pin.sha256);
@@ -300,7 +303,7 @@ test('both pinned successors carry their exact identities and are excluded from 
   assert.equal(historical.length, 188);
   assert.deepEqual(historical, [...prefix, followUpName, ...followupMigrations.map(item => item.name)]);
   assert.deepEqual([...historical, ...successorNames], sources.map(([entry]) => entry));
-  assert.deepEqual(sources.slice(-2).map(([entry]) => entry), successorNames);
+  assert.deepEqual(sources.slice(-3).map(([entry]) => entry), successorNames);
   assert.ok(successorNames.every(name => !historical.includes(name) && !prefix.includes(name)));
   const visual = visualReleaseSources(sources).map(([entry]) => entry);
   assert.equal(visual.length, 187);
@@ -365,4 +368,67 @@ test('historical plan builders reject invalid complete inputs before producing a
   assert.throws(() => visualReleaseSources(adding(['20261109000000_between_successors.sql', broken])), failsWith('Unexpected migration sequence after the #379 target'));
   assert.throws(() => targetPrefixSources(adding(['20261109000000_between_successors.sql', broken]), broken), failsWith('Unexpected migration sequence after the #379 target'));
   assert.throws(() => visualReleaseSources(adding(['20261110000000_unknown_after_g1.sql', broken])), failsWith('Unexpected migration sequence after the #379 target'));
+});
+
+test('the exact site-theme bytes contain fourteen statements and no top-level transaction control', () => {
+  assert.deepEqual(siteThemeSuccessor, {
+    label: 'site theme', name: '20261110150043_bizbot_storefront_site_theme_001.sql',
+    sha256: '98195ffeece9ca1058409537b691db17ccde013a55c67964c18dcc95e86b3e72',
+  });
+  assert.ok(Object.isFrozen(siteThemeSuccessor));
+  assert.equal(excludedSuccessors.at(-1), siteThemeSuccessor);
+  const bytes = bytesOf(siteThemeSuccessor.name);
+  assert.equal(bytes.length, 41358);
+  assert.equal(sha256(bytes), siteThemeSuccessor.sha256);
+  assert.equal(statements(bytes.toString('utf8')).length, 14);
+  assert.deepEqual(topLevelTransactionControl(bytes.toString('utf8')), []);
+});
+
+test('the current lifecycle plan is exactly the visual release plus site theme, never a payment or POS plan', () => {
+  const visual = visualReleaseSources(sources);
+  const plan = siteThemeReleaseSources(sources);
+  assert.equal(visual.length, 187);
+  assert.equal(plan.length, 188);
+  assert.deepEqual(plan.map(([name]) => name), [...visual.map(([name]) => name), siteThemeSuccessor.name]);
+  assert.ok(plan.every(([name, bytes]) => bytes === bytesOf(name)), 'Every lifecycle byte must be the exact reviewed source');
+  assert.ok(!plan.some(([name]) => [followUpName, posDutySuccessor.name, g1Successor.name].includes(name)));
+  assert.equal(plan.filter(([name]) => name === siteThemeSuccessor.name).length, 1);
+  assert.equal(plan.at(-1)[1], bytesOf(siteThemeSuccessor.name));
+  assert.notDeepEqual(plan.map(([name]) => name), proveMigrationSequence(sources).historical_names);
+});
+
+test('site-theme bytes swapped with either G1 or POS duty are refused', () => {
+  const theme = siteThemeSuccessor;
+  for (const other of [posDutySuccessor, g1Successor]) {
+    const swapped = sources.map(([name, bytes]) => [name,
+      name === theme.name ? bytesOf(other.name) : name === other.name ? bytesOf(theme.name) : bytes]);
+    refuses(swapped, `Unreviewed ${other.label} successor bytes`);
+    refuses(replacing(theme.name, bytesOf(other.name)), 'Unreviewed site theme successor bytes');
+    assert.throws(() => siteThemeReleaseSources(swapped), failsWith(`Unreviewed ${other.label} successor bytes`));
+    assert.throws(() => siteThemeReleaseSources(replacing(theme.name, bytesOf(other.name))), failsWith('Unreviewed site theme successor bytes'));
+  }
+});
+
+test('unknown successors after the theme are refused by the sequence and every plan builder', () => {
+  const nextVersion = String(Number(siteThemeSuccessor.name.slice(0, 14)) + 1);
+  for (const name of [`${nextVersion}_unknown_after_site_theme.sql`, '99991231235959_far_future_after_site_theme.sql']) {
+    assert.ok(name.slice(0, 14) > siteThemeSuccessor.name.slice(0, 14));
+    const invalid = adding([name, sql('select 1;\n')]);
+    refuses(invalid, 'Unexpected migration sequence after the #379 target');
+    assert.throws(() => targetPrefixSources(invalid, bytesOf(migrationName)), failsWith('Unexpected migration sequence after the #379 target'));
+    assert.throws(() => visualReleaseSources(invalid), failsWith('Unexpected migration sequence after the #379 target'));
+    assert.throws(() => siteThemeReleaseSources(invalid), failsWith('Unexpected migration sequence after the #379 target'));
+  }
+});
+
+test('the current lifecycle builder validates the entire directory before producing its restricted subset', () => {
+  for (const pin of [followUpName, ...followupMigrations.map(item => item.name), ...successorNames]) {
+    assert.throws(() => siteThemeReleaseSources(without(sources, pin)));
+    assert.throws(() => siteThemeReleaseSources(replacing(pin, Buffer.concat([bytesOf(pin), sql('-- changed\n')]))));
+  }
+  assert.throws(() => siteThemeReleaseSources([]), failsWith('Expected the migration directory listing'));
+  assert.throws(() => siteThemeReleaseSources(replacing(sources[0][0], bytesOf(sources[0][0]).toString('utf8'))), failsWith('Migration sources must be raw bytes'));
+  assert.throws(() => siteThemeReleaseSources([...sources].reverse()), failsWith('Migration versions must be strictly ascending'));
+  assert.throws(() => siteThemeReleaseSources(replacing(sources[0][0], bytesOf(siteThemeSuccessor.name))),
+    failsWith('Reviewed site theme bytes may appear only under their pinned name'));
 });
