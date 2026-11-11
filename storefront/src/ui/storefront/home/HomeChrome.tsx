@@ -60,6 +60,7 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
   const count = cartApi?.ready ? cartApi.summary.itemCount : 0;
   const subtotal = cartApi?.ready ? cartApi.summary.subtotalMinor : 0;
   const showIntro = tenant.menuBanner?.showIntro !== false;
+  const hasBanner = Boolean(tenant.menuBanner?.enabled && tenant.menuBanner.image);
   useEffect(() => { markIntroSeen(slug); }, [slug]);
   useLayoutEffect(() => { setDismissed(isAnnouncementDismissed(slug)); }, [slug]);
   useEffect(() => {
@@ -151,6 +152,8 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
     setCartOpen(false);
   };
   return <>
+    <div className={styles.topScene} data-sf-menu-top="" data-sf-has-banner={hasBanner ? '' : undefined}>
+    <MenuBanner className={styles.menuBanner} banner={tenant.menuBanner} />
     <header className={styles.header} data-sf-module="compact">
       <div className={`${styles.inner} ${styles.headerInner}`}>
         <a className={styles.brandLink} href="#" aria-label={tenant.displayName}><BrandLockup tenant={tenant} /></a>
@@ -163,12 +166,13 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
       <span><StoreIcon />{tenant.service.pickupEnabled ? m.pickup : m.pickupOff}</span>
       <span><DeliveryIcon />{tenant.service.deliveryEnabled ? m.delivery : m.deliveryOff}</span>
     </div>
-    <MenuBanner className={`${styles.inner} ${brand.menuBanner}`} banner={tenant.menuBanner} name={tenant.displayName} />
     {showIntro ? hero : null}
     {announcement === null || dismissed ? null : <div className={styles.announce} data-sf-module="announce" role="status"><span aria-hidden="true">✦</span><span dir="auto">{announcementSegments?.length ? announcementSegments.map((segment, index) => <Fragment key={index}>{index ? <span aria-hidden="true"> ✦ </span> : null}<TenantText>{segment}</TenantText></Fragment>) : <TenantText>{announcement}</TenantText>}</span><span aria-hidden="true">✦</span><button className={styles.announceClose} type="button" aria-label={m.close} onClick={() => { setDismissed(true); markAnnouncementDismissed(slug); }}><CloseIcon /></button></div>}
     {notice}
+    {hasBanner && (!showIntro || hero === null) ? <div className={styles.sceneWindow} data-sf-scene-window="" aria-hidden="true" /> : null}
+    {empty == null ? <div className={`${styles.inner} ${styles.topControls} ${styles.menuHeading}`}>{showIntro ? <div className={styles.menuIntro}><p className={styles.eyebrow}>{m.menuEyebrow}<span>{m.menuCaption}</span></p><h2><MenuTitle text={m.menuHeading} locale={locale} /></h2></div> : null}<div className={styles.searchControls}><form className={styles.searchBox} role="search" onSubmit={e => e.preventDefault()}><SearchIcon /><input ref={search} type="search" autoComplete="off" maxLength={80} value={query} onChange={e => { setQuery(e.target.value); setPicks(false); }} placeholder={m.searchPh} aria-label={m.search} />{query ? <button type="button" aria-label={m.clearSearch} onClick={() => { setQuery(''); search.current?.focus(); }}><CloseIcon /></button> : <kbd aria-hidden="true">/</kbd>}</form>{heroItem ? null : <div className={styles.suggestionSlot}>{suggestion}</div>}</div></div> : null}
+    </div>
     {empty ?? <section className={`${styles.inner} ${styles.menu}`} id="sf-menu" aria-label={m.menuLabel}>
-      <div className={styles.menuHeading}>{showIntro ? <div className={styles.menuIntro}><p className={styles.eyebrow}>{m.menuEyebrow}<span>{m.menuCaption}</span></p><h2><MenuTitle text={m.menuHeading} locale={locale} /></h2></div> : null}<div className={styles.searchControls}><form className={styles.searchBox} role="search" onSubmit={e => e.preventDefault()}><SearchIcon /><input ref={search} type="search" autoComplete="off" maxLength={80} value={query} onChange={e => { setQuery(e.target.value); setPicks(false); }} placeholder={m.searchPh} aria-label={m.search} />{query ? <button type="button" aria-label={m.clearSearch} onClick={() => { setQuery(''); search.current?.focus(); }}><CloseIcon /></button> : <kbd aria-hidden="true">/</kbd>}</form>{heroItem ? null : <div className={styles.suggestionSlot}>{suggestion}</div>}</div></div>
       <div className={brand.categoryWrap}><nav ref={categoryNav} className={brand.rail} aria-label={m.menuLabel} data-sf-module="categories">{categories.map(category => <button className={`${brand.chip} ${category.id === activeCategory && !query && !picks ? brand.chipActive : ''}`} type="button" key={category.id} aria-current={category.id === activeCategory && !query && !picks ? 'true' : undefined} onClick={() => switchCategory(category.id)}><CategoryIcon path={category.iconPath} image={null} /><span dir="auto">{category.name}</span><small dir="ltr">{String(items.filter(i => i.categoryId === category.id).length).padStart(2, '0')}</small></button>)}{items.some(item => item.featured && !item.soldOut) ? <button type="button" className={`${brand.chip} ${picks && !query ? brand.chipActive : ''}`} aria-current={picks && !query ? 'true' : undefined} onClick={() => { setPicks(true); setQuery(''); }}>{m.chefPicks}</button> : null}</nav></div>
       {query.trim() || picks ? <section className={styles.section} data-sf-module="sections" aria-label={query.trim() ? m.search : m.chefPicks}><div className={styles.sectionHead}><h3>{picks ? m.chefPicks : m.search}</h3><span role="status">{shown.length === 1 ? m.item : fill(m.items, {n:String(shown.length)})}</span></div>{shown.length ? <ProductCarousel key={picks ? 'picks' : 'search'} items={shown} m={m} locale={locale} label={query.trim() ? m.search : m.chefPicks} /> : <div className={styles.empty} role="status"><SearchIcon /><h3>{query.trim() ? <NoResultsTitle template={m.noResults} query={query.trim()} /> : m.emptyMenu}</h3><p>{m.tryOther}</p><button className={styles.promoCta} type="button" onClick={() => { setQuery(''); setPicks(false); }}>{m.browseMenu}</button></div>}</section> : null}
       <div hidden={Boolean(query.trim()) || picks} className={styles.menuSections}>{categories.map(category => <MenuSection key={category.id} category={category} items={items.filter(item => item.categoryId === category.id)} cardMode={cardMode} m={m} locale={locale} />)}</div>
