@@ -324,7 +324,7 @@ export function ProductSheet({
                   </h3>
                   <span
                     className={`${styles.badge} ${
-                      failed ? styles.badgeBad : group.required ? styles.badgeReq : styles.badgeOpt
+                      failed ? styles.badgeBad : ''
                     }`}
                   >
                     {badgeText(group, m, minimumChoice)}
@@ -358,9 +358,7 @@ export function ProductSheet({
                         onClick={() => toggle(group, option.id)}
                       >
                         <span
-                          className={`${styles.control} ${
-                            group.single ? styles.controlRadio : styles.controlCheck
-                          }`}
+                          className={styles.control}
                           aria-hidden="true"
                         >
                           <CheckIcon />
@@ -379,7 +377,7 @@ export function ProductSheet({
                             {delta}
                           </span>
                         ) : (
-                          <span className={`${styles.delta} ${styles.deltaFree}`}>{delta}</span>
+                          <span className={styles.delta}>{delta}</span>
                         )}
                       </button>
                       {on && group.allowQuantity ? <span className={styles.stepper} data-sf-modifier-quantity={option.id}>
@@ -432,7 +430,7 @@ export function ProductSheet({
               {qty}
             </span>
             <button
-              className={`${styles.step} ${styles.stepPlus}`}
+              className={styles.step}
               type="button"
               aria-label={m.increase}
               data-sf-step="inc"
@@ -452,7 +450,7 @@ export function ProductSheet({
             onClick={submit}
             data-sf-cta="product"
           >
-            <span className={styles.ctaLabel}>{ctaLabel}</span>
+            <span className={styles.wrapText}>{ctaLabel}</span>
             <span className={`${styles.ctaPrice} ${shell.ltr}`} dir="ltr">
               {formatMoney(totalMinor)}
             </span>

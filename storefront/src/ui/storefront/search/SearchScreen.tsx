@@ -29,7 +29,7 @@ import { searchItems } from '@/source/search';
 import type { CardMode, Category, MenuItem } from '@/source/types';
 import { ChevronIcon, CloseIcon, SearchIcon } from '../icons';
 import { TenantText } from '../TenantText';
-import { GridCard } from '../home/MenuParts';
+import { GridCard } from '../home/GridCard';
 import { productCardClass, productFrameClass, productImageClass, sectionGridClass, sectionLayout } from '../contentPresentation';
 import contentStyles from '../storefront.module.css';
 import shell from '../storefront.module.css';

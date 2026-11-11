@@ -22,7 +22,8 @@
 .controlInk{color:var(--tx);cursor:pointer}
 .close {composes:gridCenter controlInk; position: absolute; inset-block-start: 28px; inset-inline-end: calc(36% + 28px); z-index: 2; inline-size: 38px; block-size: 38px; border: 1px solid var(--hair2); border-radius: 50%; padding: 0; background: var(--bg); transition: background 200ms, transform 200ms; }
 .close:hover { background: var(--sf2); transform: rotate(90deg); }
-.close svg { inline-size: 21px; block-size: 21px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.close svg,.step svg,.alert svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+.close svg { inline-size: 21px; block-size: 21px; stroke-width: 1.7; }
 .body { grid-column: 1; grid-row: 1; min-inline-size: 0; min-block-size: 0; overflow: auto; overscroll-behavior: contain; scroll-behavior: auto; }
 /* Current head is inside the scroll body. Sticky retains its controls. Exact
  * source scrolling requires the small head/body boundary change in notes. */
@@ -43,27 +44,20 @@
 .groupName {composes:zeroHeading; font-size: 15px; font-weight: 700; line-height: 1.6; }
 .muted{color:var(--tx3);font-weight:400}
 .badge {composes:muted fixed; padding: 2px 8px; border: 0; border-radius: 20px; background: var(--sf2); font-size: 10px; line-height: 1.6; }
-.badgeReq { composes: badge; }
-.badgeOpt { composes: badge; }
 .badgeBad { background: var(--badbg); color: var(--badText); }
 .alert { display: flex; align-items: flex-start; gap: 8px; margin: 0; border-radius: 10px; padding: 8px 10px; background: var(--badbg); color: var(--badText); font-size: 12px; font-weight: 600; }
-.alert svg { flex: none; inline-size: 16px; block-size: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.alert svg { flex: none; inline-size: 16px; block-size: 16px; stroke-width: 2; }
 .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .options[role='radiogroup'] { grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); }
 .quantityOption {composes:flexColumn; min-inline-size: 0; gap: 6px; }
 .inheritFont{font:inherit}
 .option {composes:controlInk inheritFont; position: relative; display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 3px; inline-size: 100%; min-inline-size: 0; min-block-size: 65px; padding: 10px 5px; border: 1px solid var(--hair2); border-radius: 10px; background: transparent; text-align: center; transition: background var(--d-option), border-color var(--d-option); }
 .optionOn { background: var(--accA); color: var(--accOnSelection); border-color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); }
-.optionFull { opacity: .55; }
 .control { display: none; }
-.controlRadio { border-radius: 0; }
-.controlCheck { composes: controlRadio; }
 .wrapText{min-inline-size:0;overflow-wrap:anywhere}
-.ctaLabel{composes:wrapText}
 .optionName {composes:wrapText; font-size: 12px; font-weight: 600; line-height: 1.6; }
 .delta {composes:muted fixed; font-size: 9px; line-height: 1.6; white-space: nowrap; }
 .optionOn .delta { color: var(--accOnSelection); }
-.deltaFree { composes: delta; }
 .note {composes:flexColumn; gap: 10px; padding-block: 0 12px; padding-inline: 28px; border: 0; }
 .noteLabel { font-size: 14px; font-weight: 600; }
 .noteOptional {composes:muted; font-size: 10px; line-height: 1.7; }
@@ -76,8 +70,7 @@
 .step {composes:gridCenter controlInk; position: relative; inline-size: 32px; block-size: 46px; padding: 0; border: 0; background: transparent; }
 .step::after { content: ''; position: absolute; inset-block: 0; inset-inline: -6px; }
 .step:hover:not(:disabled) { background: var(--sf2); }
-.step svg { inline-size: 16px; block-size: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.stepPlus { background: transparent; color: var(--tx); }
+.step svg { inline-size: 16px; block-size: 16px; stroke-width: 1.7; }
 .step:disabled { opacity: .35; cursor: not-allowed; }
 .stepValue {composes:tabular; inline-size: 26px; text-align: center; font-size: 13px; font-weight: 600; }
 .quantityOption > .stepper { align-self: center; }
@@ -99,39 +92,20 @@
 @keyframes sfToastRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes sfShake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
 @media (max-width: 640px) {
- .sheet { inset-block-start: auto; inset-block-end: 0; display: flex; flex-direction: column; inline-size: 100%; min-block-size: 0; max-block-size: 94dvh; transform: none; border-radius: 22px 22px 0 0; }
- .media { flex: none; inline-size: 100%; block-size: 170px; }
- .mediaImg { object-position: 50% 64%; }
+ .sheet { flex-direction: column; inline-size: 100%; min-block-size: 0; }
+ .media { flex: none; inline-size: 100%; }
  .close { inset-block-start: 16px; inset-inline-end: 16px; border: 0; box-shadow: 0 2px 10px color-mix(in srgb, var(--tx) 13%, transparent); }
- .body { flex: 1; max-block-size: calc(94dvh - 170px); }
- .head { padding-block: 20px 14px; padding-inline: 22px; }
+ .body { flex: 1; }
  .name { font-size: 23px; }
- .group { padding-block-end: 20px; padding-inline: 22px; }
+ .group { padding-inline: 22px; }
  .options { gap: 6px; }
- .option { min-block-size: 57px; }
- .optionName { font-size: 11px; }
  .note { padding-block-end: 14px; padding-inline: 22px; }
- .foot { padding-block: 14px max(20px, env(safe-area-inset-bottom)); padding-inline: 22px; }
- .toast { inset-block-end: 95px; }
+ .foot { padding-inline: 22px; }
  .toastPill { min-inline-size: 200px; font-size: 12px; }
  .motionFull .sheet { animation-name: sfSheetRise; animation-duration: 250ms; }
-}
-@media (max-height: 650px) and (max-width: 640px) {
- .media { block-size: 110px; }
- .mediaNone { min-block-size: 110px; }
- .body { max-block-size: calc(94dvh - 110px); }
- .head { padding-block: 13px 10px; }
- .name { font-size: 21px; }
-}
-@media (prefers-reduced-motion: reduce) {
- .host, .host *, .host *::before, .host *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
-}
-
-/* UX-002: one modal scroll owner on phones; the action follows the fields. */
-@media(max-width:640px){
  .sheet{inset-block:0;min-block-size:100dvh;max-block-size:100dvh;display:block;overflow-y:auto;overscroll-behavior:contain;transform:none;border-radius:0;scroll-padding-block:20px}
- .media{block-size:125px;background:var(--sf2)}
- .mediaImg{object-fit:contain;object-position:center}
+ .media{block-size:125px}
+ .mediaImg{object-fit:contain}
  .body{max-block-size:none;overflow:visible}
  .head{position:static;padding:20px 22px}
  .close{inline-size:46px;block-size:46px}
@@ -139,14 +113,21 @@
  .groupName{font-size:17px}.option{min-block-size:58px;border-radius:13px}
  .optionName{font-size:13px}.delta{font-size:11px}
  .noteField{max-block-size:none;overflow:hidden;resize:none;font-size:16px;line-height:1.7;scroll-margin-block:20px}
- .foot{position:static;gap:12px;flex-wrap:wrap;padding:18px 22px max(22px,env(safe-area-inset-bottom))}
- .step{inline-size:44px;block-size:46px}.step::after{display:none}
+ .foot{position:static;flex-wrap:wrap;padding:18px 22px max(22px,env(safe-area-inset-bottom))}
+ .step{inline-size:44px}.step::after{display:none}
  .quantityOption>.stepper .step{inline-size:44px;block-size:44px}
  .cta{min-block-size:54px;border-radius:14px;font-size:15px}
- .toast{inset-block-end:20px}
+ .toast{inset-block-end:20px}.options,.options[role="radiogroup"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-height: 650px) and (max-width: 640px) {
+ .mediaNone { min-block-size: 110px; }
+ .name { font-size: 21px; }
+}
+@media (prefers-reduced-motion: reduce) {
+ .host, .host *, .host *::before, .host *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 
-@media(max-width:640px){.options,.options[role="radiogroup"]{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* UX-002: one modal scroll owner on phones; the action follows the fields. */
 
 /* Full groups still enforce the existing limit; their labels remain legible. */
 .optionFull{opacity:1}.optionFull .optionName{color:var(--tx2)}

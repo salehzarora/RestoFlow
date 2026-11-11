@@ -52,7 +52,7 @@ test('Hero rendering slices codepoints, preserving original Arabic/Hebrew marks,
 });
 test('all product media roles consume the same closed presentation helper, without changing order runtime', () => {
   const root = new URL('../src/ui/storefront/', import.meta.url);
-  for (const file of ['home/MenuParts.tsx', 'home/HomeParts.tsx', 'search/SearchScreen.tsx', 'product/ProductSheet.tsx', 'cart/LiveCartAside.tsx', 'cart/LiveCartDock.tsx', 'checkout/CartScreen.tsx']) {
+  for (const file of ['home/GridCard.tsx', 'home/HomeParts.tsx', 'search/SearchScreen.tsx', 'product/ProductSheet.tsx', 'cart/LiveCartAside.tsx', 'cart/LiveCartDock.tsx', 'checkout/CartScreen.tsx']) {
     assert.match(readFileSync(new URL(file, root), 'utf8'), /productImageClass\(/, file);
   }
   const parts = readFileSync(new URL('home/HomeParts.tsx', root), 'utf8');
