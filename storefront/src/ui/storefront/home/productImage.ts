@@ -17,6 +17,6 @@ export function carouselImageSources(item: MenuItem, selected: boolean) {
   const desktopWidth = `calc(${number(69 * scale)}vw - ${number(55.2 * scale)}px)`;
   return {
     srcSet: variants.map(v => `${v.url} ${v.width}w`).join(', '),
-    sizes: `(max-width:365px) min(${mobileWidth}, ${px(210)}), (max-width:650px) min(${mobileWidth}, ${px(240)}), min(${desktopWidth}, ${number(565.8 * scale)}px, ${px(336)})`,
+    sizes: `(max-width:365px) min(${mobileWidth}, ${px(185)}), (max-width:650px) min(${mobileWidth}, ${px(195)}), min(${desktopWidth}, ${number(565.8 * scale)}px, ${px(306)})`,
   };
 }

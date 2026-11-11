@@ -713,4 +713,68 @@ void main() {
       expect(next.invoker.calls, isEmpty);
     },
   );
+  testWidgets(
+    'banner upload selects only banner draft and skips background HD',
+    (tester) async {
+      final rig = _Rig(highResolution: true);
+      final original = rig.repo.document.json;
+      await _mount(tester, rig);
+      await setContentGroup(tester, 'menu-banner');
+      await _tap(tester, 'content-menu-banner-upload');
+      expect(rig.storage.uploads, hasLength(1));
+      expect(rig.qualityInvoker.calls, isEmpty);
+      expect(rig.repo.writes, isEmpty);
+      await _tap(tester, 'content-save');
+      final saved = rig.repo.document.json;
+      expect((saved['appearance'] as Map)['menu_banner_media_id'], _media);
+      expect((saved['appearance'] as Map)['menu_banner_enabled'], isTrue);
+      expect(
+        (saved['appearance'] as Map)['menu_background_media_id'],
+        (original['appearance'] as Map?)?['menu_background_media_id'],
+      );
+      expect(saved['hero'], original['hero']);
+    },
+  );
+
+  testWidgets(
+    'banner uncertain replay retains target and request without reupload',
+    (tester) async {
+      final rig = _Rig(highResolution: true)..invoker.outcome = 'uncertain';
+      await _mount(tester, rig);
+      await setContentGroup(tester, 'menu-banner');
+      await _tap(tester, 'content-menu-banner-upload');
+      final request = rig.invoker.calls.first['request_id'];
+      expect(rig.repo.writes, isEmpty);
+      rig.invoker.outcome = 'published';
+      await _tap(tester, 'content-retry-publish');
+      expect(rig.storage.uploads, hasLength(1));
+      expect(rig.invoker.calls.map((c) => c['request_id']).toSet(), {request});
+      expect(rig.invoker.calls.map((c) => c['source_key']).toSet(), {_source});
+      expect(rig.qualityInvoker.calls, isEmpty);
+      await _tap(tester, 'content-save');
+      expect(
+        (rig.repo.document.json['appearance'] as Map)['menu_banner_media_id'],
+        _media,
+      );
+      expect(
+        (rig.repo.document.json['appearance']
+            as Map)['menu_background_media_id'],
+        isNull,
+      );
+    },
+  );
+
+  testWidgets('banner cancelled picker changes no saved document or media', (
+    tester,
+  ) async {
+    final rig = _Rig(picker: () async => null);
+    final original = rig.repo.document.json;
+    await _mount(tester, rig);
+    await setContentGroup(tester, 'menu-banner');
+    await _tap(tester, 'content-menu-banner-upload');
+    expect(rig.storage.uploads, isEmpty);
+    expect(rig.invoker.calls, isEmpty);
+    expect(rig.repo.writes, isEmpty);
+    expect(rig.repo.document.json, original);
+  });
 }

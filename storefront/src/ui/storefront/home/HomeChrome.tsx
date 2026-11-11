@@ -9,8 +9,10 @@ import type { Locale } from '@/i18n/locales';
 import type { CampaignModule, CardMode, Category, MenuItem, Tenant } from '@/source/types';
 import { searchItems } from '@/source/search';
 import { cartPath } from '@/routes/routes';
+import { formatMoney } from '@/money/format';
+import { MenuBanner } from './MenuBanner';
 import { cartNavigationHref } from '@/routes/cart-navigation';
-import { CloseIcon, SearchIcon, TrolleyIcon } from '../icons';
+import { CloseIcon, SearchIcon, TrolleyIcon, StoreIcon, DeliveryIcon } from '../icons';
 import { TenantText } from '../TenantText';
 
 import { RestaurantContact } from '../RestaurantContact';
@@ -33,6 +35,8 @@ function CategoryIcon({ path, image }: { path: string; image: string | null }) {
   );
 }
 import styles from './home.module.css';
+const brand = styles;
+
 
 /** Presentation state only. Product/cart/order authority stays in StorefrontRuntime. */
 export function HomeChrome({ tenant, locale, slug, language, categories, items, cardMode, announcement, announcementSegments, heroTitle, heroSubline, heroContent, notice, empty, cart }: {
@@ -54,6 +58,8 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
   const categoryNav = useRef<HTMLElement>(null);
   const cartApi = useCartApi();
   const count = cartApi?.ready ? cartApi.summary.itemCount : 0;
+  const subtotal = cartApi?.ready ? cartApi.summary.subtotalMinor : 0;
+  const showIntro = tenant.menuBanner?.showIntro !== false;
   useEffect(() => { markIntroSeen(slug); }, [slug]);
   useLayoutEffect(() => { setDismissed(isAnnouncementDismissed(slug)); }, [slug]);
   useEffect(() => {
@@ -149,20 +155,21 @@ export function HomeChrome({ tenant, locale, slug, language, categories, items, 
       <div className={`${styles.inner} ${styles.headerInner}`}>
         <a className={styles.brandLink} href="#" aria-label={tenant.displayName}><BrandLockup tenant={tenant} /></a>
         <nav className={styles.headerNav} aria-label={m.menuLabel}><a href="#sf-menu">{m.menuLabel}</a><button type="button" onClick={() => { setPicks(true); setQuery(''); document.getElementById('sf-menu')?.scrollIntoView({block:'start', behavior:'auto'}); }}>{m.chefPicks}</button><a href="#sf-find">{m.findUs}</a></nav>
-        <div className={styles.headerActions}><RestaurantContact publicPhone={tenant.phone} label={m.callRestaurant} iconOnly className={styles.headerPhone} />{language}<button className={styles.cartTrigger} data-sf-cart-trigger="" type="button" onClick={() => setCartOpen(true)}><TrolleyIcon /><span>{m.yourChoices}</span><b>{count}</b></button></div>
+        <div className={styles.headerActions}><RestaurantContact publicPhone={tenant.phone} label={m.callRestaurant} iconOnly className={styles.headerPhone} />{language}<button className={brand.cartTrigger} data-sf-cart-trigger="" aria-label={`${m.cart}: ${count} · ${formatMoney(subtotal)}`} type="button" onClick={() => setCartOpen(true)}><span className={brand.cartGlyph}><TrolleyIcon /><b>{count}</b></span><span className={brand.headerTotal} dir="ltr">{formatMoney(subtotal)}</span><span className={styles.srOnly}>{m.yourChoices}</span></button></div>
       </div>
     </header>
-    <div className={styles.orderStatus} data-sf-order-status="">
-      <span>{tenant.service.state === 'open' ? m.openNow : tenant.service.state === 'closed' ? m.closed : m.paused}</span>
-      <span>{tenant.service.pickupEnabled ? m.pickup : m.pickupOff}</span>
-      <span>{tenant.service.deliveryEnabled ? m.delivery : m.deliveryOff}</span>
+    <div className={`${brand.orderStatus} ${styles.inner}`} data-sf-order-status="">
+      <span data-state={tenant.service.state} className={tenant.service.state === 'open' ? styles.stateOpen : tenant.service.state === 'closed' ? styles.stateClosed : styles.statePaused}><i className={styles.stateDot} aria-hidden="true" />{tenant.service.state === 'open' ? m.openNow : tenant.service.state === 'closed' ? m.closed : m.paused}</span>
+      <span><StoreIcon />{tenant.service.pickupEnabled ? m.pickup : m.pickupOff}</span>
+      <span><DeliveryIcon />{tenant.service.deliveryEnabled ? m.delivery : m.deliveryOff}</span>
     </div>
-    {hero}
+    <MenuBanner className={`${styles.inner} ${brand.menuBanner}`} banner={tenant.menuBanner} name={tenant.displayName} />
+    {showIntro ? hero : null}
     {announcement === null || dismissed ? null : <div className={styles.announce} data-sf-module="announce" role="status"><span aria-hidden="true">✦</span><span dir="auto">{announcementSegments?.length ? announcementSegments.map((segment, index) => <Fragment key={index}>{index ? <span aria-hidden="true"> ✦ </span> : null}<TenantText>{segment}</TenantText></Fragment>) : <TenantText>{announcement}</TenantText>}</span><span aria-hidden="true">✦</span><button className={styles.announceClose} type="button" aria-label={m.close} onClick={() => { setDismissed(true); markAnnouncementDismissed(slug); }}><CloseIcon /></button></div>}
     {notice}
     {empty ?? <section className={`${styles.inner} ${styles.menu}`} id="sf-menu" aria-label={m.menuLabel}>
-      <div className={styles.menuHeading}><div><p className={styles.eyebrow}>{m.menuEyebrow}<span>{m.menuCaption}</span></p><h2><MenuTitle text={m.menuHeading} locale={locale} /></h2></div><div className={styles.searchControls}><form className={styles.searchBox} role="search" onSubmit={e => e.preventDefault()}><SearchIcon /><input ref={search} type="search" autoComplete="off" maxLength={80} value={query} onChange={e => { setQuery(e.target.value); setPicks(false); }} placeholder={m.searchPh} aria-label={m.search} />{query ? <button type="button" aria-label={m.clearSearch} onClick={() => { setQuery(''); search.current?.focus(); }}><CloseIcon /></button> : <kbd aria-hidden="true">/</kbd>}</form>{heroItem ? null : <div className={styles.suggestionSlot}>{suggestion}</div>}</div></div>
-      <div className={styles.categoryWrap}><nav ref={categoryNav} className={styles.rail} aria-label={m.menuLabel} data-sf-module="categories">{categories.map(category => <button className={`${styles.chip} ${category.id === activeCategory && !query && !picks ? styles.chipActive : ''}`} type="button" key={category.id} aria-current={category.id === activeCategory && !query && !picks ? 'true' : undefined} onClick={() => switchCategory(category.id)}><CategoryIcon path={category.iconPath} image={category.image} /><span dir="auto">{category.name}</span><small dir="ltr">{String(items.filter(i => i.categoryId === category.id).length).padStart(2, '0')}</small></button>)}{items.some(item => item.featured && !item.soldOut) ? <button type="button" className={`${styles.chip} ${styles.picksChip} ${picks && !query ? styles.chipActive : ''}`} aria-current={picks && !query ? 'true' : undefined} onClick={() => { setPicks(true); setQuery(''); }}>{m.chefPicks}</button> : null}</nav></div>
+      <div className={styles.menuHeading}>{showIntro ? <div className={styles.menuIntro}><p className={styles.eyebrow}>{m.menuEyebrow}<span>{m.menuCaption}</span></p><h2><MenuTitle text={m.menuHeading} locale={locale} /></h2></div> : null}<div className={styles.searchControls}><form className={styles.searchBox} role="search" onSubmit={e => e.preventDefault()}><SearchIcon /><input ref={search} type="search" autoComplete="off" maxLength={80} value={query} onChange={e => { setQuery(e.target.value); setPicks(false); }} placeholder={m.searchPh} aria-label={m.search} />{query ? <button type="button" aria-label={m.clearSearch} onClick={() => { setQuery(''); search.current?.focus(); }}><CloseIcon /></button> : <kbd aria-hidden="true">/</kbd>}</form>{heroItem ? null : <div className={styles.suggestionSlot}>{suggestion}</div>}</div></div>
+      <div className={brand.categoryWrap}><nav ref={categoryNav} className={brand.rail} aria-label={m.menuLabel} data-sf-module="categories">{categories.map(category => <button className={`${brand.chip} ${category.id === activeCategory && !query && !picks ? brand.chipActive : ''}`} type="button" key={category.id} aria-current={category.id === activeCategory && !query && !picks ? 'true' : undefined} onClick={() => switchCategory(category.id)}><CategoryIcon path={category.iconPath} image={null} /><span dir="auto">{category.name}</span><small dir="ltr">{String(items.filter(i => i.categoryId === category.id).length).padStart(2, '0')}</small></button>)}{items.some(item => item.featured && !item.soldOut) ? <button type="button" className={`${brand.chip} ${picks && !query ? brand.chipActive : ''}`} aria-current={picks && !query ? 'true' : undefined} onClick={() => { setPicks(true); setQuery(''); }}>{m.chefPicks}</button> : null}</nav></div>
       {query.trim() || picks ? <section className={styles.section} data-sf-module="sections" aria-label={query.trim() ? m.search : m.chefPicks}><div className={styles.sectionHead}><h3>{picks ? m.chefPicks : m.search}</h3><span role="status">{shown.length === 1 ? m.item : fill(m.items, {n:String(shown.length)})}</span></div>{shown.length ? <ProductCarousel key={picks ? 'picks' : 'search'} items={shown} m={m} locale={locale} label={query.trim() ? m.search : m.chefPicks} /> : <div className={styles.empty} role="status"><SearchIcon /><h3>{query.trim() ? <NoResultsTitle template={m.noResults} query={query.trim()} /> : m.emptyMenu}</h3><p>{m.tryOther}</p><button className={styles.promoCta} type="button" onClick={() => { setQuery(''); setPicks(false); }}>{m.browseMenu}</button></div>}</section> : null}
       <div hidden={Boolean(query.trim()) || picks} className={styles.menuSections}>{categories.map(category => <MenuSection key={category.id} category={category} items={items.filter(item => item.categoryId === category.id)} cardMode={cardMode} m={m} locale={locale} />)}</div>
     </section>}

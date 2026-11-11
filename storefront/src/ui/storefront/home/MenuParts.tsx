@@ -35,7 +35,7 @@ export function PopularSection({ items, m }: { items: readonly MenuItem[]; m: St
 }
 export function MenuSection({ category, items, m, locale }: { category: Category; items: readonly MenuItem[]; cardMode: CardMode; m: StorefrontMessages; locale: Locale }) {
   return <section className={styles.section} id={`sf-cat-${category.id}`} aria-labelledby={`sf-cat-title-${category.id}`} data-sf-module="sections">
-    <div className={styles.sectionHead}><h3 id={`sf-cat-title-${category.id}`} tabIndex={-1}><TenantText>{category.heading ?? category.name}</TenantText></h3>{category.blurb ? <p className={styles.sectionBlurb}><TenantText>{category.blurb}</TenantText></p> : null}</div>
+    <div className={styles.sectionHead}><h3 id={`sf-cat-title-${category.id}`} tabIndex={-1}><span className={styles.categoryTitle}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={category.iconPath} /></svg><TenantText>{category.heading ?? category.name}</TenantText></span></h3>{category.blurb ? <p className={styles.sectionBlurb}><TenantText>{category.blurb}</TenantText></p> : null}</div>
     {items.length ? <ProductCarousel items={items} m={m} locale={locale} label={category.name} /> : <p className={styles.sectionBlurb}>{m.emptyMenu}</p>}
   </section>;
 }

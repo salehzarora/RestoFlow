@@ -166,10 +166,10 @@ export function ProductCarousel({ items, m, locale, label }: {
       })}
       {items.length > 1 ? <div className={styles.controls}>
         <button className={styles.previous} type="button" aria-label={copy.previous} onClick={() => move(-1)} data-sf-carousel-prev="">
-          <svg viewBox="0 0 76 42" aria-hidden="true"><path d="M6 5C1 22 23 32 65 34M56 27l10 7-12 4" /></svg>
+          <svg viewBox="0 0 76 42" aria-hidden="true"><path d="m43 10-15 11 15 11" /></svg>
         </button>
         <button className={styles.next} type="button" aria-label={copy.next} onClick={() => move(1)} data-sf-carousel-next="">
-          <svg viewBox="0 0 76 42" aria-hidden="true"><path d="M6 5C1 22 23 32 65 34M56 27l10 7-12 4" /></svg>
+          <svg viewBox="0 0 76 42" aria-hidden="true"><path d="m43 10-15 11 15 11" /></svg>
         </button>
       </div> : null}
     </div>
@@ -182,6 +182,7 @@ export function ProductCarousel({ items, m, locale, label }: {
       <button type="button" className={styles.add} data-sf-item={current.id} disabled={current.soldOut}
         aria-label={`${m.addShort}: ${current.name}`}><PlusIcon /></button>
     </div>
+    {current.description ? <p className={styles.description}><TenantText>{current.description}</TenantText></p> : null}
     {items.length > 1 ? <p className={styles.hint}>{copy.swipe}<span dir="ltr">{String(active + 1).padStart(2, '0')} / {String(items.length).padStart(2, '0')}</span></p> : null}
   </div>;
 }

@@ -3,6 +3,7 @@ import { dirOf, type Locale } from '@/i18n/locales';
 import { storefrontMessages } from '@/i18n/storefront';
 import { buildSiteTheme, siteThemeClass } from '@/theme/buildSiteTheme';
 import { MenuBackdrop } from './MenuBackdrop';
+import { buildMenuBrand } from '@/theme/buildMenuBrand';
 import { menuBackground } from './menuBackground';
 import { cartPath, checkoutPath } from '@/routes/routes';
 import type { StorefrontResolution } from '@/source/types';
@@ -24,7 +25,7 @@ export function Home({ resolution, locale, slug, hrefFor }: {
   const { view, groups, zones, taxRateBp, menuVersion } = resolution;
   const { tenant, modules, categories, items, cardMode } = view;
   const m = storefrontMessages(locale);
-  const tokens = buildSiteTheme(tenant);
+  const tokens = buildMenuBrand(tenant, buildSiteTheme(tenant));
   const background = menuBackground(tenant, tenant.scenePreset);
   return (
     <ThemeScope tokens={tokens} menuImageDim={background.dim} scenePreset={tenant.scenePreset} className={`${shell.root} ${appearance[siteThemeClass(tenant.siteTheme)]} ${MOTION_CLASS[view.motion]}`} dir={dirOf(locale)}>

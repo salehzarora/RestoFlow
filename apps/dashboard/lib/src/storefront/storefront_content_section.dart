@@ -16,6 +16,7 @@ import 'storefront_sources.dart';
 import 'storefront_scene_preset_dialog.dart';
 import 'storefront_settings_group.dart';
 import 'storefront_site_theme_preview.dart';
+import 'storefront_menu_banner_editor.dart';
 
 /// A read acknowledgment from the actual parent editor. A completed Future is
 /// not evidence that the profile and its media were both refreshed.
@@ -108,6 +109,7 @@ class _ContentState extends State<StorefrontContentSection> {
     String requestId,
     String branchId,
     bool background,
+    bool banner,
   })?
   _pendingPublish;
   ({
@@ -115,6 +117,7 @@ class _ContentState extends State<StorefrontContentSection> {
     String requestId,
     String branchId,
     String? backgroundMediaId,
+    String? bannerMediaId,
   })?
   _confirmedPublish;
   String c(String key) =>
@@ -328,6 +331,8 @@ class _ContentState extends State<StorefrontContentSection> {
     final refresh = widget.onRefresh;
     final published = _confirmedPublish != null;
     final backgroundMediaId = _confirmedPublish?.backgroundMediaId;
+    final bannerMediaId = _confirmedPublish?.bannerMediaId;
+    final selectedMediaId = backgroundMediaId ?? bannerMediaId;
     final publishedSource = _confirmedPublish?.source;
     _ownsRefresh = true;
     StorefrontContentRefresh parent;
@@ -353,10 +358,10 @@ class _ContentState extends State<StorefrontContentSection> {
         owned: true,
       );
     if (!_current(binding)) return;
-    if (verified && backgroundMediaId != null) {
+    if (verified && selectedMediaId != null) {
       verified = _media!.rows.any(
         (row) =>
-            row.media.id == backgroundMediaId &&
+            row.media.id == selectedMediaId &&
             row.media.isLive &&
             row.media.variant == StorefrontVariant.w960 &&
             row.media.sourceBucket == publishedSource!.bucket &&
@@ -368,11 +373,18 @@ class _ContentState extends State<StorefrontContentSection> {
       _busy = false;
       _stale = !verified;
       if (verified) {
-        if (backgroundMediaId != null) {
+        if (selectedMediaId != null) {
           _draft!['appearance'] ??= <String, dynamic>{
             for (final key in storefrontAppearanceKeys) key: null,
           };
-          _put('appearance.menu_background_media_id', backgroundMediaId);
+          _put(
+            bannerMediaId != null
+                ? 'appearance.menu_banner_media_id'
+                : 'appearance.menu_background_media_id',
+            selectedMediaId,
+          );
+          if (bannerMediaId != null)
+            _put('appearance.menu_banner_enabled', true);
           _notifyDraft(true);
           // Refresh happened before this unsaved selection. Rebuild the picker
           // with its new initial value without changing any saved profile slot.
@@ -1529,7 +1541,7 @@ class _ContentState extends State<StorefrontContentSection> {
     // image. The existing base and whole-document CAS remain usable.
   }
 
-  Future<void> _uploadMenuBackground() async {
+  Future<void> _uploadMenuBackground({bool banner = false}) async {
     final upload = widget.backgroundUpload;
     if (!_editable || _dirty || upload == null || widget.publisher == null)
       return;
@@ -1546,12 +1558,14 @@ class _ContentState extends State<StorefrontContentSection> {
     if (!_current(binding)) return;
     _uploadingBackground = false;
     _setBusy(false);
-    if (source != null) await _publish(uploadedBackground: source);
+    if (source != null)
+      await _publish(uploadedBackground: source, bannerUpload: banner);
   }
 
   Future<void> _publish({
     bool replay = false,
     StorefrontMediaSource? uploadedBackground,
+    bool bannerUpload = false,
   }) async {
     if (!mounted ||
         _busy ||
@@ -1565,6 +1579,7 @@ class _ContentState extends State<StorefrontContentSection> {
     final branch = widget.savedBranchId;
     final background =
         uploadedBackground != null || (replay && _pendingPublish!.background);
+    final banner = replay ? _pendingPublish!.banner : bannerUpload;
     if (publisher == null) return;
     final initial = _sources(
       widget.sources,
@@ -1610,6 +1625,7 @@ class _ContentState extends State<StorefrontContentSection> {
       requestId: requestId,
       branchId: branch,
       background: background,
+      banner: banner,
     );
     try {
       result = await publisher.publish(
@@ -1637,7 +1653,7 @@ class _ContentState extends State<StorefrontContentSection> {
       return;
     }
     if (result.isPublished) {
-      if (background && widget.backgroundPublisher != null) {
+      if (background && !banner && widget.backgroundPublisher != null) {
         final media = result.media!;
         await _prepareBackgroundQuality(
           mediaId: media.id,
@@ -1654,7 +1670,8 @@ class _ContentState extends State<StorefrontContentSection> {
         source: source,
         requestId: requestId,
         branchId: branch,
-        backgroundMediaId: background ? result.media!.id : null,
+        backgroundMediaId: background && !banner ? result.media!.id : null,
+        bannerMediaId: banner ? result.media!.id : null,
       );
       await _refreshConfirmed(binding);
     } else if (result.status == StorefrontPublishStatus.uncertain) {
@@ -1664,6 +1681,7 @@ class _ContentState extends State<StorefrontContentSection> {
           requestId: requestId,
           branchId: branch,
           background: background,
+          banner: banner,
         );
         _busy = false;
         _message = 'publishUncertain';
@@ -1863,6 +1881,24 @@ class _ContentState extends State<StorefrontContentSection> {
                 ),
                 _appearanceFont(),
               ],
+            ),
+          ),
+          StorefrontSettingsGroup(
+            key: const Key('content-group-menu-banner'),
+            title: c('menuBannerTitle'),
+            child: StorefrontMenuBannerEditor(
+              appearance: _draft?['appearance'] as Map?,
+              media: _media?.rows ?? const [],
+              editable: _editable,
+              onChanged: _changeAppearance,
+              publicUrlFor: widget.publicUrlFor,
+              onUpload:
+                  _editable &&
+                      !_dirty &&
+                      widget.backgroundUpload?.supported == true &&
+                      widget.publisher != null
+                  ? () => _uploadMenuBackground(banner: true)
+                  : null,
             ),
           ),
           StorefrontSettingsGroup(

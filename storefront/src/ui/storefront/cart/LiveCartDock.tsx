@@ -26,14 +26,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cartNavigationHref } from '@/routes/cart-navigation';
-import { productImageClass } from '../contentPresentation';
-import contentStyles from '../storefront.module.css';
 import { useEffect, useRef, useState } from 'react';
 import { fill, type StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
 import type { CartSummary } from '@/cart/cartModel';
 import type { MotionMode, ServiceState } from '@/source/types';
-import { ChevronIcon } from '../icons';
+import { TrolleyIcon } from '../icons';
 import { orderingBlocker, orderingReason } from '../checkout/eligibility';
 import styles from '../home/home.module.css';
 
@@ -82,71 +80,14 @@ export function LiveCartDock({
   // The ONE shared reason (eligibility.ts): browse-only first, then closed / paused.
   const reason = orderingReason(orderingBlocker(state, orderingEnabled), m, opensAt);
 
-  return (
-    <div className={styles.dock} data-sf-dock="live">
-      {motion === 'calm' ? null : <span className={styles.dockHalo} aria-hidden="true" />}
-
-      <div className={`${styles.dockThumbs} ${styles.dockRelative}`}>
-        {summary.lines.slice(0, 3).map((line) =>
-          line.item.image === null ? (
-            <span
-              className={`${styles.dockThumb} ${styles.dockThumbNone}`}
-              key={line.line.lineId}
-              aria-hidden="true"
-            >
-              {line.item.name.trim().slice(0, 1)}
-            </span>
-          ) : (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              className={`${styles.dockThumb} ${productImageClass(line.item, contentStyles.wholeImage)}`}
-              key={line.line.lineId}
-              src={line.item.image}
-              alt=""
-              width={80}
-              height={80}
-              loading="lazy"
-              decoding="async"
-            />
-          ),
-        )}
-        <span
-          className={`${styles.dockCount} ${bump ? styles.dockBump : ''}`}
-          aria-hidden="true"
-        >
-          {count}
-        </span>
-      </div>
-
-      <span className={styles.dockText}>
-        <span className={styles.dockItems}>{countLabel(count, m)}</span>
-        {/* SUBTOTAL, not total - DESIGN_HANDOFF.md:76. */}
-        <span className={`${styles.dockTotal} ${styles.ltr}`} dir="ltr">
-          {formatMoney(summary.subtotalMinor)}
-        </span>
-      </span>
-
-      {reason === null ? (
-        <Link
-          className={styles.dockCta}
-          href={cartHref}
-          /* A static export serves no per-segment RSC payload, so Next's
-             viewport prefetch would 404 on every render of this dock. */
-          prefetch={false}
-          data-sf-dock-cta="cart"
-        >
-          {m.viewCart}
-          <ChevronIcon />
-        </Link>
-      ) : (
-        <span
-          className={`${styles.dockCta} ${styles.dockDisabled}`}
-          role="status"
-          data-sf-dock-cta="blocked"
-        >
-          {reason}
-        </span>
-      )}
-    </div>
-  );
+  const contents = <>
+    <span className={styles.dockText}>
+      <span className={`${styles.dockItems} ${bump && motion !== 'calm' ? styles.dockBump : ''}`}>{countLabel(count, m)}</span>
+      <span className={`${styles.dockTotal} ${styles.ltr}`} dir="ltr">{formatMoney(summary.subtotalMinor)}</span>
+    </span>
+    <span className={`${styles.dockCta} ${reason ? styles.dockDisabled : ''}`} data-sf-dock-cta={reason ? 'blocked' : 'cart'}><TrolleyIcon />{reason ?? m.viewCart}</span>
+  </>;
+  // One native link owns the whole bar; no nested controls or new cart action.
+  return reason === null ? <Link className={styles.dock} data-sf-dock="live" href={cartHref} prefetch={false}>{contents}</Link>
+    : <div className={styles.dock} data-sf-dock="live" role="status">{contents}</div>;
 }
