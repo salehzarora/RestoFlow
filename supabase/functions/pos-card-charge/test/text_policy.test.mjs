@@ -132,6 +132,7 @@ test("the Unicode self-check: the module's own pairs, a failing normalize, and a
   assert.equal(RUNTIME_UNICODE_OK, true);
   // An older runtime, simulated in a child process: String.prototype.normalize leaves Cyrillic Extended-D unmapped.
   const script = [
+    "(async () => {",
     "const original = String.prototype.normalize;",
     "String.prototype.normalize = function (form) {",
     "  const value = String(this);",
@@ -145,6 +146,7 @@ test("the Unicode self-check: the module's own pairs, a failing normalize, and a
     "  approval: policy.safeTextFailure('A1', 'approval_type'), none: policy.safeTextFailure(null, 'reason'),",
     "  status: out.status, body: out.body, rpc: w.calls.rpc.length, provider: w.calls.provider.length,",
     "  blocked: fixtures.blocked.length, stray: fixtures.stray.length }));",
+    "})().catch((error) => { console.error(error); process.exitCode = 1; });",
   ].join("\n");
   const output = execFileSync(process.execPath, ["--input-type=module", "-e", script], { encoding: "utf8" });
   assert.deepEqual(JSON.parse(output), { flag: false, reason: "charset", approval: "charset", none: null, status: 503,
