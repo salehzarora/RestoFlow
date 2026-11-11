@@ -148,7 +148,7 @@ test("the Unicode self-check: the module's own pairs, a failing normalize, and a
     "  blocked: fixtures.blocked.length, stray: fixtures.stray.length }));",
     "})().catch((error) => { console.error(error); process.exitCode = 1; });",
   ].join("\n");
-  const output = execFileSync(process.execPath, ["--input-type=module", "-e", script], { encoding: "utf8" });
+  const output = execFileSync(process.execPath, ["--input-type=module", "-"], { input: script, encoding: "utf8" });
   assert.deepEqual(JSON.parse(output), { flag: false, reason: "charset", approval: "charset", none: null, status: 503,
     body: { ok: false, error: "provider_unavailable" }, rpc: 0, provider: 0, blocked: 0, stray: 0 },
     "a failed self-check refuses every value: the configuration references fail, so start makes no call");
