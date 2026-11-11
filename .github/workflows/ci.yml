@@ -287,6 +287,12 @@ jobs:
       - name: Tests — POS committed decisions and terminal wake (Node, synthetic RPC)
         run: node --test supabase/functions/pos-web-order-decision/test/*.test.mjs
 
+      # BIZBOT-PAYMENTS-ZCREDIT-PILOT-001E: the card-present Edge adapter against a scripted
+      # fake provider and a scripted fake PostgREST. Synthetic data only; the suite refuses
+      # any real network connection; no provider, database, secret or deployment.
+      - name: Tests — card-present Edge adapter (Node, fake provider + fake RPC)
+        run: node --test supabase/functions/pos-card-charge/test/*.test.mjs
+
       # Isolated scheduler boundary: fake HTTPS only, no credentials or deploy.
       - name: Tests — Vercel POS alert scheduler (Node, synthetic transport)
         run: node --test services/pos-alert-cron/test/*.test.mjs
