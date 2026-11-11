@@ -18,6 +18,12 @@ export interface WireAppearance {
   readonly scene_preset?:'reference_dark'|null;
   /** Only the explicitly versioned v8 decoder accepts this key. */
   readonly site_theme?:SiteTheme|null;
+  /** v9 only. The five independent menu-banner presentation fields. */
+  readonly menu_banner_url?:string|null;
+  readonly menu_banner_enabled?:boolean|null;
+  readonly menu_intro_visible?:boolean|null;
+  readonly menu_banner_focal_x?:number|null;
+  readonly menu_banner_focal_y?:number|null;
 }
 export interface WireContentV1 {
   readonly schema:1;
@@ -166,6 +172,46 @@ export function decodeStorefrontMenuV8(raw: unknown): StorefrontMenuV8Envelope {
   const decoded = decodeStorefrontMenuV7({ ...envelope, content_v1: { ...document, appearance: legacyAppearance } });
   if (!decoded.ok || decoded.content_v1.appearance === undefined) return reject('appearance.site_theme');
   return { ...decoded, content_v1: { ...decoded.content_v1, appearance: { ...decoded.content_v1.appearance, site_theme } } };
+}
+
+
+export type StorefrontMenuV9Ok = StorefrontMenuV8Ok;
+export type StorefrontMenuV9Envelope = StorefrontMenuV9Ok | StorefrontMenuFailure;
+const BANNER_FIELDS = ['menu_banner_url', 'menu_banner_enabled', 'menu_intro_visible', 'menu_banner_focal_x', 'menu_banner_focal_y'] as const;
+
+/** v9 negotiates optional independent banner support; v8 remains a strict boundary. */
+export function decodeStorefrontMenuV9(raw: unknown): StorefrontMenuV9Envelope {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return reject('envelope');
+  const envelope = raw as Record<string, unknown>;
+  const content = envelope.content_v1;
+  if (typeof content !== 'object' || content === null || Array.isArray(content)) return decodeStorefrontMenuV8(raw);
+  const document = content as Record<string, unknown>;
+  const appearance = document.appearance;
+  if (typeof appearance !== 'object' || appearance === null || Array.isArray(appearance)) return decodeStorefrontMenuV8(raw);
+  const fields = appearance as Record<string, unknown>;
+  if (!BANNER_FIELDS.some(key => Object.hasOwn(fields, key))) return decodeStorefrontMenuV8(raw);
+  const legacyAppearance = { ...fields };
+  const banner: { -readonly [K in keyof WireAppearance]?: WireAppearance[K] } = {};
+  for (const key of BANNER_FIELDS) {
+    if (!Object.hasOwn(fields, key)) continue;
+    const value = fields[key];
+    delete legacyAppearance[key];
+    if (key === 'menu_banner_url') banner[key] = image(value, `appearance.${key}`, true);
+    else if (key === 'menu_banner_enabled' || key === 'menu_intro_visible') {
+      if (value !== null && typeof value !== 'boolean') return reject(`appearance.${key}`);
+      banner[key] = value;
+    } else {
+      if (value === null) banner[key] = null;
+      else {
+        const point = integer(value, `appearance.${key}`);
+        if (point < 0 || point > 100) return reject(`appearance.${key}`);
+        banner[key] = point;
+      }
+    }
+  }
+  const decoded = decodeStorefrontMenuV8({ ...envelope, content_v1: { ...document, appearance: legacyAppearance } });
+  if (!decoded.ok || decoded.content_v1.appearance === undefined) return reject('appearance.menu_banner_url');
+  return { ...decoded, content_v1: { ...decoded.content_v1, appearance: { ...decoded.content_v1.appearance, ...banner } } };
 }
 
 function decodeContent(raw:unknown,allowAppearance:boolean,allowScene=false):StorefrontMenuV5Envelope{

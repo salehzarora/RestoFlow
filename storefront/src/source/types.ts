@@ -113,6 +113,8 @@ export interface Tenant {
   readonly scenePreset?: 'reference_dark' | null;
   /** Versioned merchant choice, separate from legacy visual_preset and scene selection. */
   readonly siteTheme?: SiteTheme | null;
+  /** Independent menu banner; absent preserves existing merchants. Published derivative only. */
+  readonly menuBanner?: { readonly image: string | null; readonly enabled: boolean; readonly showIntro: boolean; readonly focalX: number; readonly focalY: number };
   readonly currency: 'ILS';
 }
 

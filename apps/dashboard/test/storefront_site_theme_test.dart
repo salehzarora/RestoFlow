@@ -72,7 +72,7 @@ void main() {
   );
 
   test(
-    'site mode is negotiated through v4 and saves on unchanged branch CAS transport',
+    'site mode is negotiated through v5 and saves on unchanged branch CAS transport',
     () async {
       const org = '11111111-1111-4111-8111-111111111111';
       const restaurant = '22222222-2222-4222-8222-222222222222';
@@ -113,7 +113,7 @@ void main() {
       expect(read.isOk, isTrue);
       expect(
         transport.calls.single.function,
-        'get_restaurant_storefront_content_v4',
+        'get_restaurant_storefront_content_v5',
       );
       final attempt = repo.prepareContent(
         expectedVersion: read.snapshot!.version,
@@ -198,7 +198,7 @@ void main() {
       expect(contentFieldPath('appearance.site_theme'), isTrue);
       expect(
         SupabaseStorefrontContentRepository.readFunction,
-        'get_restaurant_storefront_content_v4',
+        'get_restaurant_storefront_content_v5',
       );
       expect(
         SupabaseStorefrontContentRepository.writeFunction,

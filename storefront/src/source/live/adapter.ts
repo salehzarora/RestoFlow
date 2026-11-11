@@ -121,6 +121,15 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
     ...(content?.appearance?.menu_background_dim === undefined ? {} : { menuBackgroundDim: content.appearance.menu_background_dim }),
     ...(content?.appearance?.scene_preset === undefined ? {} : { scenePreset: content.appearance.scene_preset }),
     ...(content?.appearance?.site_theme === undefined ? {} : { siteTheme: content.appearance.site_theme }),
+    ...(content?.appearance && ['menu_banner_url', 'menu_banner_enabled', 'menu_intro_visible', 'menu_banner_focal_x', 'menu_banner_focal_y'].some(key => Object.hasOwn(content.appearance!, key)) ? {
+      menuBanner: {
+        image: mediaUrl(content.appearance.menu_banner_url ?? null, origin),
+        enabled: content.appearance.menu_banner_enabled ?? false,
+        showIntro: content.appearance.menu_intro_visible ?? true,
+        focalX: content.appearance.menu_banner_focal_x ?? 50,
+        focalY: content.appearance.menu_banner_focal_y ?? 50,
+      },
+    } : {}),
     currency: 'ILS',
   };
 
