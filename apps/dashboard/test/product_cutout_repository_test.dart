@@ -156,6 +156,115 @@ class _Harness {
 }
 
 void main() {
+  group('independent Original detail publication', () {
+    const cutout = '66666666-6666-4666-8666-666666666666';
+    Map<String, dynamic> proof() => {
+      ..._read(),
+      'selected_derivative_id': cutout,
+    };
+    Future<ProductCutoutPublishResult> prepare(_Harness h) =>
+        h.repo.prepareDetailOriginal(
+          item: _item,
+          original: _original(),
+          requestId: _request,
+        );
+
+    test(
+      'publishes only current Original w960 without upload or selection',
+      () async {
+        final h = _Harness()..responses[_readRpc] = [proof(), proof()];
+        expect((await prepare(h)).status, ProductCutoutPublishStatus.published);
+        expect(h.uploads, isEmpty);
+        expect(h.rpcCalls(_selectRpc), isEmpty);
+        expect(h.bodies.single['variant'], 'w960');
+        expect(h.bodies.single['source_key'], _key);
+        final registered = h.rpcCalls(_registerRpc).single;
+        expect(registered['p_treatment'], 'original');
+        expect(registered['p_candidate_key'], _key);
+        expect(registered['p_expected_selection_version'], 7);
+        expect(h.events, [_readRpc, _registerRpc, 'publish:w960', _readRpc]);
+      },
+    );
+    test(
+      'lost transport answer retries the exact request and keeps the selected cutout',
+      () async {
+        final h = _Harness()..responses[_readRpc] = [proof(), proof()];
+        var n = 0;
+        h.publication = (body) async => n++ == 0
+            ? const StorefrontFunctionReply.transportFailure()
+            : _published(body);
+        expect((await prepare(h)).status, ProductCutoutPublishStatus.published);
+        expect(h.bodies, hasLength(2));
+        expect(h.bodies[0], h.bodies[1]);
+        expect(h.rpcCalls(_selectRpc), isEmpty);
+      },
+    );
+    for (final change in [
+      {'selection_version': 8},
+      {'source_key': 'changed.png'},
+      {
+        'source_snapshot': {'version': 'new'},
+      },
+      {'selected_derivative_id': _derivative},
+    ]) {
+      test('never restores a concurrent $change after publication', () async {
+        final h = _Harness()
+          ..responses[_readRpc] = [
+            proof(),
+            {...proof(), ...change},
+          ];
+        expect(
+          (await prepare(h)).status,
+          ProductCutoutPublishStatus.staleSource,
+        );
+        expect(h.rpcCalls(_selectRpc), isEmpty);
+        expect(h.uploads, isEmpty);
+      });
+    }
+    test(
+      'malformed or unavailable proof is uncertain, not a successful selection comparison',
+      () async {
+        for (final after in [
+          {'ok': false},
+          {...proof()}..remove('selected_derivative_id'),
+          {...proof(), 'selection_version': '7'},
+        ]) {
+          final h = _Harness()..responses[_readRpc] = [proof(), after];
+          expect(
+            (await prepare(h)).status,
+            ProductCutoutPublishStatus.uncertain,
+          );
+          expect(h.rpcCalls(_selectRpc), isEmpty);
+        }
+      },
+    );
+    test(
+      'stale original refuses publication and denied registration never invokes publisher',
+      () async {
+        final stale = _Harness()
+          ..responses[_readRpc] = [
+            {...proof(), 'selection_version': 8},
+          ];
+        expect(
+          (await prepare(stale)).status,
+          ProductCutoutPublishStatus.staleSource,
+        );
+        expect(stale.bodies, isEmpty);
+        expect(stale.rpcCalls(_registerRpc), isEmpty);
+        final denied = _Harness()
+          ..responses[_registerRpc] = [
+            {'ok': false, 'error': 'permission_denied'},
+          ];
+        expect(
+          (await prepare(denied)).status,
+          ProductCutoutPublishStatus.denied,
+        );
+        expect(denied.bodies, isEmpty);
+        expect(denied.rpcCalls(_selectRpc), isEmpty);
+      },
+    );
+  });
+
   group('private original generation', () {
     test(
       'reads around download and captures authoritative selection version',

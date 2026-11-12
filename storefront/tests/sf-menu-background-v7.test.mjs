@@ -98,6 +98,8 @@ test('after exact missing v8, the live source retries only missing v7 and decode
   const attempts = [];
   const responses = (...entries) => {
     entries.unshift([404, { code: 'PGRST202', message: 'Could not find the function public.storefront_menu_v8(p_slug) in the schema cache' }]);
+    entries.unshift([404, { code: 'PGRST202', message: 'Could not find the function public.storefront_menu_v9(p_slug) in the schema cache' }]);
+    entries.unshift([404, { code: 'PGRST202', message: 'Could not find the function public.storefront_menu_v10(p_slug) in the schema cache' }]);
     attempts.length = 0;
     globalThis.fetch = async (url, init) => {
       attempts.push({ url, init });
@@ -108,10 +110,10 @@ test('after exact missing v8, the live source retries only missing v7 and decode
   const read = () => source.getStorefront('sf-synth-a');
   try {
     responses([200, raw]); assert.equal((await read()).view.tenant.menuBackgroundVariants.length, 2);
-    assert.equal(attempts.length, 2);
+    assert.equal(attempts.length, 4);
     for (const error of [pgrst, pg]) {
       responses([404, error], [200, v6]); assert.equal((await read()).view.tenant.menuBackgroundVariants, undefined);
-      assert.deepEqual(attempts.map(a => a.url), [8, 7, 6].map(version => config.url + '/rest/v1/rpc/storefront_menu_v' + version));
+      assert.deepEqual(attempts.map(a => a.url), [10, 9, 8, 7, 6].map(version => config.url + '/rest/v1/rpc/storefront_menu_v' + version));
       assert.equal(attempts[0].init, attempts[1].init, 'one deadline, slug and public auth');
     }
     for (const [status, body] of [
@@ -120,9 +122,9 @@ test('after exact missing v8, the live source retries only missing v7 and decode
       [404, { ...pg, message:'function app.internal_helper(text) does not exist' }],
       [200, { ...raw, extra:true }],
     ]) {
-      responses([status, body]); await assert.rejects(read); assert.equal(attempts.length, 2);
+      responses([status, body]); await assert.rejects(read); assert.equal(attempts.length, 4);
     }
-    responses([404, pgrst], [200, raw]); await assert.rejects(read, EnvelopeError); assert.equal(attempts.length, 3);
-    responses([404, pgrst], [500, {}]); await assert.rejects(read, /HTTP 500/); assert.equal(attempts.length, 3);
+    responses([404, pgrst], [200, raw]); await assert.rejects(read, EnvelopeError); assert.equal(attempts.length, 5);
+    responses([404, pgrst], [500, {}]); await assert.rejects(read, /HTTP 500/); assert.equal(attempts.length, 5);
   } finally { globalThis.fetch = original; }
 });

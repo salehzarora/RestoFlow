@@ -163,12 +163,20 @@ export const followupMigrations = Object.freeze([
 export const siteThemeSuccessor = Object.freeze({ label: 'site theme',
   name: '20261110150043_bizbot_storefront_site_theme_001.sql',
   sha256: '98195ffeece9ca1058409537b691db17ccde013a55c67964c18dcc95e86b3e72' });
+export const menuBannerSuccessor = Object.freeze({ label: 'menu banner',
+  name: '20261111170713_bizbot_storefront_menu_banner_001.sql',
+  sha256: '6661d0b97a12bbcf181d0bf12d43a64995d2def1bf5b11348a7b55795d2446b3' });
+export const detailOriginalSuccessor = Object.freeze({ label: 'product detail original',
+  name: '20261112011934_bizbot_storefront_product_detail_original_001.sql',
+  sha256: 'c92d70304045a171de8660b8eaefc27f8df2072e6f213e0a28bfda49a1af3c73' });
 export const excludedSuccessors = Object.freeze([
   Object.freeze({ label: 'POS duty', name: '20261108085442_bizbot_pos_long_shift_alerts_001.sql',
     sha256: '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865' }),
   Object.freeze({ label: 'G1', name: '20261109143313_bizbot_zcredit_001e_drop_evidence_001.sql',
     sha256: '1ac9a99048c0755a982d197099a7aed27d802a67ea02b38254b79453b92bad95' }),
   siteThemeSuccessor,
+  menuBannerSuccessor,
+  detailOriginalSuccessor,
 ]);
 
 export const targetFunctions = [
@@ -288,4 +296,18 @@ export function siteThemeReleaseSources(sources) {
   const visual = visualReleaseSources(sources);
   const bytes = new Map(sources);
   return [...visual, [siteThemeSuccessor.name, bytes.get(siteThemeSuccessor.name)]];
+}
+
+// PROPOSED UX003 extension — subject to a NEW scoped coordination ACK.
+// Each builder validates the whole exact directory, then adds one named file.
+// Existing historical and site-theme plans retain their exact contents/sizes.
+export function menuBannerReleaseSources(sources) {
+  const theme = siteThemeReleaseSources(sources);
+  const bytes = new Map(sources);
+  return [...theme, [menuBannerSuccessor.name, bytes.get(menuBannerSuccessor.name)]];
+}
+export function detailOriginalReleaseSources(sources) {
+  const banner = menuBannerReleaseSources(sources);
+  const bytes = new Map(sources);
+  return [...banner, [detailOriginalSuccessor.name, bytes.get(detailOriginalSuccessor.name)]];
 }

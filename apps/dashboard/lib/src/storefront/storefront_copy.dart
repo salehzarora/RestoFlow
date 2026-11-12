@@ -4,6 +4,50 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 /// untouched. Keys are internal constants, never server-provided text.
 String storefrontContentCopy(AppLocalizations l10n, String key) {
   const copy = <String, List<String>>{
+    'menuBannerTitle': [
+      'Menu top banner',
+      'بانر المنيو العلوي',
+      'באנר עליון בתפריט',
+    ],
+    'menuBannerHelp': [
+      'Independent of the welcome image and continuous menu background. These controls edit the content draft; Save content publishes the selection.',
+      'مستقل عن صورة الترحيب وخلفية المنيو المستمرة. هذه الخيارات تعدّل المسودة؛ حفظ المحتوى يحفظ الاختيار.',
+      'נפרד מתמונת הפתיחה ומרקע התפריט הרציף. הבקרות עורכות טיוטת תוכן; שמירת תוכן שומרת את הבחירה.',
+    ],
+    'menuBannerEnabled': ['Show banner', 'إظهار البانر', 'הצגת באנר'],
+    'menuIntroVisible': [
+      'Show the opening heading and introduction',
+      'إظهار عنوان البداية والنص التمهيدي',
+      'הצגת כותרת וטקסט הפתיחה',
+    ],
+    'menuBannerImage': ['Banner image', 'صورة البانر', 'תמונת הבאנר'],
+    'menuBannerNone': ['No banner image', 'دون صورة بانر', 'ללא תמונת באנר'],
+    'menuBannerUpload': [
+      'Upload a new banner',
+      'رفع بانر جديد',
+      'העלאת באנר חדש',
+    ],
+    'menuBannerClear': [
+      'Clear banner selection',
+      'مسح اختيار البانر',
+      'ניקוי בחירת הבאנר',
+    ],
+    'menuBannerFocusX': [
+      'Horizontal focal position',
+      'موضع التركيز الأفقي',
+      'מיקום מוקד אופקי',
+    ],
+    'menuBannerFocusY': [
+      'Vertical focal position',
+      'موضع التركيز الرأسي',
+      'מיקום מוקד אנכי',
+    ],
+    'menuBannerPreview': [
+      'Non-destructive crop preview — phone / desktop',
+      'معاينة قص غير هدّام — هاتف / سطح المكتب',
+      'תצוגת חיתוך לא הרסנית — טלפון / מחשב',
+    ],
+
     'title': ['Storefront content', 'محتوى واجهة المتجر', 'תוכן חלון הראווה'],
     'help': [
       'Edit the saved branch content. Save is one complete versioned change.',

@@ -15,7 +15,8 @@
  */
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import { fill } from '@/i18n/fill';
+import type { StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney, formatRateBp } from '@/money/format';
 import type { Quote } from '@/money/quote';
 import { ChevronIcon } from '../icons';

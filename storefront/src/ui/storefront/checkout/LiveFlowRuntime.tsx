@@ -9,6 +9,7 @@ export function LiveFlowRuntime(props: FlowProps) {
   if (!props.orderCopy) throw new Error('Live checkout messages are missing');
   return (
     <StorefrontRuntime
+      m={props.m}
       source="live"
       slug={props.slug}
       menuVersion={props.menuVersion}

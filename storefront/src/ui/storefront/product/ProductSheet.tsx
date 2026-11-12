@@ -30,7 +30,8 @@ import contentStyles from '../storefront.module.css';
  * addition this build makes deliberately, recorded in the Phase C report.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import type { StorefrontMessages } from '@/i18n/storefront';
+import { fill } from '@/i18n/fill';
 import { formatMoney } from '@/money/format';
 import { MAX_NOTE, MAX_QTY, MIN_QTY, clampQty, modifierSelectionValid, unitPriceMinor } from '@/money/pricing';
 import { sanitizeText } from '@/theme/sanitize';
@@ -39,6 +40,7 @@ import { AlertIcon, CheckIcon, CloseIcon, MinusIcon, PlusIcon } from '../icons';
 import { TenantText } from '../TenantText';
 import shell from '../storefront.module.css';
 import styles from './product.module.css';
+import { DetailImage } from './DetailImage';
 import { validOrderNotes } from '@/orders/notes';
 
 export interface SheetDraft {
@@ -270,14 +272,9 @@ export function ProductSheet({
         data-sf-sheet="product"
       >
         <div className={`${styles.media} ${productFrameClass(item, contentStyles.wholeFrame)}`}>
-          {item.image === null ? (
-            <span className={styles.mediaNone} aria-hidden="true">
-              {item.name.trim().slice(0, 1)}
-            </span>
-          ) : (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img className={`${styles.mediaImg} ${productImageClass(item, contentStyles.wholeImage)}`} src={item.image} alt="" decoding="async" />
-          )}
+          <DetailImage key={`${item.id}:${item.detailImage?.url ?? ''}:${item.image ?? ''}`} item={item}
+            className={`${styles.mediaImg} ${productImageClass(item, contentStyles.wholeImage)}`}
+            placeholderClassName={styles.mediaNone} />
           {item.imageFit === 'whole-image' ? null : <span className={styles.mediaFade} aria-hidden="true" />}
           <span className={styles.handle} aria-hidden="true" />
           <button className={styles.close} type="button" aria-label={m.close} onClick={onClose}>
@@ -324,7 +321,7 @@ export function ProductSheet({
                   </h3>
                   <span
                     className={`${styles.badge} ${
-                      failed ? styles.badgeBad : group.required ? styles.badgeReq : styles.badgeOpt
+                      failed ? styles.badgeBad : ''
                     }`}
                   >
                     {badgeText(group, m, minimumChoice)}
@@ -358,9 +355,7 @@ export function ProductSheet({
                         onClick={() => toggle(group, option.id)}
                       >
                         <span
-                          className={`${styles.control} ${
-                            group.single ? styles.controlRadio : styles.controlCheck
-                          }`}
+                          className={styles.control}
                           aria-hidden="true"
                         >
                           <CheckIcon />
@@ -379,7 +374,7 @@ export function ProductSheet({
                             {delta}
                           </span>
                         ) : (
-                          <span className={`${styles.delta} ${styles.deltaFree}`}>{delta}</span>
+                          <span className={styles.delta}>{delta}</span>
                         )}
                       </button>
                       {on && group.allowQuantity ? <span className={styles.stepper} data-sf-modifier-quantity={option.id}>
@@ -432,7 +427,7 @@ export function ProductSheet({
               {qty}
             </span>
             <button
-              className={`${styles.step} ${styles.stepPlus}`}
+              className={styles.step}
               type="button"
               aria-label={m.increase}
               data-sf-step="inc"
@@ -452,7 +447,7 @@ export function ProductSheet({
             onClick={submit}
             data-sf-cta="product"
           >
-            <span className={styles.ctaLabel}>{ctaLabel}</span>
+            <span className={styles.wrapText}>{ctaLabel}</span>
             <span className={`${styles.ctaPrice} ${shell.ltr}`} dir="ltr">
               {formatMoney(totalMinor)}
             </span>

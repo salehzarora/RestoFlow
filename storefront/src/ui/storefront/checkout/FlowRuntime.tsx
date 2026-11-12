@@ -8,7 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useRouter } from 'next/navigation';
 import { useCartApi } from '../cart/CartContext';
 import { StorefrontRuntime } from '../StorefrontRuntime';
-import { storefrontMessages } from '@/i18n/storefront';
+import type { StorefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
 import type { OrderMessages } from '@/i18n/orders';
 import { buildQuote, type Quote, type QuoteInput } from '@/money/quote';
@@ -40,6 +40,8 @@ import s from './flow.module.css';
 export type FlowScreenName = 'cart' | 'checkout' | 'payment' | 'review';
 
 export interface FlowProps {
+  /** Public display copy for this route's locale; selected by the server entry. */
+  readonly m: StorefrontMessages;
   readonly orderCopy?: OrderMessages;
   readonly orderEndpointOrigin?: string;
   /**
@@ -68,9 +70,10 @@ export interface FlowProps {
 }
 
 export function FlowRuntime(props: FlowProps) {
-  const m = storefrontMessages(props.locale);
+  const m = props.m;
   return (
     <StorefrontRuntime
+      m={m}
       source={props.source}
       slug={props.slug}
       menuVersion={props.menuVersion}
@@ -91,6 +94,7 @@ export function FlowRuntime(props: FlowProps) {
 
 function FlowBody({
   source: resolutionSource,
+  m,
   locale,
   slug,
   screen,
@@ -106,7 +110,6 @@ function FlowBody({
   gateway,
   onComplete,
 }: FlowProps) {
-  const m = storefrontMessages(locale);
   const router = useRouter();
   const cart = useCartApi();
   const draftApi = useCheckoutDraft();
@@ -435,7 +438,7 @@ function FlowSkeleton({
   screen,
   hrefs,
 }: {
-  m: ReturnType<typeof storefrontMessages>;
+  m: StorefrontMessages;
   screen: FlowScreenName;
   hrefs: Readonly<Record<string, string>>;
 }) {

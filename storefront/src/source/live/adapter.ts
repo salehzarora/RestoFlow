@@ -39,7 +39,7 @@ import { fetchStorefrontMenu, liveConfig, type LiveConfig } from './client';
 import type { StorefrontMenuOk } from './decode';
 import type { StorefrontMenuV2Ok } from './decodeHomeContent';
 import type { StorefrontMenuV3Ok } from './decodeFeaturedItems';
-import type { StorefrontMenuV4Ok, StorefrontMenuV8Ok } from './decodeContentV1';
+import type { StorefrontMenuV4Ok, StorefrontMenuV8Ok, StorefrontMenuV10Ok } from './decodeContentV1';
 import { iconPathFor } from './icons';
 import { liveOrderingEnabled, orderEndpointOrigin } from './ordering';
 
@@ -81,7 +81,7 @@ export function nextOpenParts(iso: string | null, timeZone: string): NextOpenAt 
   }
 }
 
-export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok | StorefrontMenuV4Ok | StorefrontMenuV8Ok, origin: string): StorefrontResolution {
+export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok | StorefrontMenuV4Ok | StorefrontMenuV8Ok | StorefrontMenuV10Ok, origin: string): StorefrontResolution {
   const r = envelope.restaurant;
   const home = 'home_content' in envelope ? envelope.home_content : null;
   const featured = new Set('featured_item_ids' in envelope ? envelope.featured_item_ids : []);
@@ -89,6 +89,7 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
   const categoryPresentation = new Map(content?.category_presentation.map(c => [c.category_id, c]) ?? []);
   const itemPresentation = new Map(content?.item_presentation.map(i => [i.item_id, i]) ?? []);
   const productImages = new Map(('product_images_v1' in envelope ? envelope.product_images_v1 ?? [] : []).map(row => [row.item_id, row]));
+  const originals = new Map(('product_original_images_v1' in envelope ? envelope.product_original_images_v1 ?? [] : []).map(row => [row.item_id, row]));
   const backgroundImages = 'menu_background_images_v1' in envelope ? envelope.menu_background_images_v1 : undefined;
   const tenant: Tenant = {
     slug: r.slug,
@@ -121,6 +122,15 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
     ...(content?.appearance?.menu_background_dim === undefined ? {} : { menuBackgroundDim: content.appearance.menu_background_dim }),
     ...(content?.appearance?.scene_preset === undefined ? {} : { scenePreset: content.appearance.scene_preset }),
     ...(content?.appearance?.site_theme === undefined ? {} : { siteTheme: content.appearance.site_theme }),
+    ...(content?.appearance && ['menu_banner_url', 'menu_banner_enabled', 'menu_intro_visible', 'menu_banner_focal_x', 'menu_banner_focal_y'].some(key => Object.hasOwn(content.appearance!, key)) ? {
+      menuBanner: {
+        image: mediaUrl(content.appearance.menu_banner_url ?? null, origin),
+        enabled: content.appearance.menu_banner_enabled ?? false,
+        showIntro: content.appearance.menu_intro_visible ?? true,
+        focalX: content.appearance.menu_banner_focal_x ?? 50,
+        focalY: content.appearance.menu_banner_focal_y ?? 50,
+      },
+    } : {}),
     currency: 'ILS',
   };
 
@@ -164,6 +174,8 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
     if (!servedCategoryIds.has(i.category_id)) continue;
     const groupIds = groupsByItem.get(i.id) ?? [];
     const variants = productImages.get(i.id);
+    const detail = originals.get(i.id);
+    const detailUrl = detail ? mediaUrl(detail.url, origin) : null;
     items.push({
       id: i.id,
       categoryId: i.category_id,
@@ -171,6 +183,7 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
       description: i.description,
       priceMinor: i.base_price_minor,
       image: mediaUrl(i.image_url, origin),
+      ...(detail && detailUrl ? { detailImage: { url: detailUrl, width: detail.width, height: detail.height } } : {}),
       ...(variants ? { imageVariants: [
         { url: `${origin}${variants.w480_url}`, width: variants.width480, height: variants.height480 },
         ...(variants.width960 === variants.width480 ? [] : [{ url: `${origin}${variants.w960_url}`, width: variants.width960, height: variants.height960 }]),

@@ -9,6 +9,7 @@ import { localProductMediaTarget } from './live-transport.mjs';
 import { captureProductResponse, createProductProgress, type ProductProgress } from './product-progress.mjs';
 import { captureHighResolutionMenu, type PublishedProductImage } from './product-quality';
 import { observeResponse, responseAfterAction } from './control-progress.mjs';
+import { verifyOriginalDetail } from './original-detail';
 
 // Real owner session + shipped uploader/worker/repository/publisher. The guard
 // rejects execution outside the disposable Actions stack, even for local runs.
@@ -525,6 +526,10 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
       dimensions[`width${size}`] = row[`width${size}`];
       dimensions[`height${size}`] = row[`height${size}`];
     }
+    if (sample.name === 'burger-highres') {
+      await verifyOriginalDetail({ page, browser: context.browser()!, fixture, token, itemId,
+        selected: row, selectedProof: after.data, click: name => click(page, name), decode: decodedAlpha });
+    }
     // The same open editor must refresh its optimistic selection proof after
     // success: switching back must not fail with selection_stale.
     if (sample.name === 'burger-highres') {
@@ -618,7 +623,8 @@ async function runProductJourney(page: Page, context: BrowserContext, progress: 
   advance('publication-counts', null);
   await Promise.all(publishedReplies);
   expect(publisherCalls.filter(call => call.status === 200 && call.variant === 'w480')).toHaveLength(7);
-  expect(publisherCalls.filter(call => call.status === 200 && call.variant === 'w960')).toHaveLength(7);
+  // Seven existing chosen pairs plus one explicit, independent detail Original.
+  expect(publisherCalls.filter(call => call.status === 200 && call.variant === 'w960')).toHaveLength(8);
   advance('unchanged-invariants');
   expect(await readInvariants(fixture, token), 'Hero, logo and receipt settings remain unchanged').toEqual(initialInvariants);
   advance('transport-boundary');

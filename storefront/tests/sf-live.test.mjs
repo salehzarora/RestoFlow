@@ -412,7 +412,7 @@ test('the fixture source resolves the canonical tenant, keeps its groups / zones
 
 test('the client builds exactly the PostgREST RPC request with the anon key on the server side only', () => {
   const { url, init } = storefrontMenuRequest(CONFIG, 'sf-synth-a');
-  assert.equal(url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v8`);
+  assert.equal(url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v10`);
   assert.equal(init.method, 'POST');
   assert.equal(init.headers.apikey, CONFIG.anonKey);
   assert.equal(init.headers.Authorization, `Bearer ${CONFIG.anonKey}`);
@@ -424,7 +424,7 @@ test('the client builds exactly the PostgREST RPC request with the anon key on t
 test('rollout and ordinary menu reads preserve the established ISR fetch contract', () => {
   for (const slug of ['mapsburger', 'maps-burger', 'sf-synth-a']) {
     const { url, init } = storefrontMenuRequest(CONFIG, slug);
-    assert.equal(url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v8`);
+    assert.equal(url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v10`);
     assert.equal(init.method, 'POST');
     assert.equal(init.body, JSON.stringify({ p_slug: slug }));
     assert.equal(init.headers.apikey, CONFIG.anonKey);

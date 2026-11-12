@@ -18,6 +18,12 @@ export interface WireAppearance {
   readonly scene_preset?:'reference_dark'|null;
   /** Only the explicitly versioned v8 decoder accepts this key. */
   readonly site_theme?:SiteTheme|null;
+  /** v9 only. The five independent menu-banner presentation fields. */
+  readonly menu_banner_url?:string|null;
+  readonly menu_banner_enabled?:boolean|null;
+  readonly menu_intro_visible?:boolean|null;
+  readonly menu_banner_focal_x?:number|null;
+  readonly menu_banner_focal_y?:number|null;
 }
 export interface WireContentV1 {
   readonly schema:1;
@@ -166,6 +172,75 @@ export function decodeStorefrontMenuV8(raw: unknown): StorefrontMenuV8Envelope {
   const decoded = decodeStorefrontMenuV7({ ...envelope, content_v1: { ...document, appearance: legacyAppearance } });
   if (!decoded.ok || decoded.content_v1.appearance === undefined) return reject('appearance.site_theme');
   return { ...decoded, content_v1: { ...decoded.content_v1, appearance: { ...decoded.content_v1.appearance, site_theme } } };
+}
+
+
+export type StorefrontMenuV9Ok = StorefrontMenuV8Ok;
+export type StorefrontMenuV9Envelope = StorefrontMenuV9Ok | StorefrontMenuFailure;
+const BANNER_FIELDS = ['menu_banner_url', 'menu_banner_enabled', 'menu_intro_visible', 'menu_banner_focal_x', 'menu_banner_focal_y'] as const;
+
+/** v9 negotiates optional independent banner support; v8 remains a strict boundary. */
+export function decodeStorefrontMenuV9(raw: unknown): StorefrontMenuV9Envelope {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return reject('envelope');
+  const envelope = raw as Record<string, unknown>;
+  const content = envelope.content_v1;
+  if (typeof content !== 'object' || content === null || Array.isArray(content)) return decodeStorefrontMenuV8(raw);
+  const document = content as Record<string, unknown>;
+  const appearance = document.appearance;
+  if (typeof appearance !== 'object' || appearance === null || Array.isArray(appearance)) return decodeStorefrontMenuV8(raw);
+  const fields = appearance as Record<string, unknown>;
+  if (!BANNER_FIELDS.some(key => Object.hasOwn(fields, key))) return decodeStorefrontMenuV8(raw);
+  const legacyAppearance = { ...fields };
+  const banner: { -readonly [K in keyof WireAppearance]?: WireAppearance[K] } = {};
+  for (const key of BANNER_FIELDS) {
+    if (!Object.hasOwn(fields, key)) continue;
+    const value = fields[key];
+    delete legacyAppearance[key];
+    if (key === 'menu_banner_url') banner[key] = image(value, `appearance.${key}`, true);
+    else if (key === 'menu_banner_enabled' || key === 'menu_intro_visible') {
+      if (value !== null && typeof value !== 'boolean') return reject(`appearance.${key}`);
+      banner[key] = value;
+    } else {
+      if (value === null) banner[key] = null;
+      else {
+        const point = integer(value, `appearance.${key}`);
+        if (point < 0 || point > 100) return reject(`appearance.${key}`);
+        banner[key] = point;
+      }
+    }
+  }
+  const decoded = decodeStorefrontMenuV8({ ...envelope, content_v1: { ...document, appearance: legacyAppearance } });
+  if (!decoded.ok || decoded.content_v1.appearance === undefined) return reject('appearance.menu_banner_url');
+  return { ...decoded, content_v1: { ...decoded.content_v1, appearance: { ...decoded.content_v1.appearance, ...banner } } };
+}
+
+export interface WireProductOriginalImage extends ImageVariant { readonly item_id: string; }
+export interface StorefrontMenuV10Ok extends StorefrontMenuV9Ok {
+  readonly product_original_images_v1?: readonly WireProductOriginalImage[];
+}
+export type StorefrontMenuV10Envelope = StorefrontMenuV10Ok | StorefrontMenuFailure;
+
+/** v10 is a separate strict projection, never a relaxation of v5-v9. */
+export function decodeStorefrontMenuV10(raw: unknown): StorefrontMenuV10Envelope {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return reject('envelope');
+  if (!Object.hasOwn(raw, 'product_original_images_v1')) return decodeStorefrontMenuV9(raw);
+  const { product_original_images_v1: originals, ...rest } = raw as Record<string, unknown>;
+  const decoded = decodeStorefrontMenuV9(rest);
+  if (!decoded.ok) return reject('product_original_images_v1');
+  const categories = new Set(decoded.categories.map(c => c.id));
+  const served = new Set(decoded.items.filter(i => categories.has(i.category_id)).map(i => i.id));
+  const seen = new Set<string>();
+  const rows = array(originals, 500, 'product_original_images_v1').map(value => {
+    const row = record(value, ['item_id', 'url', 'width', 'height'], 'product_original_images_v1');
+    const item_id = id(row.item_id, 'product_original_images_v1.item_id');
+    if (!served.has(item_id) || seen.has(item_id)) return reject('product_original_images_v1.item_id');
+    seen.add(item_id);
+    const width = integer(row.width, 'product_original_images_v1.width');
+    const height = integer(row.height, 'product_original_images_v1.height');
+    if (width < 1 || height < 1 || width > 960 || height > 960) return reject('product_original_images_v1.dimensions');
+    return { item_id, url: image(row.url, 'product_original_images_v1.url')!, width, height };
+  });
+  return { ...decoded, product_original_images_v1: rows };
 }
 
 function decodeContent(raw:unknown,allowAppearance:boolean,allowScene=false):StorefrontMenuV5Envelope{

@@ -5,7 +5,8 @@
 import type { ReactNode } from 'react';
 import { Fragment } from 'react';
 import { type Locale } from '@/i18n/locales';
-import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import type { StorefrontMessages } from '@/i18n/storefront';
+import { fill } from '@/i18n/fill';
 import { formatMoney } from '@/money/format';
 import type { CampaignModule, MenuItem, PromoModule, ServiceState, StoryModule, Tenant } from '@/source/types';
 import { ChevronIcon, ClockIcon, DeliveryIcon, PinIcon, StoreIcon } from '../icons';

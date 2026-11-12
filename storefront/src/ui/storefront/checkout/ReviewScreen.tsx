@@ -29,7 +29,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CartApi } from '@/cart/useCart';
 import { optionSummary } from '@/cart/cartModel';
-import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import { fill } from '@/i18n/fill';
+import type { StorefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
 import type { Quote } from '@/money/quote';
 import type { Locale } from '@/i18n/locales';

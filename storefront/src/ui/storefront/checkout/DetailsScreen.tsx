@@ -29,7 +29,8 @@ import {
   type CheckoutField,
   type CheckoutValidation,
 } from './validation';
-import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import { fill } from '@/i18n/fill';
+import type { StorefrontMessages } from '@/i18n/storefront';
 import type { Quote } from '@/money/quote';
 import type { DeliveryZone, MotionMode } from '@/source/types';
 import type { OrderMessages } from '@/i18n/orders';

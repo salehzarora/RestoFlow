@@ -24,8 +24,7 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { storefrontMessages } from '@/i18n/storefront';
-import type { Locale } from '@/i18n/locales';
+import type { StorefrontMessages } from '@/i18n/storefront';
 import type { MotionMode, ServiceState } from '@/source/types';
 import { LiveCartDock } from './LiveCartDock';
 import { useCartApi, useMenuData } from './CartContext';
@@ -43,14 +42,14 @@ import type { CartState } from '@/source/types';
 const EMPTY_CART: CartState = { schema: 1, slug: '', menuVersion: '', lines: [] };
 
 export function DockSlot({
-  locale,
+  m,
   motion,
   state,
   opensAt,
   cartHref,
 }: {
-  /** The locale; the dictionary is resolved client-side (E-OPT-1). */
-  locale: Locale;
+  /** Current route dictionary, supplied without a client-side locale lookup. */
+  m: StorefrontMessages;
   motion: MotionMode;
   state: ServiceState;
   opensAt: string;
@@ -58,7 +57,6 @@ export function DockSlot({
 }) {
   const cart = useCartApi();
   const menu = useMenuData();
-  const m = storefrontMessages(locale);
   // Nothing before the visitor's own cart has been read: an empty cart renders
   // no dock, and that is exactly what the static document must contain.
   if (cart === null || !cart.ready) return null;
@@ -92,18 +90,17 @@ export function DockSlot({
  * that does not add up.
  */
 export function AsideSlot({
-  locale,
+  m,
   state,
   opensAt,
   checkoutHref,
 }: {
-  /** The locale; the dictionary is resolved client-side (E-OPT-1). */
-  locale: Locale;
+  /** Current route dictionary, supplied without a client-side locale lookup. */
+  m: StorefrontMessages;
   state: ServiceState;
   opensAt: string;
   checkoutHref: string;
 }) {
-  const m = storefrontMessages(locale);
   const cart = useCartApi();
   const menu = useMenuData();
   const draftApi = useCheckoutDraft();

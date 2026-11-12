@@ -32,9 +32,6 @@
 .langItem{composes:flexRow;justify-content:space-between;gap:10px;min-height:44px;padding:0 10px;color:var(--tx);font:700 14px/1.2 var(--font);text-decoration:none}
 .langActive{background:var(--accs);color:var(--accOnSelection)}
 .langItem svg{width:16px;height:16px;stroke-width:2.4}
-
-.cartTrigger{composes:flexRow;gap:11px;border:0;border-radius:7px;font:500 12px var(--font);cursor:pointer}
-.cartTrigger b{display:grid;place-items:center}
 .hero{display:grid;align-items:center}
 .heroCopy{min-width:0}
 .eyebrow{composes:flexRow;gap:11px;margin:0}
@@ -90,11 +87,6 @@
 .searchBox input::placeholder{color:var(--tx2)}
 .searchBox button{background:none;border:0;color:inherit;padding:3px;cursor:pointer;min-width:32px;min-height:32px}
 .searchBox button svg{width:16px;height:16px}
-.categoryWrap{position:sticky;inset-block-start:var(--header-height);z-index:20;background:var(--bg)}
-.rail{display:flex;overflow:auto;scrollbar-width:none}
-.chip{composes:flexRow;justify-content:center;min-width:max-content;background:none;font:400 13px var(--font);color:inherit;white-space:nowrap;cursor:pointer}
-
-.chip:hover:not(.chipActive){border-color:var(--hair2)}
 .sectionHead{composes:flexRow;justify-content:space-between;gap:21px}
 .sectionHead h3{margin:0}
 .sectionHead>span{color:var(--tx2)}
@@ -103,7 +95,6 @@
 .card{min-width:0;cursor:pointer;outline-offset:4px}
 .cardMediaGrid{position:relative;width:100%}
 .cardImg{composes:imageCover;transition:transform .55s cubic-bezier(.22,.68,0,1.01)}
-.motionFull{}
 .motionLively{composes:motionFull}
 .motionFull .card:hover .cardImg{transform:scale(1.045)}
 .cardNoImage{composes:gridCenter;width:100%;height:100%;color:var(--tx2);font-size:40px}
@@ -152,18 +143,16 @@
 .cartEdit{display:block;padding:12px 24px;color:var(--acct)}
 .ltr{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
 .srOnly{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
-.dock{composes:flexRow;position:fixed;inset-block-end:max(14px,env(safe-area-inset-bottom));inset-inline:18px;gap:15px;padding:13px 17px;background:var(--hero);color:var(--onhero);z-index:31;border-radius:10px;box-shadow:0 5px 25px #0003;border:1px solid var(--hair);font-size:12px}
-.dockThumbs{display:none}
-.dockHalo{composes:dockThumbs}
-.dockText{composes:flexRow;gap:14px;flex:1}
-.dockTotal{font-size:15px;font-weight:600}
-.dockItems{font-size:11px}
-.dockCta{composes:flexRow;gap:12px;color:inherit;text-decoration:none}
-.dockCta svg{width:18px;height:18px}
+.dock{composes:flexRow;position:fixed;inset-block-end:max(12px,env(safe-area-inset-bottom));inset-inline:14px;gap:12px;padding:7px;background:var(--sf);background:linear-gradient(115deg in srgb,var(--menuDockFrom,var(--sf)),var(--menuDockTo,var(--sf)));color:var(--tx);z-index:31;border-radius:27px;box-shadow:0 5px 20px #0003;border:1px solid var(--acc);font-size:13px;text-decoration:none;min-height:70px;transition:transform .12s,box-shadow .12s}
+.dockText{composes:flexRow;gap:12px;flex:1;justify-content:space-around;min-width:0;padding-inline:7px}
+.dockTotal{font-size:19px;font-weight:800;white-space:nowrap}
+.dockItems{font-size:13px;font-weight:700;overflow-wrap:anywhere}.dockBump{animation:sfCartBump .22s ease}@keyframes sfCartBump{50%{transform:scale(1.14)}}
+.dockCta{composes:flexRow;justify-content:center;gap:8px;min-height:54px;padding:10px 18px;border-radius:21px;background:var(--acc);color:var(--onacc);font-weight:800;box-shadow:0 3px 8px #0002}
+.dockCta svg{width:25px;height:25px;flex:none}
 .dockDisabled{font-size:10px}
-.page:has(.dock){padding-block-end:85px}
+.page:has(.dock){padding-block-end:calc(100px + env(safe-area-inset-bottom))}
 @media(min-width:651px){.dock{display:none}.page:has(.dock){padding-block-end:0}}
-@media(max-width:900px){.inner{width:calc(100% - 44px)}.headerInner{gap:16px}.headerNav{gap:18px;font-size:11px}.announce{min-height:43px;gap:27px}.headerPhone{display:none}.heroTitle{font-size:73px}.gridWrap{grid-template-columns:repeat(3,minmax(0,1fr))}.cardMain{gap:6px}}
+@media(max-width:900px){.headerInner{gap:16px}.headerNav{gap:18px;font-size:11px}.announce{min-height:43px;gap:27px}.headerPhone{display:none}.gridWrap{grid-template-columns:repeat(3,minmax(0,1fr))}.cardMain{gap:6px}}
 @media(max-width:650px){.headerNav{display:none}.hero .eyebrow{grid-column:1/-1;grid-row:1;margin-block-end:9px}
 .heroTitle{grid-column:1;grid-row:2}
 .heroSub{grid-column:1/-1}
@@ -171,14 +160,14 @@
 .heroActions .promoCta{justify-content:space-between;gap:14px}
 .heroVisual{grid-column:2;grid-row:2;margin:0;max-width:none}
 .announce{width:calc(100% - 36px);min-height:44px;gap:12px;padding:8px 44px}.announceClose{inset-inline-end:10px}.announce>span[aria-hidden]{font-size:18px}.serviceWrap{gap:8px}.service{gap:12px}.menuHeading{flex-direction:column}
-.searchBox{width:100%;margin:0;box-sizing:border-box}.chip{border-color:var(--hair)}
+.searchBox{width:100%;margin:0;box-sizing:border-box}
 .sectionHead{gap:8px}
 .gridWrap{min-height:200px}.badge{line-height:1.5}.cardMain{align-items:flex-start;gap:3px;flex-direction:column}
 .price{margin-block-start:3px}.cardBottom{gap:8px}
 .promo{grid-template-columns:1fr}.promoMediaWrap{height:210px}.storyMedia{grid-row:2}.footerInner{flex-wrap:wrap}
 .cartDialog{inset-block-start:auto;inset-block-end:0;margin:0;width:100%;max-width:none;border-radius:16px 16px 0 0}
 }
-@media(max-width:365px){.inner{width:calc(100% - 28px)}.heroActions .promoCta{min-width:145px}.cartTrigger>span{display:none}}
+@media(max-width:365px){.heroActions .promoCta{min-width:145px}}
 /* Shared flat cart content. Search retains its named 360px wrapper; Home
    opens the same live content in a native dialog. Amount authority is unchanged. */
 .shell{display:flex;min-width:0;container-type:inline-size;container-name:storefront}
@@ -224,19 +213,20 @@
 .sceneBackdrop::after{content:'';position:absolute;inset:0;z-index:2;background:linear-gradient(180deg,transparent,rgba(0,0,0,.25));pointer-events:none}
 /* Keep the lead composition; reflected lower-photo strips continue through the
    whole document. Integer tracks avoid fractional-pixel gaps between strips. */
+
 .menuBackdrop{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--bg)}
 .menuBackdrop,.page[data-sf-screen="home"] .sceneBackdrop{background:radial-gradient(ellipse at 20% 0%,var(--hair),transparent 65%),linear-gradient(var(--scrim,rgba(6,8,7,.66)),var(--scrim,rgba(6,8,7,.66))),var(--bg)}
 .menuBackdrop>img{position:absolute;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center top;filter:none}
 .menuBackdrop>img,.page[data-sf-screen="home"] .sceneBackdrop>img{z-index:1;mask-image:linear-gradient(#000 70%,transparent)}
 .page[data-sf-screen="home"] .sceneBackdrop>img{position:absolute;object-position:center top;transform-origin:center top}
 .menuBackdrop::after{content:'';position:absolute;inset:0;z-index:2;background:var(--bg);opacity:var(--menu-image-dim,.15);pointer-events:none}
-.menuSceneContinuation{position:absolute;inset:0;z-index:0;display:grid;overflow:hidden;grid-template-rows:repeat(8,minmax(192px,1fr));grid-template-rows:repeat(8,max(192px,round(up,12.5%,1px)));mask-image:linear-gradient(transparent 55svh,#000 78svh)}
-.sceneRows16{grid-template-rows:repeat(16,minmax(192px,1fr));grid-template-rows:repeat(16,max(192px,round(up,6.25%,1px)))}
-.sceneRows32{grid-template-rows:repeat(32,minmax(192px,1fr));grid-template-rows:repeat(32,max(192px,round(up,3.125%,1px)))}
-.sceneRows64{grid-template-rows:repeat(64,minmax(192px,1fr));grid-template-rows:repeat(64,max(192px,round(up,1.5625%,1px)))}
-.sceneRows128{grid-template-rows:repeat(128,minmax(192px,1fr));grid-template-rows:repeat(128,max(192px,round(up,.78125%,1px)))}
-.sceneRows256{grid-template-rows:repeat(256,minmax(192px,1fr));grid-template-rows:repeat(256,max(192px,round(up,.390625%,1px)))}
-.sceneRows512{grid-template-rows:repeat(512,minmax(192px,1fr));grid-template-rows:repeat(512,max(192px,round(up,.1953125%,1px)))}
+.menuSceneContinuation{position:absolute;inset:0;z-index:0;display:grid;overflow:hidden;--scene-rows:8;grid-template-rows:repeat(var(--scene-rows),minmax(192px,1fr));grid-template-rows:repeat(var(--scene-rows),max(192px,round(up,calc(100% / var(--scene-rows)),1px)));mask-image:linear-gradient(transparent 55svh,#000 78svh)}
+.sceneRows16{--scene-rows:16}
+.sceneRows32{--scene-rows:32}
+.sceneRows64{--scene-rows:64}
+.sceneRows128{--scene-rows:128}
+.sceneRows256{--scene-rows:256}
+.sceneRows512{--scene-rows:512}
 .menuSceneStrip{position:relative;display:block;overflow:hidden;min-width:0;min-height:0;margin-block:-1px}
 .menuSceneStrip:nth-child(even){transform:scaleY(-1)}
 .menuSceneStrip img{position:absolute;inset-block-start:auto;inset-block-end:-64px;inset-inline-start:0;display:block;width:100%;height:calc(200% + 128px);object-fit:cover;object-position:center bottom}
@@ -251,9 +241,6 @@
 .brandLogo{width:42px;height:45px}.brandCity{color:var(--tx2);font-size:11px}
 .headerActions{gap:12px}.langControl{border-color:transparent;font-weight:500}
 .headerActions>.promoCta{padding:8px;min-width:44px;min-height:44px;background:transparent;color:var(--tx);box-shadow:none}
-.cartTrigger{background:transparent;color:var(--tx);padding:10px 0;min-height:44px;font-size:13px}
-.cartTrigger b{background:var(--acc);color:var(--onacc);border-radius:50%;width:24px;height:24px;font-size:11px}
-.cartTrigger svg{width:24px;height:24px}
 .hero{position:relative;min-height:520px;padding-block:60px;grid-template-columns:1fr 1fr;gap:48px}
 .heroCopy{align-self:center;display:flex;flex-direction:column;align-items:flex-start;padding:0}
 .heroTitle{font-size:clamp(56px,7vw,96px);line-height:1.28;letter-spacing:normal;font-weight:900;margin:22px 0;max-width:10ch;text-wrap:balance}
@@ -271,15 +258,10 @@
 .page[data-sf-screen="intro"] .hero{min-height:calc(100svh - 220px)}
 .page[data-sf-screen="intro"] .heroCopy{min-height:540px;align-self:stretch;justify-content:center}
 .menu{padding-block:40px 36px;scroll-margin-block-start:96px}
-.menuHeading{margin-block-end:24px;align-items:center}.menuHeading h2{font-size:40px;font-weight:800;letter-spacing:normal}
+.menuHeading{margin-block-end:18px;align-items:center}.menuIntro{min-width:0}.menuHeading h2{font-size:40px;font-weight:800;letter-spacing:normal}
 .menuHeading .eyebrow{font-size:12px;margin-block-end:10px}.menuHeading .eyebrow::before,.menuHeading .eyebrow>span{display:none}
 .searchBox{min-height:48px;padding-inline:16px;border:1px solid var(--hair);border-radius:17px;background:color-mix(in srgb,var(--sf2) 80%,transparent)}
 .searchBox input{font-size:14px}.searchBox kbd{display:none}.searchBox>svg{color:var(--tx)}
-.categoryWrap{background:color-mix(in srgb,var(--bg) 97%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);padding-block:10px;border:0}
-.rail{gap:10px}.chip{flex:none;min-height:46px;padding:11px 19px;gap:8px;border:0;border-radius:15px;font-size:14px;font-weight:450}
-.chipActive{background:var(--acc);color:var(--onacc);font-weight:600}.chipActive::after{display:none}
-.chip:hover:not(.chipActive){background:var(--sf2);color:var(--tx)}
-.chip svg,.chip img,.chip small{display:none}.picksChip{display:flex}
 .section{scroll-margin-block-start:158px}.sectionHead{padding-block:18px 15px}.sectionHead h3{font-size:15px;font-weight:500}.sectionHead>span{font-size:11px}
 .card{position:relative;border:1px solid color-mix(in srgb,var(--hair) 35%,transparent);border-radius:24px;background:linear-gradient(145deg,color-mix(in srgb,var(--acc) 7%,var(--sf)),var(--sf));overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.08)}
 .cardMediaGrid{background:transparent;border-radius:0;overflow:hidden;aspect-ratio:1.25;mask-image:none}
@@ -321,28 +303,24 @@
  .footer .servicePanel{grid-template-columns:1fr 1fr;gap:20px 35px}.footer .findUs{max-width:950px}
 }
 @media(max-width:650px){
- .page{--header-height:74px}.inner{width:calc(100% - 36px)}
- .headerInner{gap:8px}.brandName{font-size:17px;max-width:155px}.brandLogo{width:32px;height:36px}.brandCity{font-size:11px;margin-block-start:5px}.lockup{gap:7px}
- .headerActions{gap:4px}.langControl{width:40px;height:44px;font-size:13px}.cartTrigger{gap:7px;padding:8px 0}.cartTrigger>span{display:none}
+ .page{--header-height:74px}.inner{width:calc(100% - 36px)}.brandName{max-width:155px}.brandCity{margin-block-start:5px}.lockup{gap:7px}.langControl{width:40px;font-size:13px}
  .hero,.hero[data-sf-hero-mode="editorial"]{display:flex;flex-direction:column;min-height:390px;padding:30px 0;gap:22px}
- .heroCopy{width:100%;align-items:flex-start;align-self:auto}
+ .heroCopy{width:100%;align-self:auto}
  .hero .eyebrow{margin:0;font-size:11px}.heroTitle{font-size:48px;line-height:1.32;margin:12px 0 16px;align-self:auto}
- .heroSub{font-size:17px;margin:0;max-width:30ch}.heroActions{margin-block-start:24px;width:100%;justify-content:flex-start;gap:12px}
+ .heroSub{font-size:17px;max-width:30ch}.heroActions{margin-block-start:24px;width:100%;justify-content:flex-start;gap:12px}
  .heroActions .promoCta{min-height:52px;min-width:180px;font-size:15px;padding:14px 22px}.suggest{font-size:11px;padding-inline:0}
  .heroVisual{width:100%;height:310px}
- .page[data-sf-screen="intro"] .hero{min-height:calc(100svh - 220px);padding:30px 0 15px}
- .page[data-sf-screen="intro"] .heroCopy{min-height:calc(100svh - 265px);justify-content:flex-start}
- .page[data-sf-screen="intro"] .heroTitle{margin-block:10px 16px}
- .page[data-sf-screen="intro"] .heroActions{margin-block-start:auto;padding-block-start:220px}
+ .page[data-sf-screen="intro"] .hero{padding:30px 0 15px}
+ .page[data-sf-screen="intro"] .heroCopy{justify-content:flex-start}
+ .page[data-sf-screen="intro"] .heroActions{padding-block-start:220px}
  .page[data-sf-screen="intro"] .heroActions .promoCta{width:100%;justify-content:space-between}
  .page[data-sf-screen="intro"] .hero .eyebrow{display:none}.sceneBackdrop>img{object-position:50% 55%}
- .page[data-sf-screen="intro"] .serviceWrap{width:calc(100% - 36px);padding:13px 16px;margin-block:0}
+ .page[data-sf-screen="intro"] .serviceWrap{width:calc(100% - 36px);padding:13px 16px}
  .page[data-sf-screen="intro"] .service{gap:9px 16px;justify-content:space-between}.page[data-sf-screen="intro"] .serviceIcon svg{width:18px;height:18px}
  .page[data-sf-screen="intro"] .serviceOff{flex-basis:100%;justify-content:center}
  .page[data-sf-screen="intro"]>.footerInner{padding-block:20px 23px}
  .menu{padding-block:18px 30px;scroll-margin-block-start:74px}.menuHeading{margin-block-end:12px}.menuHeading .eyebrow{margin-block-end:9px}
- .searchBox{padding-inline:14px}.searchBox input{font-size:13px}
- .categoryWrap{margin-inline:-18px;padding:10px 18px 14px}.rail{gap:5px}.chip{min-height:44px;font-size:13px;padding:10px 12px;gap:0}
+ .searchBox{padding-inline:14px}
  .sectionHead{padding-block:4px 10px}.sectionHead h3{font-size:12px;color:var(--tx2)}.sectionHead>span{font-size:10px}.card{border-radius:22px}.cardName{font-size:22px}.price{font-size:21px;margin:0;gap:5px}
  .gridWrap{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.cardMediaGrid{aspect-ratio:1}.cardBody{padding:12px}.card .cardName{font-size:16px}.card .price{font-size:18px}.card .priceFrom{font-size:10px}
  .cardBottom{min-height:46px;margin-block-start:8px}.card .cardDesc{font-size:10px;padding-inline-end:0;padding-block-end:46px}.card .addCircle{inset-block-start:auto;inset-block-end:0}
@@ -353,7 +331,7 @@
  .contactLine{font-size:14px;margin-block-start:9px}.footerBand{padding-block:18px 20px}.footerInner{gap:8px}.footerCredit{margin-block-start:26px}
  .footerPhoto{opacity:.22}.footerPhoto img{width:80%;filter:blur(2px)}
 }
-@media(max-width:365px){.heroTitle{font-size:43px}.brandName{max-width:132px;font-size:15px}.headerActions{gap:0}.chip{padding-inline:10px;font-size:12px}.servicePair{gap:8px}.servicePanel{padding:16px}}
+@media(max-width:365px){.heroTitle{font-size:43px}.brandName{max-width:132px}.headerActions{gap:0}.servicePair{gap:8px}.servicePanel{padding:16px}}
 
 /* The selected tab already names an uncustomized category. Keep its heading
    accessible, and reveal it when programmatic category navigation focuses it. */
@@ -361,7 +339,7 @@
 
 /* Final orbital menu: source-ordered categories stay mounted and browsable. */
 .menuSections[hidden]{display:none}
-.menuSections>.section{margin-block:30px 68px;scroll-margin-block-start:168px}
+.menuSections>.section{margin-block:24px 42px;scroll-margin-block-start:168px}
 .menuSections>.section:last-child{margin-block-end:38px}
 .menuSections .sectionHead{display:flex;flex-wrap:wrap;justify-content:center;padding:0;margin-block:0 18px;text-align:center;gap:8px}
 .menuSections .sectionHead h3{display:flex;align-items:center;justify-content:center;gap:24px;width:100%;font-size:38px;font-weight:850;line-height:1.5;color:var(--tx);letter-spacing:normal}
@@ -378,16 +356,12 @@
 .servicePanel{border-color:color-mix(in srgb,var(--acc) 28%,var(--hair));background:linear-gradient(125deg,color-mix(in srgb,var(--acc) 11%,var(--sf)),color-mix(in srgb,var(--sf2) 92%,transparent))}
 .page[data-sf-screen="intro"] .header{background:color-mix(in srgb,var(--bg) 65%,transparent)}
 .page[data-sf-screen="intro"] .heroTitle{font-weight:900;line-height:1.35}
-@media(min-width:651px){.menuHeading{max-width:1060px;margin-inline:auto}.menuSections{max-width:1000px;margin-inline:auto}.searchControls{min-width:330px}.menuSections>.section{margin-block-end:90px}}
+@media(min-width:651px){.menuHeading{max-width:1060px;margin-inline:auto}.menuSections{max-width:1000px;margin-inline:auto}.searchControls{min-width:330px}.menuSections>.section{margin-block-end:48px}}
 @media(max-width:650px){
- .menuHeading h2{font-size:30px;font-weight:850}.searchControls{width:100%;gap:8px}.menuHeading{gap:19px}
- .menuSections>.section{margin-block:22px 52px;scroll-margin-block-start:158px}.menuSections .sectionHead{margin-block-end:8px}
- .menuSections .sectionHead h3{font-size:32px;gap:15px}.menuSections .sectionHead h3::before,.menuSections .sectionHead h3::after{max-width:72px}
- .chip{font-weight:650;border-radius:24px}.chipActive{font-weight:750}.menu{padding-block-start:24px}
- .page[data-sf-screen="intro"] .heroTitle{font-size:clamp(46px,12.7vw,62px)}
- .page[data-sf-screen="intro"] .heroActions .promoCta{font-size:21px;min-height:64px;border-radius:22px}
- .page[data-sf-screen="intro"] .serviceWrap{border-radius:24px;border-color:color-mix(in srgb,var(--acc) 28%,var(--hair));background:color-mix(in srgb,var(--sf2) 78%,transparent)}
- .page[data-sf-screen="intro"] .serviceCell{font-size:12px}.page[data-sf-screen="intro"] .serviceOff{font-size:12px;padding-block-start:4px;opacity:.85}
+ .menuHeading h2{font-weight:850}.searchControls{width:100%;gap:8px}
+ .menuSections>.section{scroll-margin-block-start:158px}
+ .menuSections .sectionHead h3{gap:15px}.menuSections .sectionHead h3::before,.menuSections .sectionHead h3::after{max-width:72px}
+ .page[data-sf-screen="intro"] .serviceWrap{border-color:color-mix(in srgb,var(--acc) 28%,var(--hair));background:color-mix(in srgb,var(--sf2) 78%,transparent)}.page[data-sf-screen="intro"] .serviceOff{font-size:12px;padding-block-start:4px;opacity:.85}
  .footerInner .brandName{font-size:27px}.footerTagline{font-weight:600}
 }
 
@@ -397,14 +371,13 @@
    Brand accents still belong to controls; photographs and glass use charcoal.
    A viewport-sized cover preserves image proportions on long menus instead of
    enlarging a photograph to the height of the whole document. */
-[data-sf-scene="reference_dark"] .page .header,
-[data-sf-scene="reference_dark"] .page .categoryWrap{background:var(--sceneGlass);backdrop-filter:none;-webkit-backdrop-filter:none}
+[data-sf-scene="reference_dark"] .page .header{background:var(--sceneGlass);backdrop-filter:none;-webkit-backdrop-filter:none}
 [data-sf-scene="reference_dark"] .page .searchBox,
 [data-sf-scene="reference_dark"] .page .suggestionSlot .suggest,
 [data-sf-scene="reference_dark"] .page .servicePanel,
 [data-sf-scene="reference_dark"] .page .contactLine,
 [data-sf-scene="reference_dark"] .page[data-sf-screen="intro"] .serviceWrap{background:var(--sceneGlassSoft);border-color:var(--sceneLine)}
-[data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop>img{position:absolute;inset:0;width:100%;height:100svh;object-fit:cover;object-position:center top;opacity:1;filter:none;transform:none}
+[data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop>img{object-position:center top;opacity:1;filter:none;transform:none}
 [data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .menuBackdrop::after,
 [data-sf-scene="reference_dark"] .page[data-sf-screen="home"] .sceneBackdrop::after{background:#000;opacity:var(--menu-image-dim,.15)}
 [data-sf-scene="reference_dark"] .footerPhoto img{filter:none}
@@ -413,14 +386,10 @@
 
 /* UX-002: accepted mobile ordering spacing, current scene/ad renderer retained. */
 @media(max-width:650px){
- .headerInner{min-height:76px;height:auto;padding-block:10px;gap:12px}
- .headerActions{gap:10px}.cartTrigger{min-width:46px;min-height:46px;padding:8px;border:1px solid var(--hair2);border-radius:50%;gap:5px}
- .cartTrigger>span{display:none}.headerActions button,.headerActions a{min-block-size:44px}
- .brandName{font-size:16px}.brandLogo{width:32px;height:39px}.brandCity{font-size:11px}
+ .headerInner{min-height:76px;height:auto;padding-block:10px}.headerActions button,.headerActions a{min-block-size:44px}
+ .brandName{font-size:19px}.brandLogo{width:40px;height:44px}
  .menuHeading{gap:16px}.menuHeading h2{font-size:29px;line-height:1.6}
- .searchBox{min-height:48px;border-color:var(--hair2)}.searchBox input{font-size:16px;padding-block:12px}
- .chip{border:1px solid var(--hair2);border-radius:14px;min-height:44px;padding-inline:15px}
- .chipActive{border-color:var(--acc)}.menuSections>.section{margin-block:25px 44px}
+ .searchBox{border-color:var(--hair2)}.searchBox input{font-size:16px}.menuSections>.section{margin-block:25px 44px}
  .menuSections .sectionHead h3{font-size:25px}.menuSections .sectionHead{margin-block-end:10px}
  .cartClose{width:46px;height:46px;inset-inline-start:calc(100% - 60px)}
  .cartDialog .asideLines{max-height:none;overflow:visible}.cartDialog{max-height:100dvh;scroll-padding-block:18px}
@@ -434,6 +403,43 @@
  .page[data-sf-screen="intro"] .heroActions .promoCta{inline-size:100%;min-height:54px;font-size:17px;border-radius:14px}
  .page[data-sf-screen="intro"] .serviceWrap{margin-block:8px 20px;border-radius:16px}
 }
+.categoryTitle svg{display:block;margin:0 auto 3px;width:28px;height:28px;color:var(--acct)}
+.page button:active:not(:disabled):not([data-sf-carousel-product]),.dock:active{transform:scale(.97);box-shadow:inset 0 2px 5px #0003}.page button:focus-visible,.dock:focus-visible{outline:3px solid var(--ring);outline-offset:3px}
+@media(max-width:650px){.headerInner{gap:8px}.menuHeading{align-items:stretch}.searchControls{min-height:52px}.menuIntro h2{font-size:26px}.categoryTitle svg{width:25px;height:25px}.dock{gap:5px}.dockText{gap:6px}.dockCta{padding-inline:13px}.dockTotal{font-size:18px}.headerActions{gap:0}}
+@media(max-width:365px){.brandName{font-size:17px}.brandCity{font-size:10px}.headerActions .langControl{width:36px}.dockItems{font-size:12px}.dockCta{font-size:13px;padding-inline:10px}}
+@media(prefers-reduced-motion:reduce){.page button,.dock{transition:none}.dockBump{animation:none}}
 
-.orderStatus{display:flex;justify-content:center;flex-wrap:wrap;gap:8px 24px;padding:10px 18px;border-block-end:1px solid var(--hair);background:var(--sf2);color:var(--tx2);font:500 12px/1.7 var(--font)}
-@media(max-width:650px){.orderStatus{justify-content:space-between;gap:6px 10px;font-size:11px;padding:9px 18px}}
+/* Home-only feedback clearance; no flow/payment selector enters this scope. */
+:global([data-sf-root]):has(.page .dock) :global([data-sf-toast="product"]){inset-block-end:calc(120px + env(safe-area-inset-bottom))}
+@media(max-width:650px){.page[data-sf-screen="home"]{--header-height:70px}.page[data-sf-screen="home"] .headerInner{min-height:70px;padding-block:7px}.menu{padding-block-start:14px}.menuSections>.section{margin-block-start:12px}}
+
+/* Home-only: search and payment never import this module. */
+.cartGlyph{position:relative;display:grid;place-items:center;width:36px;height:36px}
+.headerTotal{font-size:16px;font-weight:800;white-space:nowrap}.headerTotal.headerTotal{display:block}
+.orderStatus{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:7px;margin-block:6px 8px;border:1px solid var(--hair2);border-radius:20px;background:var(--sf2);color:var(--tx);font:600 12px/1.6 var(--font)}
+.orderStatus>span{display:flex;align-items:center;justify-content:center;gap:7px;text-align:center;min-height:32px;overflow-wrap:anywhere}.orderStatus>span+span{border-inline-start:1px solid var(--hair2)}.orderStatus svg{width:22px;height:22px;flex:none;color:var(--acct)}.orderStatus>[data-state]{border:1px solid currentColor;border-radius:20px}
+.menuBanner{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;mask-image:linear-gradient(#000 60%,transparent)}.menuBanner img{display:block;width:100%;height:100%;object-fit:cover}
+.cartTrigger{display:flex;align-items:center;border:0;font:500 13px var(--font);cursor:pointer;background:transparent;color:var(--tx);padding:8px;min-height:48px;gap:12px;border-radius:22px;transition:transform .12s,background .12s}
+.cartTrigger b{position:absolute;inset-block-start:-5px;inset-inline-end:-8px;display:grid;place-items:center;background:var(--acc);color:var(--onacc);border-radius:50%;width:22px;height:22px;font-size:11px}.cartTrigger svg{width:24px;height:24px}
+.categoryWrap{position:sticky;inset-block-start:var(--header-height);z-index:20;padding-block:10px}
+.rail{display:flex;overflow:auto;scrollbar-width:none;gap:9px}
+.chip{display:flex;align-items:center;justify-content:center;flex:none;min-width:max-content;min-height:54px;padding:11px 16px;gap:9px;border:1px solid var(--hair2);border-radius:20px;font:650 14px var(--font);color:inherit;white-space:nowrap;cursor:pointer;background:var(--sf);background:linear-gradient(130deg in srgb,var(--menuChipPaintFrom,var(--menuChipFrom,var(--sf))),var(--menuChipPaintTo,var(--menuChipTo,var(--sf))));box-shadow:0 3px 7px #0001;transition:transform .12s,box-shadow .12s}
+.chipActive{background:var(--acc);background:linear-gradient(135deg in srgb,var(--menuActiveFrom,var(--acc)),var(--menuActiveTo,var(--acc)));color:var(--onacc);border-color:var(--acc);font-weight:750;box-shadow:0 4px 12px #0002}
+.chip:hover:not(.chipActive):not(:disabled){background:var(--sf2);color:var(--tx)}.chip:disabled{cursor:default;border-style:dashed}.chip svg,.chip img{display:block;flex:none;width:24px;height:24px;color:var(--acct)}.chip small{display:none}.chipActive svg{color:inherit}
+@media (max-width:650px){
+ .orderStatus{font-size:11px;padding:6px;gap:4px}.orderStatus svg{width:19px;height:19px}.orderStatus>span{gap:5px}
+ .headerTotal{font-size:14px}
+ .cartTrigger{min-width:46px;min-height:46px;border:1px solid var(--hair2);border-radius:50%;gap:5px}.cartTrigger>span{display:none}.cartGlyph.cartGlyph{display:grid}
+ .categoryWrap{margin-inline:-18px;padding:8px 18px 12px}.rail{gap:5px}.chip{font-size:13px;min-height:44px;padding:10px 15px;gap:7px;border-radius:14px}
+}
+@media (max-width:365px){.headerTotal.headerTotal{font-size:12px}.orderStatus{font-size:10px}.cartTrigger{gap:7px}.chip{font-size:12px}}
+
+/* UX-003: the selected banner paints only the scrolling top section. */
+.topScene{position:relative;z-index:21;isolation:isolate;padding-block-end:14px}.topScene .header{position:relative}
+.sceneWindow{height:clamp(125px,16vw,190px)}.topControls{margin-block:0;padding-block:12px 0}
+.topScene[data-sf-has-banner] .header{background:color-mix(in srgb,var(--bg) 88%,transparent)}
+.topScene[data-sf-has-banner] .searchBox,.topScene[data-sf-has-banner] .suggestionSlot .suggest,.topScene[data-sf-has-banner] .menuIntro,.topScene[data-sf-has-banner] .announce{background:var(--sf);color:var(--tx)}
+.topScene[data-sf-has-banner] .menuIntro{padding:12px;border-radius:16px}
+.page[data-sf-screen="home"] .categoryWrap{inset-block-start:0}
+.page[data-sf-screen="home"] .menu{padding-block-start:0;scroll-margin-block-start:0}
+.page[data-sf-screen="home"] .menuSections>.section{scroll-margin-block-start:80px}

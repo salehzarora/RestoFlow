@@ -25,6 +25,11 @@ const storefrontAppearanceOptionalKeys = {
   'menu_background_dim',
   'scene_preset',
   'site_theme',
+  'menu_banner_media_id',
+  'menu_banner_enabled',
+  'menu_intro_visible',
+  'menu_banner_focal_x',
+  'menu_banner_focal_y',
 };
 const storefrontFontFamilies = {'rubik', 'alexandria', 'system'};
 final storefrontAppearanceHex = RegExp(r'^#[0-9A-Fa-f]{6}$');
@@ -91,6 +96,11 @@ bool contentFieldPath(Object? value) => const {
   'appearance.menu_background_dim',
   'appearance.scene_preset',
   'appearance.site_theme',
+  'appearance.menu_banner_media_id',
+  'appearance.menu_banner_enabled',
+  'appearance.menu_intro_visible',
+  'appearance.menu_banner_focal_x',
+  'appearance.menu_banner_focal_y',
 }.contains(value);
 
 Object? _freeze(Object? value) => switch (value) {
@@ -162,6 +172,31 @@ class StorefrontContentDocument {
           'appearance.site_theme',
           'presentation_invalid',
         );
+      }
+      final banner = appearance['menu_banner_media_id'];
+      if (banner != null && !contentId(banner)) {
+        throw const StorefrontDecodeException(
+          'appearance.menu_banner_media_id',
+          'media_invalid',
+        );
+      }
+      for (final key in const ['menu_banner_enabled', 'menu_intro_visible']) {
+        final value = appearance[key];
+        if (value != null && value is! bool) {
+          throw StorefrontDecodeException(
+            'appearance.$key',
+            'presentation_invalid',
+          );
+        }
+      }
+      for (final key in const ['menu_banner_focal_x', 'menu_banner_focal_y']) {
+        final value = appearance[key];
+        if (value != null && (value is! int || value < 0 || value > 100)) {
+          throw StorefrontDecodeException(
+            'appearance.$key',
+            'presentation_invalid',
+          );
+        }
       }
       final scene = appearance['scene_preset'];
       if (scene != null && scene != 'reference_dark') {

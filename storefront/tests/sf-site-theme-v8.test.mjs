@@ -84,6 +84,8 @@ test('v8 client accepts only exact missing requested signatures, sharing one dea
   const original = globalThis.fetch;
   const attempts = [];
   const responses = (...entries) => {
+    entries.unshift([404, missing(9)]);
+    entries.unshift([404, missing(10)]);
     attempts.length = 0;
     globalThis.fetch = async (url, init) => {
       attempts.push({ url, init });
@@ -98,15 +100,15 @@ test('v8 client accepts only exact missing requested signatures, sharing one dea
   try {
     responses([200, menu('dark')]);
     assert.equal((await read()).content_v1.appearance.site_theme, 'dark');
-    assert.equal(attempts.length, 1);
+    assert.equal(attempts.length, 3);
     for (const pg of [false, true]) {
       responses([404, missing(8, pg)], [200, legacy]);
       assert.deepEqual(await read(), decodeStorefrontMenuV7(legacy));
-      assert.deepEqual(attempts.map(a => a.url), [8, 7].map(v => `${config.url}/rest/v1/rpc/storefront_menu_v${v}`));
+      assert.deepEqual(attempts.map(a => a.url), [10, 9, 8, 7].map(v => `${config.url}/rest/v1/rpc/storefront_menu_v${v}`));
       assert.equal(attempts[0].init, attempts[1].init);
       responses([404, missing(8, pg)], [404, missing(7, pg)], [200, v6]);
       assert.deepEqual(await read(), decodeStorefrontMenuV6(v6));
-      assert.deepEqual(attempts.map(a => a.url), [8, 7, 6].map(v => `${config.url}/rest/v1/rpc/storefront_menu_v${v}`));
+      assert.deepEqual(attempts.map(a => a.url), [10, 9, 8, 7, 6].map(v => `${config.url}/rest/v1/rpc/storefront_menu_v${v}`));
       assert.ok(attempts.every(a => a.init === attempts[0].init));
     }
     for (const [status, body] of [
@@ -115,12 +117,12 @@ test('v8 client accepts only exact missing requested signatures, sharing one dea
       [404, { ...missing(8), message: missing(8).message.replace('public.', 'app.') }],
       [200, menu('auto')], [200, { ...menu('light'), extra: true }],
     ]) {
-      responses([status, body]); await assert.rejects(read); assert.equal(attempts.length, 1);
+      responses([status, body]); await assert.rejects(read); assert.equal(attempts.length, 3);
     }
     for (const [status, body] of [[200, menu('dark')], [404, missing(8)], [403, missing(7)], [500, missing(7)]]) {
-      responses([404, missing(8)], [status, body]); await assert.rejects(read); assert.equal(attempts.length, 2);
+      responses([404, missing(8)], [status, body]); await assert.rejects(read); assert.equal(attempts.length, 4);
     }
     responses([404, missing(8)], [404, missing(7)], [200, menu('dark')]);
-    await assert.rejects(read, EnvelopeError); assert.equal(attempts.length, 3);
+    await assert.rejects(read, EnvelopeError); assert.equal(attempts.length, 5);
   } finally { globalThis.fetch = original; }
 });

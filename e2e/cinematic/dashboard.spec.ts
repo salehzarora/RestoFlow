@@ -1,6 +1,6 @@
 import { test, expect, type BrowserContext, type Page, type Response, type Locator } from '@playwright/test';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { enableFlutterSemantics, waitForFlutterBoot, readAccessibleText } from '../lib/flutter';
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { MAX_REVEAL_WHEELS, nextRevealMove, observeResponse, responseAfterAction } from './control-progress.mjs';
@@ -34,6 +34,7 @@ const L = {
   saturation: 'التشبع / السطوع', hue: 'درجة اللون',
   scenePreview: 'معاينة مظهر المشهد', sceneReference: 'مرجع داكن محايد', sceneLegacy: 'استخدام مشهد العلامة',
   siteThemeLegacy: 'إبقاء المظهر الحالي (توافق سابق)', siteThemeLight: 'فاتح / أبيض', siteThemeDark: 'داكن',
+  bannerTitle: 'بانر المنيو العلوي', bannerUpload: 'رفع بانر جديد', bannerClear: 'مسح اختيار البانر',
 };
 type Obj = Record<string, any>;
 type Fixture = {
@@ -532,12 +533,13 @@ async function revealSavedStatus(page: Page): Promise<void> {
   await reveal(page, status, 'content-status');
   await textContains(page, L.saved);
 }
-type AppearanceGroup = 'profile' | 'content' | 'background';
+type AppearanceGroup = 'profile' | 'content' | 'background' | 'banner';
 async function openFoldedGroup(page: Page, group: AppearanceGroup, overviewCapture?: string): Promise<void> {
   const attributes = {
     profile: { title: L.profileAppearance, control: L.primary },
     content: { title: L.contentAppearance, control: L.textColor },
     background: { title: L.backgroundAndScene, control: L.upload },
+    banner: { title: L.bannerTitle, control: L.bannerUpload },
   }[group];
   // Flutter exposes a folded ExpansionTile header as a button. After a
   // normal click the expanded group exposes its actual child controls.
@@ -663,7 +665,8 @@ function routeClass(url: string): RouteClass {
   if (u.pathname.startsWith('/storage/v1/object/public/')) return 'public-media';
   return 'other-local';
 }
-async function upload(page: Page, filename: string, diagnostics: UploadDiagnostics, expectedStatus = 200): Promise<Obj> {
+async function upload(page: Page, filename: string, diagnostics: UploadDiagnostics, expectedStatus = 200, purpose: 'background' | 'banner' = 'background', synthetic?: Buffer): Promise<Obj> {
+  const uploadName = purpose === 'banner' ? L.bannerUpload : L.upload;
   const fixturePath = filename === 'background-2816.jpg' ? backgroundFixture
     : resolve(__dirname, '../../supabase/functions/storefront-media-publish/test/fixtures', filename);
   const onRequest = (request: import('@playwright/test').Request) => {
@@ -680,8 +683,8 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
   page.on('requestfailed', onFailed);
   try {
     diagnostics.mark('reveal', 'started');
-    const target = page.getByRole('button', { name: L.upload, exact: true });
-    await diagnostics.value('reveal', diagnostics.observe('reveal', reveal(page, target, 'upload', page.getByRole('button', { name: L.upload, exact: true, includeHidden: true }))));
+    const target = page.getByRole('button', { name: uploadName, exact: true });
+    await diagnostics.value('reveal', diagnostics.observe('reveal', reveal(page, target, 'upload', page.getByRole('button', { name: uploadName, exact: true, includeHidden: true }))));
     diagnostics.control = await targetGeometry(page, target);
     const uploaded = diagnostics.observe('private-upload-response', page.waitForResponse(r => {
       const u = new URL(r.url());
@@ -691,24 +694,24 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
       && r.request().postDataJSON()?.slot === 'hero' && r.status() !== 202, { timeout: 120_000 }));
     const chosen = diagnostics.observe('filechooser', page.waitForEvent('filechooser'));
     diagnostics.mark('click', 'started');
-    await diagnostics.value('click', diagnostics.observe('click', tapRevealedButton(page, L.upload)));
+    await diagnostics.value('click', diagnostics.observe('click', tapRevealedButton(page, uploadName)));
     const chooser = await diagnostics.value('filechooser', chosen);
     diagnostics.mark('file-set', 'started');
-    await diagnostics.value('file-set', diagnostics.observe('file-set', chooser.setFiles(fixturePath)));
+    await diagnostics.value('file-set', diagnostics.observe('file-set', chooser.setFiles(synthetic ? { name: filename, mimeType: 'image/png', buffer: synthetic } : fixturePath)));
     expect((await diagnostics.value('private-upload-response', uploaded)).ok(), 'Actual private bytes upload').toBe(true);
     const response = await diagnostics.value('publisher-response', published);
     expect(response.status(), 'Actual Edge publication response').toBe(expectedStatus);
     const body = await response.json() as Obj;
     if (expectedStatus === 200) {
       expect(body.ok, 'Actual Edge publisher accepted bytes').toBe(true);
-      await textContains(page, L.selected);
+      await textContains(page, purpose === 'banner' ? 'نُشرت الصورة؛ اخترها واحفظ المحتوى.' : L.selected);
     } else {
       expect(body.status, 'Cross-source duplicate is rejected').toBe('object_conflict');
       await textContains(page, L.unavailable);
     }
     return body;
   } catch (error) {
-    diagnostics.control = await targetGeometry(page, page.getByRole('button', { name: L.upload, exact: true })).catch(() => null);
+    diagnostics.control = await targetGeometry(page, page.getByRole('button', { name: uploadName, exact: true })).catch(() => null);
     diagnostics.fail('upload-assertion', error);
     throw diagnostics.original(error);
   } finally {
@@ -1047,7 +1050,7 @@ async function verifyReferenceScene(page: Page, dim: number): Promise<void> {
   expect(result.image).toEqual({ fit: 'cover', filter: 'none', position: 'absolute', opacity: '1' });
   expect(result.overlay).toEqual({ colour: 'rgb(0, 0, 0)', opacity: dim / 100 });
   expect(result.header).toEqual({ colour: 'rgba(21, 21, 21, 0.76)', blur: 'none' });
-  expect(result.category).toEqual({ colour: 'rgba(21, 21, 21, 0.76)', blur: 'none' });
+  expect(result.category).toEqual({ colour: 'rgba(0, 0, 0, 0)', blur: 'none' });
   expect(result.footer).toBe('rgba(37, 37, 37, 0.8)');
   expect(result.fits, 'Reference scene fits the viewport').toBe(true);
 }
@@ -1066,6 +1069,84 @@ async function screenshot(page: Page, path: string): Promise<void> {
   });
   await page.screenshot({ path, fullPage: true });
   await page.locator('[data-cinematic-test-label]').evaluateAll(nodes => nodes.forEach(n => n.remove()));
+}
+
+async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: string, diagnostics: () => UploadDiagnostics): Promise<void> {
+  const out = process.env.CINEMATIC_ARTIFACT_DIR!;
+  let stage = 'baseline';
+  const receipt: Obj = { status: 'FAIL', failedStage: stage, data: 'actual isolated Dashboard/Auth/Storage/Edge; no mocked publication', publications: [] };
+  const read = async () => (await rpc(f, token, 'get_restaurant_storefront_content_v5')).document;
+  const publicMenu = async () => {
+    const response = await fetch(API + '/rest/v1/rpc/storefront_menu_v10', { method: 'POST', redirect: 'error',
+      headers: { apikey: f.anonKey, authorization: 'Bearer ' + f.anonKey, 'content-type': 'application/json' }, body: JSON.stringify({ p_slug: f.ownerA.slug }) });
+    expect(response.status).toBe(200); const value = await response.json(); expect(value.ok).toBe(true); return value;
+  };
+  const baseline = await read();
+  const unchanged = async () => {
+    expect((await read()).appearance.menu_background_media_id).toBe(baseline.appearance.menu_background_media_id);
+    await invariants(f, token);
+  };
+  try {
+    for (const [index, geometry] of [[900, 450], [1000, 750]].entries()) {
+      const file = `ux003-banner-${index}.png`;
+      // Procedural test pixels through the existing fixture generator. Unique
+      // sources avoid collisions with independent Hero/product security inputs.
+      const chosen = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file));
+      stage = index === 0 ? 'upload-save-first-banner' : 'replace-save-banner';
+      await openEditor(page, true); await openFoldedGroup(page, 'banner');
+      const publication = await upload(page, file, diagnostics(), 200, 'banner', chosen);
+      expect(publication.recipe).toBe('storefront-media-c4'); expect(publication.media.variant).toBe('w960');
+      await saveContent(page); await openEditor(page, true); await openFoldedGroup(page, 'banner');
+      const document = await read();
+      expect(document.appearance.menu_banner_media_id).toBe(publication.media.id);
+      expect(document.appearance.menu_banner_enabled).toBe(true); await unchanged();
+      stage = 'verify-retained-private-source';
+      const sourceResponse = await fetch(API + '/rest/v1/rpc/get_storefront_background_source_v1', { method: 'POST', redirect: 'error',
+        headers: { apikey: f.anonKey, authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+        body: JSON.stringify({ p_organization_id: f.ownerA.orgId, p_restaurant_id: f.ownerA.restaurantId, p_branch_id: f.ownerA.branchId, p_base_media_id: publication.media.id }) });
+      expect(sourceResponse.status).toBe(200); const source = await sourceResponse.json(); expect(source.ok).toBe(true);
+      expect(source.source_bucket).toBe('restaurant-logos');
+      expect(source.source_key.startsWith(f.ownerA.orgId + '/' + f.ownerA.restaurantId + '/logo/')).toBe(true);
+      const privateReply = await fetch(API + '/storage/v1/object/authenticated/restaurant-logos/' + source.source_key.split('/').map(encodeURIComponent).join('/'),
+        { redirect: 'error', headers: { apikey: f.anonKey, authorization: 'Bearer ' + token } });
+      expect(privateReply.status).toBe(200);
+      const original = Buffer.from(await privateReply.arrayBuffer());
+      const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+      expect(hash(original), 'Dashboard retains the exact private source bytes').toBe(hash(chosen));
+      stage = 'public-banner-read-and-render';
+      const current = await publicMenu(), path = current.content_v1.appearance.menu_banner_url;
+      expect(path).toMatch(/^\/storage\/v1\/object\/public\/storefront-media\/[a-f0-9]{32}\/[a-f0-9]{64}\.webp$/);
+      const actual = await fetch(API + path, { redirect: 'error' }); expect(actual.status).toBe(200);
+      const bytes = Buffer.from(await actual.arrayBuffer()); expect(bytes.length).toBe(publication.media.bytes);
+      const dimensions = await menu.evaluate(async data => {
+        const image = await createImageBitmap(new Blob([Uint8Array.from(atob(data), c => c.charCodeAt(0))]));
+        const result = { width: image.width, height: image.height }; image.close(); return result;
+      }, bytes.toString('base64'));
+      expect(dimensions).toEqual({ width: publication.media.width, height: publication.media.height });
+      expect(Math.max(dimensions.width, dimensions.height)).toBeLessThanOrEqual(960);
+      await expect.poll(async () => {
+        await menu.goto(STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+        const image = menu.locator('[data-sf-menu-banner] img');
+        return await image.count() === 1 && (await image.getAttribute('src'))?.endsWith(path);
+      }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe(true);
+      const image = menu.locator('[data-sf-menu-banner] img');
+      await expect.poll(() => image.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
+      await screenshot(menu, resolve(out, `banner-${index ? 'replacement' : 'first'}-test-data.png`));
+      receipt.publications.push({ publicPath: path, originalBytes: original.length, originalSha256: hash(original), publishedBytes: bytes.length, publishedSha256: hash(bytes), ...dimensions });
+    }
+    stage = 'clear-banner-only';
+    await revealButton(page, L.bannerClear); await tapRevealedButton(page, L.bannerClear); await saveContent(page);
+    await openEditor(page, true); expect((await read()).appearance.menu_banner_media_id).toBeNull(); await unchanged();
+    await expect.poll(async () => {
+      await menu.goto(STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+      return await menu.locator('[data-sf-menu-top]').count() === 1 && await menu.locator('[data-sf-menu-banner]').count() === 0;
+    }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe(true);
+    receipt.status = 'BANNER_UPLOAD_E2E_PASS'; receipt.failedStage = null;
+    receipt.backgroundAndWelcomePreserved = true;
+  } finally {
+    if (receipt.status !== 'BANNER_UPLOAD_E2E_PASS') receipt.failedStage = stage;
+    writeFileSync(resolve(out, 'banner-upload-result.json'), JSON.stringify(receipt, null, 2));
+  }
 }
 
 test('real owner Dashboard → Storage → publisher → save → live menu; replacement, clear and appearance', async ({ page, context }) => {
@@ -1171,7 +1252,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     stages.push(stage);
 
     stage = 'site-theme-baseline';
-    const themeBaseline = await rpc(f, token, 'get_restaurant_storefront_content_v4');
+    const themeBaseline = await rpc(f, token, 'get_restaurant_storefront_content_v5');
     const profileBaseline = (await rpc(f, token, 'get_restaurant_storefront_profile')).profile;
     const retainedMenu = await menu.locator('[data-sf-root]').evaluate(root => {
       const style = getComputedStyle(root);
@@ -1191,7 +1272,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       await selectRevealedDropdown(page, selectedTheme, label);
       selectedTheme = label;
       expect(draftWrites, 'Choosing site appearance changes only the unsaved draft').toBe(writesBefore);
-      const pending = await rpc(f, token, 'get_restaurant_storefront_content_v4');
+      const pending = await rpc(f, token, 'get_restaurant_storefront_content_v5');
       expect(pending.version, 'A dropdown selection does not advance server CAS').toBe(themeVersion);
       if (mode === 'light') expect(pending.document).toEqual(themeBaseline.document);
       else expect(pending.document.appearance.site_theme).toBe(mode === 'dark' ? 'light' : 'dark');
@@ -1208,7 +1289,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       const reloaded = page.getByRole('button', { name: label, exact: false });
       await reveal(page, reloaded, 'field', page.getByRole('button', { name: label, exact: false, includeHidden: true }));
       await expect(reloaded, 'The actual reloaded Dashboard retains its saved appearance').toHaveCount(1);
-      const readback = await rpc(f, token, 'get_restaurant_storefront_content_v4');
+      const readback = await rpc(f, token, 'get_restaurant_storefront_content_v5');
       expect(readback.restaurant_id).toBe(f.ownerA.restaurantId);
       expect(readback.storefront_branch_id).toBe(f.ownerA.branchId);
       expect(readback.version).toBe(++themeVersion);
@@ -1496,5 +1577,37 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       controlReveal: error instanceof ControlRevealError ? error.samples : null,
       controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], siteThemeRenders: siteThemeRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
+  }
+});
+
+// Independent evidence in the same real-service stack. A failed legacy
+// background-companion assertion remains a failure, but cannot skip this
+// banner lifecycle. It signs in through the real UI again; no session injection.
+test('independent banner → actual Edge → save/reload → replace/clear preserves other media', async ({ page, context }) => {
+  const f = fixture(), network = await guardBrowser(context);
+  const uploads: UploadDiagnostics[] = [];
+  let signedIn = false, passed = false;
+  try {
+    await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();
+    await fillField(page, L.email, f.ownerA.email); await enterLoginPassword(page, f.ownerA.password);
+    expect(await page.getByRole('textbox', { name: L.email }).inputValue()).toBe(f.ownerA.email);
+    expect(await page.locator('input[type="password"]').inputValue()).toBe(f.ownerA.password);
+    const observed = observeResponse(page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API)));
+    const auth = await responseAfterAction(observed, () => tapButton(page, L.login, { which: 'last' }));
+    expect(auth.status()).toBe(200); const session = await auth.json();
+    expect(session.user.email).toBe(f.ownerA.email); expect(typeof session.access_token).toBe('string');
+    signedIn = true;
+    await openEditor(page);
+    const menu = await context.newPage();
+    await verifyBannerJourney(page, menu, f, session.access_token, () => {
+      const value = new UploadDiagnostics(); uploads.push(value); return value;
+    });
+    await network.check(); passed = true;
+  } finally {
+    if (signedIn && !passed) await failureScreenshot(page, resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-dashboard-failure-test-data.png'));
+    writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-browser-result.json'), JSON.stringify({
+      status: passed ? 'PASS' : 'FAIL', realUiSignIn: signedIn, uploads: uploads.map(item => item.snapshot()),
+      fonts: network.fonts(), mediaTransport: network.media(),
+    }, null, 2));
   }
 });

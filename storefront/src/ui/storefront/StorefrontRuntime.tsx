@@ -25,7 +25,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useCart, type CartDraft } from '@/cart/useCart';
 import { findLine } from '@/cart/cartModel';
-import { storefrontMessages } from '@/i18n/storefront';
+import type { StorefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
 import { groupsFor } from '@/source/lookup';
 import type { BasisPoints, DeliveryZone, MenuItem, ModifierGroup, MotionMode, ServiceState } from '@/source/types';
@@ -79,6 +79,7 @@ export function StorefrontRuntime({
   taxRateBp,
   orderingEnabled,
   locale,
+  m,
   motion,
   state,
   opensAt,
@@ -99,14 +100,10 @@ export function StorefrontRuntime({
   taxRateBp: BasisPoints;
   /** False for a browse-only storefront: every progression control states why. */
   orderingEnabled: boolean;
-  /**
-   * The LOCALE, not the dictionary. A dictionary handed across the server ->
-   * client boundary is serialised into every document's RSC payload - four
-   * files per document, eight home/search documents - while the client bundle
-   * already carries all three dictionaries for the flow. Resolving it here
-   * costs no bytes; passing it cost ~290 KB of the export (E-OPT-1).
-   */
+  /** Locale is still required for the existing product-note help copy. */
   locale: Locale;
+  /** Current dictionary supplied by the caller; no runtime dictionary lookup. */
+  m: StorefrontMessages;
   motion: MotionMode;
   state: ServiceState;
   opensAt: string;
@@ -116,7 +113,6 @@ export function StorefrontRuntime({
    */
   children?: ReactNode;
 }) {
-  const m = storefrontMessages(locale);
   const cart = useCart(slug, menuVersion, items, groups, source === 'fixture');
   const menu: MenuData = { source, items, groups, zones, taxRateBp, menuVersion, orderingEnabled };
   const [target, setTarget] = useState<SheetTarget | null>(null);

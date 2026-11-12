@@ -1,10 +1,10 @@
 /**
  * THE LIVE READ CLIENT - server-only, no SDK.
  *
- * WHAT IT DOES. POSTs `{p_slug}` to `<origin>/rest/v1/rpc/storefront_menu_v8`
+ * WHAT IT DOES. POSTs `{p_slug}` to `<origin>/rest/v1/rpc/storefront_menu_v10`
  * with the PUBLISHABLE anon key from SERVER environment (never `NEXT_PUBLIC_`),
  * with one shared 5 s deadline, and decodes the response for the requested RPC.
- * During a staggered rollout, an explicitly missing v8 permits v7, then only an
+ * During a staggered rollout, explicitly missing v10 permits v9, missing v9 permits v8, then missing v8 permits v7, then an
  * explicitly missing v7 permits v6. All reads share the original deadline.
  * Each is the same request a direct PostgREST caller could make
  * with the same key, so the site adds caching only and no authority.
@@ -24,7 +24,7 @@
  * fixture is never a substitute for a live tenant (packet §4.3 failure contract).
  */
 
-import { decodeStorefrontMenuV6, decodeStorefrontMenuV7, decodeStorefrontMenuV8, type StorefrontMenuV8Envelope } from './decodeContentV1';
+import { decodeStorefrontMenuV6, decodeStorefrontMenuV7, decodeStorefrontMenuV8, decodeStorefrontMenuV9, decodeStorefrontMenuV10, type StorefrontMenuV10Envelope } from './decodeContentV1';
 
 const TIMEOUT_MS = 5000;
 
@@ -49,7 +49,7 @@ export function liveConfig(env: NodeJS.ProcessEnv = process.env): LiveConfig {
 /** The exact request the read makes, exposed so a test can assert its shape. */
 export function storefrontMenuRequest(config: LiveConfig, slug: string): { readonly url: string; readonly init: RequestInit } {
   return {
-    url: `${config.url}/rest/v1/rpc/storefront_menu_v8`,
+    url: `${config.url}/rest/v1/rpc/storefront_menu_v10`,
     init: {
       method: 'POST',
       headers: {
@@ -65,7 +65,7 @@ export function storefrontMenuRequest(config: LiveConfig, slug: string): { reado
 }
 
 /** Only an exact missing requested RPC permits its legacy read. */
-async function missingMenu(response: Response, version: 7 | 8): Promise<boolean> {
+async function missingMenu(response: Response, version: 7 | 8 | 9 | 10): Promise<boolean> {
   if (response.status !== 404) return false;
   try {
     const body = await response.json();
@@ -83,15 +83,21 @@ async function missingMenu(response: Response, version: 7 | 8): Promise<boolean>
  * ISR keeps the last good document for a cached URL and a never-cached URL
  * gets the framework error page, never a fabricated menu.
  */
-export async function fetchStorefrontMenu(slug: string, config?: LiveConfig): Promise<StorefrontMenuV8Envelope> {
+export async function fetchStorefrontMenu(slug: string, config?: LiveConfig): Promise<StorefrontMenuV10Envelope> {
   if (typeof window !== 'undefined') {
     throw new Error('storefront live client is server-only');
   }
   const cfg = config ?? liveConfig();
   const { url, init } = storefrontMenuRequest(cfg, slug);
   const response = await fetch(url, init);
-  if (response.ok) return decodeStorefrontMenuV8(await response.json());
-  if (await missingMenu(response, 8)) {
+  if (response.ok) return decodeStorefrontMenuV10(await response.json());
+  if (!await missingMenu(response, 10)) throw new Error(`storefront_menu: HTTP ${response.status}`);
+  const v9 = await fetch(`${cfg.url}/rest/v1/rpc/storefront_menu_v9`, init);
+  if (v9.ok) return decodeStorefrontMenuV9(await v9.json());
+  if (!await missingMenu(v9, 9)) throw new Error(`storefront_menu: HTTP ${v9.status}`);
+  const v8 = await fetch(`${cfg.url}/rest/v1/rpc/storefront_menu_v8`, init);
+  if (v8.ok) return decodeStorefrontMenuV8(await v8.json());
+  if (await missingMenu(v8, 8)) {
     // All reads share the original deadline, slug and publishable credentials.
     const v7 = await fetch(`${cfg.url}/rest/v1/rpc/storefront_menu_v7`, init);
     if (v7.ok) return decodeStorefrontMenuV7(await v7.json());
@@ -102,5 +108,5 @@ export async function fetchStorefrontMenu(slug: string, config?: LiveConfig): Pr
     }
     throw new Error(`storefront_menu: HTTP ${v7.status}`);
   }
-  throw new Error(`storefront_menu: HTTP ${response.status}`);
+  throw new Error(`storefront_menu: HTTP ${v8.status}`);
 }

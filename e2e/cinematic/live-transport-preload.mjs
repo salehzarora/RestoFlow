@@ -31,4 +31,4 @@ installChildProcessBoundary(resolve(root, 'storefront'), preload, process.argv.i
 globalThis.fetch = createMenuTransport(globalThis.fetch, { anonKey: status.ANON_KEY, slug: fixture.ownerA.slug });
 // Fixed scalar receipt, emitted by the real bounded child before Next starts.
 writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR, 'storefront-transport-boundary.json'),
-  JSON.stringify({ status: 'PASS', deniedNetworkCanaries, onlyMenuV5Read: true, onlyLoopbackDestination: true, responseRewriting: false }));
+  JSON.stringify({ status: 'PASS', deniedNetworkCanaries, onlyMenuV10Read: true, onlyLoopbackDestination: true, responseRewriting: false }));

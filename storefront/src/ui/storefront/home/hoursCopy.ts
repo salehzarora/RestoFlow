@@ -15,7 +15,8 @@
  *   paused + window        -> "10:00–23:00" (paused is not closed: the window stands)
  *   paused + no window     -> "unavailable now" (paused never invents a next-open time)
  */
-import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import type { StorefrontMessages } from '@/i18n/storefront';
+import { fill } from '@/i18n/fill';
 import type { Tenant } from '@/source/types';
 
 export interface HoursLabel {

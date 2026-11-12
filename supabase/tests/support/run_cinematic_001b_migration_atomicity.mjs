@@ -18,6 +18,7 @@ import {
   migrationName, migrationVersion, historicalMigrationName, originalCommit, wrapperOnlyCommit, proveWrapperOnly, proveFinalMigration,
   requireEphemeralCi, sha256, predecessorVersion, followUpName, followUpVersion, targetFunctions, proveMigrationSequence,
   targetPrefixSources, visualReleaseSources, siteThemeSuccessor, siteThemeReleaseSources,
+  menuBannerSuccessor, menuBannerReleaseSources, detailOriginalSuccessor, detailOriginalReleaseSources,
 } from './cinematic_001b_migration_contract.mjs';
 
 requireEphemeralCi(process.env); // Must precede subprocesses, including Docker.
@@ -101,6 +102,40 @@ const siteThemeGrantsQuery = `select json_build_object(
   'content_v4_authenticated', has_function_privilege('authenticated', 'public.get_restaurant_storefront_content_v4(uuid,uuid)', 'EXECUTE'),
   'menu_v8_anon', has_function_privilege('anon', 'public.storefront_menu_v8(text)', 'EXECUTE'),
   'menu_v8_authenticated', has_function_privilege('authenticated', 'public.storefront_menu_v8(text)', 'EXECUTE'))::text;`;
+
+// PROPOSED UX003-only readiness/grant queries; no payment schema input.
+const menuBannerReadinessQuery = `select json_build_object(
+  'content_v5', to_regprocedure('public.get_restaurant_storefront_content_v5(uuid,uuid)') is not null,
+  'menu_v9', to_regprocedure('public.storefront_menu_v9(text)') is not null)::text;`;
+const menuBannerGrantsQuery = `select json_build_object(
+  'content_v5_authenticated', has_function_privilege('authenticated','public.get_restaurant_storefront_content_v5(uuid,uuid)','EXECUTE'),
+  'menu_v9_anon', has_function_privilege('anon','public.storefront_menu_v9(text)','EXECUTE'),
+  'menu_v9_authenticated', has_function_privilege('authenticated','public.storefront_menu_v9(text)','EXECUTE'))::text;`;
+const detailOriginalReadinessQuery = `select json_build_object(
+  'menu_v10', to_regprocedure('public.storefront_menu_v10(text)') is not null,
+  'original_helper', to_regprocedure('app.storefront_product_original_images_v1(uuid,uuid,uuid,uuid[])') is not null)::text;`;
+const detailOriginalGrantsQuery = `select json_build_object(
+  'menu_v10_anon', has_function_privilege('anon','public.storefront_menu_v10(text)','EXECUTE'),
+  'menu_v10_authenticated', has_function_privilege('authenticated','public.storefront_menu_v10(text)','EXECUTE'),
+  'menu_v10_service_role', has_function_privilege('service_role','public.storefront_menu_v10(text)','EXECUTE'),
+  'helper_anon', has_function_privilege('anon','app.storefront_product_original_images_v1(uuid,uuid,uuid,uuid[])','EXECUTE'),
+  'helper_authenticated', has_function_privilege('authenticated','app.storefront_product_original_images_v1(uuid,uuid,uuid,uuid[])','EXECUTE'),
+  'helper_service_role', has_function_privilege('service_role','app.storefront_product_original_images_v1(uuid,uuid,uuid,uuid[])','EXECUTE'),
+  'no_public_execute', not exists(select 1 from pg_proc p cross join lateral
+    aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+    where p.oid in('public.storefront_menu_v10(text)'::regprocedure,
+      'app.storefront_product_original_images_v1(uuid,uuid,uuid,uuid[])'::regprocedure)
+      and a.grantee=0 and a.privilege_type='EXECUTE'))::text;`;
+const detailLegacyReadersQuery = `select jsonb_agg(jsonb_build_object(
+  'identity',p.oid::regprocedure::text,'definition',pg_get_functiondef(p.oid),
+  'acl',p.proacl,'owner',p.proowner) order by p.oid::regprocedure::text)::text
+  from pg_proc p where p.oid in(
+    'public.get_restaurant_storefront_content_v4(uuid,uuid)'::regprocedure,
+    'public.get_restaurant_storefront_content_v5(uuid,uuid)'::regprocedure,
+    'public.storefront_menu_v5(text)'::regprocedure,'public.storefront_menu_v6(text)'::regprocedure,
+    'public.storefront_menu_v7(text)'::regprocedure,'public.storefront_menu_v8(text)'::regprocedure,
+    'public.storefront_menu_v9(text)'::regprocedure);`;
+
 const historyVersionsQuery = "select coalesce(jsonb_agg(version order by version),'[]'::jsonb)::text from supabase_migrations.schema_migrations;";
 const historyThroughTargetQuery = `select coalesce(jsonb_agg(to_jsonb(h) order by version),'[]'::jsonb)::text
   from supabase_migrations.schema_migrations h where version <= '${migrationVersion}';`;
@@ -366,6 +401,78 @@ end;\n$cinematic_late_failure$;\n`;
   const finalSiteThemeSources = await readMigrationSources(migrationsDirectory);
   assert.ok(finalSiteThemeSources.length === sources.length && finalSiteThemeSources.every(([name, bytes], index) =>
     name === sources[index][0] && bytes.equals(sources[index][1])), 'Every tracked migration source must remain byte-identical');
+
+  // PROPOSED UX003 extension. Preserve every historical/theme phase above.
+  // The banner deliberately updates strict legacy projections: do not assert
+  // their definitions unchanged across it; bounded SQL/API tests prove shapes.
+  phase = 'apply_reviewed_menu_banner';
+  assert.deepEqual(JSON.parse(sql(menuBannerReadinessQuery)), { content_v5: false, menu_v9: false },
+    'Banner readers must be absent before their separate phase');
+  const bannerPlan = menuBannerReleaseSources(sources);
+  await writeFile(join(releaseWorkdir, 'supabase/migrations', menuBannerSuccessor.name), sourceBytes.get(menuBannerSuccessor.name));
+  const bannerWritten = await readMigrationSources(join(releaseWorkdir, 'supabase/migrations'));
+  assert.deepEqual(bannerWritten.map(([name]) => name), bannerPlan.map(([name]) => name), 'Banner plan names must match exactly');
+  assert.ok(bannerWritten.every(([name, bytes]) => bytes.equals(sourceBytes.get(name))), 'Banner plan bytes must match exactly');
+  checked('supabase', ['migration', 'up', '--local', '--workdir', releaseWorkdir]);
+  const bannerVersion = menuBannerSuccessor.name.slice(0, 14);
+  const bannerHistory = JSON.parse(sql(historyQuery));
+  assert.deepEqual(bannerHistory.map(row => row.version), versionsOf(bannerPlan.map(([name]) => name)), 'Only the exact banner plan may be applied');
+  assert.equal(bannerHistory.filter(row => row.version === bannerVersion).length, 1, 'Banner history row must exist exactly once');
+  assert.deepEqual(bannerHistory.filter(row => row.version !== bannerVersion), siteThemeHistory, 'Every prior theme/history row must remain unchanged');
+  const bannerReadiness = JSON.parse(sql(menuBannerReadinessQuery));
+  const bannerGrants = JSON.parse(sql(menuBannerGrantsQuery));
+  assert.deepEqual(bannerReadiness, { content_v5: true, menu_v9: true }, 'Banner phase must produce v5/v9 readiness');
+  assert.deepEqual(bannerGrants, { content_v5_authenticated: true, menu_v9_anon: true, menu_v9_authenticated: true }, 'Banner public grants must match');
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), followupReadiness, 'Existing follow-up readiness must survive banner');
+  assert.deepEqual(JSON.parse(sql(siteThemeReadinessQuery)), siteThemeReadiness, 'Existing theme readiness must survive banner');
+  assert.equal(sql("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname in ('card_provider_attempts','card_provider_private_events','card_payments_pilot_revisions','payment_terminals','card_attempt_identity_tombstones');"), '0',
+    'No unrelated payment schema may be introduced by banner');
+  receipt.menu_banner_release = { status: 'PASS', applied_version: bannerVersion,
+    migration_versions: bannerHistory.map(row => row.version), prior_history_unchanged: true,
+    readiness: bannerReadiness, grants: bannerGrants, followup_readiness_unchanged: true,
+    pending_payment_schema_absent: true, schema_sha256: sha256(schemaSnapshot()), history_sha256: sha256(sql(historyQuery)),
+    lifecycle_stack: 'post_menu_banner_release', site_theme_release_describes: 'historical_pre_banner_stack' };
+  const finalBannerSources = await readMigrationSources(migrationsDirectory);
+  assert.ok(finalBannerSources.length === sources.length && finalBannerSources.every(([name, bytes], index) =>
+    name === sources[index][0] && bytes.equals(sources[index][1])), 'Every tracked migration source must remain byte-identical');
+
+  phase = 'apply_reviewed_product_detail_original';
+  assert.deepEqual(JSON.parse(sql(detailOriginalReadinessQuery)), { menu_v10: false, original_helper: false },
+    'Detail-original readers must be absent before their separate phase');
+  const beforeDetailLegacy = sql(detailLegacyReadersQuery);
+  const detailPlan = detailOriginalReleaseSources(sources);
+  await writeFile(join(releaseWorkdir, 'supabase/migrations', detailOriginalSuccessor.name), sourceBytes.get(detailOriginalSuccessor.name));
+  const detailWritten = await readMigrationSources(join(releaseWorkdir, 'supabase/migrations'));
+  assert.deepEqual(detailWritten.map(([name]) => name), detailPlan.map(([name]) => name), 'Detail-original plan names must match exactly');
+  assert.ok(detailWritten.every(([name, bytes]) => bytes.equals(sourceBytes.get(name))), 'Detail-original plan bytes must match exactly');
+  checked('supabase', ['migration', 'up', '--local', '--workdir', releaseWorkdir]);
+  const detailVersion = detailOriginalSuccessor.name.slice(0, 14);
+  const detailHistory = JSON.parse(sql(historyQuery));
+  assert.deepEqual(detailHistory.map(row => row.version), versionsOf(detailPlan.map(([name]) => name)), 'Only the exact detail-original plan may be applied');
+  assert.equal(detailHistory.filter(row => row.version === detailVersion).length, 1, 'Detail-original history row must exist exactly once');
+  assert.deepEqual(detailHistory.filter(row => row.version !== detailVersion), bannerHistory, 'Every prior banner/history row must remain unchanged');
+  const detailReadiness = JSON.parse(sql(detailOriginalReadinessQuery));
+  const detailGrants = JSON.parse(sql(detailOriginalGrantsQuery));
+  assert.deepEqual(detailReadiness, { menu_v10: true, original_helper: true }, 'Detail phase must produce v10 and the four-argument helper');
+  assert.deepEqual(detailGrants, { menu_v10_anon: true, menu_v10_authenticated: true, menu_v10_service_role: false,
+    helper_anon: false, helper_authenticated: false, helper_service_role: false, no_public_execute: true }, 'Detail reader/helper grants must match');
+  assert.equal(sql(detailLegacyReadersQuery), beforeDetailLegacy, 'Detail-original must preserve current legacy reader definitions, ACLs and owners');
+  assert.deepEqual(JSON.parse(sql(menuBannerReadinessQuery)), bannerReadiness, 'Banner readiness must survive detail-original');
+  assert.deepEqual(JSON.parse(sql(siteThemeReadinessQuery)), siteThemeReadiness, 'Theme readiness must survive detail-original');
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), followupReadiness, 'Existing follow-up readiness must survive detail-original');
+  assert.equal(sql("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname in ('card_provider_attempts','card_provider_private_events','card_payments_pilot_revisions','payment_terminals','card_attempt_identity_tombstones');"), '0',
+    'No unrelated payment schema may be introduced by detail-original');
+  receipt.product_detail_original_release = { status: 'PASS', applied_version: detailVersion,
+    migration_versions: detailHistory.map(row => row.version), prior_history_unchanged: true,
+    readiness: detailReadiness, grants: detailGrants, legacy_readers_unchanged: true,
+    legacy_readers_before_sha256: sha256(beforeDetailLegacy), legacy_readers_after_sha256: sha256(sql(detailLegacyReadersQuery)),
+    pending_payment_schema_absent: true, schema_sha256: sha256(schemaSnapshot()), history_sha256: sha256(sql(historyQuery)),
+    ready_for_real_service_lifecycle: true, lifecycle_stack: 'post_product_detail_original_release',
+    menu_banner_release_describes: 'historical_pre_detail_original_stack', site_theme_release_describes: 'historical_pre_banner_stack' };
+  const finalDetailSources = await readMigrationSources(migrationsDirectory);
+  assert.ok(finalDetailSources.length === sources.length && finalDetailSources.every(([name, bytes], index) =>
+    name === sources[index][0] && bytes.equals(sources[index][1])), 'Every tracked migration source must remain byte-identical');
+
   receipt.status = 'PASS';
   phase = 'complete';
 } catch (error) {

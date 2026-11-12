@@ -113,6 +113,8 @@ export interface Tenant {
   readonly scenePreset?: 'reference_dark' | null;
   /** Versioned merchant choice, separate from legacy visual_preset and scene selection. */
   readonly siteTheme?: SiteTheme | null;
+  /** Independent menu banner; absent preserves existing merchants. Published derivative only. */
+  readonly menuBanner?: { readonly image: string | null; readonly enabled: boolean; readonly showIntro: boolean; readonly focalX: number; readonly focalY: number };
   readonly currency: 'ILS';
 }
 
@@ -220,6 +222,8 @@ export interface MenuItem {
   readonly image: string | null;
   /** Authorized, immutable product variants; legacy catalogues omit them. */
   readonly imageVariants?: readonly ImageVariant[];
+  /** Optional independently published, bounded Original photo; details only. */
+  readonly detailImage?: ImageVariant;
   /** Featured items render as the large card at the top of their section. */
   readonly featured: boolean;
   /** Signature items are the ones eligible for the popular rail. */

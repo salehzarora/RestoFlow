@@ -10,6 +10,7 @@ import { installDashboardFontMirror } from './font-mirror.mjs';
 import { requireEphemeralCi } from '../../supabase/tests/support/cinematic_001b_migration_contract.mjs';
 import { capturePublisherRuntime } from './publisher-diagnostics.mjs';
 import { LOGICAL_ORIGIN } from './live-transport.mjs';
+import { measureLiveBudget } from './live-budget.mjs';
 
 const marker = 'BIZBOT-STOREFRONT-CINEMATIC-001B';
 const api = 'http://127.0.0.1:54321';
@@ -170,7 +171,7 @@ async function main(action) {
     const clean = value => {
       let text = String(value || '').replace(/\x1b\[[0-9;]*m/g, '');
       for (const secret of privateValues) text = text.replaceAll(secret, '[REDACTED]');
-      return text.replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED JWT]').split('\n')[0].slice(0, 400);
+      return text.replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED JWT]').trim().split('\n')[0].slice(0, 400);
     };
     const cases = [];
     const collect = suites => { for (const suite of suites || []) {
@@ -180,13 +181,19 @@ async function main(action) {
       }
       collect(suite.suites);
     } };
-    if (existsSync(report)) collect(JSON.parse(readFileSync(report, 'utf8')).suites);
+    const reported = existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : {};
+    collect(reported.suites);
+    const errors = (reported.errors || []).map(error => clean(error.message));
     writeFileSync(resolve(publicDir, 'browser-result.json'), JSON.stringify({
       status: result.status === 0 ? 'PASS' : 'FAIL', exitCode: result.status,
-      actualServices: true, retries: 0, cases,
+      actualServices: true, retries: 0, cases, errors,
     }, null, 2));
     for (const item of cases) console.log(`${item.status}: ${item.title}`);
+    // Run only after the independent UI lifecycle has finished. A size failure
+    // cannot prevent Edge acceptance from executing or erase its own receipt.
+    const liveBudget = await measureLiveBudget(root, privateDir, publicDir, fixture.ownerA.slug);
     assert.equal(result.status, 0, 'Real Dashboard acceptance failed; no automatic retry');
+    assert.equal(liveBudget.status, 'PASS', 'Actual live first-load budget failed; unchanged caps remain a release gate');
   } finally {
     for (const child of children) child.kill('SIGTERM');
   }
