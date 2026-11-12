@@ -1080,21 +1080,28 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
   const read = () => rpc(f, token, 'get_restaurant_storefront_content_v5');
   const previewFrames = page.locator('iframe[title="Storefront banner preview"]');
   const preview = (index: number) => page.frameLocator('iframe[title="Storefront banner preview"]').nth(index);
-  const geometry = async (root: Locator): Promise<Obj> => root.evaluate(async el => {
-    const doc = el.ownerDocument;
-    await doc.fonts.ready;
-    // Browser layout only; wait two actual animation frames after font/size updates.
-    await new Promise<void>(resolve => doc.defaultView!.requestAnimationFrame(() => doc.defaultView!.requestAnimationFrame(() => resolve())));
-    const image = doc.querySelector<HTMLImageElement>('[data-sf-menu-banner] img')!;
-    await image.decode();
-    const box = image.getBoundingClientRect();
-    const scale = Math.max(box.width / image.naturalWidth, box.height / image.naturalHeight);
-    return { width: box.width, height: box.height, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight,
-      publicPath: new URL(image.currentSrc).pathname, position: getComputedStyle(image).objectPosition,
-      clippedX: Math.max(0, image.naturalWidth - box.width / scale), clippedY: Math.max(0, image.naturalHeight - box.height / scale),
-      searchY: doc.querySelector('[role="search"]')!.getBoundingClientRect().y,
-      categoriesY: doc.querySelector('[data-sf-module="categories"]')!.getBoundingClientRect().y };
-  });
+  const geometry = async (root: Locator): Promise<Obj> => {
+    await root.evaluate(async el => {
+      await el.ownerDocument.fonts.ready;
+      await el.ownerDocument.querySelector<HTMLImageElement>('[data-sf-menu-banner] img')!.decode();
+    });
+    // The render-only iframe intentionally forbids scripts; its rAF callbacks
+    // cannot run. Wait for layout in the owning page, without relaxing sandbox.
+    await root.page().evaluate(async () => {
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    });
+    return root.evaluate(el => {
+      const doc = el.ownerDocument;
+      const image = doc.querySelector<HTMLImageElement>('[data-sf-menu-banner] img')!;
+      const box = image.getBoundingClientRect();
+      const scale = Math.max(box.width / image.naturalWidth, box.height / image.naturalHeight);
+      return { width: box.width, height: box.height, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight,
+        publicPath: new URL(image.currentSrc).pathname, position: getComputedStyle(image).objectPosition,
+        clippedX: Math.max(0, image.naturalWidth - box.width / scale), clippedY: Math.max(0, image.naturalHeight - box.height / scale),
+        searchY: doc.querySelector('[role="search"]')!.getBoundingClientRect().y,
+        categoriesY: doc.querySelector('[data-sf-module="categories"]')!.getBoundingClientRect().y };
+    });
+  };
   const label = (axis: 'x' | 'y') => axis === 'x' ? 'موضع التركيز الأفقي' : 'موضع التركيز الرأسي';
   const focalText = (axis: 'x' | 'y', value: number) => page.getByText(`${label(axis)} — ${value}%`, { exact: true });
   // Discover the real range following its visible axis label, not a fixed
@@ -1165,6 +1172,7 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
     // Wait for that initial document and fonts before taking a baseline. Only
     // this pre-input wait accepts navigation; draft/reuse checks stay strict.
     let initialDocumentNavigations = 0;
+    receipt.initialDocumentNavigations = 0;
     const initialGeometry = async (index: number): Promise<Obj> => {
       let observed: Obj | undefined;
       await expect.poll(async () => {
@@ -1175,17 +1183,21 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
               && el.querySelector('[data-sf-order-status] [data-state]')!.getAttribute('data-state') !== 'unknown');
           if (!ready) return false;
           observed = await geometry(preview(index).locator('[data-sf-menu-top]'));
+          receipt[index === 0 ? 'initialPhoneGeometry' : 'initialDesktopGeometry'] = observed;
           return observed.position === `${initialX}% ${initialY}%`;
         } catch (error) {
           if (!(error instanceof Error) || !error.message.includes('Execution context was destroyed')) throw error;
-          initialDocumentNavigations++;
+          receipt.initialDocumentNavigations = ++initialDocumentNavigations;
           return false;
         }
       }, { timeout: 25000 }).toBe(true);
       return observed!;
     };
-    const phoneBefore = await initialGeometry(0), desktopBefore = await initialGeometry(1);
-    receipt.initialDocumentNavigations = initialDocumentNavigations;
+    stage = 'baseline-initial-phone';
+    const phoneBefore = await initialGeometry(0);
+    stage = 'baseline-initial-desktop';
+    const desktopBefore = await initialGeometry(1);
+    stage = 'baseline-crop-geometry';
     expect(phoneBefore.width, 'Default logical phone preview').toBe(390);
     expect(desktopBefore.width, 'Independent logical desktop preview').toBe(1280);
     expect(phoneBefore.clippedX, 'This real image actually crops horizontally on phone').toBeGreaterThan(1);
