@@ -8763,6 +8763,366 @@ class AppLocalizationsAr extends AppLocalizations {
       'لا يوجد كاشير مسجّل الدخول. سجّل الدخول ثم اقبض الدفعة. لم يتم تحصيل أي مبلغ.';
 
   @override
+  String get posCardTerminalTender => 'جهاز البطاقات';
+
+  @override
+  String get posCardTerminalTestTender => 'جهاز البطاقات · اختبار';
+
+  @override
+  String get posCardTerminalNote =>
+      'يدفع الزبون على جهاز البطاقات. يسجّل BIZBOT الدفعة فقط بعد موافقة مزوّد الخدمة.';
+
+  @override
+  String get posCardTerminalTestNote =>
+      'وضع الاختبار: يجري الجهاز عملية دفع تجريبية. لا يُسجَّل أي شيء ويبقى الطلب غير مدفوع.';
+
+  @override
+  String get posCardTerminalStart => 'بدء الدفع بالبطاقة';
+
+  @override
+  String get posCardTerminalLabSwitch => 'مختبر اختبار جهاز البطاقات';
+
+  @override
+  String get posCardTerminalUnavailableNote =>
+      'الدفع عبر جهاز البطاقات غير متاح على نقطة البيع هذه الآن. اقبض الدفعة بطريقة أخرى.';
+
+  @override
+  String get posCardTerminalRequiredNote =>
+      'تقبل نقطة البيع هذه الدفع بالبطاقة عبر جهاز البطاقات فقط. لا يمكن استخدام تسجيل البطاقة يدويًا هنا.';
+
+  @override
+  String get posCardPostureUnknownNote =>
+      'تعذّر التحقق من إعدادات البطاقة على نقطة البيع هذه، لذا لا يمكن تسجيل البطاقة الآن. تحقّق من الاتصال وحاول مرة أخرى، أو اقبض الدفعة بطريقة أخرى.';
+
+  @override
+  String get posCardNotePostureUnknown =>
+      'تعذّر التحقق من إعدادات جهاز البطاقات. تحقّق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get posCardJournalQuarantinedTitle =>
+      'دفعة بطاقة مخزّنة غير قابلة للقراءة';
+
+  @override
+  String get posCardJournalQuarantinedBody =>
+      'تعذّرت قراءة دفعة مخزّنة عبر جهاز البطاقات. الدفعات الجديدة عبر جهاز البطاقات محظورة على نقطة البيع هذه. اسأل المدير.';
+
+  @override
+  String get posCardJournalFullNote =>
+      'سعة تخزين دفعات جهاز البطاقات على نقطة البيع هذه ممتلئة. أنهِ الدفعات المفتوحة عبر جهاز البطاقات قبل بدء دفعة جديدة. لم تُحصَّل أي بطاقة.';
+
+  @override
+  String get posCardSaveBlocked =>
+      'تعذّر حفظ طلب البطاقة، لذلك لم يُرسَل أي شيء. حاول مرة أخرى.';
+
+  @override
+  String get posCardAttemptTitle => 'الدفع عبر جهاز البطاقات';
+
+  @override
+  String get posCardAttemptTestTitle => 'اختبار جهاز البطاقات';
+
+  @override
+  String get posCardTestBadge => 'اختبار — لا يُسجَّل أي شيء';
+
+  @override
+  String get posCardPreparingTitle => 'جارٍ تجهيز طلب البطاقة';
+
+  @override
+  String get posCardPreparingBody =>
+      'لا تقبض الدفعة بطريقة أخرى ما دام هذا الطلب مفتوحًا.';
+
+  @override
+  String get posCardNotSentTitle => 'لم يُرسَل طلب البطاقة';
+
+  @override
+  String get posCardNotSentBody =>
+      'لم يصل أي شيء إلى مزوّد البطاقات. أرسل الطلب نفسه مرة أخرى، أو ألغِه واقبض الدفعة بطريقة أخرى.';
+
+  @override
+  String get posCardSignInTitle => 'سجّل الدخول مرة أخرى';
+
+  @override
+  String get posCardSignInBody =>
+      'رفض الخادم الجلسة. سجّل الدخول مرة أخرى ثم أرسل الطلب نفسه.';
+
+  @override
+  String get posCardNotAppliedTitle => 'الدفع عبر جهاز البطاقات غير متاح';
+
+  @override
+  String get posCardNotAppliedBody =>
+      'رُفض الطلب قبل معالجته. لم تُحصَّل أي بطاقة. اقبض الدفعة بطريقة أخرى.';
+
+  @override
+  String get posCardRefusedTitle => 'لم يبدأ الدفع بالبطاقة';
+
+  @override
+  String get posCardRefusedDisabled =>
+      'الدفع عبر جهاز البطاقات متوقف على نقطة البيع هذه الآن. لم تُحصَّل أي بطاقة.';
+
+  @override
+  String get posCardRefusedInProgress =>
+      'هناك دفعة أخرى بالبطاقة قيد التنفيذ لهذا الطلب.';
+
+  @override
+  String get posCardRefusedSettled => 'هذا الطلب مدفوع بالفعل.';
+
+  @override
+  String get posCardRefusedNotChargeable =>
+      'لا يوجد مبلغ لتحصيله في هذا الطلب.';
+
+  @override
+  String get posCardRefusedOrderChanged => 'تغيّر الطلب. حدّثه وابدأ من جديد.';
+
+  @override
+  String get posCardRefusedLimit =>
+      'المبلغ أعلى من الحد المسموح لجهاز البطاقات في نقطة البيع هذه.';
+
+  @override
+  String get posCardRefusedCurrency =>
+      'لا يستطيع جهاز البطاقات التحصيل بهذه العملة.';
+
+  @override
+  String get posCardRefusedRole => 'دورك لا يسمح ببدء دفعة عبر جهاز البطاقات.';
+
+  @override
+  String get posCardRefusedGeneric =>
+      'تعذّر بدء الدفع عبر جهاز البطاقات. لم تُحصَّل أي بطاقة.';
+
+  @override
+  String get posCardUncertainTitle => 'النتيجة غير مؤكدة';
+
+  @override
+  String get posCardUncertainBody =>
+      'ربما وصل طلب البطاقة إلى المزوّد. لا تحصّل مرة أخرى — يجري التحقق من الحالة.';
+
+  @override
+  String get posCardNotFoundTitle => 'لم تُنشأ أي دفعة بالبطاقة';
+
+  @override
+  String get posCardNotFoundBody =>
+      'لا يوجد لدى الخادم دفعة بالبطاقة لهذا الطلب، لذلك لم تُحصَّل أي بطاقة بسببه. يمكنك قبض الدفعة بطريقة أخرى.';
+
+  @override
+  String get posCardWaitingTitle => 'بانتظار الزبون عند الجهاز';
+
+  @override
+  String get posCardWaitingBody =>
+      'اطلب من الزبون إكمال الدفع على الجهاز. ما دامت هذه النافذة مفتوحة، يتم التحقق من الحالة تلقائيًا.';
+
+  @override
+  String get posCardReleasedTitle => 'أكّد المزوّد طلب الإلغاء';
+
+  @override
+  String get posCardReleasedBody =>
+      'قد يكون هناك تحصيل رغم ذلك. واصل التحقق من الحالة حتى تصبح النتيجة نهائية.';
+
+  @override
+  String get posCardApprovedTitle =>
+      'تمت الموافقة — جارٍ إكمال التسجيل في BIZBOT';
+
+  @override
+  String get posCardApprovedBody =>
+      'وافق المزوّد على التحصيل. يُعتبر الطلب مدفوعًا فقط بعد أن يسجّل BIZBOT الدفعة.';
+
+  @override
+  String get posCardRecordingUnconfirmedTitle =>
+      'تمت الموافقة — التسجيل غير مؤكد';
+
+  @override
+  String get posCardRecordingUnconfirmedBody =>
+      'أرسل التسجيل نفسه مرة أخرى. لن يُحصَّل من الزبون مرة أخرى أبدًا.';
+
+  @override
+  String get posCardRecordingRefusedTitle => 'تمت الموافقة — رُفض التسجيل';
+
+  @override
+  String get posCardRecordingRefusedBody =>
+      'تمت الموافقة على التحصيل لكن BIZBOT لم يتمكن من تسجيله. يستطيع المدير استئناف التسجيل على نقطة البيع هذه.';
+
+  @override
+  String posCardResumesUsed(int used, int limit) {
+    return 'مرات الاستئناف المستخدمة: $used من $limit';
+  }
+
+  @override
+  String get posCardManagerMustSendTitle => 'يجب أن يرسل المدير هذا التسجيل';
+
+  @override
+  String get posCardManagerMustSendBody =>
+      'استأنف المدير هذا التسجيل. المدير فقط يستطيع إرساله مرة أخرى.';
+
+  @override
+  String get posCardResumeRefusedTitle => 'رُفض الاستئناف';
+
+  @override
+  String get posCardResumeRefusedBody =>
+      'رفض الخادم هذا الاستئناف؛ لم يُحصَّل أو يُسجَّل أي شيء. تحقّق من الحالة قبل المحاولة مرة أخرى.';
+
+  @override
+  String get posCardResumeStaleBody =>
+      'حدث استئناف آخر أولًا. تحقّق من الحالة ثم حاول مرة أخرى.';
+
+  @override
+  String get posCardResumeLimitBody =>
+      'تم بلوغ الحد الأقصى للاستئناف. اطلب من المدير تسوية هذه الدفعة مع المزوّد.';
+
+  @override
+  String get posCardRecordedTitle => 'سُجّلت الدفعة بالبطاقة';
+
+  @override
+  String get posCardRecordedBody => 'سجّل BIZBOT الدفعة بالبطاقة لهذا الطلب.';
+
+  @override
+  String get posCardDeclinedTitle => 'رُفضت البطاقة';
+
+  @override
+  String get posCardDeclinedBody =>
+      'لم يُقبض أي مبلغ. اقبض الدفعة بطريقة أخرى أو ابدأ دفعة جديدة بالبطاقة.';
+
+  @override
+  String get posCardFreedTitle => 'فتحه المدير';
+
+  @override
+  String get posCardFreedBody =>
+      'أكّد المدير أن طلب البطاقة هذا لم يُحصِّل أي مبلغ. اقبض الدفعة بطريقة أخرى أو ابدأ دفعة جديدة بالبطاقة.';
+
+  @override
+  String get posCardResolvedTitle => 'أغلقه أحد المشغّلين';
+
+  @override
+  String get posCardResolvedBody =>
+      'أغلق أحد المشغّلين هذه الدفعة بالبطاقة (أُلغيت أو أُعيدت). إذا كان الطلب لا يزال مستحقًا، اقبض الدفعة مرة أخرى.';
+
+  @override
+  String get posCardReconcileTitle => 'الدفعة بالبطاقة تحتاج إلى تسوية';
+
+  @override
+  String get posCardReconcileBody =>
+      'قد يكون هناك تحصيل. لا تحصّل مرة أخرى ولا تسجّل هذه الدفعة بطريقة أخرى. اطلب من المدير حلّها مع المزوّد.';
+
+  @override
+  String get posCardSafetyStopBody =>
+      'لم يتطابق رد الخادم مع هذه الدفعة، لذلك أوقفها BIZBOT. لا تحصّل مرة أخرى. اطلب من المدير التواصل مع الدعم.';
+
+  @override
+  String get posCardTestWaitingTitle => 'الاختبار قيد التنفيذ';
+
+  @override
+  String get posCardTestWaitingBody =>
+      'أكمل الاختبار على الجهاز. لا يُسجَّل أي شيء.';
+
+  @override
+  String get posCardTestReleasedTitle => 'تم تأكيد إلغاء الاختبار';
+
+  @override
+  String get posCardTestReleasedBody =>
+      'أكّد المزوّد الإلغاء. واصل التحقق حتى تصبح نتيجة الاختبار نهائية.';
+
+  @override
+  String get posCardTestApprovedTitle => 'تمت الموافقة على الاختبار';
+
+  @override
+  String get posCardTestApprovedBody =>
+      'تمت الموافقة على التحصيل التجريبي. لم يُسجَّل أي شيء والطلب غير مدفوع.';
+
+  @override
+  String get posCardTestDeclinedTitle => 'رُفض الاختبار';
+
+  @override
+  String get posCardTestDeclinedBody =>
+      'رُفض التحصيل التجريبي. لم يُسجَّل أي شيء.';
+
+  @override
+  String get posCardTestClosedTitle => 'أُغلق الاختبار';
+
+  @override
+  String get posCardTestClosedBody => 'أغلق أحد المشغّلين محاولة الاختبار هذه.';
+
+  @override
+  String get posCardNoteChecking => 'جارٍ التحقق من حالة الدفع…';
+
+  @override
+  String get posCardNoteStarting => 'جارٍ إرسال طلب البطاقة…';
+
+  @override
+  String get posCardNoteRecording => 'جارٍ إرسال التسجيل إلى BIZBOT…';
+
+  @override
+  String get posCardNoteReleasing => 'جارٍ إرسال طلب الإلغاء…';
+
+  @override
+  String get posCardNoteNotSent =>
+      'لم يُرسَل الطلب الأخير. تحقّق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get posCardNoteSignIn =>
+      'رُفضت الجلسة. سجّل الدخول مرة أخرى ثم حاول مجددًا.';
+
+  @override
+  String get posCardNoteRefused => 'رُفض الطلب الأخير قبل معالجته.';
+
+  @override
+  String get posCardNoteUnavailable =>
+      'تعذّر التحقق من الحالة الآن. الدفعة بالبطاقة محفوظة؛ حاول مرة أخرى.';
+
+  @override
+  String get posCardNotePollLimit =>
+      'توقفت عمليات التحقق التلقائية. تحقّق من الحالة يدويًا؛ وإذا بقيت مفتوحة، اسأل المدير.';
+
+  @override
+  String get posCardNoteAutoPaused =>
+      'تم إيقاف التحقق التلقائي مؤقتًا. استخدم التحقق من الحالة.';
+
+  @override
+  String get posCardNoteReleaseNotConfirmed =>
+      'لم يتم تأكيد طلب الإلغاء. واصل التحقق من الحالة.';
+
+  @override
+  String get posCardNoteSaveFailed =>
+      'تعذّر على هذا الجهاز حفظ الخطوة الأخيرة. الدفعة بالبطاقة محفوظة؛ تحقّق من الحالة مرة أخرى.';
+
+  @override
+  String get posCardNoteManagerRequired =>
+      'يجب أن يكون المدير مسجّل الدخول على نقطة البيع هذه للقيام بذلك.';
+
+  @override
+  String get posCardNoteManagerProof =>
+      'تعذّر تأكيد صلاحية المدير. حاول مرة أخرى.';
+
+  @override
+  String get posCardNoteNotRecoverable =>
+      'لم يعد الخادم يسمح باستئناف هذا التسجيل. تحقّق من الحالة.';
+
+  @override
+  String get posCardNoteRole => 'دورك لا يسمح بالتحقق من هذه الدفعة بالبطاقة.';
+
+  @override
+  String get posCardSendAgain => 'إرسال الطلب نفسه مرة أخرى';
+
+  @override
+  String get posCardCancelRequest => 'إلغاء هذا الطلب';
+
+  @override
+  String get posCardOtherMethod => 'قبض الدفعة بطريقة أخرى';
+
+  @override
+  String get posCardRelease => 'الإلغاء على الجهاز';
+
+  @override
+  String get posCardResendRecording => 'إرسال التسجيل مرة أخرى';
+
+  @override
+  String get posCardResume => 'استئناف التسجيل (للمدير)';
+
+  @override
+  String get posCardManagerSend => 'إرسال التسجيل (للمدير)';
+
+  @override
+  String get posCardBackToPayment => 'العودة إلى الدفع';
+
+  @override
+  String get posCardClose => 'إغلاق';
+
+  @override
   String get authForgotPassword => 'نسيت كلمة المرور؟';
 
   @override

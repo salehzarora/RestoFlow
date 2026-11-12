@@ -15778,6 +15778,618 @@ abstract class AppLocalizations {
   /// **'No signed-in cashier. Sign in, then take the payment. Nothing was charged.'**
   String get posPaymentActorRequired;
 
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: tender chip that starts an integrated card payment on a LIVE terminal till
+  ///
+  /// In en, this message translates to:
+  /// **'Card terminal'**
+  String get posCardTerminalTender;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: TEST lab tender chip on a TEST terminal till (never records a payment)
+  ///
+  /// In en, this message translates to:
+  /// **'Card terminal · TEST'**
+  String get posCardTerminalTestTender;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: note under the card terminal tender
+  ///
+  /// In en, this message translates to:
+  /// **'The customer pays on the card terminal. BIZBOT records the payment only after the provider approves it.'**
+  String get posCardTerminalNote;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: note under the TEST lab tender
+  ///
+  /// In en, this message translates to:
+  /// **'Test mode: the terminal runs a test charge. Nothing is recorded and the order stays unpaid.'**
+  String get posCardTerminalTestNote;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: confirm button label when the card terminal tender is selected
+  ///
+  /// In en, this message translates to:
+  /// **'Start card payment'**
+  String get posCardTerminalStart;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: per-device TEST lab switch (default off, UX only) on a TEST terminal till
+  ///
+  /// In en, this message translates to:
+  /// **'Card terminal test lab'**
+  String get posCardTerminalLabSwitch;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: LIVE terminal till whose starts are stopped (configured, draining or switched off); the hand-recorded Card stays hidden
+  ///
+  /// In en, this message translates to:
+  /// **'Card terminal payments are not available on this till right now. Take payment another way.'**
+  String get posCardTerminalUnavailableNote;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: a hand-recorded Card confirmed while the posture was unknown; the re-read found a LIVE terminal till, so nothing was sent
+  ///
+  /// In en, this message translates to:
+  /// **'This till takes card payments on the card terminal. A hand-recorded card cannot be used here.'**
+  String get posCardTerminalRequiredNote;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: the hand-recorded Card was chosen or confirmed while the terminal posture could not be read, even after one more read; nothing was minted or sent
+  ///
+  /// In en, this message translates to:
+  /// **'This till\'s card settings could not be checked, so a card cannot be recorded now. Check the connection and try again, or take payment another way.'**
+  String get posCardPostureUnknownNote;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: sending the same card request again needs the terminal posture, and it could not be read even after one more read; nothing was sent
+  ///
+  /// In en, this message translates to:
+  /// **'The card terminal settings could not be checked. Check the connection and try again.'**
+  String get posCardNotePostureUnknown;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: banner title when a stored card attempt record cannot be read
+  ///
+  /// In en, this message translates to:
+  /// **'Stored card payment unreadable'**
+  String get posCardJournalQuarantinedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: the record is kept, new terminal payments are blocked, manager assistance
+  ///
+  /// In en, this message translates to:
+  /// **'A stored card terminal payment could not be read. New card terminal payments are blocked on this till. Ask a manager.'**
+  String get posCardJournalQuarantinedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F-JOURNAL-RECOVERY-CORRECTIONS-001: payment sheet: the card journal holds its 200 records and none is final, so nothing was saved or sent; not a corrupt journal
+  ///
+  /// In en, this message translates to:
+  /// **'This till\'s card terminal storage is full. Resolve the open card terminal payments before starting a new one. No card was charged.'**
+  String get posCardJournalFullNote;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: payment sheet: the card attempt could not be durably saved, so nothing was sent
+  ///
+  /// In en, this message translates to:
+  /// **'The card request could not be saved, so nothing was sent. Try again.'**
+  String get posCardSaveBlocked;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: title
+  ///
+  /// In en, this message translates to:
+  /// **'Card terminal payment'**
+  String get posCardAttemptTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: title of a TEST attempt
+  ///
+  /// In en, this message translates to:
+  /// **'Card terminal test'**
+  String get posCardAttemptTestTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: badge on every TEST attempt
+  ///
+  /// In en, this message translates to:
+  /// **'TEST — nothing is recorded'**
+  String get posCardTestBadge;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the start request is being prepared or sent
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing the card request'**
+  String get posCardPreparingTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: body while the start request is being prepared
+  ///
+  /// In en, this message translates to:
+  /// **'Do not take payment another way while this request is open.'**
+  String get posCardPreparingBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the start request was definitely not sent
+  ///
+  /// In en, this message translates to:
+  /// **'The card request was not sent'**
+  String get posCardNotSentTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: safe retry of a definitely-not-sent start (same request) or cancel
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing reached the card provider. Send the same request again, or cancel it and take payment another way.'**
+  String get posCardNotSentBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the server refused the session (HTTP 401) for the start
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again'**
+  String get posCardSignInTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: body for the refused session; the same request is sent after signing in
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused the session. Sign in again, then send the same request.'**
+  String get posCardSignInBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the start was refused before processing (HTTP 400 / 403 / 404 / 405), never a decline
+  ///
+  /// In en, this message translates to:
+  /// **'Card terminal payment unavailable'**
+  String get posCardNotAppliedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: body of the configuration refusal path
+  ///
+  /// In en, this message translates to:
+  /// **'The request was refused before it was processed. No card was charged. Take payment another way.'**
+  String get posCardNotAppliedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the server refused the start before creating any attempt
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment not started'**
+  String get posCardRefusedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: start refused card_payments_disabled
+  ///
+  /// In en, this message translates to:
+  /// **'Card terminal payments are switched off on this till right now. No card was charged.'**
+  String get posCardRefusedDisabled;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: start refused payment_in_progress
+  ///
+  /// In en, this message translates to:
+  /// **'Another card payment is already in progress for this order.'**
+  String get posCardRefusedInProgress;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: start refused order_already_settled
+  ///
+  /// In en, this message translates to:
+  /// **'This order is already paid.'**
+  String get posCardRefusedSettled;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: start refused order_not_chargeable
+  ///
+  /// In en, this message translates to:
+  /// **'This order has nothing to charge.'**
+  String get posCardRefusedNotChargeable;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: start refused conflict / amount_mismatch / ineligible_order_state
+  ///
+  /// In en, this message translates to:
+  /// **'The order changed. Refresh it and start again.'**
+  String get posCardRefusedOrderChanged;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: start refused max_live_amount_exceeded / max_test_amount_exceeded
+  ///
+  /// In en, this message translates to:
+  /// **'The amount is above this till\'s card terminal limit.'**
+  String get posCardRefusedLimit;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: start refused currency_not_supported
+  ///
+  /// In en, this message translates to:
+  /// **'The card terminal cannot charge this currency.'**
+  String get posCardRefusedCurrency;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: start refused permission_denied
+  ///
+  /// In en, this message translates to:
+  /// **'Your role cannot start a card terminal payment.'**
+  String get posCardRefusedRole;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: any other start refusal (no attempt was created)
+  ///
+  /// In en, this message translates to:
+  /// **'The card terminal payment could not be started. No card was charged.'**
+  String get posCardRefusedGeneric;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the start may have executed; only status resolves it
+  ///
+  /// In en, this message translates to:
+  /// **'Result not confirmed'**
+  String get posCardUncertainTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: body of the uncertain start; never start again
+  ///
+  /// In en, this message translates to:
+  /// **'The card request may have reached the provider. Do not charge again — the status is being checked.'**
+  String get posCardUncertainBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: a settled status found no attempt for this request
+  ///
+  /// In en, this message translates to:
+  /// **'No card payment was created'**
+  String get posCardNotFoundTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: body of the settled not-found state
+  ///
+  /// In en, this message translates to:
+  /// **'The server has no card payment for this request, so no card was charged by it. You can take payment another way.'**
+  String get posCardNotFoundBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: waiting for the terminal / customer
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the customer at the terminal'**
+  String get posCardWaitingTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: body while waiting; automatic checks only while the window is open
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the customer to complete the payment on the terminal. While this window is open, the status is checked automatically.'**
+  String get posCardWaitingBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the provider confirmed a release (provisional)
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel confirmed by the provider'**
+  String get posCardReleasedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: a release never proves that no charge exists
+  ///
+  /// In en, this message translates to:
+  /// **'A charge may still exist. Keep checking the status until the result is final.'**
+  String get posCardReleasedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: approved, the BIZBOT recording leg is being completed (never Paid)
+  ///
+  /// In en, this message translates to:
+  /// **'Approved — completing BIZBOT recording'**
+  String get posCardApprovedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the order is paid only after the recording
+  ///
+  /// In en, this message translates to:
+  /// **'The provider approved the charge. The order is paid only once BIZBOT records the payment.'**
+  String get posCardApprovedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: approved, the recording leg's outcome is unknown
+  ///
+  /// In en, this message translates to:
+  /// **'Approved — recording not confirmed'**
+  String get posCardRecordingUnconfirmedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the same recording may be sent again; it never charges again
+  ///
+  /// In en, this message translates to:
+  /// **'Send the same recording again. It never charges the customer again.'**
+  String get posCardRecordingUnconfirmedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: approved, the recording leg was refused (recoverable)
+  ///
+  /// In en, this message translates to:
+  /// **'Approved — recording refused'**
+  String get posCardRecordingRefusedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: manager Resume required
+  ///
+  /// In en, this message translates to:
+  /// **'The charge was approved but BIZBOT could not record it. A manager can resume the recording on this till.'**
+  String get posCardRecordingRefusedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: authorized Resume recordings used so far, out of the phase-1 maximum
+  ///
+  /// In en, this message translates to:
+  /// **'Resumes used: {used} of {limit}'**
+  String posCardResumesUsed(int used, int limit);
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: a Resume reopened this recording; only a manager may send it (resume_authority_required)
+  ///
+  /// In en, this message translates to:
+  /// **'A manager must send this recording'**
+  String get posCardManagerMustSendTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: body of resume_authority_required
+  ///
+  /// In en, this message translates to:
+  /// **'A manager resumed this recording. Only a manager can send it again.'**
+  String get posCardManagerMustSendBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the server refused a Resume (resume_denied); nothing was consumed
+  ///
+  /// In en, this message translates to:
+  /// **'Resume refused'**
+  String get posCardResumeRefusedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: generic resume_denied body
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused this resume; nothing was charged or recorded. Check the status before trying again.'**
+  String get posCardResumeRefusedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: resume_denied resume_stale
+  ///
+  /// In en, this message translates to:
+  /// **'Another resume happened first. Check the status, then try again.'**
+  String get posCardResumeStaleBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the Resume limit is reached
+  ///
+  /// In en, this message translates to:
+  /// **'The resume limit is reached. Ask a manager to reconcile this payment with the provider.'**
+  String get posCardResumeLimitBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the authoritative recording succeeded (the only paid state)
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment recorded'**
+  String get posCardRecordedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: body of the recorded state
+  ///
+  /// In en, this message translates to:
+  /// **'BIZBOT recorded the card payment for this order.'**
+  String get posCardRecordedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: provider declined (terminal)
+  ///
+  /// In en, this message translates to:
+  /// **'Card declined'**
+  String get posCardDeclinedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: no automatic replacement charge
+  ///
+  /// In en, this message translates to:
+  /// **'No payment was taken. Take payment another way or start a new card payment.'**
+  String get posCardDeclinedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: a manager freed the order after confirming no charge
+  ///
+  /// In en, this message translates to:
+  /// **'Unlocked by a manager'**
+  String get posCardFreedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: body of the freed state
+  ///
+  /// In en, this message translates to:
+  /// **'A manager confirmed that this card request did not charge. Take payment another way or start a new card payment.'**
+  String get posCardFreedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: final operator resolution (voided or refunded)
+  ///
+  /// In en, this message translates to:
+  /// **'Closed by an operator'**
+  String get posCardResolvedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: body of the resolved state; never recreates the attempt
+  ///
+  /// In en, this message translates to:
+  /// **'An operator closed this card payment (voided or refunded). If the order still owes money, take payment again.'**
+  String get posCardResolvedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: anomaly / orphan / non-recoverable — reconciliation or support required
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment needs reconciliation'**
+  String get posCardReconcileTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: no further charge and no manual fallback
+  ///
+  /// In en, this message translates to:
+  /// **'A charge may exist. Do not charge again and do not record this payment another way. Ask a manager to resolve it with the provider.'**
+  String get posCardReconcileBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: a fail-closed safety stop (a contradicting or defective answer)
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s answer did not match this payment, so BIZBOT stopped it. Do not charge again. Ask a manager to contact support.'**
+  String get posCardSafetyStopBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: TEST attempt waiting (test_sent / test_unknown)
+  ///
+  /// In en, this message translates to:
+  /// **'Test in progress'**
+  String get posCardTestWaitingTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: TEST attempt waiting body
+  ///
+  /// In en, this message translates to:
+  /// **'Complete the test on the terminal. Nothing is recorded.'**
+  String get posCardTestWaitingBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: TEST attempt released (test_released)
+  ///
+  /// In en, this message translates to:
+  /// **'Test cancel confirmed'**
+  String get posCardTestReleasedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: TEST released body
+  ///
+  /// In en, this message translates to:
+  /// **'The provider confirmed the cancel. Keep checking until the test result is final.'**
+  String get posCardTestReleasedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: TEST attempt approved (test_approved) — never a payment
+  ///
+  /// In en, this message translates to:
+  /// **'Test approved'**
+  String get posCardTestApprovedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: TEST approved body
+  ///
+  /// In en, this message translates to:
+  /// **'The test charge was approved. Nothing was recorded and the order is not paid.'**
+  String get posCardTestApprovedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: TEST attempt declined (test_declined)
+  ///
+  /// In en, this message translates to:
+  /// **'Test declined'**
+  String get posCardTestDeclinedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: TEST declined body
+  ///
+  /// In en, this message translates to:
+  /// **'The test charge was declined. Nothing was recorded.'**
+  String get posCardTestDeclinedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: TEST attempt closed by an operator (test_closed)
+  ///
+  /// In en, this message translates to:
+  /// **'Test closed'**
+  String get posCardTestClosedTitle;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: TEST closed body
+  ///
+  /// In en, this message translates to:
+  /// **'An operator closed this test attempt.'**
+  String get posCardTestClosedBody;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: a status check is in flight
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the payment status…'**
+  String get posCardNoteChecking;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the start request is in flight
+  ///
+  /// In en, this message translates to:
+  /// **'Sending the card request…'**
+  String get posCardNoteStarting;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the recording leg is in flight
+  ///
+  /// In en, this message translates to:
+  /// **'Sending the recording to BIZBOT…'**
+  String get posCardNoteRecording;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the release request is in flight
+  ///
+  /// In en, this message translates to:
+  /// **'Sending the cancel request…'**
+  String get posCardNoteReleasing;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: the last request was not sent (device / session check)
+  ///
+  /// In en, this message translates to:
+  /// **'The last request was not sent. Check the connection and try again.'**
+  String get posCardNoteNotSent;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: a status / release request was refused for the session
+  ///
+  /// In en, this message translates to:
+  /// **'The session was refused. Sign in again, then try again.'**
+  String get posCardNoteSignIn;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: a status / release request was refused before processing
+  ///
+  /// In en, this message translates to:
+  /// **'The last request was refused before it was processed.'**
+  String get posCardNoteRefused;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: provider / status unavailable; the attempt is kept
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check the status right now. The card payment is kept; try again.'**
+  String get posCardNoteUnavailable;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: poll_limit — a manual / operator follow-up, never a decline
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic checks stopped. Check the status manually; if it stays open, ask a manager.'**
+  String get posCardNotePollLimit;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: this window's automatic checks are used up
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic checks paused. Use Check status.'**
+  String get posCardNoteAutoPaused;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: an advisory release was not confirmed
+  ///
+  /// In en, this message translates to:
+  /// **'The cancel request was not confirmed. Keep checking the status.'**
+  String get posCardNoteReleaseNotConfirmed;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: a journal write failed; the attempt is kept
+  ///
+  /// In en, this message translates to:
+  /// **'This device could not save the latest step. The card payment is kept; check the status again.'**
+  String get posCardNoteSaveFailed;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: the fresh proof found no manager-or-higher session
+  ///
+  /// In en, this message translates to:
+  /// **'A manager must be signed in on this till to do this.'**
+  String get posCardNoteManagerRequired;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: the manager proof could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'Could not confirm manager authority. Try again.'**
+  String get posCardNoteManagerProof;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: the fresh status no longer allows a Resume
+  ///
+  /// In en, this message translates to:
+  /// **'The server no longer allows resuming this recording. Check the status.'**
+  String get posCardNoteNotRecoverable;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view note: status refused permission_denied for this role
+  ///
+  /// In en, this message translates to:
+  /// **'Your role cannot check this card payment.'**
+  String get posCardNoteRole;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view action: send the SAME start request again (never sent, or a refused session)
+  ///
+  /// In en, this message translates to:
+  /// **'Send the same request again'**
+  String get posCardSendAgain;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view action: cancel a request that never left this device
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this request'**
+  String get posCardCancelRequest;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view action: leave the card view for the tender form (only where no charge can exist)
+  ///
+  /// In en, this message translates to:
+  /// **'Take payment another way'**
+  String get posCardOtherMethod;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view action: advisory release on the terminal
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel on the terminal'**
+  String get posCardRelease;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view action: send the same recording leg again (cashier or higher)
+  ///
+  /// In en, this message translates to:
+  /// **'Send the recording again'**
+  String get posCardResendRecording;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view action: the manager Resume recording
+  ///
+  /// In en, this message translates to:
+  /// **'Resume recording (manager)'**
+  String get posCardResume;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view action: a manager sends a recording a Resume reopened
+  ///
+  /// In en, this message translates to:
+  /// **'Send the recording (manager)'**
+  String get posCardManagerSend;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view action: leave a TEST attempt and return to the tender form
+  ///
+  /// In en, this message translates to:
+  /// **'Back to payment'**
+  String get posCardBackToPayment;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view action: close the sheet; the attempt is kept
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get posCardClose;
+
   /// AUTH-256: opens the password-reset request from the sign-in form.
   ///
   /// In en, this message translates to:
