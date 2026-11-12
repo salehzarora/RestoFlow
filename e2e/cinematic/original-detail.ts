@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { API_URL, STOREFRONT_URL, rpc, scope } from './service.mjs';
 import { LOGICAL_ORIGIN, localMediaTarget, localProductMediaTarget } from './live-transport.mjs';
+import { waitForText } from '../lib/dashboard';
 
 const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 type Image = { item_id: string; url: string; width: number; height: number };
@@ -34,7 +35,10 @@ export async function verifyOriginalDetail(args: {
     expect(response.status()).toBe(200);
     const published = await response.json(); expect(published.ok).toBe(true); expect(published.status).toBe('published');
     expect(published.recipe).toBe('storefront-media-c4');
-    await expect(page.getByText('تم نشر الأصل للتفاصيل.', { exact: true })).toBeVisible();
+    stage = 'dashboard-original-published-status';
+    // CanvasKit Text is exposed through aria-labels, not DOM textContent.
+    // Use the same real semantics reader as the existing publication journey.
+    await waitForText(page, 'تم نشر الأصل للتفاصيل.');
     stage = 'same-selection-and-public-readback';
     const current = await readSelection();
     for (const key of ['source_key', 'source_snapshot', 'selection_version', 'selected_derivative_id']) expect(current[key], key + ' unchanged').toEqual(selectedProof[key]);
@@ -114,7 +118,10 @@ export async function verifyOriginalDetail(args: {
     } finally { await context.close(); }
     receipt.status = 'ORIGINAL_DETAIL_IMAGE_ACCEPTED'; receipt.failedStage = null;
   } finally {
-    if (receipt.status !== 'ORIGINAL_DETAIL_IMAGE_ACCEPTED') receipt.failedStage = stage;
+    if (receipt.status !== 'ORIGINAL_DETAIL_IMAGE_ACCEPTED') {
+      receipt.failedStage = stage;
+      await page.screenshot({ path: resolve(dir, 'original-detail-dashboard-failure.png') }).catch(() => {});
+    }
     writeFileSync(resolve(dir, 'original-detail-result.json'), JSON.stringify(receipt, null, 2));
   }
 }

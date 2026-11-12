@@ -1251,10 +1251,6 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await renderMenu(menu, f, firstUrl, 15);
     stages.push(stage);
 
-    stage = 'independent-banner-upload-replace-clear';
-    await verifyBannerJourney(page, menu, f, token, nextUpload);
-    stages.push(stage);
-
     stage = 'site-theme-baseline';
     const themeBaseline = await rpc(f, token, 'get_restaurant_storefront_content_v5');
     const profileBaseline = (await rpc(f, token, 'get_restaurant_storefront_profile')).profile;
@@ -1581,5 +1577,37 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       controlReveal: error instanceof ControlRevealError ? error.samples : null,
       controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], siteThemeRenders: siteThemeRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
     throw error;
+  }
+});
+
+// Independent evidence in the same real-service stack. A failed legacy
+// background-companion assertion remains a failure, but cannot skip this
+// banner lifecycle. It signs in through the real UI again; no session injection.
+test('independent banner → actual Edge → save/reload → replace/clear preserves other media', async ({ page, context }) => {
+  const f = fixture(), network = await guardBrowser(context);
+  const uploads: UploadDiagnostics[] = [];
+  let signedIn = false, passed = false;
+  try {
+    await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();
+    await fillField(page, L.email, f.ownerA.email); await enterLoginPassword(page, f.ownerA.password);
+    expect(await page.getByRole('textbox', { name: L.email }).inputValue()).toBe(f.ownerA.email);
+    expect(await page.locator('input[type="password"]').inputValue()).toBe(f.ownerA.password);
+    const observed = observeResponse(page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API)));
+    const auth = await responseAfterAction(observed, () => tapButton(page, L.login, { which: 'last' }));
+    expect(auth.status()).toBe(200); const session = await auth.json();
+    expect(session.user.email).toBe(f.ownerA.email); expect(typeof session.access_token).toBe('string');
+    signedIn = true;
+    await openEditor(page);
+    const menu = await context.newPage();
+    await verifyBannerJourney(page, menu, f, session.access_token, () => {
+      const value = new UploadDiagnostics(); uploads.push(value); return value;
+    });
+    await network.check(); passed = true;
+  } finally {
+    if (signedIn && !passed) await failureScreenshot(page, resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-dashboard-failure-test-data.png'));
+    writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-browser-result.json'), JSON.stringify({
+      status: passed ? 'PASS' : 'FAIL', realUiSignIn: signedIn, uploads: uploads.map(item => item.snapshot()),
+      fonts: network.fonts(), mediaTransport: network.media(),
+    }, null, 2));
   }
 });
