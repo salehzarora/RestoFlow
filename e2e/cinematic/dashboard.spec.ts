@@ -1161,11 +1161,31 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
     const initialX = before.appearance.menu_banner_focal_x ?? 50, initialY = before.appearance.menu_banner_focal_y ?? 50;
     const phone = preview(0).locator('[data-sf-menu-top]'), desktop = preview(1).locator('[data-sf-menu-top]');
     await expect(previewFrames).toHaveCount(2);
-    await expect(preview(0).locator('[data-sf-order-status] [data-state]'), 'The real published service state was read for the preview').not.toHaveAttribute('data-state', 'unknown');
-    await expect.poll(async () => (await geometry(phone)).position).toBe(`${initialX}% ${initialY}%`);
-    await expect.poll(() => preview(0).locator('[data-banner-preview-root]').evaluate(el => (el as HTMLElement).style.getPropertyValue('--font'))).not.toBe('');
-    await expect.poll(() => preview(1).locator('[data-banner-preview-root]').evaluate(el => (el as HTMLElement).style.getPropertyValue('--font'))).not.toBe('');
-    const phoneBefore = await geometry(phone), desktopBefore = await geometry(desktop);
+    // The single asynchronous public-state read replaces the initial srcdoc.
+    // Wait for that initial document and fonts before taking a baseline. Only
+    // this pre-input wait accepts navigation; draft/reuse checks stay strict.
+    let initialDocumentNavigations = 0;
+    const initialGeometry = async (index: number): Promise<Obj> => {
+      let observed: Obj | undefined;
+      await expect.poll(async () => {
+        try {
+          const ready = await preview(index).locator('[data-banner-preview-root]').evaluate(el =>
+            Boolean((el as HTMLElement).style.getPropertyValue('--font'))
+              && Boolean(el.querySelector('[data-sf-order-status] [data-state]'))
+              && el.querySelector('[data-sf-order-status] [data-state]')!.getAttribute('data-state') !== 'unknown');
+          if (!ready) return false;
+          observed = await geometry(preview(index).locator('[data-sf-menu-top]'));
+          return observed.position === `${initialX}% ${initialY}%`;
+        } catch (error) {
+          if (!(error instanceof Error) || !error.message.includes('Execution context was destroyed')) throw error;
+          initialDocumentNavigations++;
+          return false;
+        }
+      }, { timeout: 25000 }).toBe(true);
+      return observed!;
+    };
+    const phoneBefore = await initialGeometry(0), desktopBefore = await initialGeometry(1);
+    receipt.initialDocumentNavigations = initialDocumentNavigations;
     expect(phoneBefore.width, 'Default logical phone preview').toBe(390);
     expect(desktopBefore.width, 'Independent logical desktop preview').toBe(1280);
     expect(phoneBefore.clippedX, 'This real image actually crops horizontally on phone').toBeGreaterThan(1);
