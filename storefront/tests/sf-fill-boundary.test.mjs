@@ -59,3 +59,23 @@ test('fixture and live checkout dependency graphs cannot pull the storefront dic
     assert.ok(seen.has(path.join(src, 'i18n/fill.ts')), 'Existing formatter remains in use');
   }
 });
+
+const { packStorefrontMessages, unpackStorefrontMessages } = await import('../src/i18n/storefrontValues.ts');
+
+test('public current-locale values preserve every dictionary key, value and formatter without another request', () => {
+  for (const locale of ['ar', 'he', 'en']) {
+    const original = storefrontMessages(locale);
+    const values = packStorefrontMessages(original);
+    const restored = unpackStorefrontMessages(JSON.parse(JSON.stringify(values)));
+    assert.deepEqual(restored, original);
+    assert.equal(values.length, Object.keys(original).length, 'No omitted or duplicate keys');
+    assert.ok(Buffer.byteLength(JSON.stringify(values)) < Buffer.byteLength(JSON.stringify(original)) - 2000);
+    for (const key of Object.keys(original)) if (typeof original[key] === 'string') {
+      assert.equal(pure(restored[key], { n: '3', time: '13:00' }), fill(original[key], { n: '3', time: '13:00' }));
+    }
+    assert.throws(() => unpackStorefrontMessages(values.slice(1)), /incomplete/);
+    assert.throws(() => unpackStorefrontMessages([...values, 'extra']), /incomplete/);
+  }
+  const boundary = readFileSync(new URL('../src/i18n/storefrontValues.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(boundary, /fetch\(|messages\/|storefront\.(?:ar|en|he)\.json/);
+});
