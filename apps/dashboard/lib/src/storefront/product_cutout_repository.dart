@@ -155,6 +155,88 @@ class StorefrontProductCutoutRepository implements ProductCutoutGateway {
         _ => ProductCutoutPublishStatus.unavailable,
       };
 
+  static bool _validSelectionProof(Map<String, dynamic> data) {
+    final version = data['selection_version'],
+        selected = data['selected_derivative_id'];
+    return version is int &&
+        version >= 0 &&
+        data.containsKey('selected_derivative_id') &&
+        (selected == null ||
+            selected is String &&
+                RegExp(r'^[0-9a-f-]{36}$').hasMatch(selected));
+  }
+
+  @override
+  Future<ProductCutoutPublishResult> prepareDetailOriginal({
+    required MenuItem item,
+    required ProductCutoutOriginal original,
+    required String requestId,
+  }) async {
+    ProductCutoutPublishResult result(ProductCutoutPublishStatus status) =>
+        ProductCutoutPublishResult(status);
+    try {
+      final before = await _read(item);
+      if (before['ok'] != true) return result(_failure(before));
+      if (!_validSelectionProof(before) || before['source_snapshot'] is! Map) {
+        return result(ProductCutoutPublishStatus.uncertain);
+      }
+      if (original.sourceKey != item.imagePath ||
+          before['source_key'] != original.sourceKey ||
+          before['source_snapshot'] is! Map ||
+          before['selection_version'] is! int ||
+          _generation(before) != original.sourceGeneration) {
+        return result(ProductCutoutPublishStatus.staleSource);
+      }
+      final registered =
+          await _write('register_storefront_product_derivative_v1', {
+            ..._scope(item),
+            'p_client_request_id': _step(requestId, 'detail-register'),
+            'p_item_id': item.id,
+            'p_original_key': original.sourceKey,
+            'p_original_snapshot': before['source_snapshot'],
+            'p_candidate_key': original.sourceKey,
+            'p_treatment': 'original',
+            'p_expected_selection_version': before['selection_version'],
+          });
+      if (registered?['ok'] != true) return result(_failure(registered));
+      final derivative = registered!['derivative_id'];
+      if (derivative is! String ||
+          !RegExp(r'^[0-9a-f-]{36}$').hasMatch(derivative) ||
+          registered['candidate_key'] != original.sourceKey) {
+        return result(ProductCutoutPublishStatus.uncertain);
+      }
+      final status = await _publishVariant(
+        item,
+        original.sourceKey,
+        derivative,
+        'w960',
+        _step(requestId, 'detail-w960'),
+      );
+      if (status != ProductCutoutPublishStatus.published) return result(status);
+      final after = await _read(item);
+      if (after['ok'] != true ||
+          !_validSelectionProof(after) ||
+          after['source_snapshot'] is! Map) {
+        return result(ProductCutoutPublishStatus.uncertain);
+      }
+      if (after['source_key'] != original.sourceKey ||
+          _generation(after) != _generation(before) ||
+          after['selected_derivative_id'] != before['selected_derivative_id']) {
+        // Never restore an earlier selection if another actor changed it.
+        return result(ProductCutoutPublishStatus.staleSource);
+      }
+      return result(ProductCutoutPublishStatus.published);
+    } on PostgrestException catch (error) {
+      return result(
+        error.code == '42501' || error.code == 'PGRST301'
+            ? ProductCutoutPublishStatus.denied
+            : ProductCutoutPublishStatus.uncertain,
+      );
+    } catch (_) {
+      return result(ProductCutoutPublishStatus.uncertain);
+    }
+  }
+
   @override
   Future<ProductCutoutPublishResult> publish({
     required MenuItem item,

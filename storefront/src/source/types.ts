@@ -222,6 +222,8 @@ export interface MenuItem {
   readonly image: string | null;
   /** Authorized, immutable product variants; legacy catalogues omit them. */
   readonly imageVariants?: readonly ImageVariant[];
+  /** Optional independently published, bounded Original photo; details only. */
+  readonly detailImage?: ImageVariant;
   /** Featured items render as the large card at the top of their section. */
   readonly featured: boolean;
   /** Signature items are the ones eligible for the popular rail. */

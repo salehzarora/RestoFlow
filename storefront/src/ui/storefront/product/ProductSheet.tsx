@@ -39,6 +39,7 @@ import { AlertIcon, CheckIcon, CloseIcon, MinusIcon, PlusIcon } from '../icons';
 import { TenantText } from '../TenantText';
 import shell from '../storefront.module.css';
 import styles from './product.module.css';
+import { DetailImage } from './DetailImage';
 import { validOrderNotes } from '@/orders/notes';
 
 export interface SheetDraft {
@@ -270,14 +271,9 @@ export function ProductSheet({
         data-sf-sheet="product"
       >
         <div className={`${styles.media} ${productFrameClass(item, contentStyles.wholeFrame)}`}>
-          {item.image === null ? (
-            <span className={styles.mediaNone} aria-hidden="true">
-              {item.name.trim().slice(0, 1)}
-            </span>
-          ) : (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img className={`${styles.mediaImg} ${productImageClass(item, contentStyles.wholeImage)}`} src={item.image} alt="" decoding="async" />
-          )}
+          <DetailImage key={`${item.id}:${item.detailImage?.url ?? ''}:${item.image ?? ''}`} item={item}
+            className={`${styles.mediaImg} ${productImageClass(item, contentStyles.wholeImage)}`}
+            placeholderClassName={styles.mediaNone} />
           {item.imageFit === 'whole-image' ? null : <span className={styles.mediaFade} aria-hidden="true" />}
           <span className={styles.handle} aria-hidden="true" />
           <button className={styles.close} type="button" aria-label={m.close} onClick={onClose}>

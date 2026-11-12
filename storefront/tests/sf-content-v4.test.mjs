@@ -66,10 +66,10 @@ test('adapter resolves presentation without mutating canonical identity, order o
   assert.equal(result.view.modules.promo.priceMinor,previous.view.items[0].priceMinor);assert.equal(result.view.modules.promo.image,previous.view.items[0].image);assert.equal(result.view.modules.promo.hasOptions,previous.view.items[0].hasOptions);
   const b=adaptStorefront(decodeStorefrontMenuV4(menu()),ORIGIN);assert.equal(b.view.categories[0].heading,null);assert.equal(b.view.items[0].imageFit,'fill');assert.equal(b.view.modules.story,null);
 });
-test('live composition requests v9 exactly once and never downgrades on old/malformed/error responses',async()=>{
+test('live composition requests v10 exactly once and never downgrades on old/malformed/error responses',async()=>{
   const old=globalThis.fetch,calls=[];const source=liveStorefrontSource({url:ORIGIN,anonKey:'SYNTHETIC_PUBLIC_KEY_NOT_A_REAL_SECRET'});
   try {
-    globalThis.fetch=async(url,init)=>{calls.push(url);assert.equal(url,ORIGIN+'/rest/v1/rpc/storefront_menu_v9');assert.equal(init.body,JSON.stringify({p_slug:'sf-synth-a'}));return {ok:true,json:async()=>menu()};};
+    globalThis.fetch=async(url,init)=>{calls.push(url);assert.equal(url,ORIGIN+'/rest/v1/rpc/storefront_menu_v10');assert.equal(init.body,JSON.stringify({p_slug:'sf-synth-a'}));return {ok:true,json:async()=>menu()};};
     assert.equal((await source.getStorefront('sf-synth-a')).view.tenant.slug,'sf-synth-a');assert.equal(calls.length,1);
     const {content_v1,...legacy}=menu();
     for(const body of [legacy,menu({schema:99}),{ok:false,error:'temporary',entity:'storefront_menu'}]){globalThis.fetch=async()=>{calls.push('only');return {ok:true,json:async()=>body};};await assert.rejects(()=>source.getStorefront('sf-synth-a'));}
@@ -90,7 +90,7 @@ test('new public reader never retries an older contract on a bare 404, denied or
       };
       const source = liveStorefrontSource({ url: ORIGIN, anonKey: 'synthetic-publishable-key-only' });
       await assert.rejects(() => source.getStorefront('sf-synth-a'));
-      assert.deepEqual(calls, [ORIGIN + '/rest/v1/rpc/storefront_menu_v9']);
+      assert.deepEqual(calls, [ORIGIN + '/rest/v1/rpc/storefront_menu_v10']);
     }
   } finally { globalThis.fetch = original; }
 });

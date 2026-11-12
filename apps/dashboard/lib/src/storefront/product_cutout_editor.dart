@@ -34,10 +34,13 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
   bool _loadingOriginal = false,
       _processing = false,
       _saving = false,
+      _publishingDetail = false,
       _removeBackground = false,
       _dark = false;
   int _generation = 0;
   String? _error, _stage, _requestId;
+  String? _detailRequestId, _publishedDetailProof;
+  ProductCutoutPublishStatus? _detailStatus;
   String? _publishedSelectionProof;
   bool? _publishedRemoveBackground;
   ProductCutoutPublishStatus? _status;
@@ -64,10 +67,13 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
         oldWidget.removalEnabled != widget.removalEnabled) {
       _cancel();
       _saving = false;
+      _publishingDetail = false;
       _original = null;
       _candidate = null;
       _status = null;
       _requestId = null;
+      _detailRequestId = _publishedDetailProof = null;
+      _detailStatus = null;
       _publishedSelectionProof = null;
       _publishedRemoveBackground = null;
       _removeBackground = false;
@@ -132,6 +138,7 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
         _processing ||
         _saving ||
         _status == ProductCutoutPublishStatus.uncertain ||
+        _detailStatus == ProductCutoutPublishStatus.uncertain ||
         widget.item.imagePath == null)
       return;
     final generation = ++_generation;
@@ -139,6 +146,7 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
       _loadingOriginal = true;
       _error = null;
       _status = null;
+      _detailStatus = null;
       _stage = 'loading-original';
     });
     try {
@@ -279,6 +287,49 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
     }
   }
 
+  Future<void> _prepareDetailOriginal() async {
+    final original = _original;
+    if (original == null ||
+        _saving ||
+        _loadingOriginal ||
+        _processing ||
+        _status == ProductCutoutPublishStatus.uncertain ||
+        _publishedDetailProof == original.sourceGeneration)
+      return;
+    final generation = _generation;
+    _detailRequestId ??= RandomImageIdGenerator().newImageId();
+    setState(() {
+      _saving = _publishingDetail = true;
+      _detailStatus = null;
+    });
+    try {
+      final result = await widget.gateway.prepareDetailOriginal(
+        item: widget.item,
+        original: original,
+        requestId: _detailRequestId!,
+      );
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _detailStatus = result.status;
+        if (result.status == ProductCutoutPublishStatus.published) {
+          _publishedDetailProof = original.sourceGeneration;
+        }
+        if (result.status != ProductCutoutPublishStatus.uncertain)
+          _detailRequestId = null;
+      });
+    } catch (_) {
+      if (mounted && generation == _generation) {
+        setState(() => _detailStatus = ProductCutoutPublishStatus.uncertain);
+      }
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() {
+          _saving = _publishingDetail = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.item.imagePath == null) return const SizedBox.shrink();
@@ -286,7 +337,8 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
         _loadingOriginal ||
         _processing ||
         _saving ||
-        _status == ProductCutoutPublishStatus.uncertain;
+        _status == ProductCutoutPublishStatus.uncertain ||
+        _detailStatus == ProductCutoutPublishStatus.uncertain;
     final original = _original, candidate = _candidate;
     return Card(
       child: Padding(
@@ -381,7 +433,13 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
               const SizedBox(height: 12),
               const LinearProgressIndicator(),
               Text(
-                _saving
+                _saving && _publishingDetail
+                    ? _t(
+                        'Publishing Original for details…',
+                        'جارٍ نشر الأصل للتفاصيل…',
+                        'מפרסם מקור לפרטי המוצר…',
+                      )
+                    : _saving
                     ? _t(
                         'Publishing selection…',
                         'جارٍ نشر الاختيار…',
@@ -435,6 +493,56 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
                 ),
               }),
             const SizedBox(height: 12),
+            if (original != null) ...[
+              Text(
+                _t(
+                  'Publish a bounded public copy of Original for product details only. The menu photo selection stays unchanged.',
+                  'انشر نسخة عامة محدودة من الأصل لتفاصيل الوجبة فقط. اختيار صورة المنيو يبقى كما هو.',
+                  'פרסמו עותק ציבורי מוגבל של המקור לפרטי המוצר בלבד. בחירת תמונת התפריט לא תשתנה.',
+                ),
+              ),
+              if (_detailStatus != null)
+                Text(switch (_detailStatus!) {
+                  ProductCutoutPublishStatus.published => _t(
+                    'Original for details published.',
+                    'تم نشر الأصل للتفاصيل.',
+                    'המקור לפרטי המוצר פורסם.',
+                  ),
+                  ProductCutoutPublishStatus.uncertain => _t(
+                    'Detail publication is unconfirmed. Retry the same action.',
+                    'نشر صورة التفاصيل غير مؤكد. أعد المحاولة بنفس الإجراء.',
+                    'פרסום התמונה לפרטים לא אושר. נסו שוב את אותה פעולה.',
+                  ),
+                  ProductCutoutPublishStatus.staleSource => _t(
+                    'The source or selection changed. Load Original again.',
+                    'تغير الأصل أو الاختيار. حمّل الأصل مجددًا.',
+                    'המקור או הבחירה השתנו. טענו את המקור שוב.',
+                  ),
+                  _ => _t(
+                    'Detail publication failed. Selection was not changed.',
+                    'تعذر نشر صورة التفاصيل. لم يتغير الاختيار.',
+                    'פרסום תמונת הפרטים נכשל. הבחירה לא השתנתה.',
+                  ),
+                }),
+              OutlinedButton(
+                key: const Key('product-detail-publish-original'),
+                onPressed:
+                    _saving ||
+                        _loadingOriginal ||
+                        _processing ||
+                        _status == ProductCutoutPublishStatus.uncertain ||
+                        _publishedDetailProof == original.sourceGeneration
+                    ? null
+                    : _prepareDetailOriginal,
+                child: Text(
+                  _t(
+                    'Publish Original for details',
+                    'نشر الأصل للتفاصيل',
+                    'פרסום מקור לפרטי המוצר',
+                  ),
+                ),
+              ),
+            ],
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -485,6 +593,8 @@ class _ProductCutoutEditorState extends State<ProductCutoutEditor> {
                         _loadingOriginal ||
                             _processing ||
                             _saving ||
+                            _detailStatus ==
+                                ProductCutoutPublishStatus.uncertain ||
                             _alreadyPublished
                         ? null
                         : _publish,

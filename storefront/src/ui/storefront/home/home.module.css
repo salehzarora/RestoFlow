@@ -418,7 +418,7 @@
 .headerTotal{font-size:16px;font-weight:800;white-space:nowrap}.headerTotal.headerTotal{display:block}
 .orderStatus{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:7px;margin-block:6px 8px;border:1px solid var(--hair2);border-radius:20px;background:var(--sf2);color:var(--tx);font:600 12px/1.6 var(--font)}
 .orderStatus>span{display:flex;align-items:center;justify-content:center;gap:7px;text-align:center;min-height:32px;overflow-wrap:anywhere}.orderStatus>span+span{border-inline-start:1px solid var(--hair2)}.orderStatus svg{width:22px;height:22px;flex:none;color:var(--acct)}.orderStatus>[data-state]{border:1px solid currentColor;border-radius:20px}
-.menuBanner{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}.menuBanner img{display:block;width:100%;height:100%;object-fit:cover}
+.menuBanner{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;mask-image:linear-gradient(#000 60%,transparent)}.menuBanner img{display:block;width:100%;height:100%;object-fit:cover}
 .cartTrigger{display:flex;align-items:center;border:0;font:500 13px var(--font);cursor:pointer;background:transparent;color:var(--tx);padding:8px;min-height:48px;gap:12px;border-radius:22px;transition:transform .12s,background .12s}
 .cartTrigger b{position:absolute;inset-block-start:-5px;inset-inline-end:-8px;display:grid;place-items:center;background:var(--acc);color:var(--onacc);border-radius:50%;width:22px;height:22px;font-size:11px}.cartTrigger svg{width:24px;height:24px}
 .categoryWrap{position:sticky;inset-block-start:var(--header-height);z-index:20;padding-block:10px}
@@ -436,8 +436,6 @@
 
 /* UX-003: the selected banner paints only the scrolling top section. */
 .topScene{position:relative;z-index:21;isolation:isolate;padding-block-end:14px}.topScene .header{position:relative}
-.topScene[data-sf-has-banner]{background:var(--bg)}
-.menuBanner::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 15%,transparent),transparent 65%,color-mix(in srgb,var(--bg) 80%,transparent))}
 .sceneWindow{height:clamp(125px,16vw,190px)}.topControls{margin-block:0;padding-block:12px 0}
 .topScene[data-sf-has-banner] .header{background:color-mix(in srgb,var(--bg) 88%,transparent)}
 .topScene[data-sf-has-banner] .searchBox,.topScene[data-sf-has-banner] .suggestionSlot .suggest,.topScene[data-sf-has-banner] .menuIntro,.topScene[data-sf-has-banner] .announce{background:var(--sf);color:var(--tx)}

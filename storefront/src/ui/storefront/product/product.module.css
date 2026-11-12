@@ -15,7 +15,7 @@
 /* Media occupies the reading-end36%; the Arabic reference puts it on the left.
  * Static positioning lets the EXISTING close button anchor to .sheet. */
 .media { grid-column: 2; grid-row: 1 / span 2; position: static; min-block-size: 0; overflow: hidden; background: var(--sf2); }
-.mediaImg { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; object-position: center; }
+.mediaImg { display: block; inline-size: 100%; block-size: 100%; object-fit: contain; object-position: center; }
 .mediaFade, .handle { display: none; }
 .gridCenter{display:grid;place-items:center}
 .mediaNone {composes:gridCenter; block-size: 100%; min-block-size: 170px; background: var(--sf2); color: var(--acct); font-size: 56px; font-weight: 900; }

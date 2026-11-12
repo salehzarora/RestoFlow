@@ -47,6 +47,18 @@ class Gateway implements ProductCutoutGateway {
         })
       >[];
   ProductCutoutPublishStatus status = ProductCutoutPublishStatus.published;
+  final detailRequests = <String>[];
+  Completer<ProductCutoutPublishResult>? pendingDetail;
+  @override
+  Future<ProductCutoutPublishResult> prepareDetailOriginal({
+    required MenuItem item,
+    required ProductCutoutOriginal original,
+    required String requestId,
+  }) async {
+    detailRequests.add(requestId);
+    return pendingDetail?.future ?? ProductCutoutPublishResult(status);
+  }
+
   @override
   Future<ProductCutoutOriginal> loadOriginal(MenuItem item) async {
     loads++;
@@ -148,6 +160,63 @@ Future<void> tap(WidgetTester tester, String key) async {
 }
 
 void main() {
+  testWidgets(
+    'detail publication is explicit, preserves selection and never starts removal',
+    (tester) async {
+      final gateway = Gateway(), processor = Processor();
+      await mount(tester, gateway, processor);
+      expect(gateway.detailRequests, isEmpty);
+      await tap(tester, 'product-cutout-load-original');
+      expect(gateway.detailRequests, isEmpty);
+      await tap(tester, 'product-detail-publish-original');
+      expect(gateway.detailRequests, hasLength(1));
+      expect(gateway.requests, isEmpty);
+      expect(gateway.selectionVersion, 0);
+      expect(processor.runs, 0);
+      expect(find.text('Original for details published.'), findsOneWidget);
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.byKey(const Key('product-detail-publish-original')),
+            )
+            .onPressed,
+        isNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'uncertain detail retries the same id and blocks a different selection',
+    (tester) async {
+      final gateway = Gateway()..status = ProductCutoutPublishStatus.uncertain;
+      final processor = Processor();
+      await mount(tester, gateway, processor);
+      await tap(tester, 'product-cutout-load-original');
+      await tap(tester, 'product-detail-publish-original');
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('product-cutout-publish')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.byKey(const Key('product-cutout-load-original')),
+            )
+            .onPressed,
+        isNull,
+      );
+      gateway.status = ProductCutoutPublishStatus.published;
+      await tap(tester, 'product-detail-publish-original');
+      expect(gateway.detailRequests, hasLength(2));
+      expect(gateway.detailRequests.toSet(), hasLength(1));
+      expect(gateway.requests, isEmpty);
+    },
+  );
+
   testWidgets(
     'confirmed unchanged choice cannot publish duplicate derivatives',
     (tester) async {

@@ -214,6 +214,35 @@ export function decodeStorefrontMenuV9(raw: unknown): StorefrontMenuV9Envelope {
   return { ...decoded, content_v1: { ...decoded.content_v1, appearance: { ...decoded.content_v1.appearance, ...banner } } };
 }
 
+export interface WireProductOriginalImage extends ImageVariant { readonly item_id: string; }
+export interface StorefrontMenuV10Ok extends StorefrontMenuV9Ok {
+  readonly product_original_images_v1?: readonly WireProductOriginalImage[];
+}
+export type StorefrontMenuV10Envelope = StorefrontMenuV10Ok | StorefrontMenuFailure;
+
+/** v10 is a separate strict projection, never a relaxation of v5-v9. */
+export function decodeStorefrontMenuV10(raw: unknown): StorefrontMenuV10Envelope {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return reject('envelope');
+  if (!Object.hasOwn(raw, 'product_original_images_v1')) return decodeStorefrontMenuV9(raw);
+  const { product_original_images_v1: originals, ...rest } = raw as Record<string, unknown>;
+  const decoded = decodeStorefrontMenuV9(rest);
+  if (!decoded.ok) return reject('product_original_images_v1');
+  const categories = new Set(decoded.categories.map(c => c.id));
+  const served = new Set(decoded.items.filter(i => categories.has(i.category_id)).map(i => i.id));
+  const seen = new Set<string>();
+  const rows = array(originals, 500, 'product_original_images_v1').map(value => {
+    const row = record(value, ['item_id', 'url', 'width', 'height'], 'product_original_images_v1');
+    const item_id = id(row.item_id, 'product_original_images_v1.item_id');
+    if (!served.has(item_id) || seen.has(item_id)) return reject('product_original_images_v1.item_id');
+    seen.add(item_id);
+    const width = integer(row.width, 'product_original_images_v1.width');
+    const height = integer(row.height, 'product_original_images_v1.height');
+    if (width < 1 || height < 1 || width > 960 || height > 960) return reject('product_original_images_v1.dimensions');
+    return { item_id, url: image(row.url, 'product_original_images_v1.url')!, width, height };
+  });
+  return { ...decoded, product_original_images_v1: rows };
+}
+
 function decodeContent(raw:unknown,allowAppearance:boolean,allowScene=false):StorefrontMenuV5Envelope{
   if(typeof raw!=='object'||raw===null||Array.isArray(raw))return reject('envelope');
   const e=raw as Record<string,unknown>;

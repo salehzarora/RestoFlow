@@ -34,6 +34,14 @@ class ProductCutoutPublishResult {
 abstract interface class ProductCutoutGateway {
   Future<ProductCutoutOriginal> loadOriginal(MenuItem item);
 
+  /// Explicitly publishes a bounded Original for product details only.
+  /// Must not select a derivative, upload a candidate, or change the menu image.
+  Future<ProductCutoutPublishResult> prepareDetailOriginal({
+    required MenuItem item,
+    required ProductCutoutOriginal original,
+    required String requestId,
+  });
+
   /// null candidate selects Original. Implementations MUST NOT change the
   /// menu image pointer or overwrite the original. Retry uses the same id.
   Future<ProductCutoutPublishResult> publish({
