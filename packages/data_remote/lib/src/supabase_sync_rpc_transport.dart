@@ -1,11 +1,17 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:supabase/supabase.dart';
 import 'package:http/http.dart' as http;
 
+import 'card_charge_transport.dart';
 import 'sync_rpc_transport.dart';
 import 'guarded_kitchen_ack_transport.dart';
 import 'kitchen_ack_http_boundary.dart';
+
+/// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001C: true in a browser build, where the card
+/// capability refuses before any IO (the function serves native POS only).
+const bool _onWeb = bool.fromEnvironment('dart.library.js_interop');
 
 /// The Supabase-backed [SyncRpcTransport] (RF-063): the ONLY file that imports
 /// the Supabase SDK.
@@ -25,7 +31,8 @@ import 'kitchen_ack_http_boundary.dart';
 class SupabaseSyncRpcTransport
     implements
         GuardedKitchenAckTransport,
-        AuthenticatedWebOrderDecisionTransport {
+        AuthenticatedWebOrderDecisionTransport,
+        AuthenticatedCardChargeTransport {
   const SupabaseSyncRpcTransport(
     this._client, {
     String schema = 'public',
@@ -108,6 +115,116 @@ class SupabaseSyncRpcTransport
       throw const SyncTransportException(SyncTransportErrorKind.transient);
     }
   }
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001C: one `pos-card-charge` exchange over
+  /// the SAME authenticated client, with its own deadline (never [_timeout]).
+  /// Only the POS client of [createKitchenAckClient] qualifies: its HTTP
+  /// boundary is the exchange's one-handoff gate, so a plain SDK client is
+  /// deliberately not a fallback. Native only: a browser would add the
+  /// `Origin` the function refuses.
+  @override
+  Future<CardChargeTransportResult> sendCardCharge(
+    Map<String, dynamic> body, {
+    bool Function()? isCurrent,
+  }) async {
+    final boundary = _kitchenAckBoundary;
+    if (_onWeb) {
+      return const CardChargeTransportFailure.notSent(
+        CardChargeFailureReason.unsupportedPlatform,
+      );
+    }
+    if (boundary == null) {
+      return const CardChargeTransportFailure.notSent(
+        CardChargeFailureReason.capabilityUnavailable,
+      );
+    }
+    // The exact bytes, fixed before the first await: the SDK sends a String
+    // body as-is and the boundary hands off only these bytes. The transport
+    // never adds, removes or rewrites a field.
+    final String encoded;
+    try {
+      encoded = jsonEncode(body);
+    } catch (_) {
+      return const CardChargeTransportFailure.notSent(
+        CardChargeFailureReason.unencodableBody,
+      );
+    }
+    final attemptId = body['attempt_id'];
+    final exchange = CardChargeExchange(
+      utf8.encode(encoded),
+      isCurrent ?? _always,
+    );
+    try {
+      final response = await boundary
+          .runCardCharge(
+            exchange,
+            () => _client.functions.invoke(
+              posCardChargeFunction,
+              body: encoded,
+              headers: const {'Content-Type': 'application/json'},
+            ),
+          )
+          .timeout(
+            posCardChargeTimeout,
+            onTimeout: () {
+              // Synchronous with the deadline: no handoff can follow it.
+              exchange.end();
+              throw TimeoutException(null, posCardChargeTimeout);
+            },
+          );
+      final data = response.data;
+      if (data is Stream) {
+        // An event stream is never the function's answer: close it unread.
+        unawaited(data.listen(null).cancel());
+      }
+      return classifyCardChargeAnswer(
+        response.status,
+        data is Stream ? null : data,
+        attemptId: attemptId is String ? attemptId : null,
+      );
+    } on FunctionException catch (error) {
+      return classifyCardChargeAnswer(error.status, error.details);
+    } catch (error) {
+      return exchange.handedOff ? _afterHandoff(error) : _beforeHandoff(error);
+    } finally {
+      exchange.end();
+    }
+  }
+
+  static bool _always() => true;
+
+  /// The request was handed to the HTTP client: it may have executed. A late
+  /// answer is never read and never causes a second send.
+  static CardChargeTransportFailure _afterHandoff(Object error) =>
+      CardChargeTransportFailure.uncertain(switch (error) {
+        TimeoutException() => CardChargeFailureReason.timeout,
+        FormatException() => CardChargeFailureReason.malformedAnswer,
+        _ => CardChargeFailureReason.transport,
+      });
+
+  /// Nothing was handed to the HTTP client, and the ended exchange refuses any
+  /// later handoff. Only the gate's own refusal is reported as not sent: a
+  /// timeout or a lost connection stays transport-unknown (authorization §6)
+  /// even here, so 001F handles every one of them the same way.
+  static CardChargeTransportFailure _beforeHandoff(Object error) =>
+      switch (error) {
+        CardChargeHandoffRefused(deviceSessionUnverified: true) =>
+          const CardChargeTransportFailure.notSent(
+            CardChargeFailureReason.deviceSessionUnverified,
+          ),
+        CardChargeHandoffRefused() => const CardChargeTransportFailure.notSent(
+          CardChargeFailureReason.handoffRefused,
+        ),
+        AuthException() => const CardChargeTransportFailure.uncertain(
+          CardChargeFailureReason.accessTokenUnavailable,
+        ),
+        TimeoutException() => const CardChargeTransportFailure.uncertain(
+          CardChargeFailureReason.timeout,
+        ),
+        _ => const CardChargeTransportFailure.uncertain(
+          CardChargeFailureReason.transport,
+        ),
+      };
 
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) {

@@ -18,6 +18,7 @@
 /// never changes.
 library;
 
+import 'card_charge_transport.dart';
 import 'sync_rpc_transport.dart';
 import 'guarded_kitchen_ack_transport.dart';
 
@@ -26,10 +27,43 @@ import 'guarded_kitchen_ack_transport.dart';
 class UpgradableSyncTransport
     implements
         GuardedKitchenAckTransport,
-        AuthenticatedWebOrderDecisionTransport {
+        AuthenticatedWebOrderDecisionTransport,
+        AuthenticatedCardChargeTransport {
   SyncRpcTransport? _real;
   final List<void Function()> _onUpgrade = <void Function()>[];
   int _heldCallCount = 0;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001C: a held card exchange is refused with
+  /// zero IO and never queued, so the later [upgrade] can never replay it.
+  /// After the upgrade the delegate is asked again at the HTTP handoff, as for
+  /// guarded ACKs.
+  @override
+  Future<CardChargeTransportResult> sendCardCharge(
+    Map<String, dynamic> body, {
+    bool Function()? isCurrent,
+  }) {
+    final real = _real;
+    if (real == null) {
+      _heldCallCount++;
+      return Future.value(
+        const CardChargeTransportFailure.notSent(
+          CardChargeFailureReason.devicePrincipalPending,
+        ),
+      );
+    }
+    if (real is! AuthenticatedCardChargeTransport) {
+      return Future.value(
+        const CardChargeTransportFailure.notSent(
+          CardChargeFailureReason.capabilityUnavailable,
+        ),
+      );
+    }
+    return (real as AuthenticatedCardChargeTransport).sendCardCharge(
+      body,
+      isCurrent: () =>
+          identical(_real, real) && (isCurrent == null || isCurrent()),
+    );
+  }
 
   @override
   Future<Object?> decideWebOrder(Map<String, dynamic> body) {
@@ -50,7 +84,8 @@ class UpgradableSyncTransport
   bool get isUpgraded => _real != null;
 
   /// How many calls were refused in hold mode (diagnostics/tests only —
-  /// each one threw synchronously; none reached any wire).
+  /// each one threw synchronously, or for a card exchange answered not sent;
+  /// none reached any wire).
   int get heldCallCount => _heldCallCount;
 
   /// Registers [listener] to run when (and only when) the single upgrade
