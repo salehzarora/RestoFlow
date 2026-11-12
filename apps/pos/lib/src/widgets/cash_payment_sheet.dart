@@ -15,6 +15,9 @@ import '../data/order_detail_repository.dart'
 import '../data/order_identity.dart';
 import '../data/payment.dart';
 import '../data/payment_attempt.dart';
+import '../data/provider_card_attempt.dart'
+    show ProviderCardMode, kProviderCardCurrencies;
+import '../data/provider_card_capability.dart';
 import '../format/cash_input.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
@@ -31,9 +34,11 @@ import '../state/pos_receipt_logo.dart' show posReceiptLogoAssetProvider;
 import '../state/pos_session.dart' show posSignedInEmployeeProfileIdProvider;
 import '../state/order_sync_controller.dart';
 import '../state/payment_controller.dart';
+import '../state/provider_card_controller.dart';
 import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
 import '../state/receipt_print_controller.dart';
 import '../state/recent_orders_controller.dart';
+import 'provider_card_payment_view.dart';
 import 'receipt_print_preview.dart' show buildReceiptDocument;
 
 /// The ASCII decimal separator the cash field accepts (mirrors the input
@@ -246,7 +251,13 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   /// and hand-written repositories hydrate instantly.
   Future<void> _hydrate() async {
     final payments = ref.read(paymentControllerProvider.notifier);
-    await payments.ensureHydrated();
+    // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: the card journal is read beside the
+    // base attempt store, before any Confirm.
+    final cards = ref.read(providerCardControllerProvider.notifier);
+    await Future.wait(<Future<void>>[
+      payments.ensureHydrated(),
+      cards.ensureHydrated(),
+    ]);
     if (!mounted) return;
     final st = ref.read(paymentControllerProvider);
     final pending = st.pendingAttemptFor(widget.identity);
@@ -285,6 +296,33 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   /// externally recorded (no drawer cash, no change).
   PaymentMethod _method = PaymentMethod.cash;
 
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: the integrated card tender ("Card
+  /// terminal") is chosen, as opposed to the hand-recorded [_method] card.
+  bool _cardTerminal = false;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: the mode of the integrated card option
+  /// this build offers (null: none), and whether the hand-recorded Card is
+  /// offered (packet §9.1). Both are derived from the server posture in [build].
+  ProviderCardMode? _cardTerminalMode;
+  bool _manualCardAllowed = true;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: a hand-recorded Card was refused here
+  /// because the re-read posture is a LIVE terminal till.
+  bool _manualCardRefused = false;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: a hand-recorded Card was held here
+  /// because the posture still could not be read (packet §9.1).
+  bool _manualCardUnknown = false;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card attempts this sheet showed while
+  /// they were open (a result stays visible until the cashier leaves it), and
+  /// the one the cashier left for the tender form.
+  final Set<String> _cardShown = <String>{};
+  String? _cardLeft;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: why the last card start did not start.
+  ProviderCardStartRequest? _cardStartIssue;
+
   /// Clears the RETRYABLE failure banner.
   ///
   /// POS-OPERATIONS-SYNC-001: it deliberately does NOT clear [_notChargeable].
@@ -301,12 +339,35 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     _saveBlocked = false;
     _revisionRequired = false;
     _actorRequired = false;
+    _cardStartIssue = null;
+    _manualCardRefused = false;
+    _manualCardUnknown = false;
   }
 
   void _selectMethod(PaymentMethod method) {
-    if (_method == method) return;
+    if (_method == method && !_cardTerminal) return;
     setState(() {
       _method = method;
+      _cardTerminal = false;
+      _clearErrors();
+    });
+    // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: choosing the hand-recorded Card
+    // while the posture is not known reads it at once, so the cashier learns
+    // before charging anything outside BIZBOT whether this till may record a
+    // card; the send checks it again (packet §9.1).
+    if (method == PaymentMethod.card &&
+        ref.read(providerCardPostureProvider).posture
+            is ProviderCardPostureUnknown) {
+      unawaited(_manualCardPermitted());
+    }
+  }
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: chooses the integrated card tender.
+  void _selectCardTerminal() {
+    if (_cardTerminal) return;
+    setState(() {
+      _cardTerminal = true;
+      _method = PaymentMethod.card;
       _clearErrors();
     });
   }
@@ -379,6 +440,37 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   );
 
   Future<void> _confirm() async {
+    // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: the integrated card tender starts a
+    // provider attempt instead of recording a hand-entered card, and a
+    // hand-recorded Card is sent only where the posture is proven to permit
+    // it. The sheet (its TEST lab switch too) is busy while the posture is
+    // read, so nothing it froze can change meanwhile.
+    if (_cardTerminal) return _startCard();
+    if (_method == PaymentMethod.card) {
+      if (!_manualCardAllowed) return;
+      setState(() {
+        _submitting = true;
+        _clearErrors();
+      });
+      final permitted = await _manualCardPermitted();
+      if (!mounted) return;
+      // Only what is still chosen is sent, and never while a card attempt for
+      // this order is open on screen: the form may have changed while the
+      // posture was read (a card attempt took over, or was left).
+      final open = ref
+          .read(providerCardControllerProvider)
+          .currentFor(
+            widget.identity,
+            includeTest: ref.read(providerCardLabEnabledProvider),
+          );
+      if (!permitted ||
+          _cardTerminal ||
+          _method != PaymentMethod.card ||
+          (open != null && open.isOpen)) {
+        setState(() => _submitting = false);
+        return;
+      }
+    }
     // CASH must physically cover the total; a NON-CASH tender records the exact
     // order total (the server forces tendered = total, change = 0 anyway).
     final int tendered;
@@ -409,6 +501,185 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
       expectedRevision: widget.expectedRevision,
     );
     await _handleOutcome(outcome, seams, fromRecovery: false);
+  }
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: starts the integrated card attempt
+  /// (an explicit cashier action). The card view takes over once the
+  /// controller holds the attempt.
+  Future<void> _startCard() async {
+    final mode = _cardTerminalMode;
+    if (mode == null) return;
+    if (mode == ProviderCardMode.live && widget.expectedRevision == null) {
+      // A LIVE start carries the authoritative revision (the claim's stale-till
+      // check); without one nothing is minted or sent.
+      setState(() => _revisionRequired = true);
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _clearErrors();
+    });
+    final cards = ref.read(providerCardControllerProvider.notifier);
+    final r = await cards.start(
+      identity: widget.identity,
+      orderId: widget.orderId ?? '',
+      orderNumber: widget.orderNumber,
+      amountMinor: widget.amountMinor,
+      currencyCode: widget.currencyCode,
+      expectedRevision: widget.expectedRevision,
+      mode: mode,
+    );
+    if (!mounted) return;
+    final begun =
+        r == ProviderCardStartRequest.started ||
+        r == ProviderCardStartRequest.adopted;
+    // The attempt this start produced is shown until the cashier leaves it,
+    // even when its answer closed it before any frame was built (a refusal
+    // such as card_payments_disabled must be read, not skipped).
+    final shown = begun
+        ? ref
+              .read(providerCardControllerProvider)
+              .currentFor(
+                widget.identity,
+                includeTest: ref.read(providerCardLabEnabledProvider),
+              )
+        : null;
+    setState(() {
+      _submitting = false;
+      if (shown != null) {
+        _cardShown.add(shown.attemptId);
+        _cardLeft = null;
+      }
+      _cardStartIssue = begun ? null : r;
+    });
+  }
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: whether a hand-recorded Card may be
+  /// recorded on this till (packet §9.1). The posture is read fresh first (a
+  /// binding may have been configured since the PIN session began), and only
+  /// a proven posture permits the Card: no terminal binding, or a TEST one. A
+  /// LIVE till refuses it and offers its terminal instead (the server would
+  /// refuse it `card_terminal_required`); a posture that cannot be read holds
+  /// it with a note, because a LIVE till must never fall back to a
+  /// hand-recorded Card during an outage and an unread till may be one.
+  /// Either way nothing is minted or sent. The read never refreshes the PIN
+  /// session's capabilities, so one that fails changes nothing else on the
+  /// till ([ProviderCardController.readPosture]); where no card call is
+  /// possible at all (demo, no transport, no session) nothing is read.
+  Future<bool> _manualCardPermitted() async {
+    final posture = await ref
+        .read(providerCardControllerProvider.notifier)
+        .readPosture();
+    if (!mounted) return false;
+    final live =
+        posture is ProviderCardPosturePresent &&
+        posture.mode == ProviderCardMode.live;
+    final unknown = posture is ProviderCardPostureUnknown;
+    setState(() {
+      _manualCardRefused = live;
+      _manualCardUnknown = unknown;
+      if (live && !_cardTerminal && _method == PaymentMethod.card) {
+        _method = PaymentMethod.cash;
+      }
+    });
+    return !live && !unknown;
+  }
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: the authoritative recording edge of a
+  /// card attempt. The row behind the sheet is reconciled; the one automatic
+  /// receipt is requested only when this device's own recording reply
+  /// reserved it (a passive discovery prints nothing; Reprint stands).
+  void _cardRecorded(bool armed) {
+    if (!mounted) return;
+    final s = _captureSeams();
+    unawaited(_reconcile(s.sync));
+    if (armed) unawaited(_requestPaidReceipt(s.receiptRef, s.l10n));
+  }
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: the refused or held hand-recorded
+  /// Card, the stopped-starts note, the TEST lab switch, the journal
+  /// quarantine and the last start problem (packet §9). Nothing is added on a
+  /// till proven to have no terminal binding.
+  List<Widget> _cardTerminalNotes(
+    AppLocalizations l10n,
+    ProviderCardPosturePresent? present,
+    bool lab,
+    bool quarantined,
+    bool busy,
+  ) {
+    final issue = _cardStartIssue;
+    final issueText = switch (issue) {
+      ProviderCardStartRequest.saveBlocked => l10n.posCardSaveBlocked,
+      ProviderCardStartRequest.notPermitted =>
+        l10n.posCardTerminalUnavailableNote,
+      ProviderCardStartRequest.invalid => l10n.posCardRefusedGeneric,
+      ProviderCardStartRequest.unavailable => l10n.posCardNoteNotSent,
+      // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F-JOURNAL-RECOVERY-CORRECTIONS-001:
+      // capacity, not corruption (correction packet §5).
+      ProviderCardStartRequest.journalFull => l10n.posCardJournalFullNote,
+      _ => null,
+    };
+    return <Widget>[
+      if (_manualCardRefused) ...[
+        const SizedBox(height: RestoflowSpacing.sm),
+        RestoflowNoticeBanner(
+          key: const Key('card-terminal-required'),
+          tone: RestoflowTone.warning,
+          body: l10n.posCardTerminalRequiredNote,
+        ),
+      ],
+      if (_manualCardUnknown &&
+          !_cardTerminal &&
+          _method == PaymentMethod.card) ...[
+        const SizedBox(height: RestoflowSpacing.sm),
+        RestoflowNoticeBanner(
+          key: const Key('card-posture-unknown'),
+          tone: RestoflowTone.warning,
+          body: l10n.posCardPostureUnknownNote,
+        ),
+      ],
+      if (present != null &&
+          present.mode == ProviderCardMode.live &&
+          !present.enabled) ...[
+        const SizedBox(height: RestoflowSpacing.sm),
+        RestoflowNoticeBanner(
+          key: const Key('card-terminal-unavailable'),
+          tone: RestoflowTone.info,
+          body: l10n.posCardTerminalUnavailableNote,
+        ),
+      ],
+      if (present != null && present.mode == ProviderCardMode.test) ...[
+        const SizedBox(height: RestoflowSpacing.sm),
+        SwitchListTile(
+          key: const Key('card-terminal-lab-switch'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.posCardTerminalLabSwitch),
+          value: lab,
+          // Held while the sheet is busy: what a send froze cannot change.
+          onChanged: busy
+              ? null
+              : (v) =>
+                    ref.read(providerCardLabEnabledProvider.notifier).state = v,
+        ),
+      ],
+      if (quarantined && present != null) ...[
+        const SizedBox(height: RestoflowSpacing.sm),
+        RestoflowNoticeBanner(
+          key: const Key('card-journal-quarantined'),
+          tone: RestoflowTone.danger,
+          title: l10n.posCardJournalQuarantinedTitle,
+          body: l10n.posCardJournalQuarantinedBody,
+        ),
+      ],
+      if (issueText != null) ...[
+        const SizedBox(height: RestoflowSpacing.sm),
+        RestoflowNoticeBanner(
+          key: const Key('card-start-issue'),
+          tone: RestoflowTone.warning,
+          body: issueText,
+        ),
+      ],
+    ];
   }
 
   /// RESUME SAME ATTEMPT: the same identity, the same bytes — an explicit
@@ -736,7 +1007,85 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     if (_quarantined) return _quarantinedView(l10n, theme);
     if (pending != null) return _recoveryView(l10n, theme, pending);
 
-    final isCash = _method.isCash;
+    // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: an open card attempt for this order
+    // replaces the tender form — no other tender, no new start and no manual
+    // Card while it is open; a result this sheet showed stays until it is
+    // left (packet §7.2). An open TEST attempt appears whatever the lab
+    // toggle; a final TEST result only in the lab, or when this sheet showed
+    // the attempt before it turned final
+    // (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F-JOURNAL-RECOVERY-CORRECTIONS-001,
+    // correction packet §4).
+    final cardState = ref.watch(providerCardControllerProvider);
+    final cardLab = ref.watch(providerCardLabEnabledProvider);
+    final cardAttempt = cardState.currentFor(
+      widget.identity,
+      includeTest:
+          cardLab ||
+          _cardShown.any((id) => cardState.byId(id)?.isLive == false),
+    );
+    if (cardAttempt != null &&
+        (cardAttempt.isOpen ||
+            (cardAttempt.attemptId != _cardLeft &&
+                _cardShown.contains(cardAttempt.attemptId)))) {
+      final id = cardAttempt.attemptId;
+      _cardShown.add(id);
+      return ProviderCardPaymentView(
+        key: ValueKey<String>('card-view-$id'),
+        attemptId: id,
+        onTakeAnotherWay: () {
+          if (!mounted) return;
+          setState(() {
+            _cardLeft = id;
+            _cardTerminal = false;
+            _method = PaymentMethod.cash;
+          });
+        },
+        onRecorded: _cardRecorded,
+        onDone: () => Navigator.of(context).pop(true),
+        onClose: () => Navigator.of(context).pop(),
+      );
+    }
+
+    // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: the tenders follow the server
+    // posture (packet §9.1). The hand-recorded Card is hidden on a LIVE
+    // terminal till (configured, enabled or draining: no manual fallback) and
+    // unchanged otherwise; while the posture is unknown it stays on screen,
+    // and choosing or sending it reads the posture again: still unknown, it
+    // is held with a note ([_manualCardPermitted]). The integrated option
+    // needs a permitted start and an eligible order.
+    final postureView = ref.watch(providerCardPostureProvider);
+    final posture = postureView.posture;
+    final present = posture is ProviderCardPosturePresent ? posture : null;
+    final showManualCard = present?.mode != ProviderCardMode.live;
+    _manualCardAllowed = showManualCard;
+    final cardEligible =
+        widget.identity.isAuthoritative &&
+        (widget.orderId ?? '').isNotEmpty &&
+        widget.amountMinor > 0 &&
+        kProviderCardCurrencies.contains(widget.currencyCode);
+    _cardTerminalMode =
+        present != null &&
+            present.enabled &&
+            cardEligible &&
+            (present.mode == ProviderCardMode.live || cardLab)
+        ? present.mode
+        : null;
+    // The chosen tender follows what the posture offers now, so Confirm acts
+    // on exactly what is shown: a terminal choice whose option went away falls
+    // back to Cash (never to the hand-recorded Card), and so does a
+    // hand-recorded Card a LIVE till hides.
+    if (_cardTerminalMode == null && _cardTerminal) {
+      _cardTerminal = false;
+      _method = PaymentMethod.cash;
+    }
+    if (!_cardTerminal &&
+        _method == PaymentMethod.card &&
+        !_manualCardAllowed) {
+      _method = PaymentMethod.cash;
+    }
+    final method = _method;
+
+    final isCash = method.isCash;
     final tendered = _tenderedMinor;
     final hasInput = _controller.text.trim().isNotEmpty;
     final invalid = isCash && hasInput && tendered == null;
@@ -752,7 +1101,10 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     //
     // PAYMENT-ATTEMPT-RECOVERY-001: and never before the durable store has been
     // read — a new attempt may not start while an unresolved one could exist.
-    final busy = _submitting || _hydrating;
+    // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: also held while the card journal is
+    // read again (a new PIN session or scope rebuilds the controller), so no
+    // tender is confirmed past an open card attempt it has not shown yet.
+    final busy = _submitting || _hydrating || !cardState.hydrated;
     final canConfirm =
         !_notChargeable &&
         !_conflictStale &&
@@ -789,9 +1141,25 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
             // RF-117: the tender selector (Cash / Card / Bit / External).
             _TenderSelector(
               l10n: l10n,
-              selected: _method,
+              selected: method,
               enabled: !busy && !_conflictStale,
               onSelect: _selectMethod,
+              // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F (packet §9.1).
+              showCard: showManualCard,
+              terminalLabel: switch (_cardTerminalMode) {
+                ProviderCardMode.live => l10n.posCardTerminalTender,
+                ProviderCardMode.test => l10n.posCardTerminalTestTender,
+                null => null,
+              },
+              terminalSelected: _cardTerminal,
+              onSelectTerminal: _selectCardTerminal,
+            ),
+            ..._cardTerminalNotes(
+              l10n,
+              present,
+              cardLab,
+              cardState.quarantined,
+              busy,
             ),
             const SizedBox(height: RestoflowSpacing.md),
             _AmountRow(
@@ -885,7 +1253,13 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
                 hasChange: changeMinor != null,
               ),
             ] else
-              _NonCashNote(message: l10n.posNonCashNote),
+              _NonCashNote(
+                message: !_cardTerminal
+                    ? l10n.posNonCashNote
+                    : _cardTerminalMode == ProviderCardMode.test
+                    ? l10n.posCardTerminalTestNote
+                    : l10n.posCardTerminalNote,
+              ),
             if (_notChargeable) ...[
               const SizedBox(height: RestoflowSpacing.md),
               // MONEY-SETTLEMENT-CONSISTENCY-001: the server's typed
@@ -991,7 +1365,11 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
                       icon: busy
                           ? const RestoflowInlineSpinner()
                           : const Icon(Icons.check),
-                      label: Text(l10n.posConfirmPayment),
+                      label: Text(
+                        _cardTerminal
+                            ? l10n.posCardTerminalStart
+                            : l10n.posConfirmPayment,
+                      ),
                       style: RestoflowButtonStyles.big(context),
                     ),
             ),
@@ -1348,12 +1726,25 @@ class _TenderSelector extends StatelessWidget {
     required this.selected,
     required this.enabled,
     required this.onSelect,
+    this.showCard = true,
+    this.terminalLabel,
+    this.terminalSelected = false,
+    this.onSelectTerminal,
   });
 
   final AppLocalizations l10n;
   final PaymentMethod selected;
   final bool enabled;
   final ValueChanged<PaymentMethod> onSelect;
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: whether the hand-recorded Card chip is
+  /// shown ([showCard]); the integrated option is a separate chip labelled
+  /// [terminalLabel] (absent when null). The defaults render exactly the
+  /// RF-117 selector.
+  final bool showCard;
+  final String? terminalLabel;
+  final bool terminalSelected;
+  final VoidCallback? onSelectTerminal;
 
   static const Map<PaymentMethod, String> _keys = <PaymentMethod, String>{
     PaymentMethod.cash: 'tender-cash',
@@ -1400,16 +1791,27 @@ class _TenderSelector extends StatelessWidget {
             // danger, which is what a cashier reads to know whether money
             // actually moved.
             for (final method in PaymentMethod.values)
+              if (method != PaymentMethod.card || showCard)
+                ChoiceChip(
+                  key: Key(_keys[method]!),
+                  label: Text(paymentMethodLabel(l10n, method)),
+                  selected: !terminalSelected && selected == method,
+                  onSelected: enabled ? (_) => onSelect(method) : null,
+                  showCheckmark: true,
+                  checkmarkColor: tenderAccent,
+                  side: !terminalSelected && selected == method
+                      ? BorderSide(color: tenderAccent)
+                      : null,
+                ),
+            if (terminalLabel case final label?)
               ChoiceChip(
-                key: Key(_keys[method]!),
-                label: Text(paymentMethodLabel(l10n, method)),
-                selected: selected == method,
-                onSelected: enabled ? (_) => onSelect(method) : null,
+                key: const Key('tender-card-terminal'),
+                label: Text(label),
+                selected: terminalSelected,
+                onSelected: enabled ? (_) => onSelectTerminal?.call() : null,
                 showCheckmark: true,
                 checkmarkColor: tenderAccent,
-                side: selected == method
-                    ? BorderSide(color: tenderAccent)
-                    : null,
+                side: terminalSelected ? BorderSide(color: tenderAccent) : null,
               ),
           ],
         ),
