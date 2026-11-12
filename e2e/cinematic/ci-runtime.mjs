@@ -10,6 +10,7 @@ import { installDashboardFontMirror } from './font-mirror.mjs';
 import { requireEphemeralCi } from '../../supabase/tests/support/cinematic_001b_migration_contract.mjs';
 import { capturePublisherRuntime } from './publisher-diagnostics.mjs';
 import { LOGICAL_ORIGIN } from './live-transport.mjs';
+import { measureLiveBudget } from './live-budget.mjs';
 
 const marker = 'BIZBOT-STOREFRONT-CINEMATIC-001B';
 const api = 'http://127.0.0.1:54321';
@@ -186,7 +187,11 @@ async function main(action) {
       actualServices: true, retries: 0, cases,
     }, null, 2));
     for (const item of cases) console.log(`${item.status}: ${item.title}`);
+    // Run only after the independent UI lifecycle has finished. A size failure
+    // cannot prevent Edge acceptance from executing or erase its own receipt.
+    const liveBudget = await measureLiveBudget(root, privateDir, publicDir, fixture.ownerA.slug);
     assert.equal(result.status, 0, 'Real Dashboard acceptance failed; no automatic retry');
+    assert.equal(liveBudget.status, 'PASS', 'Actual live first-load budget failed; unchanged caps remain a release gate');
   } finally {
     for (const child of children) child.kill('SIGTERM');
   }

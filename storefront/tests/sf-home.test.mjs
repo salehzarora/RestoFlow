@@ -124,6 +124,10 @@ test('NEGATIVE CONTROL: approved source order catches reordered, deleted and dup
   assert.ok(anchorOrder(duplicated, CHROME_ANCHORS).some(x => x.includes('occurs 2x')));
   assert.ok(anchorOrder(footerSource.replace('<ServiceStatusStrip', '<MissingService'), FOOTER_ANCHORS).length > 0);
   assert.ok(anchorOrder(footerSource.replace('<ServiceStatusStrip', '<ServiceStatusStrip /><ServiceStatusStrip'), FOOTER_ANCHORS).some(x => x.includes('occurs 2x')));
+  const heroSlot = '{showIntro ? hero : null}';
+  assert.ok(anchorOrder(chrome.replace(heroSlot, ''), CHROME_ANCHORS).some(x => x.includes('hero') && x.includes('occurs 0x')));
+  assert.ok(anchorOrder(chrome.replace(heroSlot, heroSlot + heroSlot), CHROME_ANCHORS).some(x => x.includes('hero') && x.includes('occurs 2x')));
+  assert.ok(anchorOrder(chrome.replace(heroSlot, '').replace('{notice}', '{notice}' + heroSlot), CHROME_ANCHORS).length > 0);
   assert.deepEqual(anchorOrder(chrome, CHROME_ANCHORS), []);
   assert.deepEqual(anchorOrder(homeSource, PAGE_ANCHORS), []);
   assert.deepEqual(anchorOrder(footerSource, FOOTER_ANCHORS), []);

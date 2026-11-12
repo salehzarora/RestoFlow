@@ -83,7 +83,7 @@ export function anchorOrder(source, anchors) {
 /** The JSX anchors. Every one is a real element or a rendered child slot. */
 export const CHROME_ANCHORS = Object.freeze([
   ['compact', 'data-sf-module="compact"'],
-  ['hero', '{hero}'],
+  ['hero', '{showIntro ? hero : null}'],
   ['announce', 'data-sf-module="announce"'],
   ['notice', '{notice}'],
   ['categories', 'data-sf-module="categories"'],

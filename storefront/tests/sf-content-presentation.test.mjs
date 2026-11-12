@@ -52,15 +52,25 @@ test('Hero rendering slices codepoints, preserving original Arabic/Hebrew marks,
 });
 test('all product media roles consume the same closed presentation helper, without changing order runtime', () => {
   const root = new URL('../src/ui/storefront/', import.meta.url);
-  for (const file of ['home/GridCard.tsx', 'home/HomeParts.tsx', 'search/SearchScreen.tsx', 'product/ProductSheet.tsx', 'cart/LiveCartAside.tsx', 'cart/LiveCartDock.tsx', 'checkout/CartScreen.tsx']) {
+  const roles = ['home/GridCard.tsx', 'home/HomeParts.tsx', 'search/SearchScreen.tsx', 'product/ProductSheet.tsx', 'cart/LiveCartAside.tsx', 'checkout/CartScreen.tsx'];
+  for (const file of roles) {
     assert.match(readFileSync(new URL(file, root), 'utf8'), /productImageClass\(/, file);
   }
+  // The accepted UX003 dock contains count/subtotal/CTA only, no product media.
+  const dock = readFileSync(new URL('cart/LiveCartDock.tsx', root), 'utf8');
+  const dockWithoutProductImage = source => assert.doesNotMatch(source, /<img\b|productImageClass\(/);
+  dockWithoutProductImage(dock);
+  assert.match(dock, /formatMoney\(summary\.subtotalMinor\)/);
+  assert.match(dock, /countLabel\(count, m\)/);
+  assert.throws(() => dockWithoutProductImage(dock + '<img src="unreviewed.webp" />'));
+  for (const file of roles) assert.throws(() => assert.match(readFileSync(new URL(file, root), 'utf8').replaceAll('productImageClass(', 'unreviewed('), /productImageClass\(/), file);
   const parts = readFileSync(new URL('home/HomeParts.tsx', root), 'utf8');
   assert.match(parts, /data-sf-category=\{isCategory \? promo\.categoryId/);
   assert.match(parts, /data-sf-item=\{isCategory \? undefined : promo\.itemId/);
   assert.doesNotMatch(parts.slice(parts.indexOf('export function PromoBanner'), parts.indexOf('export function StoryCard')), /type="button" disabled/);
   const chrome = readFileSync(new URL('home/HomeChrome.tsx', root), 'utf8');
-  assert.match(chrome, /<CategoryIcon path=\{category\.iconPath\} image=\{category\.image\}/);
+  assert.match(chrome, /<CategoryIcon path=\{category\.iconPath\} image=\{null\}/);
+  assert.doesNotMatch(chrome, /<CategoryIcon[^>]*image=\{category\.image\}/);
   assert.match(chrome, /return image === null \? <svg/);
   assert.match(chrome, /heading\.focus\(\{ preventScroll: true \}\)/);
   assert.match(chrome, /setActive\(id\); setPicks\(false\); setQuery\(''\); setCategoryTarget\(id\)/);
