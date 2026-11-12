@@ -1,0 +1,31 @@
+/* One copy of each unchanged, self-hosted subset. Preload policy belongs to
+   the rendering route, not to the CSS chunk into which these faces merge. */
+@font-face {
+  font-family: 'SF Rubik Latin';
+  src: url('./rubik-latin-var.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0100-017F, U+02BC-02DC, U+0300-030F, U+2000-206F, U+20AC, U+2122, U+2212-2215;
+}
+@font-face {
+  font-family: 'SF Rubik Arabic';
+  src: url('./rubik-arabic-var.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+FB50-FDFF;
+}
+@font-face {
+  font-family: 'SF Rubik Hebrew';
+  src: url('./rubik-hebrew-var.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  unicode-range: U+0590-05FF, U+20AA, U+FB1D-FB4F;
+}
+.variables {
+  --sf-font-latin: 'SF Rubik Latin';
+  --sf-font-arabic: 'SF Rubik Arabic';
+  --sf-font-hebrew: 'SF Rubik Hebrew';
+}

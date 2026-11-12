@@ -1071,6 +1071,220 @@ async function screenshot(page: Page, path: string): Promise<void> {
   await page.locator('[data-cinematic-test-label]').evaluateAll(nodes => nodes.forEach(n => n.remove()));
 }
 
+// BIZBOT-STOREFRONT-BANNER-PREVIEW-001: exercise the existing content writer
+// through the shipped editor, then require a fresh authenticated server read.
+async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, token: string): Promise<void> {
+  const out = process.env.CINEMATIC_ARTIFACT_DIR!;
+  const receipt: Obj = { status: 'FAIL', failedStage: 'baseline', data: 'real temporary CI services; owner UI save, no SQL focus write' };
+  let stage = 'baseline';
+  const read = () => rpc(f, token, 'get_restaurant_storefront_content_v5');
+  const previewFrames = page.locator('iframe[title="Storefront banner preview"]');
+  const preview = (index: number) => page.frameLocator('iframe[title="Storefront banner preview"]').nth(index);
+  const geometry = async (root: Locator): Promise<Obj> => {
+    await root.evaluate(async el => {
+      await el.ownerDocument.fonts.ready;
+      await el.ownerDocument.querySelector<HTMLImageElement>('[data-sf-menu-banner] img')!.decode();
+    });
+    // The render-only iframe intentionally forbids scripts; its rAF callbacks
+    // cannot run. Wait for layout in the owning page, without relaxing sandbox.
+    await root.page().evaluate(async () => {
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    });
+    return root.evaluate(el => {
+      const doc = el.ownerDocument;
+      const image = doc.querySelector<HTMLImageElement>('[data-sf-menu-banner] img')!;
+      const box = image.getBoundingClientRect();
+      const scale = Math.max(box.width / image.naturalWidth, box.height / image.naturalHeight);
+      return { width: box.width, height: box.height, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight,
+        publicPath: new URL(image.currentSrc).pathname, position: getComputedStyle(image).objectPosition,
+        clippedX: Math.max(0, image.naturalWidth - box.width / scale), clippedY: Math.max(0, image.naturalHeight - box.height / scale),
+        searchY: doc.querySelector('[role="search"]')!.getBoundingClientRect().y,
+        categoriesY: doc.querySelector('[data-sf-module="categories"]')!.getBoundingClientRect().y };
+    });
+  };
+  const label = (axis: 'x' | 'y') => axis === 'x' ? 'موضع التركيز الأفقي' : 'موضع التركيز الرأسي';
+  const focalText = (axis: 'x' | 'y', value: number) => page.getByText(`${label(axis)} — ${value}%`, { exact: true });
+  // Discover the real range following its visible axis label, not a fixed
+  // Flutter semantic-node ID or a DOM value assignment. Other editor sliders
+  // (such as background dimming) are deliberately not selected by index.
+  const focalSlider = async (axis: 'x' | 'y', value: number): Promise<Locator> => {
+    const text = focalText(axis, value);
+    await reveal(page, text, 'content-status');
+    const boundary = axis === 'x'
+      ? page.getByText(/^موضع التركيز الرأسي — \d+%$/)
+      : page.getByText('معاينة قص غير هدّام — هاتف / سطح المكتب', { exact: true });
+    await expect(boundary).toHaveCount(1);
+    const boundaryElement = await boundary.elementHandle();
+    const id = await text.evaluate((el, limit) => {
+      const candidates = Array.from(document.querySelectorAll<HTMLElement>('[role="slider"],input[type="range"]'))
+        .filter(node => Boolean(el.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)
+          && Boolean(node.compareDocumentPosition(limit!) & Node.DOCUMENT_POSITION_FOLLOWING));
+      if (candidates.length !== 1) throw new Error('Axis label must precede exactly one real focal range');
+      const node = candidates[0];
+      const owner = node?.closest<HTMLElement>('[id^="flt-semantic-node-"]');
+      if (!owner?.id) throw new Error('Focal range has no rendered semantic owner');
+      return owner.id;
+    }, boundaryElement);
+    const slider = page.locator(`[id="${id}"]`).getByRole('slider');
+    await expect(slider).toHaveCount(1);
+    await reveal(page, slider, 'field');
+    return slider;
+  };
+  const setFocal = async (axis: 'x' | 'y', from: number, to: number) => {
+    const slider = await focalSlider(axis, from);
+    await slider.focus();
+    await expect(slider, 'The same ordinary focal input retains keyboard focus').toBeFocused();
+    const step = Math.sign(to - from);
+    for (let value = from; value !== to;) {
+      await page.keyboard.press(step > 0 ? 'ArrowRight' : 'ArrowLeft');
+      value += step;
+      await expect(focalText(axis, value), 'Observe each actual Flutter draft tick before the next key').toHaveCount(1);
+      await expect(slider).toHaveAttribute('aria-valuetext', `${value}%`);
+      await expect(slider, 'Never refocus a recreated or unfocused range to hide a draft-input defect').toBeFocused();
+    }
+  };
+  const profileFields = (profile: Obj) => Object.fromEntries([
+    'storefront_branch_id', 'display_name', 'tagline', 'public_city', 'public_address', 'public_phone',
+    'primary_color', 'accent_color', 'visual_preset', 'locale_default', 'logo_media_id', 'hero_media_id',
+    'opening_hours', 'pickup_enabled', 'paused_until', 'pause_reason', 'is_published',
+  ].map(key => [key, profile[key]]));
+  const withoutFocals = (document: Obj) => {
+    const value = structuredClone(document);
+    delete value.appearance.menu_banner_focal_x; delete value.appearance.menu_banner_focal_y;
+    return value;
+  };
+  let writes = 0, profileWrites = 0;
+  const countWrites = (request: import('@playwright/test').Request) => {
+    const u = new URL(request.url());
+    if (u.origin === API && request.method() === 'POST' && u.pathname === '/rest/v1/rpc/set_restaurant_storefront_content_v1') writes++;
+    if (u.origin === API && request.method() === 'POST' && u.pathname === '/rest/v1/rpc/set_restaurant_storefront_profile') profileWrites++;
+  };
+  page.on('request', countWrites);
+  try {
+    const baseline = await read(), profileBefore = (await rpc(f, token, 'get_restaurant_storefront_profile')).profile;
+    expect(baseline.restaurant_id).toBe(f.ownerA.restaurantId);
+    expect(baseline.storefront_branch_id).toBe(f.ownerA.branchId);
+    const before = baseline.document;
+    const initialX = before.appearance.menu_banner_focal_x ?? 50, initialY = before.appearance.menu_banner_focal_y ?? 50;
+    const phone = preview(0).locator('[data-sf-menu-top]'), desktop = preview(1).locator('[data-sf-menu-top]');
+    await expect(previewFrames).toHaveCount(2);
+    // The single asynchronous public-state read replaces the initial srcdoc.
+    // Wait for that initial document and fonts before taking a baseline. Only
+    // this pre-input wait accepts navigation; draft/reuse checks stay strict.
+    let initialDocumentNavigations = 0;
+    receipt.initialDocumentNavigations = 0;
+    const initialGeometry = async (index: number): Promise<Obj> => {
+      let observed: Obj | undefined;
+      await expect.poll(async () => {
+        try {
+          const ready = await preview(index).locator('[data-banner-preview-root]').evaluate(el =>
+            Boolean((el as HTMLElement).style.getPropertyValue('--font'))
+              && Boolean(el.querySelector('[data-sf-order-status] [data-state]'))
+              && el.querySelector('[data-sf-order-status] [data-state]')!.getAttribute('data-state') !== 'unknown');
+          if (!ready) return false;
+          observed = await geometry(preview(index).locator('[data-sf-menu-top]'));
+          receipt[index === 0 ? 'initialPhoneGeometry' : 'initialDesktopGeometry'] = observed;
+          return observed.position === `${initialX}% ${initialY}%`;
+        } catch (error) {
+          if (!(error instanceof Error) || !error.message.includes('Execution context was destroyed')) throw error;
+          receipt.initialDocumentNavigations = ++initialDocumentNavigations;
+          return false;
+        }
+      }, { timeout: 25000 }).toBe(true);
+      return observed!;
+    };
+    stage = 'baseline-initial-phone';
+    const phoneBefore = await initialGeometry(0);
+    stage = 'baseline-initial-desktop';
+    const desktopBefore = await initialGeometry(1);
+    stage = 'baseline-crop-geometry';
+    expect(phoneBefore.width, 'Default logical phone preview').toBe(390);
+    expect(desktopBefore.width, 'Independent logical desktop preview').toBe(1280);
+    expect(phoneBefore.clippedX, 'This real image actually crops horizontally on phone').toBeGreaterThan(1);
+    expect(desktopBefore.clippedY, 'The same real image actually crops vertically on desktop').toBeGreaterThan(1);
+    const originalPhoto = await preview(0).locator('[data-sf-menu-banner] img').elementHandle();
+    expect(originalPhoto).not.toBeNull();
+    stage = 'draft-focus-no-autosave';
+    await setFocal('x', initialX, 23);
+    await expect.poll(async () => (await geometry(phone)).position).toBe(`23% ${initialY}%`);
+    await setFocal('y', initialY, 74);
+    await expect.poll(async () => (await geometry(desktop)).position).toBe('23% 74%');
+    for (const width of [430, 390]) {
+      const choice = page.getByRole('checkbox', { name: `${width}px`, exact: true });
+      await reveal(page, choice, 'field'); await tapRevealedControl(page, choice);
+      await expect(choice, 'Viewport selection is a local preview tool').toBeChecked();
+      await expect.poll(async () => (await geometry(phone)).width).toBe(width);
+    }
+    expect(await originalPhoto!.evaluate(el => el.isConnected && el.ownerDocument.querySelector('[data-sf-menu-banner] img') === el), 'Draft focal moves reuse the same image node/document').toBe(true);
+    expect(writes, 'Focal edits never write automatically').toBe(0);
+    expect(await read(), 'The actual server still has the entire pre-edit document/version').toEqual(baseline);
+    const draftPhone = await geometry(phone), draftDesktop = await geometry(desktop);
+    expect(draftPhone.publicPath).toBe(phoneBefore.publicPath);
+    expect(draftDesktop.publicPath).toBe(phoneBefore.publicPath);
+    // One axis may be complete on a viewport, but its value is still retained
+    // for the other viewport. Do not manufacture movement with extra zoom.
+    if (draftPhone.clippedY < .01) {
+      await reveal(page, previewFrames.nth(0), 'content-status');
+      await expect(page.getByText('موضع التركيز الرأسي: الصورة ظاهرة كاملة على هذا المحور', { exact: true })).toHaveCount(1);
+      expect(draftPhone.position).toBe('23% 74%');
+    }
+    if (draftDesktop.clippedX < .01) {
+      await expect(page.getByText('موضع التركيز الأفقي: الصورة ظاهرة كاملة على هذا المحور', { exact: true })).toHaveCount(1);
+      expect(draftDesktop.position).toBe('23% 74%');
+    }
+    stage = 'save-content-via-ui';
+    await saveContent(page);
+    expect(writes, 'Only the explicit normal content Save writes once').toBe(1);
+    stage = 'reload-real-owner-read';
+    const observedRead = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v5')));
+    const reloadResponse = await responseAfterAction(observedRead, () => openEditor(page, true));
+    expect(reloadResponse.status()).toBe(200);
+    const reloadWire = await reloadResponse.json();
+    expect(reloadWire.ok).toBe(true);
+    expect(reloadWire.restaurant_id).toBe(f.ownerA.restaurantId);
+    expect(reloadWire.storefront_branch_id).toBe(f.ownerA.branchId);
+    expect(reloadWire.document.appearance.menu_banner_focal_x).toBe(23);
+    expect(reloadWire.document.appearance.menu_banner_focal_y).toBe(74);
+    await openFoldedGroup(page, 'banner');
+    await expect(focalText('x', 23)).toHaveCount(1); await expect(focalText('y', 74)).toHaveCount(1);
+    const reread = await read();
+    expect(reread.restaurant_id).toBe(f.ownerA.restaurantId); expect(reread.storefront_branch_id).toBe(f.ownerA.branchId);
+    expect(reread.version).toBeGreaterThan(baseline.version);
+    expect(reread.document.appearance.menu_banner_focal_x).toBe(23);
+    expect(reread.document.appearance.menu_banner_focal_y).toBe(74);
+    expect(withoutFocals(reread.document), 'All other content/appearance values survive exactly').toEqual(withoutFocals(before));
+    expect(profileFields((await rpc(f, token, 'get_restaurant_storefront_profile')).profile), 'Independent profile save was not invoked').toEqual(profileFields(profileBefore));
+    expect(profileWrites, 'Content save never invokes the independent profile writer').toBe(0);
+    expect(Object.keys(reread.document.appearance).filter(key => /viewport|preview.*width|phone.*width/.test(key))).toEqual([]);
+    await invariants(f, token);
+    stage = 'matching-saved-phone-preview-and-storefront';
+    await expect.poll(async () => (await geometry(phone)).position).toBe('23% 74%');
+    const afterPreview = await geometry(phone);
+    await menu.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(async () => {
+      await menu.goto(STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+      const image = menu.locator('[data-sf-menu-banner] img');
+      return await image.count() === 1 ? image.evaluate(el => getComputedStyle(el).objectPosition) : '';
+    }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe('23% 74%');
+    const afterSite = await geometry(menu.locator('[data-sf-menu-top]'));
+    for (const key of ['width', 'height', 'naturalWidth', 'naturalHeight', 'publicPath', 'position', 'searchY', 'categoriesY']) {
+      expect(afterSite[key], `Saved phone preview and live source match ${key}`).toBe(afterPreview[key]);
+    }
+    await reveal(page, previewFrames.nth(0), 'content-status');
+    await screenshot(page, resolve(out, 'banner-focus-dashboard-saved-test-data.png'));
+    await screenshot(menu, resolve(out, 'banner-focus-storefront-saved-test-data.png'));
+    receipt.status = 'SAVE_READBACK_PASS'; receipt.failedStage = null;
+    Object.assign(receipt, { saved: { x: 23, y: 74 }, phoneBefore, desktopBefore, draftPhone, draftDesktop,
+      afterPreview, afterSite, contentWrites: writes, actualUiReloadReadObserved: true,
+      allOtherContentPreserved: true, independentProfilePreserved: true, correctRestaurantAndBranch: true,
+      viewportToolsNotPersisted: !Object.keys(reread.document.appearance).some(key => /viewport|preview.*width|phone.*width/.test(key)) });
+  } finally {
+    page.off('request', countWrites);
+    if (receipt.status !== 'SAVE_READBACK_PASS') receipt.failedStage = stage;
+    writeFileSync(resolve(out, 'banner-focus-persistence-result.json'), JSON.stringify(receipt, null, 2));
+  }
+}
+
 async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: string, diagnostics: () => UploadDiagnostics): Promise<void> {
   const out = process.env.CINEMATIC_ARTIFACT_DIR!;
   let stage = 'baseline';
@@ -1129,6 +1343,10 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
         const image = menu.locator('[data-sf-menu-banner] img');
         return await image.count() === 1 && (await image.getAttribute('src'))?.endsWith(path);
       }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe(true);
+      if (index === 0) {
+        stage = 'banner-focal-persistence';
+        await verifyBannerFocalPersistence(page, menu, f, token);
+      }
       const image = menu.locator('[data-sf-menu-banner] img');
       await expect.poll(() => image.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
       await screenshot(menu, resolve(out, `banner-${index ? 'replacement' : 'first'}-test-data.png`));

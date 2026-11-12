@@ -1870,6 +1870,20 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           sources: _sources,
           reloadSources: _reloadSources,
           publicUrlFor: widget.seams!.publicUrlFor,
+          bannerPreviewProfile: profile,
+          bannerPreviewLogoUrl: widget.seams!.publicUrlFor == null
+              ? null
+              : _media?.media
+                    .where((row) => row.isLive && row.id == profile.logoMediaId)
+                    .map((row) => widget.seams!.publicUrlFor!(row.objectKey))
+                    .firstOrNull,
+          loadBannerPreview:
+              widget.seams!.profileRepository is StorefrontBannerPreviewReader
+              ? () =>
+                    (widget.seams!.profileRepository
+                            as StorefrontBannerPreviewReader)
+                        .readPublishedBannerPreview(profile.slug)
+              : null,
           onRefresh: () async => _currentBinding(contentBinding)
               ? _refreshAllState()
               : const StorefrontContentRefresh.unavailable(),
