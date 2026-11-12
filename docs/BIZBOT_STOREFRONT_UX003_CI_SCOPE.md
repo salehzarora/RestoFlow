@@ -68,3 +68,13 @@ bootstrap into its private directory, then uploaded by the unchanged real UI
 journey. Collection alone now discovers both tests; this is not UI acceptance.
 Sanitized global report errors are retained alongside sanitized test errors so
 a collection failure is diagnosable without publishing private Playwright logs.
+
+The owner also accepted the exact six-test public-surface baseline patch
+`daaace434b8e382578fa6c821f697f26b49085ce9eab0b21cb37fa1edc139832`
+after the actual full database run identified fifteen failures. It adds only
+the literal v9/v10 identities to the exact anonymous/definer reader sets and
+keeps the authenticated-denied expectation consistent with their existing
+reviewed grants. Unknown-routine/procedure and definer-only negative controls
+remain. No migration, ACL, production payment guard or pending-count guard is
+changed by this test-baseline correction. Required full database CI must prove
+the resulting source; the prior failure is preserved rather than reclassified.
