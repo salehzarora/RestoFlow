@@ -19,6 +19,7 @@ import { JourneyAppearance } from './JourneyAppearance';
 import type { FlowScreenName } from './FlowRuntime';
 import { FlowEntry } from './FlowEntry';
 import { orderMessages } from '@/i18n/orders';
+import { storefrontMessages } from '@/i18n/storefront';
 
 export function FlowScreen({
   resolution,
@@ -44,6 +45,7 @@ export function FlowScreen({
   return (
     <JourneyAppearance tenant={tenant} legacyTokens={tokens} dir={dirOf(locale)} payment={screen === 'payment'}>
       <FlowEntry
+        m={storefrontMessages(locale)}
         source={resolution.source}
         orderCopy={resolution.source === 'live' ? orderMessages(locale) : undefined}
         locale={locale}

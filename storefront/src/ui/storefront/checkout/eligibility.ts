@@ -21,7 +21,8 @@
  */
 import type { Quote } from '@/money/quote';
 import type { ServiceState } from '@/source/types';
-import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import { fill } from '@/i18n/fill';
+import type { StorefrontMessages } from '@/i18n/storefront';
 import type { CheckoutDraft } from './draft';
 import { validateCheckout } from './validation';
 

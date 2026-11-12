@@ -1,7 +1,6 @@
 'use client';
 
 import { StorefrontRuntime } from '../StorefrontRuntime';
-import { storefrontMessages } from '@/i18n/storefront';
 import { LiveFlowBody } from './LiveFlowBody';
 import type { FlowProps } from './FlowRuntime';
 
@@ -10,7 +9,7 @@ export function LiveFlowRuntime(props: FlowProps) {
   if (!props.orderCopy) throw new Error('Live checkout messages are missing');
   return (
     <StorefrontRuntime
-      m={storefrontMessages(props.locale)}
+      m={props.m}
       source="live"
       slug={props.slug}
       menuVersion={props.menuVersion}

@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import type { OrderMessages } from '@/i18n/orders';
 import { orderSnapshotCopy, orderStatusCopy } from '@/i18n/orderCopy';
 import { acceptanceEtaCopy } from '@/i18n/acceptanceEta';
-import { storefrontMessages } from '@/i18n/storefront';
+import type { StorefrontMessages } from '@/i18n/storefront';
 import type { Locale } from '@/i18n/locales';
 import { menuPath } from '@/routes/routes';
 import { useLiveOrder } from '../checkout/LiveOrderProvider';
@@ -17,8 +17,7 @@ import type { RequestTenant } from './requestParts';
 import s from './liveRequest.module.css';
 
 /** Private status reads only; no cancellation, kitchen timeline or demo state. */
-export function LiveRequestRuntime({ locale, copy, slug, origin, tenant, publicPhone, onOrderAgain }: { locale: Locale; copy: OrderMessages; slug: string; origin?: string; tenant: RequestTenant; publicPhone?: string; onOrderAgain: () => void }) {
-  const m = storefrontMessages(locale);
+export function LiveRequestRuntime({ m, locale, copy, slug, origin, tenant, publicPhone, onOrderAgain }: { m: StorefrontMessages; locale: Locale; copy: OrderMessages; slug: string; origin?: string; tenant: RequestTenant; publicPhone?: string; onOrderAgain: () => void }) {
   const { controller, snapshot } = useLiveOrder(origin);
   const result = snapshot.result;
   const status = result?.status;
