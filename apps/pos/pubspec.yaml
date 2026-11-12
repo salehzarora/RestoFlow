@@ -98,6 +98,11 @@ dev_dependencies:
   path: '>=1.9.0 <2.0.0'
   # (restoflow_data_local moved to regular dependencies in 001C2B — the spool
   # runtime is real production code now, confined to lib/src/spool.)
+  # BIZBOT-PAYMENTS-ZCREDIT-PILOT-001C-TRANSPORT-CORRECTIONS-001: the SDK
+  # composition tests (card charge, kitchen ACK, online-order inbox and
+  # background alerts) import package:http and package:supabase directly.
+  http: ^1.5.0
+  supabase: '>=2.0.0 <3.0.0'
 
 flutter:
   # Bundles the Material Icons font so `Icon(Icons.*)` renders glyphs (not the

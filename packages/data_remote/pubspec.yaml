@@ -12,8 +12,14 @@ resolution: workspace
 # URL/anon key/secret (DECISION D-011).
 dependencies:
   supabase: '>=2.0.0 <3.0.0'
+  # BIZBOT-PAYMENTS-ZCREDIT-PILOT-001C-TRANSPORT-CORRECTIONS-001: the HTTP
+  # boundary imports package:http directly, and the card exchange's abort
+  # trigger (`http.AbortableRequest`) needs http 1.5.0 or later.
+  http: ^1.5.0
   restoflow_core:
     path: ../core
 
 dev_dependencies:
   test: ^1.25.0
+  # The card transport test reads the SDK's log records (no body is logged).
+  logging: ^1.3.0

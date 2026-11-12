@@ -6,7 +6,8 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 class DeviceSessionGuardedTransport
     implements
         GuardedKitchenAckTransport,
-        AuthenticatedWebOrderDecisionTransport {
+        AuthenticatedWebOrderDecisionTransport,
+        AuthenticatedCardChargeTransport {
   DeviceSessionGuardedTransport(this._inner);
 
   final SyncRpcTransport _inner;
@@ -43,6 +44,36 @@ class DeviceSessionGuardedTransport
     // wins here. Already handed-off outcomes remain uncertain, never retried.
     return (inner as AuthenticatedWebOrderDecisionTransport).decideWebOrder(
       body,
+    );
+  }
+
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001C: a blocked guard refuses the card
+  /// exchange before the Edge invocation — at entry, and again at the HTTP
+  /// handoff after the SDK's access-token step, as for guarded ACKs. A
+  /// handed-off exchange stays uncertain and is never re-sent.
+  @override
+  Future<CardChargeTransportResult> sendCardCharge(
+    Map<String, dynamic> body, {
+    bool Function()? isCurrent,
+  }) {
+    if (_blocked) {
+      return Future.value(
+        const CardChargeTransportFailure.notSent(
+          CardChargeFailureReason.deviceSessionUnverified,
+        ),
+      );
+    }
+    final inner = _inner;
+    if (inner is! AuthenticatedCardChargeTransport) {
+      return Future.value(
+        const CardChargeTransportFailure.notSent(
+          CardChargeFailureReason.capabilityUnavailable,
+        ),
+      );
+    }
+    return (inner as AuthenticatedCardChargeTransport).sendCardCharge(
+      body,
+      isCurrent: () => !_blocked && (isCurrent == null || isCurrent()),
     );
   }
 
