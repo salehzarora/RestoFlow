@@ -17,7 +17,8 @@
 import { usePathname, useRouter } from 'next/navigation';
 import type { CartSummary } from '@/cart/cartModel';
 import { optionSummary } from '@/cart/cartModel';
-import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import type { StorefrontMessages } from '@/i18n/storefront';
+import { fill } from '@/i18n/fill';
 import { formatMoney, formatRateBp } from '@/money/format';
 import type { Quote } from '@/money/quote';
 import type { ModifierSelections, ServiceState } from '@/source/types';

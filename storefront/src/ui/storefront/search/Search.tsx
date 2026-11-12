@@ -69,6 +69,7 @@ export function Search({
           (prototype Storefront.dc.html:865 `showCartBar: isMenu && ...`), and
           neither canonical search screenshot shows one. */}
       <StorefrontRuntime
+        m={m}
         source={resolution.source}
         slug={slug}
         menuVersion={menuVersion}
@@ -91,12 +92,12 @@ export function Search({
           <SearchScreen
             items={items}
             categories={categories}
-            locale={locale}
+            m={m}
             menuHref={menuPath(locale, slug)}
             cardMode={view.cardMode}
           />
           <AsideSlot
-            locale={locale}
+            m={m}
             state={tenant.service.state}
             opensAt={tenant.hours.opens}
             checkoutHref={checkoutPath(locale, slug)}

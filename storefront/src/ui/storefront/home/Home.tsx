@@ -29,21 +29,21 @@ export function Home({ resolution, locale, slug, hrefFor }: {
   const background = menuBackground(tenant, tenant.scenePreset);
   return (
     <ThemeScope tokens={tokens} menuImageDim={background.dim} scenePreset={tenant.scenePreset} className={`${shell.root} ${appearance[siteThemeClass(tenant.siteTheme)]} ${MOTION_CLASS[view.motion]}`} dir={dirOf(locale)}>
-      <StorefrontRuntime source={resolution.source} slug={slug} menuVersion={menuVersion} items={items} groups={groups} zones={zones} taxRateBp={taxRateBp} orderingEnabled={tenant.service.orderingEnabled} locale={locale} motion={view.motion} state={tenant.service.state} opensAt={tenant.hours.opens}>
+      <StorefrontRuntime m={m} source={resolution.source} slug={slug} menuVersion={menuVersion} items={items} groups={groups} zones={zones} taxRateBp={taxRateBp} orderingEnabled={tenant.service.orderingEnabled} locale={locale} motion={view.motion} state={tenant.service.state} opensAt={tenant.hours.opens}>
         <main className={styles.page} data-sf-screen="home">
           {tenant.siteTheme === 'light' ? null : <MenuBackdrop background={background} sectionCount={categories.length} itemCount={items.length} />}
-          <HomeChrome key={slug} tenant={tenant} locale={locale} slug={slug} language={<LanguageMenu locale={locale} hrefFor={hrefFor} />} categories={categories} items={items} cardMode={cardMode}
+          <HomeChrome key={slug} m={m} tenant={tenant} locale={locale} slug={slug} language={<LanguageMenu locale={locale} hrefFor={hrefFor} />} categories={categories} items={items} cardMode={cardMode}
             announcement={modules.announcement === null || tenant.service.state !== 'open' ? null : modules.announcement.text}
             announcementSegments={modules.announcement?.segments}
             heroTitle={modules.campaign.title} heroSubline={modules.campaign.subline} heroContent={modules.campaign.hero}
             notice={tenant.service.orderingEnabled && tenant.service.state === 'open' ? null : <div className={styles.notices}>{tenant.service.state === 'open' ? null : <StateNotice state={tenant.service.state} tenant={tenant} m={m} />}{tenant.service.state === 'open' && !tenant.service.orderingEnabled ? <OrderingOffNotice m={m} /> : null}</div>}
             empty={items.length === 0 ? <EmptyMenu tenant={tenant} m={m} /> : null}
-            cart={<AsideSlot locale={locale} state={tenant.service.state} opensAt={tenant.hours.opens} checkoutHref={checkoutPath(locale, slug)} />}
+            cart={<AsideSlot m={m} state={tenant.service.state} opensAt={tenant.hours.opens} checkoutHref={checkoutPath(locale, slug)} />}
           />
           {items.length === 0 || modules.promo === null ? null : <PromoBanner promo={modules.promo} m={m} />}
           {items.length === 0 || modules.story === null ? null : <StoryCard story={modules.story} />}
           <SiteFooter tenant={tenant} m={m} sceneImage={tenant.siteTheme === 'light' ? null : background.image} />
-          <DockSlot locale={locale} motion={view.motion} state={tenant.service.state} opensAt={tenant.hours.opens} cartHref={cartPath(locale, slug)} />
+          <DockSlot m={m} motion={view.motion} state={tenant.service.state} opensAt={tenant.hours.opens} cartHref={cartPath(locale, slug)} />
         </main>
       </StorefrontRuntime>
       <span className={styles.srOnly} data-slug={slug} />

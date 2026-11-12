@@ -30,7 +30,8 @@ import contentStyles from '../storefront.module.css';
  * addition this build makes deliberately, recorded in the Phase C report.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { fill, type StorefrontMessages } from '@/i18n/storefront';
+import type { StorefrontMessages } from '@/i18n/storefront';
+import { fill } from '@/i18n/fill';
 import { formatMoney } from '@/money/format';
 import { MAX_NOTE, MAX_QTY, MIN_QTY, clampQty, modifierSelectionValid, unitPriceMinor } from '@/money/pricing';
 import { sanitizeText } from '@/theme/sanitize';

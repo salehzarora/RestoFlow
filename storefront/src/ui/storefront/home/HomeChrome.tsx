@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { markIntroSeen, isAnnouncementDismissed, markAnnouncementDismissed } from '@/session/uiSession';
-import { fill, storefrontMessages } from '@/i18n/storefront';
+import type { StorefrontMessages } from '@/i18n/storefront';
+import { fill } from '@/i18n/fill';
 import type { Locale } from '@/i18n/locales';
 import type { CampaignModule, CardMode, Category, MenuItem, Tenant } from '@/source/types';
 import { searchItems } from '@/source/search';
@@ -39,12 +40,11 @@ const brand = styles;
 
 
 /** Presentation state only. Product/cart/order authority stays in StorefrontRuntime. */
-export function HomeChrome({ tenant, locale, slug, language, categories, items, cardMode, announcement, announcementSegments, heroTitle, heroSubline, heroContent, notice, empty, cart }: {
-  tenant: Tenant; locale: Locale; slug: string; language: ReactNode;
+export function HomeChrome({ tenant, m, locale, slug, language, categories, items, cardMode, announcement, announcementSegments, heroTitle, heroSubline, heroContent, notice, empty, cart }: {
+  tenant: Tenant; m: StorefrontMessages; locale: Locale; slug: string; language: ReactNode;
   categories: readonly Category[]; items: readonly MenuItem[]; cardMode: CardMode;
   announcement: string | null; announcementSegments?: readonly string[]; heroTitle: string; heroSubline: string; heroContent?: CampaignModule['hero']; notice: ReactNode; empty: ReactNode; cart: ReactNode;
 }) {
-  const m = storefrontMessages(locale);
   const cartHref = cartNavigationHref(cartPath(locale, slug), usePathname());
   const [active, setActive] = useState(categories[0]?.id ?? '');
   const [query, setQuery] = useState('');

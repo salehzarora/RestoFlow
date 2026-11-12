@@ -3,11 +3,12 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, chmodSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { API_URL, assertAnonKey, assertEphemeralEnvironment, fixturePath, request, rpc, scope, storagePath, readInvariants } from './service.mjs';
 import { createPublisherDiagnostics, waitForAuthenticatedPublisher } from './publisher-diagnostics.mjs';
+import { png, photoRgb } from '../../supabase/functions/storefront-media-publish/test/fixtures.mjs';
 
 assertEphemeralEnvironment();
 const target = fixturePath();
@@ -142,6 +143,13 @@ const publicImage = await request(fixture, null, new URL(fixture.heroUrl).pathna
 assert.equal(publicImage.status, 200);
 assert.ok(publicImage.bytes.length > 0);
 Object.assign(fixture, { orgId: a.person.orgId, restaurantId: a.person.restaurantId, branchId: a.person.branchId, slug: a.person.slug });
+// Generate input files in native Node ESM, before Playwright loads its CJS
+// TypeScript tests. The shared generator uses import.meta for its own fixtures.
+for (const [index, [width, height]] of [[900, 450], [1000, 750]].entries()) {
+  writeFileSync(resolve(dirname(target), `ux003-banner-${index}.png`),
+    png({ width, height, channels: 3, rows: photoRgb(width, height, 29 + index, 8) }),
+    { mode: 0o600, flag: 'wx' });
+}
 // Sessions stay in memory and are not serialized. Only local passwords and the
 // public anon key are handed privately to the real Dashboard sign-in test.
 writeFileSync(target, `${JSON.stringify(fixture, null, 2)}\n`, { mode: 0o600, flag: 'wx' });

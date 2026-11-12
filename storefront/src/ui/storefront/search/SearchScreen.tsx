@@ -22,8 +22,8 @@
  * the divergence is recorded in the Phase C report.
  */
 import { useMemo, useRef, useState } from 'react';
-import { fill, storefrontMessages } from '@/i18n/storefront';
-import type { Locale } from '@/i18n/locales';
+import type { StorefrontMessages } from '@/i18n/storefront';
+import { fill } from '@/i18n/fill';
 import { formatMoney } from '@/money/format';
 import { searchItems } from '@/source/search';
 import type { CardMode, Category, MenuItem } from '@/source/types';
@@ -68,18 +68,17 @@ function NoResultsTitle({ template, query }: { template: string; query: string }
 export function SearchScreen({
   items,
   categories,
-  locale,
+  m,
   menuHref,
   cardMode = 'list',
 }: {
   items: readonly MenuItem[];
   categories: readonly Category[];
-  /** The locale; the dictionary is resolved client-side (E-OPT-1). */
-  locale: Locale;
+  /** Current dictionary resolved by the server Search component. */
+  m: StorefrontMessages;
   menuHref: string;
   cardMode?: CardMode;
 }) {
-  const m = storefrontMessages(locale);
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
 

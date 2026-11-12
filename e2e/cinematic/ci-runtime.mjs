@@ -171,7 +171,7 @@ async function main(action) {
     const clean = value => {
       let text = String(value || '').replace(/\x1b\[[0-9;]*m/g, '');
       for (const secret of privateValues) text = text.replaceAll(secret, '[REDACTED]');
-      return text.replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED JWT]').split('\n')[0].slice(0, 400);
+      return text.replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED JWT]').trim().split('\n')[0].slice(0, 400);
     };
     const cases = [];
     const collect = suites => { for (const suite of suites || []) {
@@ -181,10 +181,12 @@ async function main(action) {
       }
       collect(suite.suites);
     } };
-    if (existsSync(report)) collect(JSON.parse(readFileSync(report, 'utf8')).suites);
+    const reported = existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : {};
+    collect(reported.suites);
+    const errors = (reported.errors || []).map(error => clean(error.message));
     writeFileSync(resolve(publicDir, 'browser-result.json'), JSON.stringify({
       status: result.status === 0 ? 'PASS' : 'FAIL', exitCode: result.status,
-      actualServices: true, retries: 0, cases,
+      actualServices: true, retries: 0, cases, errors,
     }, null, 2));
     for (const item of cases) console.log(`${item.status}: ${item.title}`);
     // Run only after the independent UI lifecycle has finished. A size failure

@@ -71,6 +71,7 @@ export function FlowRuntime(props: FlowProps) {
   const m = storefrontMessages(props.locale);
   return (
     <StorefrontRuntime
+      m={m}
       source={props.source}
       slug={props.slug}
       menuVersion={props.menuVersion}

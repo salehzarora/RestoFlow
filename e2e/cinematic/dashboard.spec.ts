@@ -1,6 +1,6 @@
 import { test, expect, type BrowserContext, type Page, type Response, type Locator } from '@playwright/test';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { enableFlutterSemantics, waitForFlutterBoot, readAccessibleText } from '../lib/flutter';
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { MAX_REVEAL_WHEELS, nextRevealMove, observeResponse, responseAfterAction } from './control-progress.mjs';
@@ -10,7 +10,6 @@ import { createHash } from 'node:crypto';
 import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
-import { png, photoRgb } from '../../supabase/functions/storefront-media-publish/test/fixtures.mjs';
 
 // This suite drives the shipped Flutter app. It never installs a mocked
 // repository, injects a session, calls a privileged client, or writes SQL.
@@ -1092,8 +1091,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
       const file = `ux003-banner-${index}.png`;
       // Procedural test pixels through the existing fixture generator. Unique
       // sources avoid collisions with independent Hero/product security inputs.
-      const chosen = png({ width: geometry[0], height: geometry[1], channels: 3,
-        rows: photoRgb(geometry[0], geometry[1], 29 + index, 8) });
+      const chosen = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file));
       stage = index === 0 ? 'upload-save-first-banner' : 'replace-save-banner';
       await openEditor(page, true); await openFoldedGroup(page, 'banner');
       const publication = await upload(page, file, diagnostics(), 200, 'banner', chosen);
