@@ -17,6 +17,7 @@ import 'storefront_scene_preset_dialog.dart';
 import 'storefront_settings_group.dart';
 import 'storefront_site_theme_preview.dart';
 import 'storefront_menu_banner_editor.dart';
+import 'storefront_banner_preview_data.dart';
 
 /// A read acknowledgment from the actual parent editor. A completed Future is
 /// not evidence that the profile and its media were both refreshed.
@@ -58,6 +59,9 @@ class StorefrontContentSection extends StatefulWidget {
     this.sources,
     this.reloadSources,
     this.publicUrlFor,
+    this.bannerPreviewProfile,
+    this.bannerPreviewLogoUrl,
+    this.loadBannerPreview,
     super.key,
   });
   final StorefrontContentRepository repository;
@@ -74,6 +78,10 @@ class StorefrontContentSection extends StatefulWidget {
   final StorefrontSourceOptions? sources;
   final Future<StorefrontSourceOptions> Function()? reloadSources;
   final Uri Function(String)? publicUrlFor;
+  // Presentation-only context; content/profile saves remain independent.
+  final StorefrontProfile? bannerPreviewProfile;
+  final Uri? bannerPreviewLogoUrl;
+  final Future<Map<String, dynamic>?> Function()? loadBannerPreview;
   @override
   State<StorefrontContentSection> createState() => _ContentState();
 }
@@ -1892,6 +1900,19 @@ class _ContentState extends State<StorefrontContentSection> {
               editable: _editable,
               onChanged: _changeAppearance,
               publicUrlFor: widget.publicUrlFor,
+              previewIdentity:
+                  '${widget.savedBranchId}|${widget.profileVersion}|${widget.bannerPreviewProfile?.slug}',
+              loadPreview: widget.loadBannerPreview,
+              previewDataFor: widget.bannerPreviewProfile == null
+                  ? null
+                  : (published) => storefrontBannerPreviewData(
+                      profile: widget.bannerPreviewProfile!,
+                      document: _draft ?? const {},
+                      publishedMenu: published,
+                      logoUrl: widget.bannerPreviewLogoUrl,
+                      colorSample: widget.colorSample,
+                      locale: AppLocalizations.of(context).localeName,
+                    ),
               onUpload:
                   _editable &&
                       !_dirty &&
