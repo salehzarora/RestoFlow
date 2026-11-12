@@ -9,7 +9,7 @@ const keys = [
   "openNow", "closed", "paused", "closesAt", "opensAt", "opensOn", "closedNow", "closedBodyOn",
   "closedBodyNoHours", "weekday0", "weekday1", "weekday2", "weekday3", "weekday4", "weekday5",
   "weekday6", "pickup", "delivery", "pickupOff", "deliveryOff", "fromFee", "hours", "back", "close",
-  "unknownTitle", "unknownBody", "prevCategory", "nextCategory", "orderNow", "from", "addShort",
+  "unknownTitle", "unknownBody", "prevCategory", "nextCategory", "orderNow", `from`, "addShort",
   "viewAll", "pickupShort", "mostOrdered", "last30", "chefPicks", "chefPick", "rankN", "soldOut",
   "badgeNew", "badgeDeal", "unavailableNow", "viewCart", "items", "item", "cart", "subtotal", "tax",
   "total", "checkout", "emptyCart", "closedTitle", "closedBody", "pausedTitle", "pausedBody",
