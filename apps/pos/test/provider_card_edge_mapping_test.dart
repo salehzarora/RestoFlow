@@ -5,11 +5,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_pos/src/data/provider_card_attempt.dart';
 import 'package:restoflow_pos/src/data/provider_card_edge.dart';
 
+import 'support/pos_package_root.dart';
 import 'support/provider_card_fakes.dart';
 
 ProviderCardAttempt _attempt({ProviderCardMode mode = ProviderCardMode.live}) =>
@@ -113,7 +115,11 @@ void main() {
         'lib/src/widgets/provider_card_payment_view.dart',
         'lib/src/format/provider_card_presentation.dart',
       ]) {
-        final source = File(f).readAsStringSync();
+        // CI-PORTABLE (P4 integration): resolved from the app root, because CI
+        // starts the suite from the repository root.
+        final source = File(
+          p.join(locatePosPackageRoot().path, f),
+        ).readAsStringSync();
         // Prose may name it; no code may call it.
         final code = source
             .split('\n')

@@ -5,8 +5,15 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
-String _read(String path) => File(path).readAsStringSync();
+import 'support/pos_package_root.dart';
+
+// CI-PORTABLE (P4 integration): CI runs `flutter test apps/pos` from the
+// REPOSITORY ROOT while local runs start inside the app, so every path
+// below is resolved from the app root, never from the working directory.
+String _read(String path) =>
+    File(p.join(locatePosPackageRoot().path, path)).readAsStringSync();
 
 const List<String> _cardFiles = <String>[
   'lib/src/data/provider_card_attempt.dart',
