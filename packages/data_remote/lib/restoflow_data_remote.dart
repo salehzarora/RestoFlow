@@ -8,6 +8,8 @@
 /// establishment (login/pairing/PIN) remains in auth bootstrap (DECISION D-011).
 library;
 
+// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001C: the card Edge transport capability.
+export 'src/card_charge_transport.dart';
 export 'src/invalidation_hint.dart';
 export 'src/guarded_kitchen_ack_transport.dart';
 export 'src/kitchen_ack_http_boundary.dart';
