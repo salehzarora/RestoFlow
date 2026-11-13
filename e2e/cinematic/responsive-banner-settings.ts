@@ -91,7 +91,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     restoration: { materializedNullKeys: completed.materializedNullKeys,
       meaning: 'Semantic legacy restoration with explicit null; not missing-key byte identity.' },
     video: { status: 'NOT_RUN' }, uiWriteCount: 0 };
-  let writes = 0;
+  let writes = 0, videoFailure: { error: unknown } | null = null;
   const count = (request: Request) => {
     const u = new URL(request.url());
     if (u.origin === 'http://127.0.0.1:54321' && u.pathname === '/rest/v1/rpc/set_restaurant_storefront_content_v1'
@@ -295,7 +295,9 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     await changeHeight(520, 540); await noAutosave(before, countBefore);
     expect(await originalPhoneNode!.evaluate(el => el.isConnected), 'Height ticks retain the real preview image node/document').toBe(true);
     await saveReload({ menu_banner_mobile_height_px: 540, menu_banner_desktop_height_px: 400 }); await compare('phone-height');
-    receipt.stage = 'short-synthetic-dashboard-height-video'; receipt.video = await d.captureHeightVideo(540, value => { receipt.video = value; });
+    receipt.stage = 'short-synthetic-dashboard-height-video';
+    try { receipt.video = await d.captureHeightVideo(540, value => { receipt.video = value; }); }
+    catch (error) { videoFailure = { error }; receipt.auxiliaryFailureStage = receipt.stage; }
     receipt.stage = 'desktop-height-draft-save-and-readback';
     before = await d.read(); countBefore = writes;
     await editDevice(false); await changeHeight(400, 420); await noAutosave(before, countBefore);
@@ -335,8 +337,10 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     receipt.stage = 'clear-desktop-only-and-return-to-fallback';
     await d.reload(); await editDevice(false); await click(button(copy.clear));
     await saveReload({ menu_banner_desktop_media_id: null, menu_banner_desktop_height_px: 420 }); await compare('desktop-cleared');
-    receipt.status = 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS'; receipt.stage = null;
+    receipt.primaryLifecycleCompleted = true;
     receipt.phoneImageAndFocusPreserved = true; receipt.otherContentAndMediaPreserved = true;
+    if (videoFailure) { receipt.stage = receipt.auxiliaryFailureStage; throw videoFailure.error; }
+    receipt.status = 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS'; receipt.stage = null;
   } catch (error) {
     receipt.error = error instanceof Error ? error.message.split('\n')[0] : 'acceptance failed'; throw error;
   } finally {

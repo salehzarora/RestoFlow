@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { responsiveBannerKeys, responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady } from './responsive-banner-settings.mjs';
+import { responsiveBannerKeys, responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady,
+  dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady } from './responsive-banner-settings.mjs';
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
+import { createHash } from 'node:crypto';
+import { LOCAL_API } from './live-transport.mjs';
 test('restoration materializes exactly six nullable settings without mutating any input or other viewport', () => {
   const input = { appearance: { menu_banner_layout: 'responsive', menu_banner_mobile_height_px: 540,
     menu_banner_media_id: 'phone', menu_background_media_id: 'background', independent: { retained: true } }, hero: { untouched: true } };
@@ -48,4 +51,30 @@ test('recorded 932px phone iframe cannot fit the 1000px capture viewport without
   assert.equal(controlGeometry(frame, capture, true).ready, true);
   assert.equal(controlGeometry(frame, capture, false, false).ready, false, 'A blocked input surface is still rejected');
   assert.equal(controlGeometry({ ...frame, y: 95 }, capture, true).ready, false, 'The existing top inset is retained');
+});
+
+test('native Dashboard media observation admits only exact public image GETs without credentials', () => {
+  const bytes = Buffer.from('synthetic published derivative bytes'), hash = createHash('sha256').update(bytes).digest('hex');
+  const url = `${LOCAL_API}/storage/v1/object/public/storefront-media/${'a'.repeat(32)}/${hash}.webp`;
+  const request = { url, method: 'GET', resourceType: 'image', headers: { accept: 'image/webp' } };
+  assert.equal(dashboardImageHash(request), hash);
+  for (const bad of [url.replace(LOCAL_API, 'https://external.test'), url.replace('/public/', '/authenticated/'),
+    url.replace('/public/', '/sign/'), url + '?token=secret', url + '#fragment', url.replace('127.0.0.1', 'user:secret@127.0.0.1'),
+    url.replace(hash, hash.toUpperCase())]) assert.throws(() => dashboardImageHash({ ...request, url: bad }));
+  for (const method of ['POST', 'HEAD', 'DELETE']) assert.throws(() => dashboardImageHash({ ...request, method }));
+  assert.throws(() => dashboardImageHash({ ...request, method: undefined }));
+  assert.throws(() => dashboardImageHash({ ...request, headers: undefined }));
+  assert.throws(() => dashboardImageHash({ ...request, resourceType: 'fetch' }));
+  for (const name of ['Authorization', 'apikey', 'Cookie']) for (const value of ['secret', ''])
+    assert.throws(() => dashboardImageHash({ ...request, headers: { [name]: value } }));
+  assert.equal(dashboardImageBytesMatch(hash, 200, bytes), true);
+  for (const status of [201, 304, 404]) assert.equal(dashboardImageBytesMatch(hash, status, bytes), false);
+  assert.equal(dashboardImageBytesMatch(hash, 200, Buffer.from('other bytes')), false);
+  assert.equal(dashboardImageBytesMatch(hash, 200, new Uint8Array()), false);
+});
+
+test('native Dashboard media proof cannot accept missing, failed or only partly verified responses', () => {
+  assert.equal(dashboardMediaReady(1, 1, [true]), true);
+  for (const values of [[0, 0, []], [1, 0, [false]], [2, 1, [true, false]], [2, 2, [true]], [1, 1, [false]]])
+    assert.equal(dashboardMediaReady(...values), false);
 });

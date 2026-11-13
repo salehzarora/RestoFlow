@@ -9,6 +9,7 @@ import { LOGICAL_ORIGIN, localMediaTarget, logicalMediaUrl } from './live-transp
 import { createHash, randomUUID } from 'node:crypto';
 import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot, completeResponsiveFixture, responsiveFixtureMismatch } from './banner-responsive';
 import { verifyResponsiveBannerSettings, adjustBannerHeightWithKeyboard } from './responsive-banner-settings';
+import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady } from './responsive-banner-settings.mjs';
 import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
@@ -72,6 +73,23 @@ async function guardBrowser(context: BrowserContext) {
   const mediaHashes = new Map<unknown, string>();
   const mediaChecks: Promise<boolean>[] = [];
   let mappedMedia = 0, verifiedMediaBytes = 0;
+  const directMediaChecks: Promise<boolean>[] = [];
+  let directMedia = 0, verifiedDirectMediaBytes = 0;
+  context.on('request', request => {
+    const u = new URL(request.url());
+    if (u.origin !== API || !u.pathname.startsWith('/storage/v1/object/public/storefront-media/') || request.resourceType() !== 'image') return;
+    directMedia++;
+    // Passive native-response observation only: no fetch, fulfillment, header
+    // forwarding or origin admission change. Failed requests remain failures.
+    directMediaChecks.push((async () => {
+      const hash = dashboardImageHash({ url: request.url(), method: request.method(), resourceType: request.resourceType(), headers: await request.allHeaders() });
+      const response = await request.response();
+      if (!response || response.url() !== request.url()) return false;
+      const equal = dashboardImageBytesMatch(hash, response.status(), await response.body());
+      if (equal) verifiedDirectMediaBytes++;
+      return equal;
+    })().catch(() => false));
+  });
   context.on('response', response => {
     const u = new URL(response.url());
     if (u.origin === DASHBOARD && response.status() === 200) {
@@ -129,6 +147,16 @@ async function guardBrowser(context: BrowserContext) {
       expect(verifiedMediaBytes).toBe(mappedMedia);
     },
     media: () => ({ mappedMedia, verifiedMediaBytes }),
+    checkDashboardMedia: async (recordEvidence: (value: Obj) => void) => {
+      if (violation) throw new Error('Browser attempted a non-ephemeral request.');
+      const checks = await Promise.all(directMediaChecks);
+      const nativeMedia = { directMedia, verifiedDirectMediaBytes, checkedResponses: checks.length,
+        failedResponses: checks.filter(value => !value).length };
+      recordEvidence(nativeMedia);
+      expect(dashboardMediaReady(directMedia, verifiedDirectMediaBytes, checks),
+        'Native Dashboard public images have canonical credential-free requests and exact content-addressed Storage bytes').toBe(true);
+      return nativeMedia;
+    },
     fontsReady: async () => { await expect.poll(() => fonts.has('Roboto') && fonts.has('Noto Sans Arabic'), { message: 'Exact Flutter text fallback fonts load from loopback' }).toBe(true); },
     fonts: () => [...fonts].sort(),
   };
@@ -1756,7 +1784,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
               expect(await originalNode!.evaluate(el => el.isConnected), 'Recording uses actual live preview updates, not source replacement').toBe(true);
               expect(contentWrites).toBe(0); expect(loginEntries).toBe(0);
               expect(await rpc(f, token, 'get_restaurant_storefront_content_v6')).toEqual(before);
-              await videoNetwork.check(); accepted = true;
+              videoEvidence.nativeMedia = await videoNetwork.checkDashboardMedia(value => { videoEvidence.nativeMedia = value; }); accepted = true;
             } catch (error) {
               videoEvidence.errorType = error instanceof ControlRevealError ? 'ControlRevealError'
                 : error instanceof Error && ['Error', 'TypeError', 'TimeoutError', 'AssertionError'].includes(error.name) ? error.name : 'unclassified';
@@ -1777,7 +1805,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
             return { status: 'SYNTHETIC_HEIGHT_ADJUSTMENT_VIDEO_RECORDED', file, bytes: bytes.length,
               sha256: createHash('sha256').update(bytes).digest('hex'), durationWindowMs: Date.now() - started,
               includesLocalEditorBoot: true, values: [height, height + 20, height], contentWrites: 0, loginEntries: 0,
-              syntheticStateInMemoryOnly: true, noOwnerBrowserSession: true, captures: videoEvidence.captures };
+              syntheticStateInMemoryOnly: true, noOwnerBrowserSession: true, captures: videoEvidence.captures, nativeMedia: videoEvidence.nativeMedia };
           },
           invariant: unchanged, url: STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', artifactDir: out,
         });
