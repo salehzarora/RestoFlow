@@ -1,6 +1,12 @@
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
 import 'order_edit_read_model.dart' show PosBranchFeatures;
+import 'provider_card_capability.dart'
+    show
+        ProviderCardPosture,
+        ProviderCardPostureAbsent,
+        ProviderCardPostureUnknown,
+        providerCardPostureFrom;
 
 /// FULL-COMP-PERMISSION-001 — the EFFECTIVE rights of the human behind the current
 /// PIN session, as the SERVER resolves them.
@@ -23,6 +29,7 @@ class PosStaffCapabilities {
     this.role,
     this.voidOrder,
     this.branchFeatures,
+    this.cardTerminal = const ProviderCardPostureAbsent(),
   });
 
   /// FAIL-CLOSED default: knowing nothing, we assume nothing is granted.
@@ -35,6 +42,7 @@ class PosStaffCapabilities {
     role: null,
     voidOrder: false,
     branchFeatures: null,
+    cardTerminal: ProviderCardPostureUnknown(),
   );
 
   /// KITCHEN-PRINT-DUAL-001D: the membership role of the current PIN session, as
@@ -115,6 +123,12 @@ class PosStaffCapabilities {
   /// restored rollout gate would be stale.
   final PosBranchFeatures? branchFeatures;
 
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: the till's card-terminal posture, read
+  /// from the SAME top-level `branch_features` (`card_terminal_mode` /
+  /// `card_terminal_enabled`, API_CONTRACT §4.30b). Advisory, like every key
+  /// here; parsed by [providerCardPostureFrom], which never throws.
+  final ProviderCardPosture cardTerminal;
+
   /// Parses the `capabilities` object from `public.pin_session_capabilities`.
   ///
   /// All use `== true`, so a missing field, an old server that does not send the
@@ -141,6 +155,7 @@ class PosStaffCapabilities {
         ? json['void_order'] == true
         : null,
     branchFeatures: PosBranchFeatures.tryParse(branchFeatures),
+    cardTerminal: providerCardPostureFrom(branchFeatures),
   );
 }
 

@@ -8697,6 +8697,362 @@ class AppLocalizationsHe extends AppLocalizations {
       'אין קופאי מחובר. התחברו ואז קבלו את התשלום. לא חויב דבר.';
 
   @override
+  String get posCardTerminalTender => 'מסוף כרטיסים';
+
+  @override
+  String get posCardTerminalTestTender => 'מסוף כרטיסים · בדיקה';
+
+  @override
+  String get posCardTerminalNote =>
+      'הלקוח משלם במסוף הכרטיסים. BIZBOT רושם את התשלום רק אחרי שהספק מאשר אותו.';
+
+  @override
+  String get posCardTerminalTestNote =>
+      'מצב בדיקה: המסוף מבצע חיוב בדיקה. דבר אינו נרשם וההזמנה נשארת לא משולמת.';
+
+  @override
+  String get posCardTerminalStart => 'התחלת תשלום בכרטיס';
+
+  @override
+  String get posCardTerminalLabSwitch => 'מעבדת בדיקה למסוף הכרטיסים';
+
+  @override
+  String get posCardTerminalUnavailableNote =>
+      'תשלומים במסוף הכרטיסים אינם זמינים בקופה זו כרגע. קבלו את התשלום בדרך אחרת.';
+
+  @override
+  String get posCardTerminalRequiredNote =>
+      'קופה זו מקבלת תשלומי כרטיס במסוף הכרטיסים. לא ניתן להשתמש כאן ברישום כרטיס ידני.';
+
+  @override
+  String get posCardPostureUnknownNote =>
+      'לא ניתן היה לבדוק את הגדרות הכרטיס בקופה זו, ולכן אי אפשר לרשום כרטיס כרגע. בדקו את החיבור ונסו שוב, או קבלו את התשלום בדרך אחרת.';
+
+  @override
+  String get posCardNotePostureUnknown =>
+      'לא ניתן היה לבדוק את הגדרות מסוף הכרטיסים. בדקו את החיבור ונסו שוב.';
+
+  @override
+  String get posCardJournalQuarantinedTitle => 'תשלום כרטיס שמור אינו קריא';
+
+  @override
+  String get posCardJournalQuarantinedBody =>
+      'לא ניתן לקרוא תשלום שמור של מסוף הכרטיסים. תשלומים חדשים במסוף חסומים בקופה זו. פנו למנהל.';
+
+  @override
+  String get posCardJournalFullNote =>
+      'האחסון של תשלומי מסוף הכרטיסים בקופה זו מלא. סיימו לטפל בתשלומים הפתוחים במסוף לפני שמתחילים תשלום חדש. שום כרטיס לא חויב.';
+
+  @override
+  String get posCardSaveBlocked =>
+      'לא ניתן היה לשמור את בקשת הכרטיס, ולכן דבר לא נשלח. נסו שוב.';
+
+  @override
+  String get posCardAttemptTitle => 'תשלום במסוף כרטיסים';
+
+  @override
+  String get posCardAttemptTestTitle => 'בדיקת מסוף כרטיסים';
+
+  @override
+  String get posCardTestBadge => 'בדיקה — דבר אינו נרשם';
+
+  @override
+  String get posCardPreparingTitle => 'מכינים את בקשת הכרטיס';
+
+  @override
+  String get posCardPreparingBody =>
+      'אל תקבלו תשלום בדרך אחרת כל עוד הבקשה פתוחה.';
+
+  @override
+  String get posCardNotSentTitle => 'בקשת הכרטיס לא נשלחה';
+
+  @override
+  String get posCardNotSentBody =>
+      'דבר לא הגיע לספק הכרטיסים. שלחו שוב את אותה בקשה, או בטלו אותה וקבלו את התשלום בדרך אחרת.';
+
+  @override
+  String get posCardSignInTitle => 'התחברו מחדש';
+
+  @override
+  String get posCardSignInBody =>
+      'השרת דחה את ההפעלה. התחברו מחדש ואז שלחו את אותה בקשה.';
+
+  @override
+  String get posCardNotAppliedTitle => 'תשלום במסוף כרטיסים אינו זמין';
+
+  @override
+  String get posCardNotAppliedBody =>
+      'הבקשה נדחתה לפני שעובדה. שום כרטיס לא חויב. קבלו את התשלום בדרך אחרת.';
+
+  @override
+  String get posCardRefusedTitle => 'התשלום בכרטיס לא התחיל';
+
+  @override
+  String get posCardRefusedDisabled =>
+      'תשלומים במסוף הכרטיסים כבויים בקופה זו כרגע. שום כרטיס לא חויב.';
+
+  @override
+  String get posCardRefusedInProgress =>
+      'תשלום אחר בכרטיס כבר מתבצע עבור הזמנה זו.';
+
+  @override
+  String get posCardRefusedSettled => 'הזמנה זו כבר שולמה.';
+
+  @override
+  String get posCardRefusedNotChargeable => 'אין מה לחייב בהזמנה זו.';
+
+  @override
+  String get posCardRefusedOrderChanged =>
+      'ההזמנה השתנתה. רעננו אותה והתחילו מחדש.';
+
+  @override
+  String get posCardRefusedLimit =>
+      'הסכום גבוה מהמגבלה של מסוף הכרטיסים בקופה זו.';
+
+  @override
+  String get posCardRefusedCurrency =>
+      'מסוף הכרטיסים אינו יכול לחייב במטבע זה.';
+
+  @override
+  String get posCardRefusedRole =>
+      'לתפקיד שלכם אין הרשאה להתחיל תשלום במסוף כרטיסים.';
+
+  @override
+  String get posCardRefusedGeneric =>
+      'לא ניתן היה להתחיל את התשלום במסוף הכרטיסים. שום כרטיס לא חויב.';
+
+  @override
+  String get posCardUncertainTitle => 'התוצאה לא אושרה';
+
+  @override
+  String get posCardUncertainBody =>
+      'ייתכן שבקשת הכרטיס הגיעה לספק. אל תחייבו שוב — המצב נבדק.';
+
+  @override
+  String get posCardNotFoundTitle => 'לא נוצר תשלום בכרטיס';
+
+  @override
+  String get posCardNotFoundBody =>
+      'לשרת אין תשלום בכרטיס עבור בקשה זו, ולכן שום כרטיס לא חויב בגללה. אפשר לקבל את התשלום בדרך אחרת.';
+
+  @override
+  String get posCardWaitingTitle => 'ממתינים ללקוח במסוף';
+
+  @override
+  String get posCardWaitingBody =>
+      'בקשו מהלקוח להשלים את התשלום במסוף. כל עוד החלון פתוח, המצב נבדק אוטומטית.';
+
+  @override
+  String get posCardReleasedTitle => 'הספק אישר את הביטול';
+
+  @override
+  String get posCardReleasedBody =>
+      'ייתכן שעדיין קיים חיוב. המשיכו לבדוק את המצב עד שהתוצאה סופית.';
+
+  @override
+  String get posCardApprovedTitle => 'אושר — משלימים את הרישום ב-BIZBOT';
+
+  @override
+  String get posCardApprovedBody =>
+      'הספק אישר את החיוב. ההזמנה משולמת רק לאחר ש-BIZBOT רושם את התשלום.';
+
+  @override
+  String get posCardRecordingUnconfirmedTitle => 'אושר — הרישום לא אושר';
+
+  @override
+  String get posCardRecordingUnconfirmedBody =>
+      'שלחו שוב את אותו רישום. הלקוח לעולם לא יחויב שוב.';
+
+  @override
+  String get posCardRecordingRefusedTitle => 'אושר — הרישום נדחה';
+
+  @override
+  String get posCardRecordingRefusedBody =>
+      'החיוב אושר אבל BIZBOT לא הצליח לרשום אותו. מנהל יכול לחדש את הרישום בקופה זו.';
+
+  @override
+  String posCardResumesUsed(int used, int limit) {
+    return 'חידושים שנוצלו: $used מתוך $limit';
+  }
+
+  @override
+  String get posCardManagerMustSendTitle => 'מנהל חייב לשלוח את הרישום הזה';
+
+  @override
+  String get posCardManagerMustSendBody =>
+      'מנהל חידש את הרישום הזה. רק מנהל יכול לשלוח אותו שוב.';
+
+  @override
+  String get posCardResumeRefusedTitle => 'החידוש נדחה';
+
+  @override
+  String get posCardResumeRefusedBody =>
+      'השרת דחה את החידוש; דבר לא חויב ולא נרשם. בדקו את המצב לפני שתנסו שוב.';
+
+  @override
+  String get posCardResumeStaleBody =>
+      'חידוש אחר התבצע קודם. בדקו את המצב ואז נסו שוב.';
+
+  @override
+  String get posCardResumeLimitBody =>
+      'הגעתם למגבלת החידושים. בקשו ממנהל ליישב את התשלום מול הספק.';
+
+  @override
+  String get posCardRecordedTitle => 'התשלום בכרטיס נרשם';
+
+  @override
+  String get posCardRecordedBody =>
+      'BIZBOT רשם את התשלום בכרטיס עבור הזמנה זו.';
+
+  @override
+  String get posCardDeclinedTitle => 'הכרטיס נדחה';
+
+  @override
+  String get posCardDeclinedBody =>
+      'לא נגבה תשלום. קבלו את התשלום בדרך אחרת או התחילו תשלום חדש בכרטיס.';
+
+  @override
+  String get posCardFreedTitle => 'שוחרר על ידי מנהל';
+
+  @override
+  String get posCardFreedBody =>
+      'מנהל אישר שבקשת הכרטיס הזו לא חייבה. קבלו את התשלום בדרך אחרת או התחילו תשלום חדש בכרטיס.';
+
+  @override
+  String get posCardResolvedTitle => 'נסגר על ידי מפעיל';
+
+  @override
+  String get posCardResolvedBody =>
+      'מפעיל סגר את התשלום בכרטיס (בוטל או הוחזר). אם ההזמנה עדיין חייבת כסף, קבלו את התשלום שוב.';
+
+  @override
+  String get posCardReconcileTitle => 'התשלום בכרטיס דורש התאמה';
+
+  @override
+  String get posCardReconcileBody =>
+      'ייתכן שקיים חיוב. אל תחייבו שוב ואל תרשמו את התשלום הזה בדרך אחרת. בקשו ממנהל לפתור זאת מול הספק.';
+
+  @override
+  String get posCardSafetyStopBody =>
+      'תשובת השרת לא תאמה את התשלום הזה, ולכן BIZBOT עצר אותו. אל תחייבו שוב. בקשו ממנהל לפנות לתמיכה.';
+
+  @override
+  String get posCardTestWaitingTitle => 'הבדיקה מתבצעת';
+
+  @override
+  String get posCardTestWaitingBody => 'השלימו את הבדיקה במסוף. דבר אינו נרשם.';
+
+  @override
+  String get posCardTestReleasedTitle => 'ביטול הבדיקה אושר';
+
+  @override
+  String get posCardTestReleasedBody =>
+      'הספק אישר את הביטול. המשיכו לבדוק עד שתוצאת הבדיקה סופית.';
+
+  @override
+  String get posCardTestApprovedTitle => 'הבדיקה אושרה';
+
+  @override
+  String get posCardTestApprovedBody =>
+      'חיוב הבדיקה אושר. דבר לא נרשם וההזמנה לא שולמה.';
+
+  @override
+  String get posCardTestDeclinedTitle => 'הבדיקה נדחתה';
+
+  @override
+  String get posCardTestDeclinedBody => 'חיוב הבדיקה נדחה. דבר לא נרשם.';
+
+  @override
+  String get posCardTestClosedTitle => 'הבדיקה נסגרה';
+
+  @override
+  String get posCardTestClosedBody => 'מפעיל סגר את ניסיון הבדיקה הזה.';
+
+  @override
+  String get posCardNoteChecking => 'בודקים את מצב התשלום…';
+
+  @override
+  String get posCardNoteStarting => 'שולחים את בקשת הכרטיס…';
+
+  @override
+  String get posCardNoteRecording => 'שולחים את הרישום ל-BIZBOT…';
+
+  @override
+  String get posCardNoteReleasing => 'שולחים את בקשת הביטול…';
+
+  @override
+  String get posCardNoteNotSent =>
+      'הבקשה האחרונה לא נשלחה. בדקו את החיבור ונסו שוב.';
+
+  @override
+  String get posCardNoteSignIn => 'ההפעלה נדחתה. התחברו מחדש ואז נסו שוב.';
+
+  @override
+  String get posCardNoteRefused => 'הבקשה האחרונה נדחתה לפני שעובדה.';
+
+  @override
+  String get posCardNoteUnavailable =>
+      'לא ניתן לבדוק את המצב כעת. התשלום בכרטיס נשמר; נסו שוב.';
+
+  @override
+  String get posCardNotePollLimit =>
+      'הבדיקות האוטומטיות הופסקו. בדקו את המצב ידנית; אם הוא נשאר פתוח, פנו למנהל.';
+
+  @override
+  String get posCardNoteAutoPaused =>
+      'הבדיקות האוטומטיות הושהו. השתמשו בבדיקת מצב.';
+
+  @override
+  String get posCardNoteReleaseNotConfirmed =>
+      'בקשת הביטול לא אושרה. המשיכו לבדוק את המצב.';
+
+  @override
+  String get posCardNoteSaveFailed =>
+      'המכשיר לא הצליח לשמור את השלב האחרון. התשלום בכרטיס נשמר; בדקו את המצב שוב.';
+
+  @override
+  String get posCardNoteManagerRequired =>
+      'מנהל חייב להיות מחובר בקופה זו כדי לבצע זאת.';
+
+  @override
+  String get posCardNoteManagerProof => 'לא ניתן לאמת הרשאת מנהל. נסו שוב.';
+
+  @override
+  String get posCardNoteNotRecoverable =>
+      'השרת כבר לא מאפשר לחדש את הרישום הזה. בדקו את המצב.';
+
+  @override
+  String get posCardNoteRole =>
+      'לתפקיד שלכם אין הרשאה לבדוק את התשלום בכרטיס הזה.';
+
+  @override
+  String get posCardSendAgain => 'שליחת אותה בקשה שוב';
+
+  @override
+  String get posCardCancelRequest => 'ביטול הבקשה הזו';
+
+  @override
+  String get posCardOtherMethod => 'קבלת תשלום בדרך אחרת';
+
+  @override
+  String get posCardRelease => 'ביטול במסוף';
+
+  @override
+  String get posCardResendRecording => 'שליחת הרישום שוב';
+
+  @override
+  String get posCardResume => 'חידוש הרישום (מנהל)';
+
+  @override
+  String get posCardManagerSend => 'שליחת הרישום (מנהל)';
+
+  @override
+  String get posCardBackToPayment => 'חזרה לתשלום';
+
+  @override
+  String get posCardClose => 'סגירה';
+
+  @override
   String get authForgotPassword => 'שכחת סיסמה?';
 
   @override
