@@ -74,6 +74,10 @@ for (const person of [a.person, b.person]) {
     // The global category is valid for a branch item (RF-109 parent reuse).
     statements.push(`insert into public.menu_items(id,organization_id,restaurant_id,branch_id,menu_category_id,name,base_price_minor,currency_code,is_active) values
       (${quote(randomUUID())},${quote(person.orgId)},${quote(person.restaurantId)},${quote(person.branchId)},${quote(categoryId)},${quote(`TEST ${index + 1}`)},1000,'ILS',true);`);
+    // DESKTOP-BANNER-FIT-001: one additional synthetic item in the existing
+    // first category makes the real swipe/arrow regression check meaningful.
+    if (index === 0) statements.push(`insert into public.menu_items(id,organization_id,restaurant_id,branch_id,menu_category_id,name,base_price_minor,currency_code,is_active) values
+      (${quote(randomUUID())},${quote(person.orgId)},${quote(person.restaurantId)},${quote(person.branchId)},${quote(categoryId)},'TEST SWIPE',1000,'ILS',true);`);
   }
   statements.push(`update public.branches set tax_enabled=false,tax_mode='exclusive' where id=${quote(person.branchId)} and organization_id=${quote(person.orgId)};`);
   statements.push(`insert into public.restaurant_storefront_profiles(restaurant_id,organization_id,storefront_branch_id,slug,display_name,tagline,public_city,public_phone,primary_color,accent_color,visual_preset,locale_default,card_mode,motion,pickup_enabled,opening_hours,is_published,version,hero_headline,hero_subline)
@@ -95,13 +99,14 @@ for (const account of [a, b]) {
   assert.equal(menu.status, 200, 'Owner must read the seeded UI catalogue');
   assert.equal(menu.data?.ok, true, 'Owner must receive the real menu envelope');
   const items = menu.data.items;
-  assert.ok(Array.isArray(items) && items.length === 4
-    && new Set(items.map(item => item.name)).size === 4
-    && items.every(item => /^TEST [1-4]$/.test(item.name)
+  assert.ok(Array.isArray(items) && items.length === 5
+    && new Set(items.map(item => item.name)).size === 5
+    && ['TEST 1', 'TEST SWIPE', 'TEST 2', 'TEST 3', 'TEST 4'].every(name => items.some(item => item.name === name))
+    && items.every(item => /^(?:TEST [1-4]|TEST SWIPE)$/.test(item.name)
       && item.organization_id === account.person.orgId
       && item.restaurant_id === account.person.restaurantId
       && item.branch_id === account.person.branchId),
-  'All four UI items must match the owner Dashboard branch scope');
+  'All five explicit UI items must match the owner Dashboard branch scope');
 }
 
 const sourceKey = `${a.person.orgId}/${a.person.restaurantId}/logo/${randomUUID()}.jpg`;

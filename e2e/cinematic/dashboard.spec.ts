@@ -6,7 +6,8 @@ import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { MAX_REVEAL_WHEELS, nextRevealMove, observeResponse, responseAfterAction } from './control-progress.mjs';
 import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } from './auth-diagnostics.mjs';
 import { LOGICAL_ORIGIN, localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot } from './banner-responsive';
 import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
@@ -1080,28 +1081,7 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
   const read = () => rpc(f, token, 'get_restaurant_storefront_content_v5');
   const previewFrames = page.locator('iframe[title="Storefront banner preview"]');
   const preview = (index: number) => page.frameLocator('iframe[title="Storefront banner preview"]').nth(index);
-  const geometry = async (root: Locator): Promise<Obj> => {
-    await root.evaluate(async el => {
-      await el.ownerDocument.fonts.ready;
-      await el.ownerDocument.querySelector<HTMLImageElement>('[data-sf-menu-banner] img')!.decode();
-    });
-    // The render-only iframe intentionally forbids scripts; its rAF callbacks
-    // cannot run. Wait for layout in the owning page, without relaxing sandbox.
-    await root.page().evaluate(async () => {
-      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    });
-    return root.evaluate(el => {
-      const doc = el.ownerDocument;
-      const image = doc.querySelector<HTMLImageElement>('[data-sf-menu-banner] img')!;
-      const box = image.getBoundingClientRect();
-      const scale = Math.max(box.width / image.naturalWidth, box.height / image.naturalHeight);
-      return { width: box.width, height: box.height, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight,
-        publicPath: new URL(image.currentSrc).pathname, position: getComputedStyle(image).objectPosition,
-        clippedX: Math.max(0, image.naturalWidth - box.width / scale), clippedY: Math.max(0, image.naturalHeight - box.height / scale),
-        searchY: doc.querySelector('[role="search"]')!.getBoundingClientRect().y,
-        categoriesY: doc.querySelector('[data-sf-module="categories"]')!.getBoundingClientRect().y };
-    });
-  };
+  const geometry = bannerGeometry;
   const label = (axis: 'x' | 'y') => axis === 'x' ? 'موضع التركيز الأفقي' : 'موضع التركيز الرأسي';
   const focalText = (axis: 'x' | 'y', value: number) => page.getByText(`${label(axis)} — ${value}%`, { exact: true });
   // Discover the real range following its visible axis label, not a fixed
@@ -1199,16 +1179,18 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
     const desktopBefore = await initialGeometry(1);
     stage = 'baseline-crop-geometry';
     expect(phoneBefore.width, 'Default logical phone preview').toBe(390);
-    expect(desktopBefore.width, 'Independent logical desktop preview').toBe(1280);
+    expect(desktopBefore.viewportWidth, 'Independent logical desktop preview').toBe(1280);
+    expect(desktopBefore.width, 'Desktop photograph element has its bounded width').toBeLessThanOrEqual(960);
     expect(phoneBefore.clippedX, 'This real image actually crops horizontally on phone').toBeGreaterThan(1);
-    expect(desktopBefore.clippedY, 'The same real image actually crops vertically on desktop').toBeGreaterThan(1);
+    expect(desktopBefore.fit).toBe('contain');
+    expect(desktopBefore.clippedX + desktopBefore.clippedY, 'Desktop preserves the full photograph within floating-point geometry precision').toBeLessThan(.001);
     const originalPhoto = await preview(0).locator('[data-sf-menu-banner] img').elementHandle();
     expect(originalPhoto).not.toBeNull();
     stage = 'draft-focus-no-autosave';
-    await setFocal('x', initialX, 23);
-    await expect.poll(async () => (await geometry(phone)).position).toBe(`23% ${initialY}%`);
-    await setFocal('y', initialY, 74);
-    await expect.poll(async () => (await geometry(desktop)).position).toBe('23% 74%');
+    await setFocal('x', initialX, 38);
+    await expect.poll(async () => (await geometry(phone)).position).toBe(`38% ${initialY}%`);
+    await setFocal('y', initialY, 9);
+    await expect.poll(async () => (await geometry(desktop)).position).toBe('38% 9%');
     for (const width of [430, 390]) {
       const choice = page.getByRole('checkbox', { name: `${width}px`, exact: true });
       await reveal(page, choice, 'field'); await tapRevealedControl(page, choice);
@@ -1225,12 +1207,14 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
     // for the other viewport. Do not manufacture movement with extra zoom.
     if (draftPhone.clippedY < .01) {
       await reveal(page, previewFrames.nth(0), 'content-status');
-      await expect(page.getByText('موضع التركيز الرأسي: الصورة ظاهرة كاملة على هذا المحور', { exact: true })).toHaveCount(1);
-      expect(draftPhone.position).toBe('23% 74%');
+      await expect(page.getByText('موضع التركيز الرأسي: الصورة ظاهرة كاملة على هذا المحور', { exact: true }))
+        .toHaveCount([draftPhone, draftDesktop].filter(value => value.clippedY < .01).length);
+      expect(draftPhone.position).toBe('38% 9%');
     }
     if (draftDesktop.clippedX < .01) {
-      await expect(page.getByText('موضع التركيز الأفقي: الصورة ظاهرة كاملة على هذا المحور', { exact: true })).toHaveCount(1);
-      expect(draftDesktop.position).toBe('23% 74%');
+      await expect(page.getByText('موضع التركيز الأفقي: الصورة ظاهرة كاملة على هذا المحور', { exact: true }))
+        .toHaveCount([draftPhone, draftDesktop].filter(value => value.clippedX < .01).length);
+      expect(draftDesktop.position).toBe('38% 9%');
     }
     stage = 'save-content-via-ui';
     await saveContent(page);
@@ -1243,38 +1227,38 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
     expect(reloadWire.ok).toBe(true);
     expect(reloadWire.restaurant_id).toBe(f.ownerA.restaurantId);
     expect(reloadWire.storefront_branch_id).toBe(f.ownerA.branchId);
-    expect(reloadWire.document.appearance.menu_banner_focal_x).toBe(23);
-    expect(reloadWire.document.appearance.menu_banner_focal_y).toBe(74);
+    expect(reloadWire.document.appearance.menu_banner_focal_x).toBe(38);
+    expect(reloadWire.document.appearance.menu_banner_focal_y).toBe(9);
     await openFoldedGroup(page, 'banner');
-    await expect(focalText('x', 23)).toHaveCount(1); await expect(focalText('y', 74)).toHaveCount(1);
+    await expect(focalText('x', 38)).toHaveCount(1); await expect(focalText('y', 9)).toHaveCount(1);
     const reread = await read();
     expect(reread.restaurant_id).toBe(f.ownerA.restaurantId); expect(reread.storefront_branch_id).toBe(f.ownerA.branchId);
     expect(reread.version).toBeGreaterThan(baseline.version);
-    expect(reread.document.appearance.menu_banner_focal_x).toBe(23);
-    expect(reread.document.appearance.menu_banner_focal_y).toBe(74);
+    expect(reread.document.appearance.menu_banner_focal_x).toBe(38);
+    expect(reread.document.appearance.menu_banner_focal_y).toBe(9);
     expect(withoutFocals(reread.document), 'All other content/appearance values survive exactly').toEqual(withoutFocals(before));
     expect(profileFields((await rpc(f, token, 'get_restaurant_storefront_profile')).profile), 'Independent profile save was not invoked').toEqual(profileFields(profileBefore));
     expect(profileWrites, 'Content save never invokes the independent profile writer').toBe(0);
     expect(Object.keys(reread.document.appearance).filter(key => /viewport|preview.*width|phone.*width/.test(key))).toEqual([]);
     await invariants(f, token);
     stage = 'matching-saved-phone-preview-and-storefront';
-    await expect.poll(async () => (await geometry(phone)).position).toBe('23% 74%');
+    await expect.poll(async () => (await geometry(phone)).position).toBe('38% 9%');
     const afterPreview = await geometry(phone);
     await menu.setViewportSize({ width: 390, height: 844 });
     await expect.poll(async () => {
       await menu.goto(STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
       const image = menu.locator('[data-sf-menu-banner] img');
       return await image.count() === 1 ? image.evaluate(el => getComputedStyle(el).objectPosition) : '';
-    }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe('23% 74%');
+    }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe('38% 9%');
     const afterSite = await geometry(menu.locator('[data-sf-menu-top]'));
-    for (const key of ['width', 'height', 'naturalWidth', 'naturalHeight', 'publicPath', 'position', 'searchY', 'categoriesY']) {
+    for (const key of ['viewportWidth', 'width', 'height', 'naturalWidth', 'naturalHeight', 'publicPath', 'position', 'searchY', 'categoriesY']) {
       expect(afterSite[key], `Saved phone preview and live source match ${key}`).toBe(afterPreview[key]);
     }
     await reveal(page, previewFrames.nth(0), 'content-status');
     await screenshot(page, resolve(out, 'banner-focus-dashboard-saved-test-data.png'));
     await screenshot(menu, resolve(out, 'banner-focus-storefront-saved-test-data.png'));
     receipt.status = 'SAVE_READBACK_PASS'; receipt.failedStage = null;
-    Object.assign(receipt, { saved: { x: 23, y: 74 }, phoneBefore, desktopBefore, draftPhone, draftDesktop,
+    Object.assign(receipt, { saved: { x: 38, y: 9 }, phoneBefore, desktopBefore, draftPhone, draftDesktop,
       afterPreview, afterSite, contentWrites: writes, actualUiReloadReadObserved: true,
       allOtherContentPreserved: true, independentProfilePreserved: true, correctRestaurantAndBranch: true,
       viewportToolsNotPersisted: !Object.keys(reread.document.appearance).some(key => /viewport|preview.*width|phone.*width/.test(key)) });
@@ -1282,6 +1266,184 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
     page.off('request', countWrites);
     if (receipt.status !== 'SAVE_READBACK_PASS') receipt.failedStage = stage;
     writeFileSync(resolve(out, 'banner-focus-persistence-result.json'), JSON.stringify(receipt, null, 2));
+  }
+}
+
+// BIZBOT-STOREFRONT-DESKTOP-BANNER-FIT-001. This extends the already signed-in
+// real banner journey, never the owner's browser/session or a hosted endpoint.
+async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token: string): Promise<void> {
+  const out = process.env.CINEMATIC_ARTIFACT_DIR!, frames = page.locator('iframe[title="Storefront banner preview"]');
+  const preview = (index: number) => page.frameLocator('iframe[title="Storefront banner preview"]').nth(index).locator('[data-sf-menu-top]');
+  const original = await rpc(f, token, 'get_restaurant_storefront_content_v5');
+  const originalProfile = await rpc(f, token, 'get_restaurant_storefront_profile');
+  const receipt: Obj = { status: 'FAIL', stage: 'baseline-source', data: 'synthetic isolated CI; actual owner API and real application renderer', rows: [], baseline: baselineBannerEvidence(resolve(__dirname, '../..')) };
+  const write = async (name: string, body: Obj) => {
+    const response = await fetch(`${API}/rest/v1/rpc/${name}`, { method: 'POST', redirect: 'error',
+      headers: { apikey: f.anonKey, authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+      body: JSON.stringify({ p_organization_id: f.ownerA.orgId, p_restaurant_id: f.ownerA.restaurantId,
+        p_client_request_id: randomUUID(), ...body }) });
+    expect(response.status).toBe(200); expect((await response.json()).ok).toBe(true);
+  };
+  const saveDocument = async (document: Obj) => {
+    const current = await rpc(f, token, 'get_restaurant_storefront_content_v5');
+    await write('set_restaurant_storefront_content_v1', { p_expected_version: current.version,
+      p_expected_storefront_branch_id: f.ownerA.branchId, p_document: document });
+    expect((await rpc(f, token, 'get_restaurant_storefront_content_v5')).document).toEqual(document);
+  };
+  const saveProfilePatch = async (patch: Obj) => {
+    const current = await rpc(f, token, 'get_restaurant_storefront_profile');
+    await write('set_restaurant_storefront_profile', { p_expected_version: current.version, p_patch: patch });
+  };
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: originalProfile.derived.timezone, hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+  const time = (h: number) => `${String((h + 24) % 24).padStart(2, '0')}:00`;
+  const hours = (open: boolean) => ({ weekly: Array.from({ length: 7 }, (_, dow) =>
+    ({ dow, open: time(hour + (open ? -1 : 4)), close: time(hour + (open ? 2 : 5)) })), exceptions: [] });
+  const target = { x: 38, y: 9 }, annotation = 'BANNER FIT — بيانات اختبار';
+  let expectedPath = '';
+  const render = async (width: number, state: string, enabled = true, theme?: string, annotated = false) => {
+    await menu.setViewportSize({ width, height: width > 650 ? 900 : 844 });
+    await expect.poll(async () => {
+      await menu.goto(STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+      return menu.evaluate(marker => ({ state: document.querySelector('[data-sf-order-status] [data-state]')?.getAttribute('data-state'),
+        images: document.querySelectorAll('[data-sf-menu-banner] img').length,
+        light: getComputedStyle(document.querySelector('[data-sf-root]')!).getPropertyValue('--bg').trim().toLowerCase() === '#ffffff',
+        annotated: document.querySelector('[data-sf-module="announce"]')?.textContent?.includes(marker) ?? false }), annotation);
+    }, { timeout: 100000, intervals: [250, 500, 1000] }).toEqual({ state, images: enabled ? 1 : 0,
+      light: theme === 'light', annotated: annotated && state === 'open' });
+    await expect(menu.locator('[data-sf-menu-banner] img')).toHaveCount(enabled ? 1 : 0);
+    if (enabled) await expect.poll(() => bannerGeometry(menu.locator('[data-sf-menu-top]')).then(g => g.position)).toBe(`${target.x}% ${target.y}%`);
+  };
+  try {
+    for (const [theme, state] of [['dark', 'open'], ['light', 'closed']] as const) {
+      receipt.stage = `${theme}-${state}-owner-api`;
+      const document = structuredClone(original.document);
+      Object.assign(document.appearance, { site_theme: theme, menu_intro_visible: false, menu_banner_enabled: true,
+        menu_banner_focal_x: target.x, menu_banner_focal_y: target.y });
+      document.announcement_text = annotation; document.announcement_segments = null;
+      await saveDocument(document);
+      await saveProfilePatch({ opening_hours: hours(state === 'open'), paused_until: null, pause_reason: null });
+      await render(390, state, true, theme, true);
+      if (state === 'open') await expect(menu.locator('[data-sf-module="announce"]'), 'The real announcement is present, not dismissed in both comparison views').toContainText(annotation);
+      else await expect(menu.locator('[data-sf-module="announce"]'), 'Closed state keeps the existing announcement suppression').toHaveCount(0);
+      await expect(menu.locator('[data-sf-notice="closed"]'), 'Closed-state coverage includes the actual notice').toHaveCount(state === 'closed' ? 1 : 0);
+      const first = await bannerGeometry(menu.locator('[data-sf-menu-top]'));
+      if (expectedPath) expect(first.publicPath).toBe(expectedPath); else expectedPath = first.publicPath;
+      await openEditor(page, true); await openFoldedGroup(page, 'banner');
+      await expect(frames).toHaveCount(2);
+      for (const index of [0, 1]) {
+        await expect(frames.nth(index)).toHaveAttribute('sandbox', 'allow-same-origin');
+        const policy = await page.frameLocator('iframe[title="Storefront banner preview"]').nth(index).locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
+        expect(policy).toContain("script-src 'none'"); expect(policy).toContain("style-src 'self'"); expect(policy).toContain("connect-src 'none'");
+        await expect.poll(() => bannerGeometry(preview(index)).then(g => [g.state, g.position, g.publicPath])).toEqual([state, '38% 9%', expectedPath]);
+        const announcement = (await bannerGeometry(preview(index))).announcement;
+        if (state === 'open') expect(announcement).toContain(annotation);
+        else expect(announcement).toBeNull();
+      }
+      for (const width of [1280, 1920, 390, 360, 430, 650, 651]) {
+        receipt.stage = `${theme}-${state}-${width}`;
+        await render(width, state, true, theme, true);
+        const root = menu.locator('[data-sf-menu-top]'), current = await bannerGeometry(root);
+        expect(current.viewportWidth).toBe(width); expect(current.publicPath).toBe(expectedPath);
+        expect(current.position).toBe('38% 9%'); expect(current.imageCount).toBe(1);
+        expect(current.sceneWidth).toBe(width); expect(current.bannerWidth).toBe(width);
+        if (width > 650) {
+          expect(current.fit).toBe('contain'); expect(current.clippedX + current.clippedY).toBeLessThan(.001);
+          expect(current.maxControlOverlapArea, 'Desktop controls never obscure the fitted photograph').toBeLessThan(.1);
+          expect(current.borderWidth).toBe('0px'); expect(current.borderRadius).toBe('0px'); expect(current.shadow).toBe('none');
+          expect(current.imageFilter).toBe('none'); expect(current.sceneBackground).toContain('linear-gradient');
+          expect(current.sceneHeight).toBeLessThan(750);
+          if (width >= 1280) expect(current.photo.width, 'Bounded photo remains a substantial visible scene').toBeGreaterThanOrEqual(450);
+        } else expect(current.fit).toBe('cover');
+        const capture = `${theme}-${state}-${width}`;
+        await bannerViewportScreenshot(menu, resolve(out, `banner-fit-after-${capture}.png`), `CANDIDATE ${capture}`);
+        const restore = await replayBaselineBanner(root);
+        let before: Obj;
+        try {
+          before = await bannerGeometry(root);
+          await bannerViewportScreenshot(menu, resolve(out, `banner-fit-before-${capture}.png`), `PINNED BASELINE CSS REPLAY ${capture} — NOT MAIN BUILD`);
+          if (width <= 650) expect(before, 'Phone rendered geometry is unchanged by the desktop-only correction').toEqual(current);
+          else {
+            expect(before.fit).toBe('cover');
+            expect(before.clippedX + before.clippedY).toBeGreaterThan(1);
+            if (width >= 1280) expect(before.clippedY).toBeGreaterThan(1);
+          }
+        } finally { await restore(); }
+        expect(await bannerGeometry(root), 'Test-only CSS replay restores the candidate exactly').toEqual(current);
+        let matchedPreview: Obj | null = null;
+        if ([1280, 390, 360, 430].includes(width)) {
+          const index = width === 1280 ? 1 : 0;
+          if (!index) {
+            const choice = page.getByRole('checkbox', { name: `${width}px`, exact: true });
+            await reveal(page, choice, 'field');
+            if (!await choice.isChecked()) await tapRevealedControl(page, choice);
+          }
+          await expect.poll(() => bannerGeometry(preview(index)).then(g => g.viewportWidth)).toBe(width);
+          matchedPreview = await bannerGeometry(preview(index));
+          for (const key of ['viewportWidth', 'width', 'height', 'naturalWidth', 'naturalHeight', 'fit', 'publicPath', 'position', 'searchY', 'categoriesY', 'state', 'themeBackground'])
+            expect(matchedPreview[key], `Actual Dashboard iframe and Storefront match ${key} at ${width}`).toEqual(current[key]);
+          await reveal(page, frames.nth(index), 'content-status');
+          await frames.nth(index).screenshot({ path: resolve(out, `banner-fit-dashboard-${capture}.png`) });
+        }
+        receipt.rows.push({ theme, state, width, current, before: before!, matchedPreview, captures: { before: `banner-fit-before-${capture}.png`, after: `banner-fit-after-${capture}.png` } });
+      }
+    }
+    receipt.stage = 'phone-interactions';
+    // Use the open case without fake time, response overrides or production data.
+    const active = structuredClone(original.document); Object.assign(active.appearance, { site_theme: 'dark', menu_intro_visible: false });
+    await saveDocument(active); await saveProfilePatch({ opening_hours: hours(true) }); await render(390, 'open');
+    const firstSection = menu.locator('[data-sf-module="sections"]').first();
+    const independentBefore = await menu.locator('[data-sf-carousel]').evaluateAll(nodes => nodes.slice(1).map(node => node.getAttribute('data-sf-selected')));
+    const activeSlide = firstSection.locator('[data-sf-carousel-product][data-position="active"]');
+    await expect(firstSection.locator('[data-sf-carousel-product]'), 'Fixture must actually support swipe, never pass with a single item').toHaveCount(2);
+    const oldItem = await activeSlide.getAttribute('data-sf-carousel-product');
+    const carousel = firstSection.locator('[data-sf-carousel-stage]');
+    await carousel.scrollIntoViewIfNeeded();
+    const box = await carousel.boundingBox(); expect(box).not.toBeNull();
+    const beforeDrag = await activeSlide.boundingBox(); expect(beforeDrag).not.toBeNull();
+    await menu.mouse.move(box!.x + box!.width * .75, box!.y + box!.height / 2); await menu.mouse.down();
+    await menu.mouse.move(box!.x + box!.width * .25, box!.y + box!.height / 2, { steps: 8 });
+    expect(await activeSlide.getAttribute('data-sf-carousel-product'), 'Selection remains stable during the finger-following drag').toBe(oldItem);
+    expect(Math.abs((await activeSlide.boundingBox())!.x - beforeDrag!.x), 'Slide visibly follows the pointer before release').toBeGreaterThan(20);
+    await menu.mouse.up();
+    await expect.poll(() => activeSlide.getAttribute('data-sf-carousel-product')).not.toBe(oldItem);
+    await expect(menu.locator('dialog[open]'), 'Releasing a swipe never opens product or cart').toHaveCount(0);
+    const arrows = firstSection.getByRole('button', { name: 'المنتج التالي', exact: true });
+    const swiped = await activeSlide.getAttribute('data-sf-carousel-product'); await arrows.click();
+    await expect.poll(() => activeSlide.getAttribute('data-sf-carousel-product')).not.toBe(swiped);
+    expect(await menu.locator('[data-sf-carousel]').evaluateAll(nodes => nodes.slice(1).map(node => node.getAttribute('data-sf-selected'))), 'Other category sliders remain independent').toEqual(independentBefore);
+    await menu.getByRole('searchbox').fill('TEST 1');
+    await expect(menu.getByRole('searchbox')).toHaveValue('TEST 1'); await menu.getByRole('searchbox').fill('');
+    const categories = menu.locator('[data-sf-module="categories"] button'); await categories.nth(1).click();
+    await expect.poll(() => menu.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    await menu.getByRole('button', { name: /سلتك: 0/ }).click(); await expect(menu.locator('dialog[open]')).toHaveCount(1);
+    await menu.keyboard.press('Escape'); await expect(menu.locator('dialog[open]')).toHaveCount(0);
+    for (const theme of ['light', 'dark']) {
+      receipt.stage = `no-banner-${theme}`;
+      const document = structuredClone(original.document); Object.assign(document.appearance, { site_theme: theme, menu_banner_enabled: false });
+      await saveDocument(document);
+      for (const width of [390, 1280]) {
+        await render(width, 'open', false, theme);
+        const top = await menu.locator('[data-sf-menu-top]').boundingBox(); expect(top!.height).toBeLessThan(600);
+        await expect(menu.locator('[data-sf-scene-window]')).toHaveCount(0);
+        await bannerViewportScreenshot(menu, resolve(out, `banner-fit-absent-${theme}-${width}.png`), `NO BANNER ${theme} ${width}`);
+      }
+    }
+    receipt.status = 'BANNER_RESPONSIVE_PASS'; receipt.stage = null;
+  } finally {
+    // Restore only this synthetic owner's display settings, by the same CAS APIs.
+    const succeeded = receipt.status === 'BANNER_RESPONSIVE_PASS';
+    try {
+      await saveDocument(original.document);
+      await saveProfilePatch({ opening_hours: originalProfile.profile.opening_hours,
+        paused_until: originalProfile.profile.paused_until, pause_reason: originalProfile.profile.pause_reason });
+      await openEditor(page, true); await openFoldedGroup(page, 'banner');
+      receipt.syntheticSettingsRestored = true;
+    } catch (error) {
+      receipt.syntheticSettingsRestored = false;
+      if (succeeded) { receipt.status = 'FAIL'; receipt.stage = 'restore-synthetic-settings'; throw error; }
+    } finally {
+      writeFileSync(resolve(out, 'banner-responsive-result.json'), JSON.stringify(receipt, null, 2));
+    }
   }
 }
 
@@ -1346,6 +1508,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
       if (index === 0) {
         stage = 'banner-focal-persistence';
         await verifyBannerFocalPersistence(page, menu, f, token);
+        await verifyBannerResponsive(page, menu, f, token);
       }
       const image = menu.locator('[data-sf-menu-banner] img');
       await expect.poll(() => image.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);

@@ -78,6 +78,56 @@ void main() {
     expect(missing.offsetX.isFinite, isTrue);
     expect(missing.clippedX, 0);
   });
+  test(
+    'desktop contain keeps the whole photograph and physical focal axes',
+    () {
+      for (final width in [960, 1280, 1920]) {
+        for (final x in [0, 38, 50, 100]) {
+          final fitted = StorefrontBannerCrop.cover(
+            960,
+            536,
+            width,
+            300,
+            x,
+            9,
+            contain: true,
+          );
+          expect(fitted.renderedHeight, closeTo(300, .001));
+          expect(fitted.renderedWidth, closeTo(960 * 300 / 536, .001));
+          expect(fitted.clippedX, 0);
+          expect(fitted.clippedY, 0);
+          expect(fitted.sourceLeft, 0);
+          expect(fitted.sourceTop, 0);
+          expect(
+            fitted.offsetX,
+            closeTo((width - fitted.renderedWidth) * x / 100, .001),
+          );
+        }
+      }
+      final tall = StorefrontBannerCrop.cover(
+        360,
+        480,
+        960,
+        300,
+        50,
+        100,
+        contain: true,
+      );
+      expect(tall.renderedHeight, 300);
+      expect(tall.clippedX + tall.clippedY, 0);
+      final wide = StorefrontBannerCrop.cover(
+        1600,
+        300,
+        960,
+        300,
+        50,
+        100,
+        contain: true,
+      );
+      expect(wide.renderedWidth, 960);
+      expect(wide.offsetY, 120);
+    },
+  );
   test('focal ticks are excluded from the document signature', () {
     final before = data()..['focalX'] = 0;
     final after = data()..['focalX'] = 100;

@@ -229,9 +229,7 @@ class _FrameState extends State<StorefrontBannerPreviewFrame> {
     }
     final node = doc.querySelector('#banner-photo');
     final photo = node == null ? null : BannerPreviewImage(node);
-    final view =
-        doc.querySelector('[data-sf-menu-banner]')?.getBoundingClientRect() ??
-        rect;
+    final view = photo?.getBoundingClientRect() ?? rect;
     final crop = StorefrontBannerCrop.cover(
       photo?.naturalWidth ?? 0,
       photo?.naturalHeight ?? 0,
@@ -241,6 +239,12 @@ class _FrameState extends State<StorefrontBannerPreviewFrame> {
       widget.focalY,
       imageLoaded: photo?.complete == true && (photo?.naturalWidth ?? 0) > 0,
       documentHeight: measured,
+      contain:
+          node != null &&
+          bannerPreviewWindow
+                  .getComputedStyle(node)
+                  .getPropertyValue('object-fit') ==
+              'contain',
     );
     if (crop.sameAs(_lastCrop)) return;
     _lastCrop = crop;
