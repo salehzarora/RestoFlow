@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { localStatus } from './ci-runtime.mjs';
+import { localStatus, assertHeightVideoEvidence, HEIGHT_VIDEO_FILE } from './ci-runtime.mjs';
 const key = role => `test.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.test`;
 test('only the local gateway and anon role enter application builds', () => {
   assert.equal(localStatus({ API_URL: 'http://127.0.0.1:54321', ANON_KEY: key('anon') }).url, 'http://127.0.0.1:54321');
@@ -11,4 +11,14 @@ test('only the local gateway and anon role enter application builds', () => {
     assert.throws(() => localStatus({ API_URL: 'http://127.0.0.1:54321', ANON_KEY: key(role) }));
   }
   assert.throws(() => localStatus({ API_URL: 'http://127.0.0.1:54321', ANON_KEY: 'malformed' }));
+});
+
+test('only the exact bounded WebM evidence filename and header are admitted', () => {
+  const header = Buffer.alloc(64); header.set(Buffer.from('1a45dfa3', 'hex')); header.write('webm', 16);
+  assert.doesNotThrow(() => assertHeightVideoEvidence(HEIGHT_VIDEO_FILE, header));
+  for (const name of ['other.webm', 'trace.zip', '../' + HEIGHT_VIDEO_FILE, HEIGHT_VIDEO_FILE.toUpperCase()]) assert.throws(() => assertHeightVideoEvidence(name, header));
+  assert.throws(() => assertHeightVideoEvidence(HEIGHT_VIDEO_FILE, Buffer.from('not a WebM')));
+  assert.throws(() => assertHeightVideoEvidence(HEIGHT_VIDEO_FILE, Buffer.alloc(8 * 1024 * 1024 + 1)));
+  const invalid = Buffer.from(header); invalid[0] = 0; assert.throws(() => assertHeightVideoEvidence(HEIGHT_VIDEO_FILE, invalid));
+  const missingType = Buffer.from(header); missingType.fill(0, 16, 20); assert.throws(() => assertHeightVideoEvidence(HEIGHT_VIDEO_FILE, missingType));
 });

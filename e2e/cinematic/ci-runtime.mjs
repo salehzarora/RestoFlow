@@ -24,6 +24,16 @@ export function localStatus(status) {
   return { url: api, anonKey: status.ANON_KEY };
 }
 
+// Exactly one owner-authorized, synthetic-only height-control recording. Raw
+// Playwright recordings and storage state stay in the private output directory.
+export const HEIGHT_VIDEO_FILE = 'responsive-banner-height-adjustment.webm';
+export function assertHeightVideoEvidence(name, bytes) {
+  assert.equal(name, HEIGHT_VIDEO_FILE);
+  assert.ok(bytes.length >= 32 && bytes.length <= 8 * 1024 * 1024, 'Height video has a bounded size');
+  assert.equal(bytes.subarray(0, 4).toString('hex'), '1a45dfa3', 'Expected EBML WebM header');
+  assert.ok(bytes.subarray(0, 512).includes(Buffer.from('webm')), 'Expected WebM document type');
+}
+
 function setup() {
   requireEphemeralCi(process.env); // Reject endpoint/context overrides before even `supabase start`.
   assert.equal(process.env.GITHUB_ACTIONS, 'true', 'This runner is CI-only');
@@ -84,18 +94,20 @@ async function main(action) {
     return;
   }
   if (action === 'sanitize') {
-    // Only explicit receipts and PNG screenshots. Never raw server logs, traces,
+    // Only explicit receipts, PNG screenshots and the one bounded synthetic height video. Never raw server logs, traces,
     // browser storage state, request dumps or the fixture/status files.
     for (const entry of readdirSync(publicDir, { recursive: true })) {
       const path = resolve(publicDir, entry);
       assert.ok(relative(publicDir, path) !== '..' && !relative(publicDir, path).startsWith(`..${sep}`));
       if (statSync(path).isDirectory()) continue;
-      assert.match(entry, /^(?:[a-z0-9_-]+\.json|[a-z0-9_-]+\.png)$/i, 'Unexpected evidence path');
+      assert.ok(entry === HEIGHT_VIDEO_FILE || /^(?:[a-z0-9_-]+\.json|[a-z0-9_-]+\.png)$/i.test(entry), 'Unexpected evidence path');
       if (entry.endsWith('.json')) {
         const text = readFileSync(path, 'utf8');
         JSON.parse(text);
         assert.ok(!/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|"(?:access_token|refresh_token|password|service_role|anonKey|ANON_KEY)"\s*:/i.test(text),
           'Credential-shaped data must not be published');
+      } else if (entry === HEIGHT_VIDEO_FILE) {
+        assertHeightVideoEvidence(entry, readFileSync(path));
       } else {
         assert.equal(readFileSync(path).subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
       }

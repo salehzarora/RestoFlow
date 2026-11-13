@@ -24,6 +24,15 @@ export interface WireAppearance {
   readonly menu_intro_visible?:boolean|null;
   readonly menu_banner_focal_x?:number|null;
   readonly menu_banner_focal_y?:number|null;
+  /** v11 only. Optional responsive layout, independent desktop media and image heights. */
+  readonly menu_banner_layout?:'responsive'|null;
+  readonly menu_banner_desktop_url?:string|null;
+  readonly menu_banner_mobile_height_px?:number|null;
+  readonly menu_banner_desktop_height_px?:number|null;
+  readonly menu_banner_desktop_focal_x?:number|null;
+  readonly menu_banner_desktop_focal_y?:number|null;
+  readonly menu_banner_width?:number|null; readonly menu_banner_height?:number|null;
+  readonly menu_banner_desktop_width?:number|null; readonly menu_banner_desktop_height?:number|null;
 }
 export interface WireContentV1 {
   readonly schema:1;
@@ -241,6 +250,52 @@ export function decodeStorefrontMenuV10(raw: unknown): StorefrontMenuV10Envelope
     return { item_id, url: image(row.url, 'product_original_images_v1.url')!, width, height };
   });
   return { ...decoded, product_original_images_v1: rows };
+}
+
+export interface StorefrontMenuV11Ok extends StorefrontMenuV10Ok { readonly menu_banner_desktop_images_v1?:WireMenuBackgroundImages; }
+export type StorefrontMenuV11Envelope = StorefrontMenuV11Ok | StorefrontMenuFailure;
+const RESPONSIVE_FIELDS = ['menu_banner_layout','menu_banner_desktop_url','menu_banner_mobile_height_px','menu_banner_desktop_height_px','menu_banner_desktop_focal_x','menu_banner_desktop_focal_y','menu_banner_width','menu_banner_height','menu_banner_desktop_width','menu_banner_desktop_height'] as const;
+
+/** Separate opt-in contract; no new key is admitted by the legacy decoders. */
+export function decodeStorefrontMenuV11(raw:unknown):StorefrontMenuV11Envelope {
+  if(typeof raw!=='object'||raw===null||Array.isArray(raw))return reject('envelope');
+  const {menu_banner_desktop_images_v1:manifest,...envelope}=raw as Record<string,unknown>;
+  const document=envelope.content_v1;
+  if(typeof document!=='object'||document===null||Array.isArray(document))return decodeStorefrontMenuV10(raw);
+  const content=document as Record<string,unknown>,value=content.appearance;
+  if(typeof value!=='object'||value===null||Array.isArray(value))return decodeStorefrontMenuV10(raw);
+  const fields=value as Record<string,unknown>,legacy={...fields},added:{-readonly[K in keyof WireAppearance]?:WireAppearance[K]}={};
+  const bounded=(v:unknown,low:number,high:number,field:string)=>{if(v===null)return null;const n=integer(v,field);return n<low||n>high?reject(field):n;};
+  for(const key of RESPONSIVE_FIELDS){
+    if(!Object.hasOwn(fields,key))continue;
+    delete legacy[key];const v=fields[key],field=`appearance.${key}`;
+    if(key==='menu_banner_layout')added[key]=v===null?null:choice<'responsive'>(v,['responsive'],field);
+    else if(key==='menu_banner_desktop_url')added[key]=image(v,field,true);
+    else if(key==='menu_banner_mobile_height_px')added[key]=bounded(v,320,640,field);
+    else if(key==='menu_banner_desktop_height_px')added[key]=bounded(v,240,560,field);
+    else if(key==='menu_banner_desktop_focal_x'||key==='menu_banner_desktop_focal_y')added[key]=bounded(v,0,100,field);
+    else added[key]=bounded(v,1,2560,field);
+  }
+  const decoded=decodeStorefrontMenuV10({...envelope,content_v1:{...content,appearance:legacy}});
+  if(!decoded.ok){if(Object.keys(added).length||manifest!==undefined)return reject('responsive failure');return decoded;}
+  if(!decoded.content_v1.appearance)return reject('appearance');
+  const appearance={...decoded.content_v1.appearance,...added};
+  for(const prefix of ['menu_banner','menu_banner_desktop']as const){
+    const url=appearance[`${prefix}_url`],width=appearance[`${prefix}_width`],height=appearance[`${prefix}_height`];
+    if((width==null)!==(height==null)||(!url&&(width!=null||height!=null))||
+      (appearance.menu_banner_layout==='responsive'&&url&&(width==null||height==null)))return reject(`${prefix}.dimensions`);
+  }
+  let desktop:WireMenuBackgroundImages|undefined;
+  if(Object.hasOwn(raw,'menu_banner_desktop_images_v1')){
+    const field='menu_banner_desktop_images_v1',m=record(manifest,['base_url','variants'],field),base_url=image(m.base_url,field)!;
+    if(base_url!==appearance.menu_banner_desktop_url)return reject(field);
+    const variants=array(m.variants,2,field).map(v=>{const r=record(v,['url','width','height'],field);return{url:image(r.url,field)!,width:bounded(r.width,1,2560,field)!,height:bounded(r.height,1,2560,field)!};});
+    const[base,high]=variants;
+    if(!base||base.url!==base_url||base.width!==appearance.menu_banner_desktop_width||base.height!==appearance.menu_banner_desktop_height)return reject(field);
+    if(high&&(high.url===base_url||high.width<=base.width||high.height<base.height||Math.abs(high.width*base.height-high.height*base.width)>Math.max(high.width,high.height)))return reject(field);
+    desktop={base_url,variants};
+  }
+  return{...decoded,content_v1:{...decoded.content_v1,appearance},...(desktop?{menu_banner_desktop_images_v1:desktop}:{})};
 }
 
 function decodeContent(raw:unknown,allowAppearance:boolean,allowScene=false):StorefrontMenuV5Envelope{

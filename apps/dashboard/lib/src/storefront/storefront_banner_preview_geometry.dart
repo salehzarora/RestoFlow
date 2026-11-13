@@ -1,5 +1,28 @@
 import 'dart:math' as math;
 
+/// Same bounded CSS-pixel image area as the responsive Storefront. Null means
+/// automatic ratio only after the owner explicitly enables responsive layout.
+double storefrontResponsiveBannerHeight({
+  required bool phone,
+  required num viewportWidth,
+  required num imageWidth,
+  required num imageHeight,
+  int? customHeight,
+}) {
+  final low = phone ? 320 : 240,
+      high = customHeight == null ? (phone ? 640 : 480) : (phone ? 640 : 560);
+  final ratioHeight =
+      viewportWidth.isFinite &&
+          viewportWidth > 0 &&
+          imageWidth.isFinite &&
+          imageWidth > 0 &&
+          imageHeight.isFinite &&
+          imageHeight > 0
+      ? viewportWidth * imageHeight / imageWidth
+      : low.toDouble();
+  return (customHeight?.toDouble() ?? ratioHeight).clamp(low, high).toDouble();
+}
+
 /// Physical CSS image-fit geometry. X is measured from the left even in RTL.
 /// Clipped distances are original-image pixels; offsets are logical CSS pixels.
 class StorefrontBannerCrop {

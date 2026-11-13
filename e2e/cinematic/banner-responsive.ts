@@ -52,12 +52,16 @@ export async function bannerGeometry(root: Locator): Promise<Record<string, any>
     const photo = { width: image.naturalWidth * scale, height: image.naturalHeight * scale,
       x: box.x + (box.width - image.naturalWidth * scale) * points[0],
       y: box.y + (box.height - image.naturalHeight * scale) * points[1] };
-    const scene = el.getBoundingClientRect(), banner = image.parentElement!.getBoundingClientRect();
-    const controls = Array.from(el.children).filter(node => node !== image.parentElement && node.getAttribute('aria-hidden') !== 'true')
+    const scene = el.getBoundingClientRect(), banner = image.closest('[data-sf-menu-banner]')!.getBoundingClientRect();
+    const controls = Array.from(el.children).filter(node => node !== image.closest('[data-sf-menu-banner]') && node.getAttribute('aria-hidden') !== 'true')
       .map(node => { const r = node.getBoundingClientRect(); return { width: r.width, height: r.height, x: r.x, y: r.y }; });
-    const overlap = controls.map(r => Math.max(0, Math.min(photo.x + photo.width, r.x + r.width) - Math.max(photo.x, r.x))
-      * Math.max(0, Math.min(photo.y + photo.height, r.y + r.height) - Math.max(photo.y, r.y)));
-    const bannerStyle = getComputedStyle(image.parentElement!);
+    // Only pixels inside the overflow-hidden banner are actually visible.
+    // A cover image's off-box source pixels cannot obscure adjacent controls.
+    const visiblePhoto = { x: Math.max(photo.x, banner.x), y: Math.max(photo.y, banner.y),
+      right: Math.min(photo.x + photo.width, banner.right), bottom: Math.min(photo.y + photo.height, banner.bottom) };
+    const overlap = controls.map(r => Math.max(0, Math.min(visiblePhoto.right, r.x + r.width) - Math.max(visiblePhoto.x, r.x))
+      * Math.max(0, Math.min(visiblePhoto.bottom, r.y + r.height) - Math.max(visiblePhoto.y, r.y)));
+    const bannerStyle = getComputedStyle(image.closest('[data-sf-menu-banner]')!);
     return { viewportWidth: doc.documentElement.clientWidth, width: box.width, height: box.height,
       naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight, fit,
       publicPath: new URL(image.currentSrc).pathname, position: style.objectPosition,
@@ -101,7 +105,7 @@ export function baselineBannerEvidence(repoRoot: string) {
 export async function replayBaselineBanner(root: Locator): Promise<() => Promise<void>> {
   const saved = await root.evaluate(el => {
     const image = el.ownerDocument.querySelector<HTMLElement>('[data-sf-menu-banner] img')!;
-    const banner = image.parentElement!, window = el.querySelector<HTMLElement>('[data-sf-scene-window]')!;
+    const banner = image.closest('[data-sf-menu-banner]')! as HTMLElement, window = el.querySelector<HTMLElement>('[data-sf-scene-window]')!;
     const search = el.querySelector('[role="search"]')!;
     const controls = Array.from(el.children).find(child => child.contains(search))! as HTMLElement;
     const nodes = [el, banner, image, window, controls] as HTMLElement[];
@@ -125,7 +129,7 @@ export async function replayBaselineBanner(root: Locator): Promise<() => Promise
     const image = el.ownerDocument.querySelector<HTMLElement>('[data-sf-menu-banner] img')!;
     const search = el.querySelector('[role="search"]')!;
     const controls = Array.from(el.children).find(child => child.contains(search))! as HTMLElement;
-    const nodes = [el, image.parentElement!, image, el.querySelector<HTMLElement>('[data-sf-scene-window]')!, controls] as HTMLElement[];
+    const nodes = [el, image.closest('[data-sf-menu-banner]')!, image, el.querySelector<HTMLElement>('[data-sf-scene-window]')!, controls] as HTMLElement[];
     nodes.forEach((node, index) => Object.entries(saved[index]).forEach(([property, original]) => {
       if (original.value) node.style.setProperty(property, original.value, original.priority);
       else node.style.removeProperty(property);

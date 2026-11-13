@@ -8,12 +8,15 @@ import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } fro
 import { LOGICAL_ORIGIN, localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot, completeResponsiveFixture, responsiveFixtureMismatch } from './banner-responsive';
+import { verifyResponsiveBannerSettings, adjustBannerHeightWithKeyboard } from './responsive-banner-settings';
 import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
 
 // This suite drives the shipped Flutter app. It never installs a mocked
-// repository, injects a session, calls a privileged client, or writes SQL.
+// repository, calls a privileged client, or writes SQL. Auth acceptance signs in
+// through the UI. The separate short video copies only that synthetic CI state
+// in memory; it never substitutes for the real sign-in/save acceptance.
 const API = 'http://127.0.0.1:54321';
 const DASHBOARD = 'http://127.0.0.1:57026';
 const STOREFRONT = 'http://127.0.0.1:3000';
@@ -666,8 +669,8 @@ function routeClass(url: string): RouteClass {
   if (u.pathname.startsWith('/storage/v1/object/public/')) return 'public-media';
   return 'other-local';
 }
-async function upload(page: Page, filename: string, diagnostics: UploadDiagnostics, expectedStatus = 200, purpose: 'background' | 'banner' = 'background', synthetic?: Buffer): Promise<Obj> {
-  const uploadName = purpose === 'banner' ? L.bannerUpload : L.upload;
+async function upload(page: Page, filename: string, diagnostics: UploadDiagnostics, expectedStatus = 200, purpose: 'background' | 'banner' | 'desktop-banner' = 'background', synthetic?: Buffer): Promise<Obj> {
+  const uploadName = purpose === 'desktop-banner' ? 'رفع صورة للكمبيوتر' : purpose === 'banner' ? L.bannerUpload : L.upload;
   const fixturePath = filename === 'background-2816.jpg' ? backgroundFixture
     : resolve(__dirname, '../../supabase/functions/storefront-media-publish/test/fixtures', filename);
   const onRequest = (request: import('@playwright/test').Request) => {
@@ -705,7 +708,7 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     const body = await response.json() as Obj;
     if (expectedStatus === 200) {
       expect(body.ok, 'Actual Edge publisher accepted bytes').toBe(true);
-      await textContains(page, purpose === 'banner' ? 'نُشرت الصورة؛ اخترها واحفظ المحتوى.' : L.selected);
+      await textContains(page, purpose !== 'background' ? 'نُشرت الصورة؛ اخترها واحفظ المحتوى.' : L.selected);
     } else {
       expect(body.status, 'Cross-source duplicate is rejected').toBe('object_conflict');
       await textContains(page, L.unavailable);
@@ -1078,7 +1081,7 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
   const out = process.env.CINEMATIC_ARTIFACT_DIR!;
   const receipt: Obj = { status: 'FAIL', failedStage: 'baseline', data: 'real temporary CI services; owner UI save, no SQL focus write' };
   let stage = 'baseline';
-  const read = () => rpc(f, token, 'get_restaurant_storefront_content_v5');
+  const read = () => rpc(f, token, 'get_restaurant_storefront_content_v6');
   const previewFrames = page.locator('iframe[title="Storefront banner preview"]');
   const preview = (index: number) => page.frameLocator('iframe[title="Storefront banner preview"]').nth(index);
   const geometry = bannerGeometry;
@@ -1180,10 +1183,11 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
     stage = 'baseline-crop-geometry';
     expect(phoneBefore.width, 'Default logical phone preview').toBe(390);
     expect(desktopBefore.viewportWidth, 'Independent logical desktop preview').toBe(1280);
-    expect(desktopBefore.width, 'Desktop photograph element has its bounded width').toBeLessThanOrEqual(960);
+    expect(desktopBefore.width, 'Absent responsive settings preserve the full-width legacy image').toBe(1280);
     expect(phoneBefore.clippedX, 'This real image actually crops horizontally on phone').toBeGreaterThan(1);
-    expect(desktopBefore.fit).toBe('contain');
-    expect(desktopBefore.clippedX + desktopBefore.clippedY, 'Desktop preserves the full photograph within floating-point geometry precision').toBeLessThan(.001);
+    const restoreLegacy = await replayBaselineBanner(desktop);
+    try { expect(await geometry(desktop), 'Legacy desktop equals the pinned production CSS replay, not the rejected contain prototype').toEqual(desktopBefore); }
+    finally { await restoreLegacy(); }
     const originalPhoto = await preview(0).locator('[data-sf-menu-banner] img').elementHandle();
     expect(originalPhoto).not.toBeNull();
     stage = 'draft-focus-no-autosave';
@@ -1220,7 +1224,7 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
     await saveContent(page);
     expect(writes, 'Only the explicit normal content Save writes once').toBe(1);
     stage = 'reload-real-owner-read';
-    const observedRead = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v5')));
+    const observedRead = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v6')));
     const reloadResponse = await responseAfterAction(observedRead, () => openEditor(page, true));
     expect(reloadResponse.status()).toBe(200);
     const reloadWire = await reloadResponse.json();
@@ -1277,7 +1281,7 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
   const original = await rpc(f, token, 'get_restaurant_storefront_content_v5');
   const originalProfile = await rpc(f, token, 'get_restaurant_storefront_profile');
   const completedFixture = completeResponsiveFixture(original.document), fixtureBase = completedFixture.document;
-  const receipt: Obj = { status: 'FAIL', stage: 'baseline-source', data: 'synthetic isolated CI; actual owner API and real application renderer', rows: [], baseline: baselineBannerEvidence(resolve(__dirname, '../..')),
+  const receipt: Obj = { status: 'FAIL', stage: 'baseline-source', data: 'synthetic isolated CI; actual owner API and renderer; legacy absence/null compatibility against pinned production CSS replay, not a separately built deployment', rows: [], baseline: baselineBannerEvidence(resolve(__dirname, '../..')),
     fixtureRestoration: { materializedNullKeys: completedFixture.materializedNullKeys,
       meaning: 'Explicit null restores legacy semantics for the five mutated optional keys; not original missing-key byte identity.' } };
   const write = async (name: string, body: Obj) => {
@@ -1354,14 +1358,8 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
         expect(current.viewportWidth).toBe(width); expect(current.publicPath).toBe(expectedPath);
         expect(current.position).toBe('38% 9%'); expect(current.imageCount).toBe(1);
         expect(current.sceneWidth).toBe(width); expect(current.bannerWidth).toBe(width);
-        if (width > 650) {
-          expect(current.fit).toBe('contain'); expect(current.clippedX + current.clippedY).toBeLessThan(.001);
-          expect(current.maxControlOverlapArea, 'Desktop controls never obscure the fitted photograph').toBeLessThan(.1);
-          expect(current.borderWidth).toBe('0px'); expect(current.borderRadius).toBe('0px'); expect(current.shadow).toBe('none');
-          expect(current.imageFilter).toBe('none'); expect(current.sceneBackground).toContain('linear-gradient');
-          expect(current.sceneHeight).toBeLessThan(750);
-          if (width >= 1280) expect(current.photo.width, 'Bounded photo remains a substantial visible scene').toBeGreaterThanOrEqual(450);
-        } else expect(current.fit).toBe('cover');
+        expect(current.fit, 'No responsive setting preserves the legacy cover renderer').toBe('cover');
+        expect(current.imageFilter).toBe('none');
         const capture = `${theme}-${state}-${width}`;
         await bannerViewportScreenshot(menu, resolve(out, `banner-fit-after-${capture}.png`), `CANDIDATE ${capture}`);
         const restore = await replayBaselineBanner(root);
@@ -1369,12 +1367,7 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
         try {
           before = await bannerGeometry(root);
           await bannerViewportScreenshot(menu, resolve(out, `banner-fit-before-${capture}.png`), `PINNED BASELINE CSS REPLAY ${capture} — NOT MAIN BUILD`);
-          if (width <= 650) expect(before, 'Phone rendered geometry is unchanged by the desktop-only correction').toEqual(current);
-          else {
-            expect(before.fit).toBe('cover');
-            expect(before.clippedX + before.clippedY).toBeGreaterThan(1);
-            if (width >= 1280) expect(before.clippedY).toBeGreaterThan(1);
-          }
+          expect(before, 'With responsive fields absent/null, every viewport equals the pinned production CSS geometry').toEqual(current);
         } finally { await restore(); }
         expect(await bannerGeometry(root), 'Test-only CSS replay restores the candidate exactly').toEqual(current);
         let matchedPreview: Obj | null = null;
@@ -1468,9 +1461,9 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
   const out = process.env.CINEMATIC_ARTIFACT_DIR!;
   let stage = 'baseline';
   const receipt: Obj = { status: 'FAIL', failedStage: stage, data: 'actual isolated Dashboard/Auth/Storage/Edge; no mocked publication', publications: [] };
-  const read = async () => (await rpc(f, token, 'get_restaurant_storefront_content_v5')).document;
+  const read = async () => (await rpc(f, token, 'get_restaurant_storefront_content_v6')).document;
   const publicMenu = async () => {
-    const response = await fetch(API + '/rest/v1/rpc/storefront_menu_v10', { method: 'POST', redirect: 'error',
+    const response = await fetch(API + '/rest/v1/rpc/storefront_menu_v11', { method: 'POST', redirect: 'error',
       headers: { apikey: f.anonKey, authorization: 'Bearer ' + f.anonKey, 'content-type': 'application/json' }, body: JSON.stringify({ p_slug: f.ownerA.slug }) });
     expect(response.status).toBe(200); const value = await response.json(); expect(value.ok).toBe(true); return value;
   };
@@ -1540,6 +1533,96 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
           } : null;
         }, { timeout: 100000, intervals: [250, 500, 1000] }).toEqual({ sameResource: true, position: '38% 9%' });
         receipt.responsiveReturn = { freshPublicRead: true, freshDocumentRead: true, samePublicPath: path, position: '38% 9%' };
+        stage = 'independent-responsive-settings-ui-save-readback';
+        await verifyResponsiveBannerSettings(page, menu, {
+          read: () => rpc(f, token, 'get_restaurant_storefront_content_v6'),
+          readLegacy: () => rpc(f, token, 'get_restaurant_storefront_content_v5'),
+          publicRead: async version => {
+            const response = await fetch(API + '/rest/v1/rpc/storefront_menu_v' + version, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000),
+              headers: { apikey: f.anonKey, authorization: 'Bearer ' + f.anonKey, 'content-type': 'application/json' }, body: JSON.stringify({ p_slug: f.ownerA.slug }) });
+            expect(response.status).toBe(200); const value = await response.json(); expect(value.ok).toBe(true); return value;
+          },
+          writeDocument: async document => {
+            const current = await rpc(f, token, 'get_restaurant_storefront_content_v6');
+            const response = await fetch(API + '/rest/v1/rpc/set_restaurant_storefront_content_v1', { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000),
+              headers: { apikey: f.anonKey, authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+              body: JSON.stringify({ p_organization_id: f.ownerA.orgId, p_restaurant_id: f.ownerA.restaurantId, p_client_request_id: randomUUID(),
+                p_expected_version: current.version, p_expected_storefront_branch_id: f.ownerA.branchId, p_document: document }) });
+            expect(response.status).toBe(200); const result = await response.json(); expect(result.ok).toBe(true); expect(result.version).toBe(current.version + 1);
+          },
+          reload: async () => {
+            const observed = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v6')));
+            const response = await responseAfterAction(observed, () => openEditor(page, true));
+            expect(response.status()).toBe(200); const readback = await response.json(); expect(readback.ok).toBe(true);
+            await openFoldedGroup(page, 'banner'); return readback;
+          },
+          save: () => saveContent(page),
+          upload: index => {
+            const file = `responsive-banner-${index}.png`;
+            return upload(page, file, diagnostics(), 200, 'desktop-banner', readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file)));
+          },
+          reveal: target => reveal(page, target, 'field'), tap: target => tapRevealedControl(page, target),
+          freshMenu: async width => {
+            const browser = page.context().browser(); expect(browser).not.toBeNull();
+            const context = await browser!.newContext({ viewport: { width, height: width > 650 ? 900 : 844 }, locale: 'ar', serviceWorkers: 'block' });
+            const network = await guardBrowser(context), surface = await context.newPage(), requestedMedia: string[] = [];
+            surface.on('request', request => { const url = new URL(request.url());
+              if (request.resourceType() === 'image' && url.origin === LOGICAL_ORIGIN) requestedMedia.push(url.pathname); });
+            return { page: surface, requestedMedia, check: network.check, close: () => context.close() };
+          },
+          captureHeightVideo: async height => {
+            const before = await rpc(f, token, 'get_restaurant_storefront_content_v6');
+            expect(before.document.appearance.menu_banner_mobile_height_px).toBe(height);
+            const browser = page.context().browser(); expect(browser).not.toBeNull();
+            // Auxiliary recording only: this state belongs to the real synthetic
+            // owner UI test above, remains in memory, and is never an artifact.
+            const recording = await browser!.newContext({ storageState: await page.context().storageState(),
+              viewport: { width: 1440, height: 1000 }, locale: 'ar', serviceWorkers: 'block',
+              recordVideo: { dir: resolve(process.env.RUNNER_TEMP!, 'cinematic-private/height-video'), size: { width: 1080, height: 750 } } });
+            const videoNetwork = await guardBrowser(recording), videoPage = await recording.newPage();
+            const clip = videoPage.video(); expect(clip).not.toBeNull();
+            let contentWrites = 0, loginEntries = 0, accepted = false;
+            const started = Date.now();
+            videoPage.on('request', request => {
+              if (request.method() === 'POST' && new URL(request.url()).pathname === '/rest/v1/rpc/set_restaurant_storefront_content_v1') contentWrites++;
+              if (isPasswordGrantRequest(request.url(), request.method(), API)) loginEntries++;
+            });
+            try {
+              await videoPage.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(videoPage); await videoNetwork.fontsReady();
+              await openEditor(videoPage); await openFoldedGroup(videoPage, 'banner');
+              expect(await videoPage.locator('input[type="password"]').count()).toBe(0);
+              await expect.poll(() => readAccessibleText(videoPage)).toContain('CINEMATIC TEST A');
+              const frame = videoPage.frameLocator('iframe[title="Storefront banner preview"]').nth(0).locator('[data-sf-menu-top]');
+              const state = (await publicMenu()).service.state;
+              await expect.poll(() => bannerGeometry(frame).then(g => [g.state, g.height]).catch(() => null)).toEqual([state, height]);
+              const originalNode = await frame.locator('[data-sf-menu-banner] img').elementHandle(); expect(originalNode).not.toBeNull();
+              const revealRange = (target: Locator) => reveal(videoPage, target, 'field');
+              await adjustBannerHeightWithKeyboard(videoPage, revealRange, height, height + 20);
+              await expect.poll(() => bannerGeometry(frame).then(g => g.height)).toBe(height + 20);
+              const iframe = videoPage.locator('iframe[title="Storefront banner preview"]').nth(0);
+              await reveal(videoPage, iframe, 'content-status');
+              await iframe.screenshot({ path: resolve(out, 'responsive-height-video-high.png') });
+              await adjustBannerHeightWithKeyboard(videoPage, revealRange, height + 20, height);
+              await expect.poll(() => bannerGeometry(frame).then(g => g.height)).toBe(height);
+              await reveal(videoPage, iframe, 'content-status');
+              await iframe.screenshot({ path: resolve(out, 'responsive-height-video-restored.png') });
+              expect(await originalNode!.evaluate(el => el.isConnected), 'Recording uses actual live preview updates, not source replacement').toBe(true);
+              expect(contentWrites).toBe(0); expect(loginEntries).toBe(0);
+              expect(await rpc(f, token, 'get_restaurant_storefront_content_v6')).toEqual(before);
+              await videoNetwork.check(); accepted = true;
+            } finally { await recording.close(); }
+            expect(accepted).toBe(true);
+            const file = 'responsive-banner-height-adjustment.webm';
+            await clip!.saveAs(resolve(out, file));
+            const bytes = readFileSync(resolve(out, file));
+            return { status: 'SYNTHETIC_HEIGHT_ADJUSTMENT_VIDEO_RECORDED', file, bytes: bytes.length,
+              sha256: createHash('sha256').update(bytes).digest('hex'), durationWindowMs: Date.now() - started,
+              includesLocalEditorBoot: true, values: [height, height + 20, height], contentWrites: 0, loginEntries: 0,
+              syntheticStateInMemoryOnly: true, noOwnerBrowserSession: true };
+          },
+          invariant: unchanged, url: STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', artifactDir: out,
+        });
+        receipt.independentResponsiveSettingsAcceptance = 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS';
       }
       const image = menu.locator('[data-sf-menu-banner] img');
       await expect.poll(() => image.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);

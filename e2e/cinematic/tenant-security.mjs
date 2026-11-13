@@ -189,6 +189,24 @@ try {
   });
 
   let productA, productB;
+  await check('v11 responsive public read retains v10 tenant boundaries and has no private media identifiers', async () => {
+    for (const owner of [fixture.ownerA, fixture.ownerB]) {
+      const latest = await rpc(fixture, null, 'storefront_menu_v11', { p_slug: owner.slug });
+      const legacy = await rpc(fixture, null, 'storefront_menu_v10', { p_slug: owner.slug });
+      assert.equal(latest.status, 200); assert.equal(latest.data?.ok, true);
+      assert.equal(latest.data.restaurant.slug, owner.slug);
+      assertRpcDenied(await rpc(fixture, null, 'get_restaurant_storefront_content_v6', scope(owner)), 'v6 management is never anonymous');
+      const projection = structuredClone(latest.data);
+      delete projection.menu_banner_desktop_images_v1;
+      for (const key of ['menu_banner_layout', 'menu_banner_desktop_url', 'menu_banner_width', 'menu_banner_height',
+        'menu_banner_desktop_width', 'menu_banner_desktop_height', 'menu_banner_mobile_height_px',
+        'menu_banner_desktop_height_px', 'menu_banner_desktop_focal_x', 'menu_banner_desktop_focal_y']) delete projection.content_v1?.appearance?.[key];
+      projection.server_ts = legacy.data.server_ts;
+      assert.deepEqual(projection, legacy.data);
+      assert.equal(Object.hasOwn(latest.data.content_v1?.appearance ?? {}, 'menu_banner_desktop_media_id'), false);
+    }
+  });
+
   await check('both owners can publish and select their own complete product pairs with real Auth/Storage/Edge', async () => {
     productA = await productFixture(fixture.ownerA, a, true);
     productB = await productFixture(fixture.ownerB, b);
@@ -218,7 +236,7 @@ try {
   });
 
   await check('owner A can read every private RPC and use real Storage read/list/sign endpoints', async () => {
-    for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
+    for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_content_v6', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
       const read = await rpc(fixture, a, name, scope(fixture.ownerA));
       assert.equal(read.status, 200);
       assert.equal(read.data?.ok, true);
@@ -295,7 +313,7 @@ try {
       }
     });
     await check(`${label}: A private content/profile/media/receipt reads denied`, async () => {
-      for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
+      for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_content_v6', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
         assertRpcDenied(await rpc(fixture, token, name, scope(fixture.ownerA)), `${label} ${name}`);
       }
       assertDenied(await request(fixture, token, originalPath), `${label} private original`);

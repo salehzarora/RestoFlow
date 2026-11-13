@@ -155,6 +155,13 @@ for (const [index, [width, height]] of [[900, 450], [1000, 750]].entries()) {
     png({ width, height, channels: 3, rows: photoRgb(width, height, 29 + index, 8) }),
     { mode: 0o600, flag: 'wx' });
 }
+// Two bounded, distinct desktop inputs for the real independent-banner UI
+// lifecycle. Existing historical source files and recipe goldens are unchanged.
+for (const [index, [width, height]] of [[1200, 360], [1200, 480]].entries()) {
+  writeFileSync(resolve(dirname(target), `responsive-banner-${index}.png`),
+    png({ width, height, channels: 3, rows: photoRgb(width, height, 61 + index, 8) }),
+    { mode: 0o600, flag: 'wx' });
+}
 // Sessions stay in memory and are not serialized. Only local passwords and the
 // public anon key are handed privately to the real Dashboard sign-in test.
 writeFileSync(target, `${JSON.stringify(fixture, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
