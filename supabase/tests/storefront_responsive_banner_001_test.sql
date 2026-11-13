@@ -109,7 +109,9 @@ select is(app.storefront_content_document_shape_v1(jsonb_set(pg_temp.responsive_
 select is(app.storefront_content_document_shape_v1(jsonb_set(pg_temp.responsive_document(),array['appearance',k],to_jsonb(v)))->'error',null::jsonb,'inclusive valid boundary: '||k||'='||v)
  from (values('menu_banner_mobile_height_px',320),('menu_banner_mobile_height_px',640),('menu_banner_desktop_height_px',240),('menu_banner_desktop_height_px',560),('menu_banner_desktop_focal_x',0),('menu_banner_desktop_focal_x',100),('menu_banner_desktop_focal_y',0),('menu_banner_desktop_focal_y',100)) x(k,v);
 select is(app.storefront_content_document_shape_v1(jsonb_set(pg_temp.responsive_document(),'{appearance,menu_banner_mobile_height_px}','4.6e2'))#>>'{document,appearance,menu_banner_mobile_height_px}','460','integral numeric normalized without truncation');
-select is(app.storefront_content_document_shape_v1(jsonb_set(pg_temp.responsive_document(),'{appearance,menu_banner_desktop_media_id}',to_jsonb(upper(pg_temp.sid('desktop')::text))))#>>'{document,appearance,menu_banner_desktop_media_id}',pg_temp.sid('desktop')::text,'UUID canonicalized for reference bookkeeping');
+select is(app.storefront_content_document_shape_v1(jsonb_set(pg_temp.responsive_document(),'{appearance,menu_banner_desktop_media_id}',to_jsonb(upper(pg_temp.sid('desktop')::text)))),
+ jsonb_build_object('error','media_invalid','field','appearance.menu_banner_desktop_media_id'),'uppercase desktop UUID remains rejected by the canonical input contract');
+select is(app.storefront_content_document_shape_v1(pg_temp.responsive_document())#>>'{document,appearance,menu_banner_desktop_media_id}',pg_temp.sid('desktop')::text,'canonical lowercase desktop UUID roundtrips for reference bookkeeping');
 select is(app.storefront_content_document_shape_v1(jsonb_set(pg_temp.responsive_document(),'{appearance,menu_banner_zoom}','2'))->>'field','appearance','unknown future field remains rejected');
 set local role authenticated;
 insert into theme_facts values('selected',pg_temp.theme_save('responsive-select',pg_temp.responsive_document(),10));
@@ -176,6 +178,9 @@ update storage.objects set metadata='{"mimetype":"image/jpeg","size":1000}' wher
 select is(public.storefront_menu_v11('responsive-banner-001-a')#>'{content_v1,appearance,menu_banner_desktop_url}','null'::jsonb,'invalid public MIME cannot supply desktop image');
 update storage.objects set metadata='{"mimetype":"image/webp","size":1000}' where bucket_id='storefront-media' and name=(select object_key from storefront_media where id=pg_temp.sid('desktop'));
 -- Same-source replacement repoints only the matching desktop reference.
+-- Match the existing publisher: retract old before publishing the same-source
+-- successor, preserving the one-live-row source/variant invariant.
+update storefront_media set unpublished_at=greatest(now(),published_at) where id=pg_temp.sid('desktop');
 insert into storefront_media(id,organization_id,restaurant_id,source_bucket,source_key,variant,object_key,content_hash,width,height,bytes,published_at)
  select pg_temp.sid('desktop-replacement'),organization_id,restaurant_id,source_bucket,source_key,variant,app.storefront_media_prefix(restaurant_id)||'/'||repeat('f',64)||'.webp',repeat('f',64),width,height,bytes,now() from storefront_media where id=pg_temp.sid('desktop');
 insert into storage.objects(bucket_id,name,metadata) select 'storefront-media',object_key,'{"mimetype":"image/webp","size":1000}' from storefront_media where id=pg_temp.sid('desktop-replacement');
