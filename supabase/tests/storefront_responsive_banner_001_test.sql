@@ -202,8 +202,10 @@ reset role;
 -- Remaining explicit nulls persist without resetting phone or other fields.
 select set_config('app.current_app_user_id',pg_temp.sid('manager')::text,true);
 set local role authenticated;
-select is(pg_temp.save_current('null-'||k,k,'null')->>'ok','true','explicit null saves optional field: '||k)
- from unnest(array['menu_banner_desktop_height_px','menu_banner_desktop_focal_x','menu_banner_desktop_focal_y']) x(k);
+-- Separate commands give each CAS write a current STABLE-reader snapshot/version.
+select is(pg_temp.save_current('null-menu_banner_desktop_height_px','menu_banner_desktop_height_px','null')->>'ok','true','explicit null saves optional field: menu_banner_desktop_height_px');
+select is(pg_temp.save_current('null-menu_banner_desktop_focal_x','menu_banner_desktop_focal_x','null')->>'ok','true','explicit null saves optional field: menu_banner_desktop_focal_x');
+select is(pg_temp.save_current('null-menu_banner_desktop_focal_y','menu_banner_desktop_focal_y','null')->>'ok','true','explicit null saves optional field: menu_banner_desktop_focal_y');
 select is(pg_temp.read_responsive()#>array['document','appearance',k],'null'::jsonb,'explicit null read back: '||k)
  from unnest(array['menu_banner_desktop_height_px','menu_banner_desktop_focal_x','menu_banner_desktop_focal_y']) x(k);
 reset role;
