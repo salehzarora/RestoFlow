@@ -109,7 +109,7 @@ test('the sequence pins #379, payment 001D, product helpers, scene, background c
       { label: 'site theme', name: '20261110150043_bizbot_storefront_site_theme_001.sql', sha256: '98195ffeece9ca1058409537b691db17ccde013a55c67964c18dcc95e86b3e72' },
       { label: 'menu banner', name: '20261111170713_bizbot_storefront_menu_banner_001.sql', sha256: '6661d0b97a12bbcf181d0bf12d43a64995d2def1bf5b11348a7b55795d2446b3' },
       { label: 'product detail original', name: '20261112011934_bizbot_storefront_product_detail_original_001.sql', sha256: 'c92d70304045a171de8660b8eaefc27f8df2072e6f213e0a28bfda49a1af3c73' },
-      { label: 'responsive banner', name: '20261113134741_bizbot_storefront_responsive_banner_001.sql', sha256: '7383b2baa830ed16cb01079421845040d7173e071c82b8f98db4228b3ff0c26a' },
+      { label: 'responsive banner', name: '20261113134741_bizbot_storefront_responsive_banner_001.sql', sha256: '734c339d116a3ae4d64544676bda78cc17d543f1f7d2ce95c23f884a8d2dd75d' },
     ],
   });
 });
@@ -302,7 +302,7 @@ test('six pinned successors carry their exact identities and are excluded from b
     ['site theme', '20261110150043_bizbot_storefront_site_theme_001.sql', '98195ffeece9ca1058409537b691db17ccde013a55c67964c18dcc95e86b3e72'],
     ['menu banner', '20261111170713_bizbot_storefront_menu_banner_001.sql', '6661d0b97a12bbcf181d0bf12d43a64995d2def1bf5b11348a7b55795d2446b3'],
     ['product detail original', '20261112011934_bizbot_storefront_product_detail_original_001.sql', 'c92d70304045a171de8660b8eaefc27f8df2072e6f213e0a28bfda49a1af3c73'],
-    ['responsive banner', '20261113134741_bizbot_storefront_responsive_banner_001.sql', '7383b2baa830ed16cb01079421845040d7173e071c82b8f98db4228b3ff0c26a'],
+    ['responsive banner', '20261113134741_bizbot_storefront_responsive_banner_001.sql', '734c339d116a3ae4d64544676bda78cc17d543f1f7d2ce95c23f884a8d2dd75d'],
   ]);
   assert.ok(Object.isFrozen(excludedSuccessors) && excludedSuccessors.every(pin => Object.isFrozen(pin)));
   for (const pin of excludedSuccessors) assert.equal(sha256(bytesOf(pin.name)), pin.sha256);
@@ -502,10 +502,10 @@ test('UX003 swaps and unknown future successors are refused by every plan', () =
 // PROPOSED PR397-only pin and plan. No historical proof or negative is removed.
 test('responsive banner has exactly one raw-byte pin and no embedded transaction control', () => {
   assert.deepEqual(responsiveBannerSuccessor, { label: 'responsive banner',
-    name: '20261113134741_bizbot_storefront_responsive_banner_001.sql', sha256: '7383b2baa830ed16cb01079421845040d7173e071c82b8f98db4228b3ff0c26a' });
+    name: '20261113134741_bizbot_storefront_responsive_banner_001.sql', sha256: '734c339d116a3ae4d64544676bda78cc17d543f1f7d2ce95c23f884a8d2dd75d' });
   assert.equal(excludedSuccessors.at(-1), responsiveBannerSuccessor);
   assert.ok(Object.isFrozen(responsiveBannerSuccessor));
-  assert.equal(bytesOf(responsiveBannerSuccessor.name).length, 58433);
+  assert.equal(bytesOf(responsiveBannerSuccessor.name).length, 58437);
   assert.equal(sha256(bytesOf(responsiveBannerSuccessor.name)), responsiveBannerSuccessor.sha256);
   assert.deepEqual(topLevelTransactionControl(bytesOf(responsiveBannerSuccessor.name).toString('utf8')), []);
 });

@@ -79,6 +79,8 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
     'bannerHeightLow': ['Low', 'منخفض', 'נמוך'],
     'bannerHeightMedium': ['Medium', 'متوسط', 'בינוני'],
     'bannerHeightHigh': ['High', 'مرتفع', 'גבוה'],
+    'bannerCssPixels': ['{value} CSS px', '{value} CSS px', '{value} CSS px'],
+    'bannerPixels': ['{value} px', '{value} px', '{value} px'],
     'bannerHeightReset': [
       'Reset this height to automatic',
       'إعادة هذا الارتفاع إلى التلقائي',

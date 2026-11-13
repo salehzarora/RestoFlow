@@ -172,7 +172,7 @@ export const detailOriginalSuccessor = Object.freeze({ label: 'product detail or
 // PROPOSED PR397 responsive extension: requires the owner's reserved-file exception.
 export const responsiveBannerSuccessor = Object.freeze({ label: 'responsive banner',
   name: '20261113134741_bizbot_storefront_responsive_banner_001.sql',
-  sha256: '7383b2baa830ed16cb01079421845040d7173e071c82b8f98db4228b3ff0c26a' });
+  sha256: '734c339d116a3ae4d64544676bda78cc17d543f1f7d2ce95c23f884a8d2dd75d' });
 export const excludedSuccessors = Object.freeze([
   Object.freeze({ label: 'POS duty', name: '20261108085442_bizbot_pos_long_shift_alerts_001.sql',
     sha256: '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865' }),

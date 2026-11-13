@@ -108,6 +108,10 @@ class _BannerEditorState extends State<StorefrontMenuBannerEditor> {
   String c(String key) =>
       storefrontContentCopy(AppLocalizations.of(context), key);
 
+  String _pixels(int value, {bool css = true}) => c(
+    css ? 'bannerCssPixels' : 'bannerPixels',
+  ).replaceAll('{value}', value.toString());
+
   Widget _heightControl(bool phone) {
     final device = phone ? 'mobile' : 'desktop';
     final field = 'menu_banner_${device}_height_px';
@@ -140,7 +144,7 @@ class _BannerEditorState extends State<StorefrontMenuBannerEditor> {
               : null,
         ),
         if (value != null) ...[
-          Text('$value CSS px', textDirection: TextDirection.ltr),
+          Text(_pixels(value), textDirection: TextDirection.ltr),
           Directionality(
             textDirection: TextDirection.ltr,
             child: Slider(
@@ -149,8 +153,8 @@ class _BannerEditorState extends State<StorefrontMenuBannerEditor> {
               min: low.toDouble(),
               max: high.toDouble(),
               divisions: high - low,
-              label: '$value CSS px',
-              semanticFormatterCallback: (v) => '${v.round()} CSS px',
+              label: _pixels(value),
+              semanticFormatterCallback: (v) => _pixels(v.round()),
               onChanged: widget.editable
                   ? (v) => widget.onChanged(field, v.round())
                   : null,
@@ -173,7 +177,10 @@ class _BannerEditorState extends State<StorefrontMenuBannerEditor> {
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
-                      Text('$stop px', textDirection: TextDirection.ltr),
+                      Text(
+                        _pixels(stop, css: false),
+                        textDirection: TextDirection.ltr,
+                      ),
                     ],
                   ),
                 ),

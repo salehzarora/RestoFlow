@@ -138,8 +138,8 @@ begin
      return jsonb_build_object('error','presentation_invalid','field','appearance.'||k);
     end if;
     if (a->>k)::numeric<>trunc((a->>k)::numeric) or
-     (a->>k)::numeric < case k when 'menu_banner_mobile_height_px' then 320 when 'menu_banner_desktop_height_px' then 240 else 0 end or
-     (a->>k)::numeric > case k when 'menu_banner_mobile_height_px' then 640 when 'menu_banner_desktop_height_px' then 560 else 100 end then
+     (a->>k)::numeric < (case k when 'menu_banner_mobile_height_px' then 320 when 'menu_banner_desktop_height_px' then 240 else 0 end) or
+     (a->>k)::numeric > (case k when 'menu_banner_mobile_height_px' then 640 when 'menu_banner_desktop_height_px' then 560 else 100 end) then
      return jsonb_build_object('error','presentation_invalid','field','appearance.'||k);
     end if;
     a:=jsonb_set(a,array[k],to_jsonb((a->>k)::numeric::integer));
