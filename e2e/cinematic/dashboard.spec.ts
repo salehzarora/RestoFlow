@@ -613,6 +613,8 @@ class UploadDiagnostics {
   private readonly started = Date.now();
   control: Awaited<ReturnType<typeof targetGeometry>> = null;
   private readonly events: { ms: number; boundary: string; event: string; status?: number }[] = [];
+  private readonly transportFailures: { boundary: RouteClass; code: string }[] = [];
+  private readonly publisherResponses: { status: number; corsAllowsDashboard: boolean; jsonContentType: boolean }[] = [];
   private first: { ms: number; boundary: UploadBoundary; errorType: string; error: unknown } | null = null;
   private firstObservedWaitFailure: { ms: number; boundary: UploadBoundary; errorType: string } | null = null;
   private errorType(error: unknown): string {
@@ -623,6 +625,17 @@ class UploadDiagnostics {
     // Names are controlled enums at call sites. Never retain URLs, request
     // bodies, headers, object keys, file names or browser exception messages.
     if (this.events.length < 64) this.events.push({ ms: Date.now() - this.started, boundary, event, ...(status === undefined ? {} : { status }) });
+  }
+  transportFailure(boundary: RouteClass, errorText: string | undefined): void {
+    // Retain only a browser network enum, never its URL/body or raw exception.
+    const code = typeof errorText === 'string' && /^net::ERR_[A-Z_0-9]{1,64}$/.test(errorText) ? errorText : 'unclassified';
+    if (this.transportFailures.length < 8) this.transportFailures.push({ boundary, code });
+  }
+  publisherResponse(response: Response): void {
+    const headers = response.headers();
+    if (this.publisherResponses.length < 8) this.publisherResponses.push({ status: response.status(),
+      corsAllowsDashboard: headers['access-control-allow-origin'] === '*' || headers['access-control-allow-origin'] === DASHBOARD,
+      jsonContentType: (headers['content-type'] ?? '').split(';')[0].trim() === 'application/json' });
   }
   fail(boundary: UploadBoundary, error: unknown): void {
     if (this.first) return;
@@ -652,7 +665,8 @@ class UploadDiagnostics {
     return result.value;
   }
   snapshot(): Obj {
-    return { events: this.events, controlGeometry: this.control, firstObservedWaitFailure: this.firstObservedWaitFailure, firstFailure: this.first === null ? null : {
+    return { events: this.events, transportFailures: this.transportFailures, publisherResponses: this.publisherResponses,
+      controlGeometry: this.control, firstObservedWaitFailure: this.firstObservedWaitFailure, firstFailure: this.first === null ? null : {
       ms: this.first.ms, boundary: this.first.boundary, errorType: this.first.errorType,
     } };
   }
@@ -680,8 +694,12 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
   const onResponse = (response: Response) => {
     const kind = routeClass(response.url());
     if (response.request().method() === 'POST' && (kind === 'private-upload' || kind === 'publisher')) diagnostics.mark(kind, 'http', response.status());
+    if (response.request().method() === 'POST' && kind === 'publisher') diagnostics.publisherResponse(response);
   };
-  const onFailed = (request: import('@playwright/test').Request) => diagnostics.mark(routeClass(request.url()), 'request-failed');
+  const onFailed = (request: import('@playwright/test').Request) => {
+    const kind = routeClass(request.url());
+    diagnostics.mark(kind, 'request-failed'); diagnostics.transportFailure(kind, request.failure()?.errorText);
+  };
   page.on('request', onRequest);
   page.on('response', onResponse);
   page.on('requestfailed', onFailed);

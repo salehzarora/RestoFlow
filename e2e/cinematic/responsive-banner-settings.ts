@@ -37,6 +37,45 @@ export async function adjustBannerHeightWithKeyboard(page: Page, reveal: (target
     }
 }
 
+/** A SwitchListTile box includes title/subtitle. A clipped tile edge may fail
+ * the pointer-only whole-rectangle guard while its real keyboard control is
+ * visibly reachable. Keep that guard intact; use native focus and Space only
+ * on the enabled switch's unobstructed center in the owned Flutter surface. */
+export async function enableResponsiveLayoutWithKeyboard(page: Page, layout: Locator, reveal: (target: Locator) => Promise<void>): Promise<Obj> {
+  const sample = () => layout.evaluate(el => {
+    const r = el.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2;
+    const hit = document.elementFromPoint(x, y), view = el.closest('flutter-view');
+    const tags = ['FLT-SEMANTICS', 'FLT-SEMANTICS-CONTAINER', 'FLT-GLASS-PANE', 'FLT-SCENE-HOST', 'FLUTTER-VIEW'];
+    return { x: r.x, y: r.y, width: r.width, height: r.height, viewportWidth: innerWidth, viewportHeight: innerHeight,
+      centerVisible: x >= 0 && x <= innerWidth && y >= 96 && y <= innerHeight - 64,
+      centerHit: hit === el || (hit !== null && el.contains(hit)),
+      flutterSurfaceHit: hit !== null && view !== null && hit.closest('flutter-view') === view && tags.includes(hit.tagName),
+      role: el.getAttribute('role'), checked: el.getAttribute('aria-checked'),
+      disabled: el.getAttribute('aria-disabled') === 'true', focusable: el instanceof HTMLElement && el.tabIndex >= 0 };
+  });
+  const ready = (g: Obj) => g.width > 0 && g.height > 0 && g.centerVisible && (g.centerHit || g.flutterSurfaceHit) && !g.disabled && g.focusable && g.role === 'switch';
+  await expect(layout).toHaveCount(1); await expect(layout).not.toBeChecked();
+  const evidence: Obj = { method: 'NATIVE_FOCUS_AND_SPACE', before: await sample() };
+  if (!ready(evidence.before)) {
+    try { await reveal(layout); evidence.pointerReveal = 'READY'; }
+    catch (error) {
+      // Only bounded counts/rectangles escape; no rendered text or sessions.
+      const samples = (error as { samples?: Obj[] }).samples;
+      evidence.pointerReveal = 'WHOLE_TILE_NOT_POINTER_READY';
+      evidence.revealTail = Array.isArray(samples) ? samples.slice(-3).map(s => ({ iteration: s.iteration,
+        normalMatches: s.normalMatches, hiddenMatches: s.hiddenMatches, direction: s.direction,
+        geometry: s.geometry == null ? null : Object.fromEntries(['x','y','width','height','centerHit','flutterSurfaceHit','disabled'].map(k => [k, s.geometry[k]])) })) : [];
+    }
+  }
+  evidence.keyboardGeometry = await sample();
+  expect(ready(evidence.keyboardGeometry), 'The genuine enabled switch has a visible center on the owned Flutter input surface').toBe(true);
+  await expect(layout).toBeVisible(); await expect(layout).toBeEnabled();
+  await layout.focus(); await expect(layout, 'Native focus reaches the actual switch').toBeFocused();
+  await page.keyboard.press('Space'); await expect(layout, 'Ordinary Space enables the real responsive setting').toBeChecked();
+  evidence.focusedBeforeSpace = true; evidence.checkedAfterSpace = true;
+  return evidence;
+}
+
 /** Real temporary services and shipped controls. DOM reads below locate genuine
  * Flutter controls; no callback/state/value assignment or response mocking. */
 export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: Dependencies): Promise<void> {
@@ -161,11 +200,13 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     }
   };
   try {
-    receipt.stage = 'enable-responsive-and-independent-custom-modes';
+    receipt.stage = 'enable-responsive-layout-native-keyboard';
     const layout = page.getByRole('switch', { name: new RegExp(copy.layout) });
-    await expect(layout).toHaveCount(1); await click(layout); await expect(layout).toBeChecked();
-    await customMode(true); await customMode(false);
-    await noAutosave(baseline, 0);
+    receipt.layoutSwitch = await enableResponsiveLayoutWithKeyboard(page, layout, d.reveal);
+    receipt.stage = 'phone-custom-height-mode'; await customMode(true);
+    receipt.stage = 'desktop-custom-height-mode'; await customMode(false);
+    receipt.stage = 'initial-responsive-draft-no-autosave'; await noAutosave(baseline, 0);
+    receipt.stage = 'save-responsive-layout-and-initial-heights';
     await saveReload({ menu_banner_layout: 'responsive', menu_banner_mobile_height_px: 520, menu_banner_desktop_height_px: 400 });
     receipt.stage = 'mobile-height-draft-save-and-readback';
     let before = await d.read(), countBefore = writes;
