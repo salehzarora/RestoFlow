@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, type Request } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { bannerGeometry, bannerViewportScreenshot } from './banner-responsive';
 import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady } from './responsive-banner-settings.mjs';
 
@@ -358,20 +359,50 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     page.off('request', count); receipt.uiWriteCount = writes;
     const succeeded = receipt.status === 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS';
     try {
+      receipt.restoration.stage = 'write-original-owner-document';
       await d.writeDocument(original);
-      expect((await d.read()).document).toEqual(original);
-      expect((await d.readLegacy()).document, 'Restored legacy V5 projection remains exact').toEqual(legacyBannerDocument(original));
+      receipt.restoration.stage = 'v6-document-exact';
+      const restored = (await d.read()).document;
+      // Only schema-key names and equality flags leave this synthetic cleanup;
+      // no document values, media identifiers, sessions or raw response bodies.
+      const differingKeys = (expected: Obj, actual: Obj) => {
+        if (!expected || !actual || typeof expected !== 'object' || typeof actual !== 'object' || Array.isArray(expected) || Array.isArray(actual)) return ['invalid-object-shape'];
+        return [...new Set([...Object.keys(expected), ...Object.keys(actual)])]
+          .filter(key => !isDeepStrictEqual(expected[key], actual[key]) || Object.hasOwn(expected, key) !== Object.hasOwn(actual, key))
+          .slice(0, 32).map(key => /^[a-z_]{1,64}$/.test(key) ? key : 'unclassified-key');
+      };
+      receipt.restoration.v6 = { equal: isDeepStrictEqual(restored, original),
+        differingKeys: differingKeys(original, restored),
+        differingAppearanceKeys: differingKeys(original.appearance, restored.appearance) };
+      expect(restored).toEqual(original);
+      receipt.restoration.stage = 'v5-legacy-projection-exact';
+      const restoredLegacy = (await d.readLegacy()).document, expectedLegacy = legacyBannerDocument(original);
+      receipt.restoration.v5 = { equal: isDeepStrictEqual(restoredLegacy, expectedLegacy),
+        differingKeys: differingKeys(expectedLegacy, restoredLegacy),
+        differingAppearanceKeys: differingKeys(expectedLegacy.appearance, restoredLegacy.appearance) };
+      expect(restoredLegacy, 'Restored legacy V5 projection remains exact').toEqual(expectedLegacy);
+      receipt.restoration.stage = 'reload-real-editor';
       await d.reload();
+      receipt.restoration.stage = 'public-v11-layout-null';
       expect((await d.publicRead(11)).content_v1.appearance.menu_banner_layout).toBeNull();
+      receipt.restoration.publicLayoutNull = true;
+      receipt.restoration.stage = 'storefront-restored-legacy-document';
       await menu.setViewportSize({ width: 390, height: 844 });
       await expect.poll(async () => {
-        await menu.goto(d.url, { waitUntil: 'domcontentloaded' });
-        return { restoredLegacy: await menu.locator('[data-sf-banner-layout="responsive"]').count() === 0,
+        const response = await menu.goto(d.url, { waitUntil: 'domcontentloaded' });
+        const observation = { restoredLegacy: await menu.locator('[data-sf-banner-layout="responsive"]').count() === 0,
           imageCount: await menu.locator('[data-sf-menu-banner] img').count() };
+        const cache = response?.headers()['x-nextjs-cache'];
+        receipt.restoration.lastStorefront = { ...observation,
+          cache: ['HIT', 'STALE', 'MISS', 'REVALIDATED'].includes(cache ?? '') ? cache : 'unclassified' };
+        return observation;
       }, { timeout: 100000, intervals: [250, 500, 1000] }).toEqual({ restoredLegacy: true, imageCount: 1 });
       receipt.syntheticSettingsRestored = true;
+      receipt.restoration.stage = 'complete';
     } catch (error) {
       receipt.syntheticSettingsRestored = false;
+      receipt.restoration.failedAt = receipt.restoration.stage;
+      receipt.restoration.errorType = error instanceof Error && ['Error','TypeError','TimeoutError','AssertionError'].includes(error.name) ? error.name : 'unclassified';
       if (succeeded) { receipt.status = 'FAIL'; receipt.stage = 'restore-synthetic-settings'; throw error; }
     } finally { writeFileSync(resolve(d.artifactDir, 'responsive-banner-settings-result.json'), JSON.stringify(receipt, null, 2)); }
   }
