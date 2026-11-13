@@ -22,7 +22,12 @@ const copy = {
 };
 
 export async function adjustBannerHeightWithKeyboard(page: Page, reveal: (target: Locator) => Promise<void>, from: number, to: number): Promise<void> {
-    const initial = page.getByRole('slider').and(page.locator(`[aria-valuetext="${from} CSS px"]`));
+    const value = page.getByText(`${from} CSS px`, { exact: true });
+    await expect(value, 'The visible height value identifies this device control').toHaveCount(1);
+    // The native range and its aria-valuetext appear only in keyboard mode /
+    // after the first change. Its real semantic owner follows the value label.
+    await page.keyboard.press('Shift');
+    const initial = value.locator('xpath=ancestor::flt-semantics[1]/following-sibling::flt-semantics[1]').getByRole('slider');
     await expect(initial, 'Exactly the actual intended CSS-height range is selected').toHaveCount(1);
     const id = await initial.evaluate(node => node.closest('[id^="flt-semantic-node-"]')?.id);
     expect(id, 'The genuine Flutter range has a stable DOM identity').toBeTruthy();
@@ -103,20 +108,41 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     expect(document.appearance.menu_banner_focal_y).toBe(original.appearance.menu_banner_focal_y);
     expect(legacyBannerDocument(document), 'All settings outside the six new responsive fields remain exact').toEqual(legacyBannerDocument(original));
   };
+  const recordControl = async (stage: string, target: Locator) => {
+    receipt.stage = stage;
+    receipt.control = { matches: await target.count(), samples: await target.evaluateAll(nodes => nodes.slice(0, 2).map(el => {
+      const r = el.getBoundingClientRect(), hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return { role: el.getAttribute('role'), tabIndex: (el as HTMLElement).tabIndex, checked: el.getAttribute('aria-checked'),
+        disabled: el.getAttribute('aria-disabled') === 'true', x: r.x, y: r.y, width: r.width, height: r.height,
+        centerHit: hit === el || (hit !== null && el.contains(hit)) };
+    })) };
+  };
   const editDevice = async (phone: boolean) => {
+    const stage = receipt.stage;
     const choice = page.getByRole('checkbox', { name: phone ? 'الهاتف' : 'الكمبيوتر', exact: true });
+    await recordControl(`${stage}-${phone ? 'phone' : 'desktop'}-choice-reveal`, choice);
     await expect(choice).toHaveCount(1); await d.reveal(choice);
-    if (!await choice.isChecked()) await d.tap(choice);
+    if (!await choice.isChecked()) {
+      await recordControl(`${stage}-${phone ? 'phone' : 'desktop'}-choice-tap`, choice); await d.tap(choice);
+    }
     await expect(choice).toBeChecked();
+    receipt.stage = stage;
   };
   const customMode = async (phone: boolean) => {
+    const stage = receipt.stage;
     await editDevice(phone);
-    // Both ordinary dropdown labels are explicit in the shipped editor. This
-    // is a real click and option click, never a Flutter-key-to-DOM assumption.
+    // Flutter exposes the popup choice as an accessible menuitem, with an
+    // aria-label and no Text node. Keep the real pointer guards and click path.
     const field = button(new RegExp(phone ? copy.mobileHeight : copy.desktopHeight));
-    await expect(field).toHaveCount(1);
-    await click(field);
-    await click(page.getByText(copy.custom, { exact: true }).last());
+    await recordControl(`${stage}-dropdown-reveal`, field); await expect(field).toHaveCount(1); await d.reveal(field);
+    await recordControl(`${stage}-dropdown-tap`, field); await d.tap(field);
+    const option = page.getByRole('menuitem', { name: copy.custom, exact: true });
+    await recordControl(`${stage}-option-reveal`, option); await expect(option).toHaveCount(1); await d.reveal(option);
+    await recordControl(`${stage}-option-tap`, option); await d.tap(option);
+    receipt.stage = `${stage}-selected-value`;
+    await expect(field).toContainText(copy.custom);
+    await expect(page.getByText(`${phone ? 520 : 400} CSS px`, { exact: true })).toHaveCount(1);
+    receipt.stage = stage;
   };
   const changeHeight = (from: number, to: number) => adjustBannerHeightWithKeyboard(page, d.reveal, from, to);
   const noAutosave = async (before: Obj, expectedWrites: number) => {
@@ -191,10 +217,23 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       expect(site.maxControlOverlapArea, 'Real identity/status/announcement/search do not cover the visible photo').toBeLessThan(.1);
       expect(site.imageCount).toBe(1); expect(site.naturalWidth).toBeGreaterThan(0); expect(site.naturalHeight).toBeGreaterThan(0);
       await bannerViewportScreenshot(surface, resolve(d.artifactDir, `responsive-settings-${label}-${width}.png`), `RESPONSIVE SETTINGS ${label} ${width}`);
-      await d.reveal(frames.nth(index)); await frames.nth(index).screenshot({ path: resolve(d.artifactDir, `responsive-settings-dashboard-${label}-${width}.png`) });
+      // A truthful custom-height phone preview can exceed the interactive
+      // 1000px Dashboard viewport. Enlarge only this read-only capture surface;
+      // keep the logical preview width, image height, zoom and input guard.
+      const dashboardViewport = page.viewportSize(); expect(dashboardViewport).not.toBeNull();
+      const frameBox = await frames.nth(index).boundingBox(); expect(frameBox).not.toBeNull();
+      const captureViewport = { width: dashboardViewport!.width,
+        height: Math.max(dashboardViewport!.height, Math.ceil(frameBox!.height) + 192) };
+      expect(captureViewport.height, 'The controlled synthetic preview has a bounded capture height').toBeLessThanOrEqual(2400);
+      try {
+        await page.setViewportSize(captureViewport);
+        await d.reveal(frames.nth(index));
+        await frames.nth(index).screenshot({ path: resolve(d.artifactDir, `responsive-settings-dashboard-${label}-${width}.png`) });
+      } finally { await page.setViewportSize(dashboardViewport!); }
       receipt.rows.push({ label, width, basePublicPath: base, actualResource: site.publicPath, iframeResource: draft.publicPath,
         resourceRelationship: site.publicPath === draft.publicPath ? 'SAME_PUBLISHED_RESOURCE' : 'DECLARED_SAME_SOURCE_COMPANION',
-        imageHeight: site.height, viewportGeometryMatches: true, state: site.state, focus, natural: [site.naturalWidth, site.naturalHeight], requestedBannerResources: requested });
+        imageHeight: site.height, viewportGeometryMatches: true, state: site.state, focus, natural: [site.naturalWidth, site.naturalHeight], requestedBannerResources: requested,
+        dashboardCaptureViewport: captureViewport, zoom: 100 });
       await sample.check();
       } finally { await sample.close(); }
     }
@@ -241,7 +280,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     const label = (p: Obj) => `${p.media.width}×${p.media.height} · ${p.media.id.slice(0, 8)}`;
     await editDevice(false);
     await click(button(new RegExp(label(publications[1]).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))));
-    await click(page.getByText(label(publications[0]), { exact: true }).last());
+    await click(page.getByRole('menuitem', { name: label(publications[0]), exact: true }));
     await saveReload({ menu_banner_desktop_media_id: publications[0].media.id }); await compare('desktop-selected');
     receipt.stage = 'legacy-v5-v10-reader-and-writer-compatibility';
     const active = await d.read(), legacy = await d.readLegacy();
