@@ -48,6 +48,40 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
       'תצוגת חיתוך לא הרסנית — טלפון / מחשב',
     ],
 
+    'bannerPhone': ['Phone preview', 'معاينة الهاتف', 'תצוגת טלפון'],
+    'bannerWidth': ['{width}px', '{width}px', '{width}px'],
+    'bannerWebOnly': [
+      'The precise preview is available in Dashboard on the web.',
+      'المعاينة الدقيقة متاحة في Dashboard على الويب.',
+      'התצוגה המדויקת זמינה ב-Dashboard בדפדפן.',
+    ],
+    'bannerDesktop': ['Desktop preview', 'معاينة الكمبيوتر', 'תצוגת מחשב'],
+    'bannerPreviewScope': [
+      'Logical CSS width; the entire frame is scaled to fit. Width selection is local only. Horizontal: 0% left, 100% right; vertical: 0% top, 100% bottom. First-visit view with an empty cart; a visitor closing the announcement shortens the scene. Public state is a read-only snapshot, not a live availability guarantee.',
+      'عرض منطقي بـCSS؛ يُصغّر الإطار كاملًا ليلائم اللوحة. اختيار العرض محلي فقط. الأفقي: 0% يسار و100% يمين؛ الرأسي: 0% أعلى و100% أسفل. تُعرض الزيارة الأولى بسلة فارغة؛ إغلاق الزائر للإعلان يقصّر المشهد. حالة المتجر لقطة قراءة فقط، وليست ضمانًا لحظيًا للإتاحة.',
+      'רוחב CSS לוגי; המסגרת כולה מוקטנת לפי המקום. בחירת הרוחב מקומית בלבד. אופקי: 0% שמאל, 100% ימין; אנכי: 0% למעלה, 100% למטה. מוצג ביקור ראשון עם סל ריק; סגירת ההודעה על ידי המבקר מקצרת את הסצנה. מצב החנות הוא תמונת מצב לקריאה בלבד, לא הבטחת זמינות בזמן אמת.',
+    ],
+    'bannerAxisComplete': [
+      'The image is fully visible on this axis',
+      'الصورة ظاهرة كاملة على هذا المحور',
+      'התמונה מוצגת במלואה בציר זה',
+    ],
+    'bannerAxisCropped': [
+      'Cropped on this axis; the focal position changes the visible area',
+      'يوجد قص على هذا المحور؛ يغيّر التركيز الجزء الظاهر',
+      'יש חיתוך בציר זה; המוקד משנה את האזור המוצג',
+    ],
+    'bannerStateLoading': [
+      'Reading published availability for this preview…',
+      'جارٍ قراءة حالة المتجر المنشورة للمعاينة…',
+      'קוראים את מצב החנות שפורסם לתצוגה…',
+    ],
+    'bannerStateUnavailable': [
+      'Published availability could not be read. Its state is unknown in this preview; notice/hero wrapping may differ. No settings were changed.',
+      'تعذرت قراءة الحالة المنشورة. تظهر الحالة غير معروفة في المعاينة وقد يختلف التفاف التنبيه أو المقدمة. لم تتغير الإعدادات.',
+      'לא ניתן לקרוא את המצב שפורסם. הוא אינו ידוע בתצוגה וייתכן הבדל בגלישת ההודעה או הפתיחה. ההגדרות לא השתנו.',
+    ],
+
     'title': ['Storefront content', 'محتوى واجهة المتجر', 'תוכן חלון הראווה'],
     'help': [
       'Edit the saved branch content. Save is one complete versioned change.',

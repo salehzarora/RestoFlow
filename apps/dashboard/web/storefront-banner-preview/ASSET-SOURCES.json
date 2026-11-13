@@ -1,0 +1,63 @@
+{
+  "workId": "BIZBOT-STOREFRONT-BANNER-PREVIEW-001",
+  "base": "99860791ea54553e073db66f96ef24e7d1c9fdd6",
+  "note": "Home CSS is the root-owned scoped header correction at this worktree; font/licence bytes are the existing unchanged sources. Assets load only inside editor preview iframe.",
+  "files": [
+    {
+      "asset": "home.css",
+      "source": "storefront/src/ui/storefront/home/home.module.css",
+      "bytes": 42117,
+      "sha256": "f0a919eea13de9058df79dc1f9901674e24de3121cce4a2a0b388c39fb10e89d",
+      "copiedUnchanged": true
+    },
+    {
+      "asset": "fonts.css",
+      "source": "storefront/src/fonts/rubik.module.css",
+      "bytes": 1038,
+      "sha256": "11feb1bf64f24e0232d15891828b691df50cfcb15f14f952c45467434277de30",
+      "copiedUnchanged": true
+    },
+    {
+      "asset": "rubik-latin-var.woff2",
+      "source": "storefront/src/fonts/rubik-latin-var.woff2",
+      "bytes": 35348,
+      "sha256": "691cd1d9b4c0cdf31a1dcf04259c86f92c85e69f6622abab7964d81e36890691",
+      "copiedUnchanged": true
+    },
+    {
+      "asset": "rubik-arabic-var.woff2",
+      "source": "storefront/src/fonts/rubik-arabic-var.woff2",
+      "bytes": 32468,
+      "sha256": "f5052e4870bf211fc22df5b85e791a292a77b9baef8cef1dc5a8e62a783ea1e0",
+      "copiedUnchanged": true
+    },
+    {
+      "asset": "rubik-hebrew-var.woff2",
+      "source": "storefront/src/fonts/rubik-hebrew-var.woff2",
+      "bytes": 9348,
+      "sha256": "197b6dbe5c6bec7276c59b02d70a16ee6acd44322fc2f8d0226c07f8d57976c2",
+      "copiedUnchanged": true
+    },
+    {
+      "asset": "alexandria-arabic.woff2",
+      "source": "storefront/src/ui/storefront/fonts/alexandria-arabic.woff2",
+      "bytes": 54528,
+      "sha256": "e1bf9cc7743f1b06223e9109a885f62098a576d26888b4d539b6e1a3200c53dd",
+      "copiedUnchanged": true
+    },
+    {
+      "asset": "OFL-Rubik.txt",
+      "source": "site/public/assets/fonts/OFL-Rubik.txt",
+      "bytes": 4476,
+      "sha256": "bb570b94e04c282dc257b4cc6b209e2cb27c6dbc5d2e2e66465fa9ce715734ea",
+      "copiedUnchanged": true
+    },
+    {
+      "asset": "OFL-Alexandria.txt",
+      "source": "storefront/src/ui/storefront/fonts/OFL-Alexandria.txt",
+      "bytes": 4482,
+      "sha256": "27633d1b4bfc575e9b9fabc851def4f72ef5d37f13735f679c3acfb1e5fa8ae2",
+      "copiedUnchanged": true
+    }
+  ]
+}

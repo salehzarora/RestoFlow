@@ -1,0 +1,17 @@
+/* Editor-only foundation of the same Storefront header. No app CSS is changed. */
+@font-face{font-family:'SF Alexandria';src:url('./alexandria-arabic.woff2') format('woff2');font-style:normal;font-weight:500 900;font-display:swap}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;overflow:hidden}
+body{background:var(--bg,#101816)}
+.previewRoot{--bg:#101816;--sf:#172320;--sf2:#1f302b;--tx:#fff4e6;--tx2:#d8cec2;--tx3:#a79c90;--hair:rgba(255,244,230,.1);--hair2:rgba(255,244,230,.2);--acc:#e07b2c;--onacc:#0b1512;--acct:#e07b2c;--ring:#e07b2c;--ok:#43e3ac;--warn:#fbbf24;--badText:#fca5a5;--r-control:12px;--font:'SF Rubik Latin','SF Rubik Arabic','SF Rubik Hebrew','Segoe UI',Tahoma,sans-serif;display:block;margin:0;background:var(--bg);color:var(--tx);font-family:var(--font);font-size:15px;line-height:1.4;letter-spacing:0;-webkit-text-size-adjust:100%}
+/* A preview ends after categories. It must not inherit a whole-page viewport
+   floor which would feed back into iframe height observation. Header/banner
+   layout itself uses the copied production rules without substitute ratios. */
+.previewSurface.page{min-height:0}
+.stateUnknown{color:var(--tx2)}
+.ltr{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
+
+/* Same three product-presentation rules as storefront.module.css. */
+.wholeImage.wholeImage{object-fit:contain;object-position:center;transform:none!important;clip-path:none;mask-image:none;border-radius:0;inline-size:100%;block-size:100%}
+.wholeFrame.wholeFrame{overflow:visible;border-radius:0;transform:none}
+.heroProduct{position:absolute;inset-inline:0;inset-block-end:0;background:var(--bg);padding:12px;border-radius:7px}

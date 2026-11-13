@@ -214,6 +214,30 @@ abstract interface class StorefrontFeaturedItemsRepository {
   });
 }
 
+/// Optional preview-only public read. Never saves or changes the owner session.
+abstract interface class StorefrontBannerPreviewReader {
+  Future<Map<String, dynamic>?> readPublishedBannerPreview(String slug);
+}
+
+/// The preview never turns an unavailable/ill-typed public state into "open".
+bool isStorefrontBannerPreviewMenu(Object? value, String slug) {
+  if (value is! Map ||
+      value.keys.any((key) => key is! String) ||
+      value['ok'] != true ||
+      value['entity'] != 'storefront_menu') {
+    return false;
+  }
+  final restaurant = value['restaurant'];
+  final service = value['service'];
+  return restaurant is Map &&
+      restaurant['slug'] == slug &&
+      service is Map &&
+      const {'open', 'closed', 'paused'}.contains(service['state']) &&
+      service['pickup_enabled'] is bool &&
+      service['delivery_enabled'] is bool &&
+      service['ordering_enabled'] is bool;
+}
+
 /// The real, Supabase-backed [StorefrontProfileRepository] over
 /// `public.get_restaurant_storefront_profile` /
 /// `public.set_restaurant_storefront_profile`.
@@ -222,6 +246,7 @@ class SupabaseStorefrontProfileRepository
         StorefrontProfileRepository,
         StorefrontHomeContentRepository,
         StorefrontFeaturedItemsRepository,
+        StorefrontBannerPreviewReader,
         StorefrontContentRepositoryBinding {
   SupabaseStorefrontProfileRepository({
     required SyncRpcTransport transport,
@@ -237,6 +262,7 @@ class SupabaseStorefrontProfileRepository
       'set_restaurant_storefront_home_content';
   static const String featuredItemsFunction =
       'set_restaurant_storefront_featured_items';
+  static const String bannerPreviewFunction = 'storefront_menu_v9';
 
   /// The idempotency-key namespace of a profile save.
   static const String requestIdPrefix = 'pbl:storefront:';
@@ -256,6 +282,19 @@ class SupabaseStorefrontProfileRepository
       );
 
   static int _microNonce() => DateTime.now().microsecondsSinceEpoch;
+
+  @override
+  Future<Map<String, dynamic>?> readPublishedBannerPreview(String slug) async {
+    if (!isValidStorefrontSlug(slug)) return null;
+    final attempt = await invokeStorefrontRpc(_t, bannerPreviewFunction, {
+      'p_slug': slug,
+    });
+    if (!attempt.isResponded ||
+        !isStorefrontBannerPreviewMenu(attempt.response, slug)) {
+      return null;
+    }
+    return Map<String, dynamic>.unmodifiable(attempt.response!);
+  }
 
   @override
   Future<StorefrontProfileRead> read() async {

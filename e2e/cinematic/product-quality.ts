@@ -134,6 +134,23 @@ export async function captureHighResolutionMenu(browser: Browser, slug: string, 
       const image = slide.locator('img');
       await expect.poll(() => image.evaluate(img => img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0)).toBe(true);
       await page.evaluate(async () => { await document.fonts.ready; await new Promise(requestAnimationFrame); });
+      if (treatment === 'original' && dpr === 2) {
+        // The comparison crop needs the actual photo safely inside the screen.
+        // A minimum slide reveal can leave a fractional pixel below the edge.
+        // Use one ordinary wheel, not a larger viewport or relaxed bounds.
+        const box = await image.boundingBox(), view = page.viewportSize()!;
+        expect(box).not.toBeNull();
+        if (box!.y < 8 || box!.y + box!.height > view.height - 8) {
+          const targetY = (view.height - box!.height) / 2;
+          await page.mouse.move(view.width / 2, view.height / 2);
+          await page.mouse.wheel(0, box!.y - targetY);
+          await expect.poll(async () => {
+            const current = await image.boundingBox();
+            return Boolean(current && Math.abs(current.y - targetY) <= 1
+              && current.y >= 8 && current.y + current.height <= view.height - 8);
+          }).toBe(true);
+        }
+      }
       const measured = await image.evaluate((element) => {
         const img = element as HTMLImageElement, box = img.getBoundingClientRect();
         const css = getComputedStyle(img), parent = getComputedStyle(img.parentElement!);
