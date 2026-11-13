@@ -2266,6 +2266,9 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
 // background-companion assertion remains a failure, but cannot skip this
 // banner lifecycle. It signs in through the real UI again; no session injection.
 test('independent banner → actual Edge → save/reload → replace/clear preserves other media', async ({ page, context }) => {
+  // The added independent device heights/media include fourteen live readbacks.
+  // Use the same finite case budget as the other full Dashboard journey.
+  test.setTimeout(20 * 60_000);
   const f = fixture(), network = await guardBrowser(context);
   const uploads: UploadDiagnostics[] = [];
   let signedIn = false, passed = false;
