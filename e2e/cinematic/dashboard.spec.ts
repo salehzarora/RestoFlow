@@ -1588,12 +1588,16 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
               if (request.resourceType() === 'image' && url.origin === LOGICAL_ORIGIN) requestedMedia.push(url.pathname); });
             return { page: surface, requestedMedia, check: network.check, close: () => context.close() };
           },
-          captureHeightVideo: async height => {
+          captureHeightVideo: async (height, recordEvidence) => {
+            const videoEvidence: Obj = { status: 'NOT_RUN', failedSubstage: 'read_saved_height', captures: [],
+              errorType: null, controlRevealPurpose: null, controlRevealTail: [] };
+            recordEvidence(videoEvidence);
             const before = await rpc(f, token, 'get_restaurant_storefront_content_v6');
             expect(before.document.appearance.menu_banner_mobile_height_px).toBe(height);
             const browser = page.context().browser(); expect(browser).not.toBeNull();
             // Auxiliary recording only: this state belongs to the real synthetic
             // owner UI test above, remains in memory, and is never an artifact.
+            videoEvidence.failedSubstage = 'create_recording_context';
             const recording = await browser!.newContext({ storageState: await page.context().storageState(),
               viewport: { width: 1440, height: 1000 }, locale: 'ar', serviceWorkers: 'block',
               recordVideo: { dir: resolve(process.env.RUNNER_TEMP!, 'cinematic-private/height-video'), size: { width: 1080, height: 750 } } });
@@ -1606,37 +1610,68 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
               if (isPasswordGrantRequest(request.url(), request.method(), API)) loginEntries++;
             });
             try {
+              videoEvidence.failedSubstage = 'open_editor';
               await videoPage.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(videoPage); await videoNetwork.fontsReady();
               await openEditor(videoPage); await openFoldedGroup(videoPage, 'banner');
               expect(await videoPage.locator('input[type="password"]').count()).toBe(0);
               await expect.poll(() => readAccessibleText(videoPage)).toContain('CINEMATIC TEST A');
               const frame = videoPage.frameLocator('iframe[title="Storefront banner preview"]').nth(0).locator('[data-sf-menu-top]');
+              videoEvidence.failedSubstage = 'verify_saved_preview';
               const state = (await publicMenu()).service.state;
               await expect.poll(() => bannerGeometry(frame).then(g => [g.state, g.height]).catch(() => null)).toEqual([state, height]);
               const originalNode = await frame.locator('[data-sf-menu-banner] img').elementHandle(); expect(originalNode).not.toBeNull();
               const revealRange = (target: Locator) => reveal(videoPage, target, 'field');
+              const iframe = videoPage.locator('iframe[title="Storefront banner preview"]').nth(0);
+              const capturePreview = async (label: 'high' | 'restored') => {
+                const originalViewport = videoPage.viewportSize(); expect(originalViewport).not.toBeNull();
+                const frameBox = await iframe.boundingBox(); expect(frameBox).not.toBeNull();
+                const captureViewport = { width: originalViewport!.width,
+                  height: Math.max(originalViewport!.height, Math.ceil(frameBox!.height) + 192) };
+                expect(captureViewport.height, 'The controlled synthetic preview has a bounded capture height').toBeLessThanOrEqual(2400);
+                try {
+                  await videoPage.setViewportSize(captureViewport);
+                  await reveal(videoPage, iframe, 'content-status');
+                  const logicalPreviewWidth = await frame.evaluate(el => el.ownerDocument.documentElement.clientWidth);
+                  expect(logicalPreviewWidth, 'Capture resizing preserves the real 390px preview document').toBe(390);
+                  await iframe.screenshot({ path: resolve(out, `responsive-height-video-${label}.png`) });
+                  videoEvidence.captures.push({ label, viewport: captureViewport, frameHeight: frameBox!.height,
+                    logicalPreviewWidth, zoom: 100 });
+                } finally { await videoPage.setViewportSize(originalViewport!); }
+              };
+              videoEvidence.failedSubstage = 'height_up_keys';
               await adjustBannerHeightWithKeyboard(videoPage, revealRange, height, height + 20);
               await expect.poll(() => bannerGeometry(frame).then(g => g.height)).toBe(height + 20);
-              const iframe = videoPage.locator('iframe[title="Storefront banner preview"]').nth(0);
-              await reveal(videoPage, iframe, 'content-status');
-              await iframe.screenshot({ path: resolve(out, 'responsive-height-video-high.png') });
+              videoEvidence.failedSubstage = 'capture_high_preview'; await capturePreview('high');
+              videoEvidence.failedSubstage = 'height_down_keys';
               await adjustBannerHeightWithKeyboard(videoPage, revealRange, height + 20, height);
               await expect.poll(() => bannerGeometry(frame).then(g => g.height)).toBe(height);
-              await reveal(videoPage, iframe, 'content-status');
-              await iframe.screenshot({ path: resolve(out, 'responsive-height-video-restored.png') });
+              videoEvidence.failedSubstage = 'capture_restored_preview'; await capturePreview('restored');
+              videoEvidence.failedSubstage = 'verify_invariants';
               expect(await originalNode!.evaluate(el => el.isConnected), 'Recording uses actual live preview updates, not source replacement').toBe(true);
               expect(contentWrites).toBe(0); expect(loginEntries).toBe(0);
               expect(await rpc(f, token, 'get_restaurant_storefront_content_v6')).toEqual(before);
               await videoNetwork.check(); accepted = true;
+            } catch (error) {
+              videoEvidence.errorType = error instanceof ControlRevealError ? 'ControlRevealError'
+                : error instanceof Error && ['Error', 'TypeError', 'TimeoutError', 'AssertionError'].includes(error.name) ? error.name : 'unclassified';
+              if (error instanceof ControlRevealError) {
+                videoEvidence.controlRevealPurpose = error.purpose;
+                videoEvidence.controlRevealTail = error.samples.slice(-3).map(sample => ({ iteration: sample.iteration,
+                  normalMatches: sample.normalMatches, hiddenMatches: sample.hiddenMatches,
+                  geometry: sample.geometry == null ? null : Object.fromEntries(
+                    ['x', 'y', 'width', 'height', 'viewportWidth', 'viewportHeight', 'centerHit', 'flutterSurfaceHit', 'disabled'].map(key => [key, sample.geometry![key as keyof typeof sample.geometry]])) }));
+              }
+              throw error;
             } finally { await recording.close(); }
             expect(accepted).toBe(true);
+            videoEvidence.failedSubstage = 'finalize_recording';
             const file = 'responsive-banner-height-adjustment.webm';
             await clip!.saveAs(resolve(out, file));
             const bytes = readFileSync(resolve(out, file));
             return { status: 'SYNTHETIC_HEIGHT_ADJUSTMENT_VIDEO_RECORDED', file, bytes: bytes.length,
               sha256: createHash('sha256').update(bytes).digest('hex'), durationWindowMs: Date.now() - started,
               includesLocalEditorBoot: true, values: [height, height + 20, height], contentWrites: 0, loginEntries: 0,
-              syntheticStateInMemoryOnly: true, noOwnerBrowserSession: true };
+              syntheticStateInMemoryOnly: true, noOwnerBrowserSession: true, captures: videoEvidence.captures };
           },
           invariant: unchanged, url: STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', artifactDir: out,
         });

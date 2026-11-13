@@ -13,7 +13,7 @@ type Dependencies = {
   upload: (index: number) => Promise<Obj>;
   reveal: (target: Locator) => Promise<void>; tap: (target: Locator) => Promise<void>;
   freshMenu: (width: number) => Promise<{ page: Page; requestedMedia: string[]; check: () => Promise<void>; close: () => Promise<void> }>;
-  invariant: () => Promise<void>; captureHeightVideo: (height: number) => Promise<Obj>; url: string; artifactDir: string;
+  invariant: () => Promise<void>; captureHeightVideo: (height: number, recordEvidence: (value: Obj) => void) => Promise<Obj>; url: string; artifactDir: string;
 };
 const copy = {
   layout: 'بانر متجاوب مستقل', auto: 'تلقائي حسب نسبة الصورة', custom: 'ارتفاع مخصص',
@@ -295,7 +295,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     await changeHeight(520, 540); await noAutosave(before, countBefore);
     expect(await originalPhoneNode!.evaluate(el => el.isConnected), 'Height ticks retain the real preview image node/document').toBe(true);
     await saveReload({ menu_banner_mobile_height_px: 540, menu_banner_desktop_height_px: 400 }); await compare('phone-height');
-    receipt.stage = 'short-synthetic-dashboard-height-video'; receipt.video = await d.captureHeightVideo(540);
+    receipt.stage = 'short-synthetic-dashboard-height-video'; receipt.video = await d.captureHeightVideo(540, value => { receipt.video = value; });
     receipt.stage = 'desktop-height-draft-save-and-readback';
     before = await d.read(); countBefore = writes;
     await editDevice(false); await changeHeight(400, 420); await noAutosave(before, countBefore);

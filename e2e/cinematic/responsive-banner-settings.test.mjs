@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { responsiveBannerKeys, responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady } from './responsive-banner-settings.mjs';
+import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 test('restoration materializes exactly six nullable settings without mutating any input or other viewport', () => {
   const input = { appearance: { menu_banner_layout: 'responsive', menu_banner_mobile_height_px: 540,
     menu_banner_media_id: 'phone', menu_background_media_id: 'background', independent: { retained: true } }, hero: { untouched: true } };
@@ -36,4 +37,15 @@ test('warm document readiness rejects a same-image stale height, wrong focus or 
   assert.equal(responsiveBannerReady(expected, { ...current, height: NaN }), false);
   assert.equal(responsiveBannerReady(expected, null), false, 'A swallowed geometry error cannot count as ready');
   assert.equal(responsiveBannerReady(expected, { ...current, height: 540.021 }), false, 'The existing strict .02px bound is retained');
+});
+
+test('recorded 932px phone iframe cannot fit the 1000px capture viewport without changing the guard', () => {
+  const frame = { x: 0, y: 96, width: 390, height: 932 }, original = { width: 1440, height: 1000 };
+  assert.equal(visibleGeometry(frame, original), false, 'The existing usable vertical range is only 840px');
+  const capture = { width: original.width, height: Math.max(original.height, Math.ceil(frame.height) + 192) };
+  assert.equal(capture.height, 1124); assert.equal(capture.width, original.width);
+  assert.equal(visibleGeometry(frame, capture), true);
+  assert.equal(controlGeometry(frame, capture, true).ready, true);
+  assert.equal(controlGeometry(frame, capture, false, false).ready, false, 'A blocked input surface is still rejected');
+  assert.equal(controlGeometry({ ...frame, y: 95 }, capture, true).ready, false, 'The existing top inset is retained');
 });
