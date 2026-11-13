@@ -1,7 +1,37 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { isDeepStrictEqual } from 'node:util';
 import type { Locator, Page } from '@playwright/test';
+
+// Exactly the optional appearance keys this synthetic responsive scenario edits.
+// The existing writer preserves omitted keys; JSON null restores legacy meaning.
+const responsiveFixtureKeys = ['site_theme', 'menu_intro_visible', 'menu_banner_enabled',
+  'menu_banner_focal_x', 'menu_banner_focal_y'] as const;
+export function completeResponsiveFixture<T extends { appearance: Record<string, unknown> }>(original: T) {
+  const document = structuredClone(original);
+  const materializedNullKeys = responsiveFixtureKeys.filter(key => !Object.hasOwn(document.appearance, key));
+  for (const key of materializedNullKeys) document.appearance[key] = null;
+  return { document, materializedNullKeys };
+}
+
+/** A failed fixture write may expose only these five public appearance values. */
+export function responsiveFixtureMismatch(expected: Record<string, any>, actual: Record<string, any>) {
+  const safeValue = (value: unknown) => value === null || typeof value === 'boolean'
+    || (typeof value === 'number' && Number.isFinite(value)) || value === 'light' || value === 'dark'
+    ? value : '[unexpected value omitted]';
+  const knownAppearance = Object.fromEntries(responsiveFixtureKeys.map(key => [key,
+    { expected: { present: Object.hasOwn(expected.appearance, key),
+      ...(Object.hasOwn(expected.appearance, key) ? { value: safeValue(expected.appearance[key]) } : {}) },
+      actual: { present: Object.hasOwn(actual.appearance, key),
+        ...(Object.hasOwn(actual.appearance, key) ? { value: safeValue(actual.appearance[key]) } : {}) } }]));
+  const others = (document: Record<string, any>) => {
+    const copy = structuredClone(document);
+    for (const key of responsiveFixtureKeys) delete copy.appearance[key];
+    return copy;
+  };
+  return { knownAppearance, allOtherDocumentFieldsEqual: isDeepStrictEqual(others(expected), others(actual)) };
+}
 
 /** Isolated CI evidence helpers only. No session, transport or application code. */
 export async function bannerGeometry(root: Locator): Promise<Record<string, any>> {

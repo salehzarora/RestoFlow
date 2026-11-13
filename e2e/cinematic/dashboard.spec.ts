@@ -7,7 +7,7 @@ import { MAX_REVEAL_WHEELS, nextRevealMove, observeResponse, responseAfterAction
 import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } from './auth-diagnostics.mjs';
 import { LOGICAL_ORIGIN, localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
 import { createHash, randomUUID } from 'node:crypto';
-import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot } from './banner-responsive';
+import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot, completeResponsiveFixture, responsiveFixtureMismatch } from './banner-responsive';
 import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
@@ -1276,7 +1276,10 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
   const preview = (index: number) => page.frameLocator('iframe[title="Storefront banner preview"]').nth(index).locator('[data-sf-menu-top]');
   const original = await rpc(f, token, 'get_restaurant_storefront_content_v5');
   const originalProfile = await rpc(f, token, 'get_restaurant_storefront_profile');
-  const receipt: Obj = { status: 'FAIL', stage: 'baseline-source', data: 'synthetic isolated CI; actual owner API and real application renderer', rows: [], baseline: baselineBannerEvidence(resolve(__dirname, '../..')) };
+  const completedFixture = completeResponsiveFixture(original.document), fixtureBase = completedFixture.document;
+  const receipt: Obj = { status: 'FAIL', stage: 'baseline-source', data: 'synthetic isolated CI; actual owner API and real application renderer', rows: [], baseline: baselineBannerEvidence(resolve(__dirname, '../..')),
+    fixtureRestoration: { materializedNullKeys: completedFixture.materializedNullKeys,
+      meaning: 'Explicit null restores legacy semantics for the five mutated optional keys; not original missing-key byte identity.' } };
   const write = async (name: string, body: Obj) => {
     const response = await fetch(`${API}/rest/v1/rpc/${name}`, { method: 'POST', redirect: 'error',
       headers: { apikey: f.anonKey, authorization: 'Bearer ' + token, 'content-type': 'application/json' },
@@ -1288,7 +1291,12 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
     const current = await rpc(f, token, 'get_restaurant_storefront_content_v5');
     await write('set_restaurant_storefront_content_v1', { p_expected_version: current.version,
       p_expected_storefront_branch_id: f.ownerA.branchId, p_document: document });
-    expect((await rpc(f, token, 'get_restaurant_storefront_content_v5')).document).toEqual(document);
+    const actual = (await rpc(f, token, 'get_restaurant_storefront_content_v5')).document;
+    try { expect(actual).toEqual(document); }
+    catch (error) {
+      if (!Object.hasOwn(receipt, 'firstSaveMismatch')) receipt.firstSaveMismatch = responsiveFixtureMismatch(document, actual);
+      throw error;
+    }
   };
   const saveProfilePatch = async (patch: Obj) => {
     const current = await rpc(f, token, 'get_restaurant_storefront_profile');
@@ -1316,7 +1324,7 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
   try {
     for (const [theme, state] of [['dark', 'open'], ['light', 'closed']] as const) {
       receipt.stage = `${theme}-${state}-owner-api`;
-      const document = structuredClone(original.document);
+      const document = structuredClone(fixtureBase);
       Object.assign(document.appearance, { site_theme: theme, menu_intro_visible: false, menu_banner_enabled: true,
         menu_banner_focal_x: target.x, menu_banner_focal_y: target.y });
       document.announcement_text = annotation; document.announcement_segments = null;
@@ -1389,9 +1397,10 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
     }
     receipt.stage = 'phone-interactions';
     // Use the open case without fake time, response overrides or production data.
-    const active = structuredClone(original.document); Object.assign(active.appearance, { site_theme: 'dark', menu_intro_visible: false });
+    const active = structuredClone(fixtureBase); Object.assign(active.appearance, { site_theme: 'dark', menu_intro_visible: false });
     await saveDocument(active); await saveProfilePatch({ opening_hours: hours(true) }); await render(390, 'open');
     const firstSection = menu.locator('[data-sf-module="sections"]').first();
+    const phoneInteractions: Obj = {}; receipt.phoneInteractions = phoneInteractions;
     const independentBefore = await menu.locator('[data-sf-carousel]').evaluateAll(nodes => nodes.slice(1).map(node => node.getAttribute('data-sf-selected')));
     const activeSlide = firstSection.locator('[data-sf-carousel-product][data-position="active"]');
     await expect(firstSection.locator('[data-sf-carousel-product]'), 'Fixture must actually support swipe, never pass with a single item').toHaveCount(2);
@@ -1404,22 +1413,30 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
     await menu.mouse.move(box!.x + box!.width * .25, box!.y + box!.height / 2, { steps: 8 });
     expect(await activeSlide.getAttribute('data-sf-carousel-product'), 'Selection remains stable during the finger-following drag').toBe(oldItem);
     expect(Math.abs((await activeSlide.boundingBox())!.x - beforeDrag!.x), 'Slide visibly follows the pointer before release').toBeGreaterThan(20);
+    phoneInteractions.slideFollowsPointerBeforeRelease = true;
     await menu.mouse.up();
     await expect.poll(() => activeSlide.getAttribute('data-sf-carousel-product')).not.toBe(oldItem);
     await expect(menu.locator('dialog[open]'), 'Releasing a swipe never opens product or cart').toHaveCount(0);
+    phoneInteractions.swipeSelectsWithoutOpeningDialog = true;
     const arrows = firstSection.getByRole('button', { name: 'المنتج التالي', exact: true });
     const swiped = await activeSlide.getAttribute('data-sf-carousel-product'); await arrows.click();
     await expect.poll(() => activeSlide.getAttribute('data-sf-carousel-product')).not.toBe(swiped);
+    phoneInteractions.arrowsChangeSelection = true;
     expect(await menu.locator('[data-sf-carousel]').evaluateAll(nodes => nodes.slice(1).map(node => node.getAttribute('data-sf-selected'))), 'Other category sliders remain independent').toEqual(independentBefore);
+    phoneInteractions.otherCategorySlidersIndependent = true;
     await menu.getByRole('searchbox').fill('TEST 1');
     await expect(menu.getByRole('searchbox')).toHaveValue('TEST 1'); await menu.getByRole('searchbox').fill('');
+    await expect(menu.getByRole('searchbox')).toHaveValue('');
+    phoneInteractions.searchInputAndClear = true;
     const categories = menu.locator('[data-sf-module="categories"] button'); await categories.nth(1).click();
     await expect.poll(() => menu.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    phoneInteractions.verticalCategoryNavigation = true;
     await menu.getByRole('button', { name: /سلتك: 0/ }).click(); await expect(menu.locator('dialog[open]')).toHaveCount(1);
     await menu.keyboard.press('Escape'); await expect(menu.locator('dialog[open]')).toHaveCount(0);
+    phoneInteractions.emptyCartOpensAndCloses = true;
     for (const theme of ['light', 'dark']) {
       receipt.stage = `no-banner-${theme}`;
-      const document = structuredClone(original.document); Object.assign(document.appearance, { site_theme: theme, menu_banner_enabled: false });
+      const document = structuredClone(fixtureBase); Object.assign(document.appearance, { site_theme: theme, menu_banner_enabled: false, menu_intro_visible: false });
       await saveDocument(document);
       for (const width of [390, 1280]) {
         await render(width, 'open', false, theme);
@@ -1433,7 +1450,7 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
     // Restore only this synthetic owner's display settings, by the same CAS APIs.
     const succeeded = receipt.status === 'BANNER_RESPONSIVE_PASS';
     try {
-      await saveDocument(original.document);
+      await saveDocument(fixtureBase);
       await saveProfilePatch({ opening_hours: originalProfile.profile.opening_hours,
         paused_until: originalProfile.profile.paused_until, pause_reason: originalProfile.profile.pause_reason });
       await openEditor(page, true); await openFoldedGroup(page, 'banner');
