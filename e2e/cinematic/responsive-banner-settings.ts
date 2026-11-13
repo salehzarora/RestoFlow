@@ -121,7 +121,18 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     const stage = receipt.stage;
     const choice = page.getByRole('checkbox', { name: phone ? 'الهاتف' : 'الكمبيوتر', exact: true });
     await recordControl(`${stage}-${phone ? 'phone' : 'desktop'}-choice-reveal`, choice);
-    await expect(choice).toHaveCount(1); await d.reveal(choice);
+    // Flutter may omit offscreen semantics after the preview capture. The
+    // existing bounded physical-wheel scan must reveal the real control first.
+    try { await d.reveal(choice); }
+    catch (error) {
+      const samples = (error as { samples?: Obj[] }).samples;
+      receipt.control.revealTail = Array.isArray(samples) ? samples.slice(-3).map(s => ({ iteration: s.iteration,
+        normalMatches: s.normalMatches, hiddenMatches: s.hiddenMatches, direction: s.direction, reversed: s.reversed,
+        geometry: s.geometry == null ? null : Object.fromEntries(['x','y','width','height','centerHit','flutterSurfaceHit','disabled'].map(k => [k, s.geometry[k]])) })) : [];
+      throw error;
+    }
+    await recordControl(`${stage}-${phone ? 'phone' : 'desktop'}-choice-ready`, choice);
+    await expect(choice).toHaveCount(1);
     if (!await choice.isChecked()) {
       await recordControl(`${stage}-${phone ? 'phone' : 'desktop'}-choice-tap`, choice); await d.tap(choice);
     }
