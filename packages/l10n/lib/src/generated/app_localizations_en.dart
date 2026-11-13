@@ -8825,6 +8825,368 @@ class AppLocalizationsEn extends AppLocalizations {
       'No signed-in cashier. Sign in, then take the payment. Nothing was charged.';
 
   @override
+  String get posCardTerminalTender => 'Card terminal';
+
+  @override
+  String get posCardTerminalTestTender => 'Card terminal · TEST';
+
+  @override
+  String get posCardTerminalNote =>
+      'The customer pays on the card terminal. BIZBOT records the payment only after the provider approves it.';
+
+  @override
+  String get posCardTerminalTestNote =>
+      'Test mode: the terminal runs a test charge. Nothing is recorded and the order stays unpaid.';
+
+  @override
+  String get posCardTerminalStart => 'Start card payment';
+
+  @override
+  String get posCardTerminalLabSwitch => 'Card terminal test lab';
+
+  @override
+  String get posCardTerminalUnavailableNote =>
+      'Card terminal payments are not available on this till right now. Take payment another way.';
+
+  @override
+  String get posCardTerminalRequiredNote =>
+      'This till takes card payments on the card terminal. A hand-recorded card cannot be used here.';
+
+  @override
+  String get posCardPostureUnknownNote =>
+      'This till\'s card settings could not be checked, so a card cannot be recorded now. Check the connection and try again, or take payment another way.';
+
+  @override
+  String get posCardNotePostureUnknown =>
+      'The card terminal settings could not be checked. Check the connection and try again.';
+
+  @override
+  String get posCardJournalQuarantinedTitle => 'Stored card payment unreadable';
+
+  @override
+  String get posCardJournalQuarantinedBody =>
+      'A stored card terminal payment could not be read. New card terminal payments are blocked on this till. Ask a manager.';
+
+  @override
+  String get posCardJournalFullNote =>
+      'This till\'s card terminal storage is full. Resolve the open card terminal payments before starting a new one. No card was charged.';
+
+  @override
+  String get posCardSaveBlocked =>
+      'The card request could not be saved, so nothing was sent. Try again.';
+
+  @override
+  String get posCardAttemptTitle => 'Card terminal payment';
+
+  @override
+  String get posCardAttemptTestTitle => 'Card terminal test';
+
+  @override
+  String get posCardTestBadge => 'TEST — nothing is recorded';
+
+  @override
+  String get posCardPreparingTitle => 'Preparing the card request';
+
+  @override
+  String get posCardPreparingBody =>
+      'Do not take payment another way while this request is open.';
+
+  @override
+  String get posCardNotSentTitle => 'The card request was not sent';
+
+  @override
+  String get posCardNotSentBody =>
+      'Nothing reached the card provider. Send the same request again, or cancel it and take payment another way.';
+
+  @override
+  String get posCardSignInTitle => 'Sign in again';
+
+  @override
+  String get posCardSignInBody =>
+      'The server refused the session. Sign in again, then send the same request.';
+
+  @override
+  String get posCardNotAppliedTitle => 'Card terminal payment unavailable';
+
+  @override
+  String get posCardNotAppliedBody =>
+      'The request was refused before it was processed. No card was charged. Take payment another way.';
+
+  @override
+  String get posCardRefusedTitle => 'Card payment not started';
+
+  @override
+  String get posCardRefusedDisabled =>
+      'Card terminal payments are switched off on this till right now. No card was charged.';
+
+  @override
+  String get posCardRefusedInProgress =>
+      'Another card payment is already in progress for this order.';
+
+  @override
+  String get posCardRefusedSettled => 'This order is already paid.';
+
+  @override
+  String get posCardRefusedNotChargeable => 'This order has nothing to charge.';
+
+  @override
+  String get posCardRefusedOrderChanged =>
+      'The order changed. Refresh it and start again.';
+
+  @override
+  String get posCardRefusedLimit =>
+      'The amount is above this till\'s card terminal limit.';
+
+  @override
+  String get posCardRefusedCurrency =>
+      'The card terminal cannot charge this currency.';
+
+  @override
+  String get posCardRefusedRole =>
+      'Your role cannot start a card terminal payment.';
+
+  @override
+  String get posCardRefusedGeneric =>
+      'The card terminal payment could not be started. No card was charged.';
+
+  @override
+  String get posCardUncertainTitle => 'Result not confirmed';
+
+  @override
+  String get posCardUncertainBody =>
+      'The card request may have reached the provider. Do not charge again — the status is being checked.';
+
+  @override
+  String get posCardNotFoundTitle => 'No card payment was created';
+
+  @override
+  String get posCardNotFoundBody =>
+      'The server has no card payment for this request, so no card was charged by it. You can take payment another way.';
+
+  @override
+  String get posCardWaitingTitle => 'Waiting for the customer at the terminal';
+
+  @override
+  String get posCardWaitingBody =>
+      'Ask the customer to complete the payment on the terminal. While this window is open, the status is checked automatically.';
+
+  @override
+  String get posCardReleasedTitle => 'Cancel confirmed by the provider';
+
+  @override
+  String get posCardReleasedBody =>
+      'A charge may still exist. Keep checking the status until the result is final.';
+
+  @override
+  String get posCardApprovedTitle => 'Approved — completing BIZBOT recording';
+
+  @override
+  String get posCardApprovedBody =>
+      'The provider approved the charge. The order is paid only once BIZBOT records the payment.';
+
+  @override
+  String get posCardRecordingUnconfirmedTitle =>
+      'Approved — recording not confirmed';
+
+  @override
+  String get posCardRecordingUnconfirmedBody =>
+      'Send the same recording again. It never charges the customer again.';
+
+  @override
+  String get posCardRecordingRefusedTitle => 'Approved — recording refused';
+
+  @override
+  String get posCardRecordingRefusedBody =>
+      'The charge was approved but BIZBOT could not record it. A manager can resume the recording on this till.';
+
+  @override
+  String posCardResumesUsed(int used, int limit) {
+    return 'Resumes used: $used of $limit';
+  }
+
+  @override
+  String get posCardManagerMustSendTitle =>
+      'A manager must send this recording';
+
+  @override
+  String get posCardManagerMustSendBody =>
+      'A manager resumed this recording. Only a manager can send it again.';
+
+  @override
+  String get posCardResumeRefusedTitle => 'Resume refused';
+
+  @override
+  String get posCardResumeRefusedBody =>
+      'The server refused this resume; nothing was charged or recorded. Check the status before trying again.';
+
+  @override
+  String get posCardResumeStaleBody =>
+      'Another resume happened first. Check the status, then try again.';
+
+  @override
+  String get posCardResumeLimitBody =>
+      'The resume limit is reached. Ask a manager to reconcile this payment with the provider.';
+
+  @override
+  String get posCardRecordedTitle => 'Card payment recorded';
+
+  @override
+  String get posCardRecordedBody =>
+      'BIZBOT recorded the card payment for this order.';
+
+  @override
+  String get posCardDeclinedTitle => 'Card declined';
+
+  @override
+  String get posCardDeclinedBody =>
+      'No payment was taken. Take payment another way or start a new card payment.';
+
+  @override
+  String get posCardFreedTitle => 'Unlocked by a manager';
+
+  @override
+  String get posCardFreedBody =>
+      'A manager confirmed that this card request did not charge. Take payment another way or start a new card payment.';
+
+  @override
+  String get posCardResolvedTitle => 'Closed by an operator';
+
+  @override
+  String get posCardResolvedBody =>
+      'An operator closed this card payment (voided or refunded). If the order still owes money, take payment again.';
+
+  @override
+  String get posCardReconcileTitle => 'Card payment needs reconciliation';
+
+  @override
+  String get posCardReconcileBody =>
+      'A charge may exist. Do not charge again and do not record this payment another way. Ask a manager to resolve it with the provider.';
+
+  @override
+  String get posCardSafetyStopBody =>
+      'The server\'s answer did not match this payment, so BIZBOT stopped it. Do not charge again. Ask a manager to contact support.';
+
+  @override
+  String get posCardTestWaitingTitle => 'Test in progress';
+
+  @override
+  String get posCardTestWaitingBody =>
+      'Complete the test on the terminal. Nothing is recorded.';
+
+  @override
+  String get posCardTestReleasedTitle => 'Test cancel confirmed';
+
+  @override
+  String get posCardTestReleasedBody =>
+      'The provider confirmed the cancel. Keep checking until the test result is final.';
+
+  @override
+  String get posCardTestApprovedTitle => 'Test approved';
+
+  @override
+  String get posCardTestApprovedBody =>
+      'The test charge was approved. Nothing was recorded and the order is not paid.';
+
+  @override
+  String get posCardTestDeclinedTitle => 'Test declined';
+
+  @override
+  String get posCardTestDeclinedBody =>
+      'The test charge was declined. Nothing was recorded.';
+
+  @override
+  String get posCardTestClosedTitle => 'Test closed';
+
+  @override
+  String get posCardTestClosedBody => 'An operator closed this test attempt.';
+
+  @override
+  String get posCardNoteChecking => 'Checking the payment status…';
+
+  @override
+  String get posCardNoteStarting => 'Sending the card request…';
+
+  @override
+  String get posCardNoteRecording => 'Sending the recording to BIZBOT…';
+
+  @override
+  String get posCardNoteReleasing => 'Sending the cancel request…';
+
+  @override
+  String get posCardNoteNotSent =>
+      'The last request was not sent. Check the connection and try again.';
+
+  @override
+  String get posCardNoteSignIn =>
+      'The session was refused. Sign in again, then try again.';
+
+  @override
+  String get posCardNoteRefused =>
+      'The last request was refused before it was processed.';
+
+  @override
+  String get posCardNoteUnavailable =>
+      'Could not check the status right now. The card payment is kept; try again.';
+
+  @override
+  String get posCardNotePollLimit =>
+      'Automatic checks stopped. Check the status manually; if it stays open, ask a manager.';
+
+  @override
+  String get posCardNoteAutoPaused =>
+      'Automatic checks paused. Use Check status.';
+
+  @override
+  String get posCardNoteReleaseNotConfirmed =>
+      'The cancel request was not confirmed. Keep checking the status.';
+
+  @override
+  String get posCardNoteSaveFailed =>
+      'This device could not save the latest step. The card payment is kept; check the status again.';
+
+  @override
+  String get posCardNoteManagerRequired =>
+      'A manager must be signed in on this till to do this.';
+
+  @override
+  String get posCardNoteManagerProof =>
+      'Could not confirm manager authority. Try again.';
+
+  @override
+  String get posCardNoteNotRecoverable =>
+      'The server no longer allows resuming this recording. Check the status.';
+
+  @override
+  String get posCardNoteRole => 'Your role cannot check this card payment.';
+
+  @override
+  String get posCardSendAgain => 'Send the same request again';
+
+  @override
+  String get posCardCancelRequest => 'Cancel this request';
+
+  @override
+  String get posCardOtherMethod => 'Take payment another way';
+
+  @override
+  String get posCardRelease => 'Cancel on the terminal';
+
+  @override
+  String get posCardResendRecording => 'Send the recording again';
+
+  @override
+  String get posCardResume => 'Resume recording (manager)';
+
+  @override
+  String get posCardManagerSend => 'Send the recording (manager)';
+
+  @override
+  String get posCardBackToPayment => 'Back to payment';
+
+  @override
+  String get posCardClose => 'Close';
+
+  @override
   String get authForgotPassword => 'Forgot password?';
 
   @override
