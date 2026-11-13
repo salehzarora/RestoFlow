@@ -606,7 +606,7 @@ async function invariants(f: Fixture, token: string): Promise<void> {
   expect(logo.receipt_logo_enabled, 'Receipt logo enabled state unchanged').toBe(f.initialInvariants.receiptLogoEnabled);
   expect(logo.receipt_logo_version, 'Receipt logo version unchanged').toBe(f.initialInvariants.receiptLogoVersion);
 }
-type UploadBoundary = 'reveal' | 'click' | 'filechooser' | 'file-set' | 'private-upload-response' | 'publisher-response' | 'upload-assertion';
+type UploadBoundary = 'reveal' | 'click' | 'filechooser' | 'file-set' | 'private-upload-response' | 'publisher-response' | 'publisher-body' | 'upload-assertion';
 type RouteClass = 'private-upload' | 'publisher' | 'auth' | 'private-read' | 'public-media' | 'application' | 'other-local' | 'external';
 type Observed<T> = { ok: true; value: T } | { ok: false; error: unknown };
 class UploadDiagnostics {
@@ -615,6 +615,15 @@ class UploadDiagnostics {
   private readonly events: { ms: number; boundary: string; event: string; status?: number }[] = [];
   private readonly transportFailures: { boundary: RouteClass; code: string }[] = [];
   private readonly publisherResponses: { status: number; corsAllowsDashboard: boolean; jsonContentType: boolean }[] = [];
+  private readonly publisherActivity = { requests: 0, finished: 0, failed: 0 };
+  private readonly pageLifecycle = { mainFrameNavigations: 0, closes: 0, crashes: 0, corsPolicyMessages: 0 };
+  private beforeUiStatuses: string[] = [];
+  private bodyFailureObservation: {
+    originalAcceptance: 'FAIL_PRESERVED'; reason: 'BODY_TRANSPORT_OR_OBSERVER_NOT_RESOLVED';
+    windowMs: number; startedMs: number; endedMs: number | null; termination: string | null;
+    beforeUiStatuses: string[];
+    samples: { ms: number; uiStatuses: string[]; uploadControl: 'enabled' | 'disabled' | 'unavailable'; terminalMatchesBefore: boolean }[];
+  } | null = null;
   private first: { ms: number; boundary: UploadBoundary; errorType: string; error: unknown } | null = null;
   private firstObservedWaitFailure: { ms: number; boundary: UploadBoundary; errorType: string } | null = null;
   private errorType(error: unknown): string {
@@ -636,6 +645,67 @@ class UploadDiagnostics {
     if (this.publisherResponses.length < 8) this.publisherResponses.push({ status: response.status(),
       corsAllowsDashboard: headers['access-control-allow-origin'] === '*' || headers['access-control-allow-origin'] === DASHBOARD,
       jsonContentType: (headers['content-type'] ?? '').split(';')[0].trim() === 'application/json' });
+  }
+  publisherEvent(event: 'request' | 'request-finished' | 'request-failed'): void {
+    if (event === 'request') this.publisherActivity.requests++;
+    else if (event === 'request-finished') this.publisherActivity.finished++;
+    else this.publisherActivity.failed++;
+    this.mark('publisher', event);
+  }
+  lifecycle(event: 'main-frame-navigation' | 'page-close' | 'page-crash' | 'cors-policy'): void {
+    if (event === 'main-frame-navigation') this.pageLifecycle.mainFrameNavigations++;
+    else if (event === 'page-close') this.pageLifecycle.closes++;
+    else if (event === 'page-crash') this.pageLifecycle.crashes++;
+    else this.pageLifecycle.corsPolicyMessages++;
+    this.mark('page-lifecycle', event);
+  }
+  beforeUpload(statuses: string[]): void { this.beforeUiStatuses = [...statuses]; }
+  async observeBodyFailure(page: Page, target: Locator): Promise<void> {
+    // Diagnostic observation only: never retry, save, decode a substitute body,
+    // or convert a UI message into publication acceptance. Disabled can also
+    // mean an unsaved draft, so uploadControl is not an assertion of app busy.
+    const windowMs = 25_000, began = Date.now();
+    const observation = this.bodyFailureObservation = {
+      originalAcceptance: 'FAIL_PRESERVED', reason: 'BODY_TRANSPORT_OR_OBSERVER_NOT_RESOLVED',
+      windowMs, startedMs: began - this.started, endedMs: null, termination: null,
+      beforeUiStatuses: [...this.beforeUiStatuses], samples: [],
+    } as NonNullable<UploadDiagnostics['bodyFailureObservation']>;
+    const terminal = new Set(['image-published', 'background-selected', 'service-unavailable',
+      'upload-failed', 'read-unavailable', 'binding-changed', 'publish-uncertain']);
+    const pageLost = () => this.pageLifecycle.mainFrameNavigations > 0 || this.pageLifecycle.closes > 0 || this.pageLifecycle.crashes > 0;
+    let active = true, timer: ReturnType<typeof setTimeout> | undefined;
+    const expiry = new Promise<string>(done => { timer = setTimeout(() => done('window-expired'), windowMs); });
+    const monitor = (async (): Promise<string> => {
+      while (active) {
+        if (page.isClosed() || pageLost()) return 'page-lifecycle-changed';
+        const uiStatuses = await editorStatus(page);
+        let uploadControl: 'enabled' | 'disabled' | 'unavailable' = 'unavailable';
+        const remaining = windowMs - (Date.now() - began);
+        if (remaining <= 0) return 'window-expired';
+        try {
+          uploadControl = await target.isEnabled({ timeout: Math.min(500, remaining) }) ? 'enabled' : 'disabled';
+        } catch { /* Missing/inaccessible control is an enum, never a raw error. */ }
+        if (!active) return 'window-expired';
+        const terminalStatuses = uiStatuses.filter(status => terminal.has(status));
+        const sample = { ms: Date.now() - this.started, uiStatuses, uploadControl,
+          terminalMatchesBefore: terminalStatuses.length > 0 && terminalStatuses.every(status => this.beforeUiStatuses.includes(status)) };
+        const previous = observation.samples.at(-1);
+        if (!previous || previous.uploadControl !== uploadControl || JSON.stringify(previous.uiStatuses) !== JSON.stringify(uiStatuses)) {
+          if (observation.samples.length < 16) observation.samples.push(sample);
+          else observation.samples[15] = sample; // Keep the last state without unbounded samples.
+        }
+        // A status left over from an earlier upload is not a new terminal result.
+        if (terminalStatuses.some(status => !this.beforeUiStatuses.includes(status))) return 'new-terminal-ui-observed-not-publication-acceptance';
+        await new Promise<void>(done => setTimeout(done, Math.min(250, Math.max(1, windowMs - (Date.now() - began)))));
+      }
+      return 'window-expired';
+    })().catch(() => page.isClosed() || pageLost() ? 'page-lifecycle-changed' : 'ui-unreadable');
+    try { observation.termination = await Promise.race([monitor, expiry]); }
+    finally {
+      active = false;
+      if (timer !== undefined) clearTimeout(timer);
+      observation.endedMs = Date.now() - this.started;
+    }
   }
   fail(boundary: UploadBoundary, error: unknown): void {
     if (this.first) return;
@@ -666,6 +736,7 @@ class UploadDiagnostics {
   }
   snapshot(): Obj {
     return { events: this.events, transportFailures: this.transportFailures, publisherResponses: this.publisherResponses,
+      publisherActivity: this.publisherActivity, pageLifecycle: this.pageLifecycle, bodyFailureObservation: this.bodyFailureObservation,
       controlGeometry: this.control, firstObservedWaitFailure: this.firstObservedWaitFailure, firstFailure: this.first === null ? null : {
       ms: this.first.ms, boundary: this.first.boundary, errorType: this.first.errorType,
     } };
@@ -689,7 +760,8 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     : resolve(__dirname, '../../supabase/functions/storefront-media-publish/test/fixtures', filename);
   const onRequest = (request: import('@playwright/test').Request) => {
     const kind = routeClass(request.url());
-    if (request.method() === 'POST' && (kind === 'private-upload' || kind === 'publisher')) diagnostics.mark(kind, 'request');
+    if (request.method() === 'POST' && kind === 'publisher') diagnostics.publisherEvent('request');
+    else if (request.method() === 'POST' && kind === 'private-upload') diagnostics.mark(kind, 'request');
   };
   const onResponse = (response: Response) => {
     const kind = routeClass(response.url());
@@ -698,16 +770,35 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
   };
   const onFailed = (request: import('@playwright/test').Request) => {
     const kind = routeClass(request.url());
-    diagnostics.mark(kind, 'request-failed'); diagnostics.transportFailure(kind, request.failure()?.errorText);
+    if (request.method() === 'POST' && kind === 'publisher') diagnostics.publisherEvent('request-failed');
+    else diagnostics.mark(kind, 'request-failed');
+    diagnostics.transportFailure(kind, request.failure()?.errorText);
+  };
+  const onFinished = (request: import('@playwright/test').Request) => {
+    if (request.method() === 'POST' && routeClass(request.url()) === 'publisher') diagnostics.publisherEvent('request-finished');
+  };
+  const onNavigation = (frame: import('@playwright/test').Frame) => { if (frame === page.mainFrame()) diagnostics.lifecycle('main-frame-navigation'); };
+  const onClose = () => diagnostics.lifecycle('page-close');
+  const onCrash = () => diagnostics.lifecycle('page-crash');
+  const onConsole = (message: import('@playwright/test').ConsoleMessage) => {
+    // Classify only. Never retain console text, which may include a URL/token.
+    if (message.type() === 'error' && /\bCORS policy\b/i.test(message.text())) diagnostics.lifecycle('cors-policy');
   };
   page.on('request', onRequest);
   page.on('response', onResponse);
   page.on('requestfailed', onFailed);
+  page.on('requestfinished', onFinished);
+  page.on('framenavigated', onNavigation);
+  page.on('close', onClose);
+  page.on('crash', onCrash);
+  page.on('console', onConsole);
+  let bodyReadFailed = false;
   try {
     diagnostics.mark('reveal', 'started');
     const target = page.getByRole('button', { name: uploadName, exact: true });
     await diagnostics.value('reveal', diagnostics.observe('reveal', reveal(page, target, 'upload', page.getByRole('button', { name: uploadName, exact: true, includeHidden: true }))));
     diagnostics.control = await targetGeometry(page, target);
+    diagnostics.beforeUpload(await editorStatus(page).catch(() => ['unreadable']));
     const uploaded = diagnostics.observe('private-upload-response', page.waitForResponse(r => {
       const u = new URL(r.url());
       return u.origin === API && u.pathname.startsWith('/storage/v1/object/restaurant-logos/') && r.request().method() === 'POST';
@@ -723,7 +814,14 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     expect((await diagnostics.value('private-upload-response', uploaded)).ok(), 'Actual private bytes upload').toBe(true);
     const response = await diagnostics.value('publisher-response', published);
     expect(response.status(), 'Actual Edge publication response').toBe(expectedStatus);
-    const body = await response.json() as Obj;
+    let body: Obj;
+    diagnostics.mark('publisher-body', 'started');
+    try { body = await response.json() as Obj; diagnostics.mark('publisher-body', 'complete'); }
+    catch (error) {
+      bodyReadFailed = true;
+      diagnostics.fail('publisher-body', error); // Preserve the first failure BEFORE observing app/lifecycle.
+      throw error;
+    }
     if (expectedStatus === 200) {
       expect(body.ok, 'Actual Edge publisher accepted bytes').toBe(true);
       await textContains(page, purpose !== 'background' ? 'نُشرت الصورة؛ اخترها واحفظ المحتوى.' : L.selected);
@@ -733,13 +831,20 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     }
     return body;
   } catch (error) {
-    diagnostics.control = await targetGeometry(page, page.getByRole('button', { name: uploadName, exact: true })).catch(() => null);
     diagnostics.fail('upload-assertion', error);
+    if (bodyReadFailed) await diagnostics.observeBodyFailure(page, page.getByRole('button', { name: uploadName, exact: true }))
+      .catch(() => diagnostics.mark('publisher-body', 'diagnostic-unavailable'));
+    diagnostics.control = await targetGeometry(page, page.getByRole('button', { name: uploadName, exact: true })).catch(() => null);
     throw diagnostics.original(error);
   } finally {
     page.off('request', onRequest);
     page.off('response', onResponse);
     page.off('requestfailed', onFailed);
+    page.off('requestfinished', onFinished);
+    page.off('framenavigated', onNavigation);
+    page.off('close', onClose);
+    page.off('crash', onCrash);
+    page.off('console', onConsole);
   }
 }
 async function editorStatus(page: Page): Promise<string[]> {
@@ -747,6 +852,7 @@ async function editorStatus(page: Page): Promise<string[]> {
   const text = await readAccessibleText(page);
   const statuses = [
     ['background-selected', L.selected], ['content-saved', L.saved],
+    ['image-published', 'نُشرت الصورة؛ اخترها واحفظ المحتوى.'],
     ['service-unavailable', L.unavailable],
     ['upload-failed', 'تعذّر رفع الصورة.'],
     ['read-unavailable', 'تعذر التحقق من المحتوى.'],
