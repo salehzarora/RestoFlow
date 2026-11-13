@@ -2,7 +2,7 @@ import { expect, type Locator, type Page, type Request } from '@playwright/test'
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { bannerGeometry, bannerViewportScreenshot } from './banner-responsive';
-import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu } from './responsive-banner-settings.mjs';
+import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady } from './responsive-banner-settings.mjs';
 
 type Obj = Record<string, any>;
 type Dependencies = {
@@ -184,11 +184,50 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       const iw = index && appearance.menu_banner_desktop_url ? appearance.menu_banner_desktop_width : appearance.menu_banner_width;
       const ih = index && appearance.menu_banner_desktop_url ? appearance.menu_banner_desktop_height : appearance.menu_banner_height;
       const expectedHeight = custom ?? Math.max(index ? 240 : 320, Math.min(index ? 480 : 640, width * ih / iw));
+      const safeHeight = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 10000 ? value : null;
+      const safeFocus = (value: unknown) => {
+        const points = typeof value === 'string' ? /^(\d+(?:\.\d+)?)% (\d+(?:\.\d+)?)%$/.exec(value) : null;
+        return points && points.slice(1).every(p => Number(p) >= 0 && Number(p) <= 100) ? points.slice(1).map(Number) : null;
+      };
+      const measure = async (root: Locator, phase: 'warm_navigation' | 'fresh_context' | 'preview_resource') => {
+        let required: Obj = { rootCount: await root.count(), selectorRead: false, currentImageCount: null,
+          layoutResponsive: false, hydrated: false, themeRoot: false, state: false, search: false, categories: false };
+        try {
+          required = { ...required, ...await root.evaluate(el => {
+            const doc = el.ownerDocument, host = doc.querySelector('[data-sf-menu-banner]'), theme = doc.querySelector<HTMLElement>('[data-sf-root],[data-banner-preview-root]');
+            return { selectorRead: true, currentImageCount: doc.querySelectorAll('[data-sf-menu-banner] img').length,
+              layoutResponsive: host?.getAttribute('data-sf-banner-layout') === 'responsive',
+              hydrated: Boolean(theme?.style.getPropertyValue('--bg') && theme.style.getPropertyValue('--font')), themeRoot: !!theme,
+              state: !!doc.querySelector('[data-sf-order-status] [data-state]'),
+              search: !!doc.querySelector('[role="search"]'), categories: !!doc.querySelector('[data-sf-module="categories"]') };
+          }) };
+          const geometry = await bannerGeometry(root);
+          const actual = { height: geometry.height, focus: geometry.position, resourceMatch: allowed.has(geometry.publicPath), layoutResponsive: required.layoutResponsive, hydrated: required.hydrated };
+          receipt.readinessObservation = { phase, width, expectedHeight: safeHeight(expectedHeight), actualHeight: safeHeight(geometry.height),
+            expectedFocus: safeFocus(focus), actualFocus: safeFocus(geometry.position), resourceMatch: actual.resourceMatch,
+            ...required, errorType: null };
+          return { geometry, actual };
+        } catch (error) {
+          receipt.readinessObservation = { phase, width, expectedHeight: safeHeight(expectedHeight), actualHeight: null,
+            expectedFocus: safeFocus(focus), actualFocus: null, resourceMatch: false, ...required,
+            errorType: error instanceof Error && ['Error', 'TypeError', 'TimeoutError'].includes(error.name) ? error.name : 'unclassified' };
+          return null;
+        }
+      };
       await menu.setViewportSize({ width, height: index ? 900 : 844 });
+      const warmStarted = Date.now(); let hydrated = false, reloadAt = 0, navigations = 0;
       await expect.poll(async () => {
-        await menu.goto(d.url, { waitUntil: 'domcontentloaded' });
-        const image = menu.locator('[data-sf-menu-banner] img');
-        return await image.count() === 1 ? image.evaluate(i => new URL((i as HTMLImageElement).currentSrc).pathname).then(path => allowed.has(path)) : false;
+        // Reuse renderMenu's existing bounded ISR/hydration pattern: do not
+        // discard a pending hydration frame by navigating at every sample.
+        if (navigations === 0 || (hydrated && Date.now() >= reloadAt)) {
+          const remaining = Math.max(1, 100000 - (Date.now() - warmStarted));
+          await menu.goto(d.url, { waitUntil: 'domcontentloaded', timeout: Math.min(30000, remaining) });
+          navigations++; hydrated = false; reloadAt = Date.now() + 5000;
+        }
+        const measured = await measure(menu.locator('[data-sf-menu-top]'), 'warm_navigation');
+        hydrated = receipt.readinessObservation?.hydrated === true;
+        receipt.readinessObservation.navigations = navigations;
+        return responsiveBannerReady({ height: expectedHeight, focus }, measured?.actual);
       }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe(true);
       // Warm the actual app until it serves this newly saved version, then
       // use a fresh, session-free context to prove native picture selection.
@@ -197,10 +236,12 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       await surface.goto(d.url, { waitUntil: 'domcontentloaded' });
       const source = surface.locator('[data-sf-menu-banner] img'); await expect(source).toHaveCount(1);
       await source.evaluate(async img => { await (img as HTMLImageElement).decode(); });
-      await expect.poll(() => bannerGeometry(surface.locator('[data-sf-menu-top]')).then(g => ({
-        heightMatches: Math.abs(g.height - expectedHeight) < .02, focus: g.position })).catch(() => null),
+      await expect.poll(async () => {
+        const measured = await measure(surface.locator('[data-sf-menu-top]'), 'fresh_context');
+        return measured ? { heightMatches: Math.abs(measured.geometry.height - expectedHeight) < .02, focus: measured.geometry.position } : null;
+      },
         { message: 'Fresh application hydrates its actual height/focal CSSOM before measurement' }).toEqual({ heightMatches: true, focus });
-      await expect.poll(() => bannerGeometry(preview(index)).then(g => g.publicPath).catch(() => null)).toBe(base);
+      await expect.poll(async () => (await measure(preview(index), 'preview_resource'))?.geometry.publicPath ?? null).toBe(base);
       const site = await bannerGeometry(surface.locator('[data-sf-menu-top]')), draft = await bannerGeometry(preview(index));
       expect(allowed.has(site.publicPath), 'Fresh Storefront uses exactly an admitted resource for this device').toBe(true);
       const candidates = new Set([appearance.menu_banner_url, appearance.menu_banner_desktop_url,

@@ -21,3 +21,11 @@ export function legacyBannerMenu(envelope) {
     'menu_banner_desktop_height_px', 'menu_banner_desktop_focal_x', 'menu_banner_desktop_focal_y']) delete copy.content_v1?.appearance?.[key];
   return copy;
 }
+
+// A same-resource response can still be an older ISR document after a height
+// edit. All presentation fields must be current before a fresh-context proof.
+export function responsiveBannerReady(expected, actual) {
+  return Number.isFinite(expected?.height) && expected.height > 0 && Number.isFinite(actual?.height)
+    && Math.abs(actual.height - expected.height) < .02 && actual.focus === expected.focus
+    && actual.resourceMatch === true && actual.layoutResponsive === true && actual.hydrated === true;
+}
