@@ -1525,7 +1525,21 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
       if (index === 0) {
         stage = 'banner-focal-persistence';
         await verifyBannerFocalPersistence(page, menu, f, token);
+        stage = 'banner-responsive';
         await verifyBannerResponsive(page, menu, f, token);
+        // The responsive case ends on a no-banner document. Restoring the
+        // synthetic server settings does not refresh this already loaded tab.
+        stage = 'restored-banner-public-read-and-render';
+        expect((await publicMenu()).content_v1.appearance.menu_banner_url).toBe(path);
+        await expect.poll(async () => {
+          await menu.goto(STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+          const restored = menu.locator('[data-sf-menu-banner] img');
+          return await restored.count() === 1 ? {
+            sameResource: (await restored.getAttribute('src'))?.endsWith(path),
+            position: await restored.evaluate(img => getComputedStyle(img).objectPosition),
+          } : null;
+        }, { timeout: 100000, intervals: [250, 500, 1000] }).toEqual({ sameResource: true, position: '38% 9%' });
+        receipt.responsiveReturn = { freshPublicRead: true, freshDocumentRead: true, samePublicPath: path, position: '38% 9%' };
       }
       const image = menu.locator('[data-sf-menu-banner] img');
       await expect.poll(() => image.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
