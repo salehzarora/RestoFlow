@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { API_URL, assertAnonKey, assertEphemeralEnvironment, fixturePath, request, rpc, scope, storagePath, readInvariants } from './service.mjs';
 import { createPublisherDiagnostics, waitForAuthenticatedPublisher } from './publisher-diagnostics.mjs';
+import { createBootstrapDiagnostics } from './bootstrap-diagnostics.mjs';
 import { png, photoRgb } from '../../supabase/functions/storefront-media-publish/test/fixtures.mjs';
 
 assertEphemeralEnvironment();
@@ -17,12 +18,17 @@ const status = JSON.parse(readFileSync(process.env.CINEMATIC_STATUS_FILE, 'utf8'
 assert.equal(status.API_URL, API_URL, 'CLI must identify the ephemeral loopback gateway');
 const fixture = { apiUrl: API_URL, anonKey: assertAnonKey(status.ANON_KEY) };
 const diagnostics = createPublisherDiagnostics(process.env.CINEMATIC_ARTIFACT_DIR);
+const bootstrapDiagnostics = createBootstrapDiagnostics(process.env.CINEMATIC_ARTIFACT_DIR);
+// Monitoring leaves Node's original uncaught error and nonzero exit unchanged.
+process.on('uncaughtExceptionMonitor', error => { try { bootstrapDiagnostics.fail(error); } catch { /* never mask the original failure */ } });
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const stamp = randomUUID().slice(0, 8);
 
 async function principal(label) {
+  bootstrapDiagnostics.advance(`${label}_signup`);
   const person = { email: `cinematic-${label}-${stamp}@example.test`, password: `${randomBytes(24).toString('base64url')}aA1!` };
   const signup = await request(fixture, null, '/auth/v1/signup', { method: 'POST', body: person });
+  bootstrapDiagnostics.response(signup);
   assert.equal(signup.status, 200, `Synthetic ${label} signup must succeed`);
   assert.equal(typeof signup.data?.access_token, 'string', 'Local signup must return a real Auth session');
   assert.match(signup.data?.user?.id || '', /^[0-9a-f-]{36}$/);
@@ -32,6 +38,7 @@ async function principal(label) {
 
 async function owner(label) {
   const account = await principal(label);
+  bootstrapDiagnostics.advance(`${label}_organization`);
   const slug = `cinematic-test-${label}-${stamp}`;
   const created = await rpc(fixture, account.token, 'create_organization', {
     p_client_request_id: randomUUID(), p_organization_name: `CINEMATIC TEST ${label.toUpperCase()}`,
@@ -39,6 +46,7 @@ async function owner(label) {
     p_branch_name: `TEST ${label.toUpperCase()}`, p_currency_code: 'ILS', p_timezone: 'UTC',
     p_default_station_name: null,
   });
+  bootstrapDiagnostics.response(created);
   assert.equal(created.status, 200, 'Real owner onboarding RPC must succeed');
   assert.equal(created.data?.ok, true);
   for (const field of ['organization_id', 'restaurant_id', 'branch_id']) assert.match(created.data[field], /^[0-9a-f-]{36}$/);
@@ -56,7 +64,10 @@ fixture.ownerB = b.person;
 fixture.outsider = outsider.person;
 // A gateway401 is only the negative JWT control. This real-user POST is
 // deliberately invalid before media/engine work and proves handler readiness.
-await waitForAuthenticatedPublisher(fixture, a.token, diagnostics);
+bootstrapDiagnostics.advance('authenticated_publisher_readiness');
+await waitForAuthenticatedPublisher(fixture, a.token, { observe: async (stage, operation) => {
+  const result = await diagnostics.observe(stage, operation); bootstrapDiagnostics.response(result, true); return result;
+} });
 
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 // Use editor-valid hours: closing at midnight would touch the next day's
@@ -64,6 +75,7 @@ const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 // closed minute is harmless: this journey neither orders nor requires open_now.
 const hours = JSON.parse(readFileSync(new URL('./profile-hours.json', import.meta.url), 'utf8'));
 const statements = ['begin;'];
+bootstrapDiagnostics.advance('seed_catalogue');
 for (const person of [a.person, b.person]) {
   for (const [index, name] of ['وجبات اختبار', 'مقبلات اختبار', 'كاسات اختبار', 'مشروبات اختبار'].entries()) {
     const categoryId = randomUUID();
@@ -85,17 +97,20 @@ for (const person of [a.person, b.person]) {
 }
 statements.push('commit;');
 // Fixed container and socket, no connection URL/env password and no hosted target.
-const seeded = spawnSync('docker', ['exec', '-i', 'supabase_db_RestoFlow', 'psql', '-X', '--no-password', '-h', '/var/run/postgresql', '-p', '5432', '-U', 'supabase_admin', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
+const seeded = spawnSync('docker', ['exec', '-i', 'supabase_db_RestoFlow', 'psql', '-X', '--no-password', '-h', '/var/run/postgresql', '-p', '5432', '-U', 'supabase_admin', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=sqlstate'], {
   input: statements.join('\n'), encoding: 'utf8', timeout: 30_000,
 });
+bootstrapDiagnostics.process(seeded);
 assert.equal(seeded.status, 0, 'Synthetic catalogue/profile bootstrap failed (SQL output withheld)');
 
 // Verify the actual owner-visible rows, not just the SQL text. A global or
 // foreign-branch fixture must fail setup before an unrelated uploader journey.
 for (const account of [a, b]) {
+  bootstrapDiagnostics.advance(account === a ? 'a_owner_list' : 'b_owner_list');
   const menu = await rpc(fixture, account.token, 'list_menu', {
     ...scope(account.person), p_branch_id: account.person.branchId,
   });
+  bootstrapDiagnostics.response(menu);
   assert.equal(menu.status, 200, 'Owner must read the seeded UI catalogue');
   assert.equal(menu.data?.ok, true, 'Owner must receive the real menu envelope');
   const items = menu.data.items;
@@ -111,19 +126,25 @@ for (const account of [a, b]) {
 
 const sourceKey = `${a.person.orgId}/${a.person.restaurantId}/logo/${randomUUID()}.jpg`;
 const image = readFileSync(resolve(repo, 'supabase/functions/storefront-media-publish/test/fixtures/gray_prog_1000x750.jpg'));
+bootstrapDiagnostics.advance('private_original_upload');
 const uploaded = await request(fixture, a.token, `/storage/v1/object/restaurant-logos/${storagePath(sourceKey)}`, {
   method: 'POST', bytes: image, contentType: 'image/jpeg',
 });
+bootstrapDiagnostics.response(uploaded);
 assert.equal(uploaded.status, 200, 'Real owner must upload the initial synthetic original');
+bootstrapDiagnostics.advance('receipt_logo');
 const receipt = await rpc(fixture, a.token, 'set_restaurant_receipt_logo', {
   ...scope(a.person), p_client_request_id: randomUUID(), p_logo_path: sourceKey, p_enabled: true, p_expected_version: 0,
 });
+bootstrapDiagnostics.response(receipt);
 assert.equal(receipt.status, 200);
 assert.equal(receipt.data?.ok, true);
+bootstrapDiagnostics.advance('fixture_hero_publish');
 const published = await diagnostics.observe('fixture_hero_publish', () => request(fixture, a.token, '/functions/v1/storefront-media-publish', {
   method: 'POST', body: { request_id: randomUUID(), organization_id: a.person.orgId, restaurant_id: a.person.restaurantId,
     slot: 'hero', variant: 'w960', source_bucket: 'restaurant-logos', source_key: sourceKey, rung: 0 },
 }));
+bootstrapDiagnostics.response(published);
 assert.equal(published.status, 200, 'Actual Edge publisher must publish the synthetic Hero');
 assert.equal(published.data?.status, 'published');
 assert.equal(published.data?.source_mismatch, false);
@@ -133,6 +154,7 @@ fixture.heroMediaId = published.data.media.id;
 fixture.heroUrl = `${API_URL}/storage/v1/object/public/storefront-media/${published.data.media.object_key}`;
 fixture.heroSourceKey = sourceKey;
 fixture.receiptLogoKey = sourceKey;
+bootstrapDiagnostics.advance('post_publish_fixture_finalize');
 const profileRead = await rpc(fixture, a.token, 'get_restaurant_storefront_profile', scope(a.person));
 assert.equal(profileRead.data?.ok, true);
 const selected = await rpc(fixture, a.token, 'set_restaurant_storefront_profile', {
@@ -166,4 +188,5 @@ for (const [index, [width, height]] of [[1200, 360], [1200, 480]].entries()) {
 // public anon key are handed privately to the real Dashboard sign-in test.
 writeFileSync(target, `${JSON.stringify(fixture, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
 chmodSync(target, 0o600);
+bootstrapDiagnostics.complete();
 console.log('Synthetic fixture bootstrap PASS: real Auth users A/B/outsider; real private upload and Edge-published Hero.');
