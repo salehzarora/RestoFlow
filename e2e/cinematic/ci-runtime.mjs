@@ -29,9 +29,6 @@ export function localStatus(status) {
 export const HEIGHT_VIDEO_FILE = 'responsive-banner-height-adjustment.webm';
 export const PUBLISHER_PROBE_TITLE = 'single publisher response - native body diagnostic';
 export const CLEAR_TRACE_TITLE = 'warm saved banner → one clear → ordinary menu read/render trace';
-// Temporary, source-pinned diagnostic selection. This head is deliberately not
-// a final-acceptance claim; it does not repeat the fourteen height comparisons.
-export const CLEAR_TRACE_DIAGNOSTIC_ONLY = true;
 export function acceptanceRunArgs(mode) {
   assert.ok(mode === 'probe' || mode === 'trace' || mode === 'full', 'Unknown acceptance selection');
   // The short probe runs exactly once. The second command still selects every
@@ -221,13 +218,9 @@ async function main(action) {
       for (const item of cases) console.log(`${item.status}: ${item.title}`);
       return outcome;
     };
-    const trace = runCases('trace');
-    if (CLEAR_TRACE_DIAGNOSTIC_ONLY) {
-      writeFileSync(resolve(publicDir, 'browser-result.json'), JSON.stringify({ status: 'NOT_RUN', reason: 'SOURCE_PINNED_WARM_CLEAR_DIAGNOSTIC_ONLY',
-        actualServices: true, retries: 0, cases: [] }, null, 2));
-      throw new Error(`Diagnostic-only source: warm clear ${trace.status}; full acceptance NOT_RUN, no green release claim`);
-    }
-    assert.equal(trace.status, 'PASS', 'Warm clear trace failed; full journeys not repeated');
+    // The short warm-clear diagnosis is retained as a separate exact selection.
+    // Normal final acceptance runs the unchanged three complete journeys; its
+    // independent banner case now captures the same clear read/render chain.
     const probe = runCases('probe');
     // Stop before the expensive height/readback comparisons if the one-POST
     // reproduction failed. HTTP200 or a later UI message cannot unlock them.

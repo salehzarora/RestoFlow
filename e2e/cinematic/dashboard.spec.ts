@@ -1865,15 +1865,17 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
     await revealButton(page, L.bannerClear);
     await tapRevealedButton(page, L.bannerClear);
     clearStep('clear-save-result');
+    clear.saveStartedAt = Date.now();
     await saveContent(page, (phase, response, body) => {
       if (phase === 'request') {
         let payload: Obj = {}; try { payload = response.request().postDataJSON() ?? {}; } catch { /* Preserve original save assertion. */ }
         clear.saveRequest = { httpStatus: response.status(), expectedVersion: evidenceScalar(payload.p_expected_version, Object.hasOwn(payload, 'p_expected_version')),
           organizationMatches: payload.p_organization_id === f.ownerA.orgId, restaurantMatches: payload.p_restaurant_id === f.ownerA.restaurantId,
           branchMatches: payload.p_expected_storefront_branch_id === f.ownerA.branchId, document: bannerDocumentEvidence(payload.p_document) };
-      } else clear.saveResult = { httpStatus: response.status(), ok: evidenceScalar(body?.ok, !!body && Object.hasOwn(body, 'ok')),
+      } else clear.saveResult = { at: Date.now(), httpStatus: response.status(), ok: evidenceScalar(body?.ok, !!body && Object.hasOwn(body, 'ok')),
         version: evidenceScalar(body?.version, !!body && Object.hasOwn(body, 'version')) };
     });
+    clear.savedAt = Date.now();
     clearStep('clear-authenticated-readback'); await openEditor(page, true);
     const afterClear = await read(); clear.authenticatedReadback = bannerDocumentEvidence(afterClear);
     clear.baseNullAssertion = bannerComparisonEvidence('Base banner selection is explicitly null after reload', 'appearance.menu_banner_media_id', null, afterClear.appearance.menu_banner_media_id);
@@ -1881,21 +1883,19 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
     clearStep('clear-preservation'); await unchanged();
     clearStep('clear-public-read');
     const clearedPublic = await publicMenu(), publicAppearance = clearedPublic.content_v1?.appearance;
-    clear.publicRead = { ok: evidenceScalar(clearedPublic.ok, Object.hasOwn(clearedPublic, 'ok')), appearance: Object.fromEntries(
-      ['menu_banner_url', 'menu_banner_desktop_url', 'menu_banner_enabled', 'menu_banner_layout', 'menu_banner_mobile_height_px',
-        'menu_banner_desktop_height_px', 'menu_banner_focal_x', 'menu_banner_focal_y', 'menu_banner_desktop_focal_x', 'menu_banner_desktop_focal_y']
-        .map(key => [key, evidenceScalar(publicAppearance?.[key], !!publicAppearance && Object.hasOwn(publicAppearance, key))])) };
+    clear.publicRead = bannerPublicProjection(clearedPublic);
+    clear.transformation = traceDecodedBanner(clearedPublic); clear.publicReadAt = Date.now();
+    expect(clear.transformation.decoder.accepted).toBe(true); expect(clear.transformation.adapterAccepted).toBe(true);
+    expect(afterClear.appearance.menu_banner_desktop_media_id ?? null, 'Base clear preserves the restored independent desktop selection')
+      .toBe(lastRetainedOwnerDocument.appearance.menu_banner_desktop_media_id ?? null);
+    // This journey restored its pre-responsive state. No desktop image is
+    // intentionally selected; a valid desktop fallback must not be erased to
+    // satisfy the no-banner predicate.
+    expect(publicAppearance.menu_banner_desktop_url ?? null, 'Restored legacy fixture has no independent desktop image').toBeNull();
+    expect(publicAppearance.menu_banner_url).toBeNull();
     clearStep('clear-storefront');
-    await expect.poll(async () => {
-      const response = await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
-      const topCount = await menu.locator('[data-sf-menu-top]').count(), bannerCount = await menu.locator('[data-sf-menu-banner]').count();
-      const actual = topCount === 1 && bannerCount === 0, cache = response?.headers()['x-nextjs-cache'];
-      const sample = { topCount, bannerCount, predicate: bannerComparisonEvidence('One menu top and no base banner', 'topCount===1 && bannerCount===0', true, actual),
-        cache: ['HIT', 'STALE', 'MISS', 'REVALIDATED'].includes(cache ?? '') ? cache : 'unclassified' };
-      clear.samples.push(sample); if (clear.samples.length > 3) clear.samples.shift();
-      clear.lastRendered = sample;
-      return actual;
-    }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe(true);
+    await waitForClearedMenu(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu',
+      receipt.publications.map((entry: Obj) => entry.publicPath), clear);
     clear.substage = 'complete';
     receipt.status = 'BANNER_UPLOAD_E2E_PASS'; receipt.failedStage = null;
     receipt.backgroundAndWelcomePreserved = true;
@@ -1904,6 +1904,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
     throw error;
   } finally {
     if (receipt.status !== 'BANNER_UPLOAD_E2E_PASS') receipt.failedStage = stage;
+    if (receipt.clearOnly) recordClearServerEvidence(receipt.clearOnly);
     try { writeFileSync(resolve(out, 'banner-upload-result.json'), JSON.stringify(receipt, null, 2)); }
     catch (error) { if (!originalFailure) throw error; }
   }
@@ -1931,7 +1932,35 @@ async function traceRenderedBanner(menu: Page, url: string, previousPaths: strin
       })) };
   });
   sample.observedAt = Date.now();
-  return sample.dom.topCount === 1 && sample.dom.bannerCount === 0;
+  return sample.html.bannerElements === 0 && sample.dom.topCount === 1 && sample.dom.bannerCount === 0;
+}
+async function waitForClearedMenu(menu: Page, url: string, previousPaths: string[], receipt: Obj): Promise<void> {
+  // The real short trace proved that an old HIT/STALE HTML document is normal
+  // until this route regenerates. Join each complete document and avoid another
+  // reload on every assertion poll. Keep the original 100s acceptance deadline.
+  const deadline = Date.now() + 100000;
+  let nextDocumentAt = 0, ready = false;
+  await expect.poll(async () => {
+    if (Date.now() < nextDocumentAt) return ready;
+    const sample: Obj = {}; receipt.samples.push(sample);
+    ready = await traceRenderedBanner(menu, url, previousPaths, sample);
+    sample.predicate = bannerComparisonEvidence('One menu top and no base banner', 'topCount===1 && bannerCount===0', true,
+      sample.dom.topCount === 1 && sample.dom.bannerCount === 0);
+    receipt.lastRendered = sample;
+    nextDocumentAt = Math.min(deadline, Date.now() + 5000);
+    return ready;
+  }, { timeout: 100000, intervals: [250, 500, 1000], message: 'The warmed ordinary menu document and DOM both reflect the cleared selection' }).toBe(true);
+}
+function recordClearServerEvidence(receipt: Obj): void {
+  try {
+    const serverLog = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), 'storefront.log'), 'utf8');
+    receipt.serverReads = serverLog.split(/\r?\n/).filter(line => line.startsWith('CINEMATIC_BANNER_READ ')).slice(-400)
+      .map(line => JSON.parse(line.slice('CINEMATIC_BANNER_READ '.length)));
+    receipt.serverErrors = safeRegenerationErrors(serverLog); receipt.serverTraceStatus = 'READ';
+  } catch {
+    // Diagnostic I/O cannot replace a clear assertion or its original error.
+    receipt.serverTraceStatus = 'UNAVAILABLE';
+  }
 }
 function traceDecodedBanner(envelope: unknown): Obj {
   return JSON.parse(execFileSync(process.execPath, [resolve(process.env.GITHUB_WORKSPACE!, 'e2e/cinematic/banner-clear-decode.mjs')], {
@@ -2004,10 +2033,7 @@ test('warm saved banner → one clear → ordinary menu read/render trace', asyn
     expect(receipt.cleared.decoder.accepted).toBe(true); expect(receipt.cleared.adapterAccepted).toBe(true);
     receipt.stage = 'cleared-ordinary-menu-render';
     media.phase('warm-clear-render');
-    await expect.poll(async () => {
-      const sample: Obj = {}; receipt.samples.push(sample);
-      return traceRenderedBanner(menu, url, [previousPath], sample);
-    }, { timeout: 100000, intervals: [250, 500, 1000], message: 'The same warmed ordinary menu URL renders the actual cleared state' }).toBe(true);
+    await waitForClearedMenu(menu, url, [previousPath], receipt);
     receipt.status = 'PASS'; receipt.stage = 'complete';
   } catch (error) { primary = error; hasPrimary = true; receipt.failure = bannerAssertionFailure(error); }
   finally {
@@ -2016,10 +2042,7 @@ test('warm saved banner → one clear → ordinary menu read/render trace', asyn
     try { await network.check(); byteGuard.status = 'PASS'; }
     catch (error) { guardError = error; byteGuard.status = 'FAIL'; byteGuard.failure = bannerAssertionFailure(error); }
     receipt.byteGuard = byteGuard; receipt.upload = diagnostics.snapshot(); receipt.logicalMedia = media.snapshot(); media.stop();
-    const serverLog = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), 'storefront.log'), 'utf8');
-    receipt.serverReads = serverLog.split(/\r?\n/).filter(line => line.startsWith('CINEMATIC_BANNER_READ ')).slice(-400)
-      .map(line => JSON.parse(line.slice('CINEMATIC_BANNER_READ '.length)));
-    receipt.serverErrors = safeRegenerationErrors(serverLog);
+    recordClearServerEvidence(receipt);
     writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'warm-clear-trace.json'), JSON.stringify(receipt, null, 2));
   }
   if (hasPrimary) throw primary;

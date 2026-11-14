@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
 import { bannerPublicProjection, bannerHtmlProjection, safeRegenerationErrors } from './banner-clear-trace.mjs';
 import { syntheticV4Envelope } from '../../storefront/tests/support/content-envelope.mjs';
 const path = `/storage/v1/object/public/storefront-media/${'a'.repeat(32)}/${'b'.repeat(64)}.webp`;
@@ -51,4 +54,39 @@ test('private diagnostic executes shipped decoder/adapter on clear and still rej
   assert.equal(valid.adapter.image, null); assert.equal(valid.adapter.desktopImage, null);
   raw.content_v1.appearance.menu_banner_width = 960;
   assert.equal(run().decoder.accepted, false);
+});
+function clearWaitUnit(clearsAt) {
+  const source = readFileSync(new URL('./dashboard.spec.ts', import.meta.url), 'utf8');
+  const block = source.slice(source.indexOf('async function waitForClearedMenu('), source.indexOf('function recordClearServerEvidence('));
+  assert(block.startsWith('async function waitForClearedMenu('));
+  const code = ts.transpileModule(block, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  let now = 0, options; const calls = [], receipt = { samples: [] };
+  const wait = runInNewContext(code + '\nwaitForClearedMenu', {
+    Date: { now: () => now }, Math,
+    expect: { poll: (callback, value) => { options = value; return { toBe: async expected => {
+      const deadline = now + value.timeout;
+      while (now < deadline) { const actual = await callback(); if (actual === expected) return; now += 1000; }
+      throw new Error('original bounded poll failed');
+    } }; } },
+    traceRenderedBanner: async (_page, _url, _paths, sample) => {
+      calls.push(now); const ready = now >= clearsAt; now += 50;
+      sample.html = { bannerElements: ready ? 0 : 1 }; sample.dom = { topCount: 1, bannerCount: ready ? 0 : 1 };
+      return ready;
+    }, bannerComparisonEvidence: (_name, _field, expected, actual) => ({ expected, actual }),
+  });
+  return { run: () => wait({}, 'http://127.0.0.1:3000/ar/s/cinematic-fixture/menu', [path], receipt),
+    calls, receipt, options: () => options, now: () => now };
+}
+test('UNIT_ONLY: actual clear waiter observes regenerated ordinary document without reload on every poll', async () => {
+  const u = clearWaitUnit(60000); await u.run();
+  assert.equal(u.options().timeout, 100000); assert.equal(u.receipt.lastRendered.dom.bannerCount, 0);
+  assert(u.calls.length > 1 && u.calls.length < 20);
+  assert(u.calls.slice(1).every((at, i) => at - u.calls[i] >= 5000));
+  assert(u.now() < 100000); assert(u.receipt.samples.slice(0, -1).every(s => s.predicate.actual === false));
+});
+test('UNIT_ONLY: an unchanged old document still fails at the existing acceptance deadline', async () => {
+  const u = clearWaitUnit(Infinity);
+  await assert.rejects(u.run(), /original bounded poll failed/);
+  assert.equal(u.options().timeout, 100000); assert(u.calls.every(at => at < 100000));
+  assert(u.receipt.samples.every(s => s.predicate.actual === false));
 });
