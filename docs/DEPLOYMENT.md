@@ -243,7 +243,64 @@ backend/RLS/RPC change):
   not even with `git add -f`.
 - CI enforces this: `bash tools/check_secrets.sh` blocks un-ignored env/secret
   files and credential-shaped values (DECISION D-011).
-- Only `*.example` templates (placeholder values) are tracked.
+- Only `*.example` templates (placeholder values) are tracked. **Exception:** inside a
+  provider / vendor-private path (§7.1) no file is accepted, whatever it is called — a
+  `*.example` name included.
+
+### 7.1 Provider / vendor-private material (BIZBOT-PAYMENTS-ZCREDIT-HYGIENE-001)
+
+Private payment-provider material — raw provider e-mails and their attachments, credential
+packages, test-card data, private research — is kept **outside the repository**. Two tracked
+safety nets exist for a copy that lands in the tree by mistake:
+
+1. a labelled block in [.gitignore](../.gitignore), so that a plain `git add` does not stage it;
+2. path rules in `tools/check_secrets.sh` (the CI guardrail above), which refuse such a path
+   **by its path alone, before any content is read** — also when it is already tracked or was
+   added with `git add -f`.
+
+| Rule | Kind | Pattern | Covers |
+|---|---|---|---|
+| P1 | path | `docs/dejavoo`, `docs/cardcom`, `docs/payplus` | the entry at that path, from the repository root, and everything below it |
+| P2 | path | `docs/PAYMENTS_CARD_PRESENT_RESEARCH.md` | the same, for that document |
+| P3 | name | `vendor-private`, `provider-private`, `zcredit-raw` | an entry with exactly that name, at any depth, and everything below it |
+
+An *entry* is whatever Git lists under that name: normally a folder with its files, but a file, a
+symbolic link or a nested repository of that name is refused as well. P1 and P2 are the places
+the material was removed from. Of P3, `vendor-private` and `zcredit-raw` are folder names of the
+private store; `provider-private` is the twin spelling, added so that either word is safe.
+
+- **Path/name rules only.** Every rule looks at the path Git reports and never opens the file.
+  There is no provider content rule: the provider's secrets have no public, recognisable shape,
+  and no pattern may be learnt from the private material itself. The guard's other checks keep
+  their rules, patterns and redacted output and are applied to the paths outside these families.
+  One inherited defect in them is fixed: file names now reach `basename` and `grep` after `--`,
+  so a file whose name starts with `-` (for example an empty `-q`) can no longer switch the
+  content checks off.
+- **What the guard does with a refused path.** It reports the entry that matched and never the
+  names below it — `BLOCK  provider/vendor-private path (tracked, 2 path(s)): docs/dejavoo/<redacted>`,
+  or for P2 the document's own path — says whether the path is `tracked` or `untracked`, and
+  leaves the path out of its later file-name and content checks, so that neither its name nor
+  its content reaches the output. If Git cannot list the files, this check reports that as a
+  finding instead of passing.
+- **Ignore rules do not untrack.** A file that was tracked before the block existed stays
+  tracked, and `git add -f` walks past an ignore rule; the guard refuses both. An untracked
+  private file that Git ignores is not a finding: a plain `git add` cannot stage it.
+- **Case.** Git matches the block with the platform's own case rule (`core.ignorecase`); the
+  guard ignores ASCII case, and only ASCII case, on every platform.
+- **Narrow on purpose.** `vendor/` and `provider/` folders and zcredit-named source, tests and
+  documents are not matched, nor is a longer or shorter name (`vendor-private-notes/`,
+  `docs/dejavoo.md`).
+- **Limits.** A path rule recognises a location or a name, not content: private material saved
+  under any other name or folder is not recognised, and the value patterns recognise only the
+  shapes they list. A clean guard run is not proof that the tree holds no credential and no
+  private file.
+- **If the guard reports such a path:** keep the file outside the repository; do not rename it
+  to get past the guard. If it was ever committed or pushed, treat its content as disclosed
+  (this repository is public) and follow [RUNBOOKS.md](RUNBOOKS.md) §6.
+- **Focused test:** `bash tools/test_check_secrets_provider.sh` — synthetic fixtures in throwaway
+  repositories under the system temp directory; nothing is added to this repository. The
+  signing-secret checks keep their own test, `bash tools/test_check_secrets_signing.sh`. Neither
+  test is a CI step; run both whenever the guard or the ignore block changes.
 
 ---
 
