@@ -15880,6 +15880,12 @@ abstract class AppLocalizations {
   /// **'TEST — nothing is recorded'**
   String get posCardTestBadge;
 
+  /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F-D9-SAFETY-COPY-001: card view: the owner-approved D9 sentence shown beside the TEST badge on every TEST attempt (never on LIVE); it states the existing restriction conditionally
+  ///
+  /// In en, this message translates to:
+  /// **'An unresolved TEST attempt keeps this order blocked on this till until a status check confirms a final result or a manager/operator closes the attempt.'**
+  String get posCardTestOrderHoldSafety;
+
   /// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the start request is being prepared or sent
   ///
   /// In en, this message translates to:

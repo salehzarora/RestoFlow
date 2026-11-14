@@ -490,10 +490,15 @@ void main() {
       expect(start.containsKey('expected_revision'), isFalse);
       expect(find.byKey(const Key('card-test-badge')), findsOneWidget);
       expect(find.text(_en.posCardAttemptTestTitle), findsOneWidget);
+      // D9: the order-hold sentence stands beside the TEST notice.
+      expect(find.byKey(const Key('card-test-hold-safety')), findsOneWidget);
+      expect(find.text(_en.posCardTestOrderHoldSafety), findsOneWidget);
 
       w.card.approve(w.attempt!.attemptId);
       await _autoCheck(tester);
       expect(_state(ProviderCardPhase.testApproved), findsOneWidget);
+      // D9: its conditional wording stays on a final TEST result.
+      expect(find.text(_en.posCardTestOrderHoldSafety), findsOneWidget);
       expect(find.byKey(const Key('card-done-button')), findsNothing);
       expect(w.card.pushCalls, isEmpty);
       expect(w.ordinary.attemptedPushes, isEmpty);
@@ -1725,6 +1730,11 @@ void main() {
           await _open(tester);
           expect(_state(ProviderCardPhase.uncertain), findsOneWidget);
           expect(find.byKey(const Key('card-test-badge')), findsNothing);
+          expect(
+            find.byKey(const Key('card-test-hold-safety')),
+            findsNothing,
+            reason: 'D9 is TEST-only',
+          );
           expect(find.text(_en.posCardAttemptTitle), findsOneWidget);
           expect(find.text(_en.posCardAttemptTestTitle), findsNothing);
           _expectKeys(_tenders, findsNothing);
@@ -1787,6 +1797,7 @@ void main() {
       _drainTenderFormOverflow(tester);
       expect(_state(ProviderCardPhase.uncertain), findsOneWidget);
       expect(find.byKey(const Key('card-test-badge')), findsNothing);
+      expect(find.byKey(const Key('card-test-hold-safety')), findsNothing);
       await _autoCheck(tester);
       expect(w.card.edgeBodies.last['action'], 'status');
       expect(w.card.edgeBodies.last['attempt_id'], cardV4(1));
@@ -1887,6 +1898,7 @@ void main() {
         await _open(tester);
         expect(lab.c.read(providerCardLabEnabledProvider), isFalse);
         expect(find.text(l10n.posCardAttemptTestTitle), findsOneWidget);
+        expect(find.text(l10n.posCardTestOrderHoldSafety), findsOneWidget);
         expect(find.text(l10n.posCardUncertainTitle), findsOneWidget);
         expect(find.text(l10n.posPaymentCheckStatus), findsOneWidget);
         _expectKeys(_tenders, findsNothing);
@@ -1970,6 +1982,101 @@ void main() {
         expect(find.text(l10n.posPaymentDone), findsOneWidget);
         await _tap(tester, 'card-done-button');
         expect(w.lastResult, isTrue);
+      });
+    }
+  });
+
+  group('D9: the TEST order-hold sentence '
+      '(BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F-D9-SAFETY-COPY-001)', () {
+    // The owner-approved copy, verbatim.
+    const approved = <String, String>{
+      'ar':
+          'إذا بقيت محاولة TEST دون نتيجة نهائية، يبقى هذا الطلب محجوزًا على هذا الكاشير حتى يؤكد فحص الحالة نتيجة نهائية أو يغلق المدير أو المشغّل المحاولة.',
+      'he':
+          'כל עוד ניסיון TEST לא הוכרע, ההזמנה נשארת חסומה בקופה זו עד שבדיקת הסטטוס מאשרת תוצאה סופית או שמנהל או מפעיל סוגר את הניסיון.',
+      'en':
+          'An unresolved TEST attempt keeps this order blocked on this till until a status check confirms a final result or a manager/operator closes the attempt.',
+    };
+    const quiet = ProviderCardPollPolicy(
+      firstDelay: Duration(hours: 1),
+      interval: Duration(hours: 1),
+    );
+    final key = providerCardAttemptsStorageKey(kCardScope.key);
+
+    test('the localized copy is the approved copy in ar, he and en', () {
+      for (final MapEntry(key: locale, value: text) in approved.entries) {
+        expect(
+          lookupAppLocalizations(Locale(locale)).posCardTestOrderHoldSafety,
+          text,
+          reason: locale,
+        );
+      }
+    });
+
+    for (final locale in const <String>['en', 'ar', 'he']) {
+      testWidgets('$locale: an open TEST attempt shows the sentence right '
+          'after the TEST notice; an open LIVE attempt never shows it', (
+        tester,
+      ) async {
+        _size(tester);
+        final l10n = lookupAppLocalizations(Locale(locale));
+        final trial = await _world(
+          card: CardServerFake(terminalMode: 'test'),
+          prefs: <String, Object>{
+            key: cardJournalEnvelope([
+              cardInDoubt(
+                cardStoredAttempt(
+                  5,
+                  order: kCardOrder,
+                  mode: ProviderCardMode.test,
+                ),
+              ),
+            ]),
+          },
+          policy: quiet,
+        );
+        await _pumpHost(tester, trial, locale: locale);
+        await _open(tester);
+        final badge = find.byKey(const Key('card-test-badge'));
+        final sentence = find.byKey(const Key('card-test-hold-safety'));
+        expect(badge, findsOneWidget);
+        expect(sentence, findsOneWidget);
+        expect(tester.widget<Text>(sentence).data, approved[locale]);
+        expect(
+          tester.getTopLeft(sentence).dy,
+          greaterThanOrEqualTo(tester.getBottomLeft(badge).dy),
+        );
+        expect(
+          tester.getBottomLeft(sentence).dy,
+          lessThanOrEqualTo(
+            tester.getTopLeft(find.byKey(const Key('card-attempt-amount'))).dy,
+          ),
+        );
+        // The sentence adds no action: the TEST recovery surface is as
+        // before (check status, close; no way back to the tender form).
+        _expectKeys(<String>[
+          'card-check-status-button',
+          'card-close-button',
+        ], findsOneWidget);
+        _expectKeys(_tenders, findsNothing);
+        expect(tester.takeException(), isNull, reason: 'no overflow');
+        await tester.pumpWidget(const SizedBox());
+
+        final live = await _world(
+          prefs: <String, Object>{
+            key: cardJournalEnvelope([
+              cardInDoubt(cardStoredAttempt(7, order: kCardOrder)),
+            ]),
+          },
+          policy: quiet,
+        );
+        await _pumpHost(tester, live, locale: locale);
+        await _open(tester);
+        expect(find.byKey(const Key('card-attempt-view')), findsOneWidget);
+        expect(find.text(l10n.posCardAttemptTitle), findsOneWidget);
+        expect(find.byKey(const Key('card-test-badge')), findsNothing);
+        expect(find.byKey(const Key('card-test-hold-safety')), findsNothing);
+        expect(find.text(l10n.posCardTestOrderHoldSafety), findsNothing);
       });
     }
   });

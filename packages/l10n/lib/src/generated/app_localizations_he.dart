@@ -8757,6 +8757,10 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posCardTestBadge => 'בדיקה — דבר אינו נרשם';
 
   @override
+  String get posCardTestOrderHoldSafety =>
+      'כל עוד ניסיון TEST לא הוכרע, ההזמנה נשארת חסומה בקופה זו עד שבדיקת הסטטוס מאשרת תוצאה סופית או שמנהל או מפעיל סוגר את הניסיון.';
+
+  @override
   String get posCardPreparingTitle => 'מכינים את בקשת הכרטיס';
 
   @override
