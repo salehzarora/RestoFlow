@@ -468,6 +468,20 @@ queries + expected results instead. Prints **PASS/FAIL**.
   through `test_closed` or a later, separately approved run with its own PRE / POST
   ([DEPLOYMENT](DEPLOYMENT.md) §18.4).
   A `test.card_recording_refused` or any other `test.*` / `security.*` event is a stop condition.
+  *(Dated 2026-11-14, `BIZBOT-PAYMENTS-ZCREDIT-PILOT-001H-PILOT-OPS`: **D-065** closed **Q-047**, and closed **Q-049**
+  for the phase-1 TEST only; the gate holds until LG-08 / LG-09 are met. Before the run, in this order: the dark
+  deployment; the signed pilot APK with D9 installed on the designated till — GR-01 closes only then, never by D9's
+  implementation or merge; the TEST configuration and the `configured` binding with every flag OFF; the reviewed
+  provider-profile wiring deployed after it with the flag OFF; the PRE / POST and hold / closure calls prepared and
+  rehearsed ([DEPLOYMENT](DEPLOYMENT.md) §18.1 steps 4–7). The D8 rule: no TEST attempt on a customer order — the
+  provider TEST attempt stays order-less (`order_id` NULL) and a dedicated non-customer order, synced before PRE and
+  unchanged through POST, is only its UI context, voided only after sealing under a separate approval; unresolved TEST
+  rows are held, never purged; every TEST attempt is final or operator-closed before the quiet window ends; POST ends
+  with zero unresolved unheld TEST rows. Quiet window: every other paired device powered off or its app fully closed —
+  signed out, idle, the PIN screen or a screen turned off is insufficient; if the captured `ordering_enabled` and
+  `submission_enabled` differ, STOP before pausing intake. Kill order: Lab OFF → master flag OFF → revision OFF →
+  mapping `enabled → draining` ([DEPLOYMENT](DEPLOYMENT.md) §18.4 Close). A TEST-only evidence acceptance is never a
+  LIVE approval.)*
 - **TEST evidence retention (D-053 point 4, D-056 point 6):** TEST attempt rows and TEST private events
   expire 90 days after creation; set an incident hold on the TEST attempt or on a single TEST private
   event (`app.card_attempt_set_incident_hold`, operator only, a private operator event, **D-057** point 8)
@@ -518,8 +532,11 @@ queries + expected results instead. Prints **PASS/FAIL**.
   mapping `enabled → draining`, then to the new references by one replacement call of
   `app.set_payment_terminal` (its `draining` row retired and the new row created `configured` in the
   same transaction, so the hand-recorded Card tender never re-opens; **D-057** point 4) and pass the
-  LIVE activation gate before `enabled` → redeploy the
-  adapter only if 001E caches configuration at worker start → review the ledger, the
+  LIVE activation gate before `enabled` → no adapter redeploy, because the adapter reads the configuration
+  per request — the replacement is validated before it is installed (as in [DEPLOYMENT](DEPLOYMENT.md) §18.4); a
+  flag-OFF probe of §18.3, a future step under its own approval, confirms only that starts stay refused (it does
+  not read the configuration) *(corrected 2026-11-14: this step read "redeploy the adapter only if 001E caches
+  configuration at worker start")* → review the ledger, the
   private events and the `card_attempt.*` audit rows for the exposure window
   ([OPERATIONS_AND_RECOVERY](OPERATIONS_AND_RECOVERY.md) §3.3). A test-terminal credential that reaches
   any commit, stash, bundle, report or chat is treated as exposed and reset.

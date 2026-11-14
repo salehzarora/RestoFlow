@@ -97,9 +97,22 @@ immutable private-event facts.
 
 Sequencing: H0 → 001A → 001B → 001D → 001E → 001C (as required) → 001F → deploy with all flags OFF →
 owner-sealed Q-047 / Q-049 evidence (hard gate; D-051 point 7, D-052 point 2, D-058) → owner-approved TEST secret
-setup → owner-approved QD3 test-card run → evidence review → later
+setup → owner-approved physical TEST run of DEPLOYMENT §18.4 (reworded 2026-11-14: the earlier name was a
+label defined nowhere) → evidence review → later
 production Maps Burger pilot approval. Reports list only concrete code, configuration, deployment or
 physical-test blockers.
+*(Amended 2026-11-14, `BIZBOT-PAYMENTS-ZCREDIT-PILOT-001H-PILOT-OPS`: the code units merged as P1–P6 — #381, #390,
+#394, #396, #398, #399 — and `BIZBOT-PAYMENTS-ZCREDIT-HYGIENE-001` landed by #400; 001D and G1 are recorded in the
+hosted ledger (DEPLOYMENT §18.2, a dated observation of 2026-11-13). **D-065** closed Q-047, and Q-049 for the
+phase-1 TEST only; the gate holds until LG-08 / LG-09 are met. The remaining sequence, in this order (DEPLOYMENT §18.1
+steps 4–8): dark deployment from an exact reviewed merged commit with `providerProfile: null` and no provider
+activation → the signed pilot APK with the accepted POS integration and D9 (GR-01 closes only once the sentence is in
+the installed APK) → the owner-present installation of the accepted TEST configuration and the designated-device
+binding, every flag OFF → the reviewed provider-profile wiring, deployed after the configuration with the flag OFF →
+the current PRE / POST and hold / closure preparation and rehearsal → the separately authorized owner-present physical
+TEST → a TEST-only evidence review; LIVE stays behind DEPLOYMENT §18.1 step 9. For that run DEPLOYMENT §18.4 governs §5's
+session: the D8 rule, decision A (the provider attempt order-less; a dedicated non-customer order only its UI
+context), every other paired device powered off or its app fully closed, and the intake-pair STOP.)*
 
 ## 2. Baseline facts the design rests on (verified read-only, 2026-10-21)
 
