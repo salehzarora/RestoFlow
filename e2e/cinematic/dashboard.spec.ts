@@ -1944,7 +1944,7 @@ function traceDecodedBanner(envelope: unknown): Obj {
 test('warm saved banner → one clear → ordinary menu read/render trace', async ({ page, context }) => {
   test.setTimeout(3 * 60_000);
   const f = fixture(), network = await guardBrowser(context), media = observeLogicalMedia(context, { dashboard: DASHBOARD, storefront: STOREFRONT });
-  const receipt: Obj = { status: 'FAIL', scope: 'ownerA synthetic data; ordinary warmed URL; no cache busting', samples: [], contentSaveCalls: 0 };
+  const receipt: Obj = { status: 'FAIL', stage: 'sign-in', scope: 'ownerA synthetic data; ordinary warmed URL; no cache busting', samples: [], contentSaveCalls: 0 };
   const diagnostics = new UploadDiagnostics(); let primary: unknown, hasPrimary = false, guardError: unknown;
   const byteGuard: Obj = { status: 'NOT_RUN' };
   try {
@@ -1954,14 +1954,16 @@ test('warm saved banner → one clear → ordinary menu read/render trace', asyn
     const auth = await responseAfterAction(observed, () => tapButton(page, L.login, { which: 'last' }));
     expect(auth.status()).toBe(200); const session = await auth.json(); expect(session.user.email).toBe(f.ownerA.email);
     await openEditor(page); await openFoldedGroup(page, 'banner');
+    receipt.stage = 'initial-owner-read';
     const before = await rpc(f, session.access_token, 'get_restaurant_storefront_content_v6');
     receipt.before = bannerDocumentEvidence(before.document);
     // A pre-existing independent desktop selection would be a different case;
     // never erase it just to make the no-banner predicate true.
-    expect(before.document.appearance.menu_banner_desktop_media_id ?? null).toBeNull();
+    expect(before.document.appearance?.menu_banner_desktop_media_id ?? null).toBeNull();
     const bytes = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), 'ux003-banner-0.png'));
+    receipt.stage = 'publish-one-banner';
     const published = await upload(page, 'warm-clear-native-probe.png', diagnostics, 200, 'banner', bytes);
-    await saveContent(page); receipt.contentSaveCalls++;
+    receipt.stage = 'save-one-banner'; await saveContent(page); receipt.contentSaveCalls++;
     const saved = await rpc(f, session.access_token, 'get_restaurant_storefront_content_v6');
     expect(saved.document.appearance.menu_banner_media_id).toBe(published.media.id);
     receipt.saved = bannerDocumentEvidence(saved.document);
@@ -1974,19 +1976,24 @@ test('warm saved banner → one clear → ordinary menu read/render trace', asyn
     };
     const selected = await publicRead(), previousPath = selected.content_v1.appearance.menu_banner_url;
     receipt.selected = traceDecodedBanner(selected);
+    expect(receipt.selected.decoder.accepted).toBe(true); expect(receipt.selected.adapterAccepted).toBe(true);
+    receipt.stage = 'warm-ordinary-menu-url';
     receipt.warm = {}; media.phase('warm-clear-saved');
     await traceRenderedBanner(menu, url, [previousPath], receipt.warm);
     await expect(menu.locator('[data-sf-menu-banner] img')).toHaveCount(1);
     await expect.poll(() => menu.locator('[data-sf-menu-banner] img').getAttribute('src')).toContain(previousPath);
     receipt.warmedAt = Date.now();
+    receipt.stage = 'clear-base-through-interface';
     await revealButton(page, L.bannerClear); await tapRevealedButton(page, L.bannerClear);
     receipt.clearStartedAt = Date.now();
+    receipt.stage = 'save-cleared-selection';
     await saveContent(page, (phase, response, body) => {
       if (phase === 'request') receipt.saveRequest = { at: Date.now(), status: response.status(),
         document: bannerDocumentEvidence(response.request().postDataJSON()?.p_document) };
       else receipt.saveResult = { at: Date.now(), status: response.status(), ok: body?.ok, version: body?.version };
     }); receipt.contentSaveCalls++; receipt.savedAt = Date.now();
     await openEditor(page, true);
+    receipt.stage = 'authenticated-and-public-readback';
     const cleared = await rpc(f, session.access_token, 'get_restaurant_storefront_content_v6');
     receipt.readback = bannerDocumentEvidence(cleared.document);
     expect(cleared.document.appearance.menu_banner_media_id).toBeNull();
@@ -1994,13 +2001,14 @@ test('warm saved banner → one clear → ordinary menu read/render trace', asyn
     expect(cleared.document, 'One clear preserves the desktop selection and every non-target content field').toEqual(retained);
     receipt.nonTargetContentUnchanged = true;
     receipt.cleared = traceDecodedBanner(await publicRead()); receipt.readAt = Date.now();
-    expect(receipt.cleared.decoder.accepted).toBe(true);
+    expect(receipt.cleared.decoder.accepted).toBe(true); expect(receipt.cleared.adapterAccepted).toBe(true);
+    receipt.stage = 'cleared-ordinary-menu-render';
     media.phase('warm-clear-render');
     await expect.poll(async () => {
       const sample: Obj = {}; receipt.samples.push(sample);
       return traceRenderedBanner(menu, url, [previousPath], sample);
     }, { timeout: 100000, intervals: [250, 500, 1000], message: 'The same warmed ordinary menu URL renders the actual cleared state' }).toBe(true);
-    receipt.status = 'PASS';
+    receipt.status = 'PASS'; receipt.stage = 'complete';
   } catch (error) { primary = error; hasPrimary = true; receipt.failure = bannerAssertionFailure(error); }
   finally {
     // Independent original guard, even on primary clear failure; no later UI
