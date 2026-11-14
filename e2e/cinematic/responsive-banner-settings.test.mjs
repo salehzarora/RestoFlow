@@ -155,13 +155,18 @@ function bannerDeferred() {
   return { promise, resolve, reject };
 }
 const bannerUnitTick = () => new Promise(resolve => setImmediate(resolve));
-function bannerNavigationUnit() {
+function bannerNavigationUnit(lateSelection = false) {
   const frameReady = bannerDeferred(), decoded = bannerDeferred(), body = bannerDeferred();
   const bytes = Buffer.from('Synthetic already-issued public image observation'), hash = createHash('sha256').update(bytes).digest('hex');
   const imageUrl = `${LOGICAL_ORIGIN}/storage/v1/object/public/storefront-media/${'7'.repeat(32)}/${hash}.webp`;
   const calls = { wait: [], goto: [], evaluate: 0, animationFrame: 0, query: 0, decode: 0, body: 0, imageRequests: 0 };
-  class ImageMock {
-    currentSrc = imageUrl;
+  class ImageMock extends EventEmitter {
+    currentSrc = lateSelection ? imageUrl.replace(hash, '0'.repeat(64)) : imageUrl;
+    srcset = '';
+    closest() { return lateSelection ? { querySelectorAll: () => [{ media: '(min-width:651px)', srcset: imageUrl + ' 1280w' }] } : null; }
+    getAttribute(name) { assert.equal(name, 'src'); return this.currentSrc; }
+    addEventListener(name, callback) { this.on(name, callback); }
+    removeEventListener(name, callback) { this.off(name, callback); }
     decode() { calls.decode++; return decoded.promise; }
   }
   const image = new ImageMock();
@@ -174,8 +179,8 @@ function bannerNavigationUnit() {
       // rather than resolving a substitute implementation of its frame/decode.
       return runInNewContext(`(${callback.toString()})()`, {
         requestAnimationFrame: callback => { calls.animationFrame++; frameReady.promise.then(() => callback(0)); return 1; },
-        HTMLImageElement: ImageMock,
-        document: { querySelector: selector => { assert.equal(selector, '[data-sf-menu-banner] img'); calls.query++; return image; } },
+        HTMLImageElement: ImageMock, URL, matchMedia: () => ({ matches: true }),
+        document: { baseURI: 'http://127.0.0.1:3000/unit-menu', querySelector: selector => { assert.equal(selector, '[data-sf-menu-banner] img'); calls.query++; return image; } },
       });
     }
     goto(url, options) {
@@ -191,7 +196,7 @@ function bannerNavigationUnit() {
   const request = { url: () => imageUrl, method: () => 'GET', resourceType: () => 'image', frame: () => frame, isNavigationRequest: () => false, failure: () => null };
   const response = { url: () => imageUrl, request: () => request, status: () => 200, body: () => { calls.body++; return body.promise; } };
   const observer = realBannerNavigation.observeLogicalMedia(context, { dashboard: 'http://127.0.0.1:57026', storefront: 'http://127.0.0.1:3000' });
-  return { page, context, request, response, observer, calls, frameReady, decoded, body, bytes };
+  return { page, context, request, response, observer, calls, frameReady, decoded, body, bytes, select: () => { image.currentSrc = imageUrl; image.emit('load'); } };
 }
 
 test('UNIT_ONLY: already-fired networkidle waits for request-before-response, current decode and native evidence once within the original budget', async () => {
@@ -207,7 +212,7 @@ test('UNIT_ONLY: already-fired networkidle waits for request-before-response, cu
     assert.equal(u.calls.goto.length, 0, 'Native requestfinished alone does not replace the pending native body observation');
     u.body.resolve(u.bytes); await navigation;
     const snapshot = u.observer.snapshot();
-    assert.deepEqual(u.calls.wait, [{ state: 'networkidle', timeout: budget }]);
+    assert.deepEqual(u.calls.wait, []);
     assert.equal(u.calls.goto.length, 1); assert.equal(u.calls.goto[0].waitUntil, 'domcontentloaded');
     const spent = u.calls.goto[0].at - started, remaining = u.calls.goto[0].timeout;
     assert(remaining > 0 && remaining <= budget && remaining <= budget - spent + 5, 'goto receives only the original remaining deadline');
@@ -247,9 +252,62 @@ test('UNIT_ONLY: unresolved native evidence times out at the supplied navigation
     await assert.rejects(realBannerNavigation.navigateAfterMediaSettles(u.page, 'http://127.0.0.1:3000/unit-target', { timeout: budget, waitUntil: 'domcontentloaded' }), /original navigation deadline/);
     const elapsed = Date.now() - started;
     assert(elapsed >= budget - 5 && elapsed <= budget + 150, 'Configured budget is unchanged; finite driver scheduling overhead is bounded');
-    assert.deepEqual(u.calls.wait, [{ state: 'networkidle', timeout: budget }]); assert.equal(u.calls.goto.length, 0); assert.equal(u.calls.body, 1); assert.equal(u.calls.imageRequests, 1);
+    assert.deepEqual(u.calls.wait, []); assert.equal(u.calls.goto.length, 0); assert.equal(u.calls.body, 1); assert.equal(u.calls.imageRequests, 1);
     assert.equal(u.observer.snapshot().pendingBodies, 1);
     u.body.resolve(u.bytes); await bannerUnitTick();
     assert.equal(u.calls.goto.length, 0, 'Completion after the failed original call never triggers another navigation');
+  } finally { u.observer.stop(); }
+});
+
+test('UNIT_ONLY: a viewport desktop request arriving after old-image decode cannot overlap goto', async () => {
+  const u = bannerNavigationUnit(true), budget = 220;
+  try {
+    u.observer.phase('responsive-desktop-selected-1280');
+    u.frameReady.resolve(); u.decoded.resolve();
+    const started = Date.now();
+    const navigation = realBannerNavigation.navigateAfterMediaSettles(u.page, 'http://127.0.0.1:3000/unit-target', { timeout: budget, waitUntil: 'domcontentloaded' });
+    await bannerUnitTick();
+    assert.equal(u.calls.goto.length, 0, 'Old currentSrc decode cannot admit navigation before active desktop source selection');
+    assert.equal(u.calls.decode, 0, 'No old-image decode is substituted for selected desktop load');
+    u.context.emit('request', u.request); u.context.emit('response', u.response); u.context.emit('requestfinished', u.request);
+    u.select(); await bannerUnitTick();
+    assert.equal(u.calls.goto.length, 0, 'Selected resource load/finished cannot replace its pending native body');
+    u.body.resolve(u.bytes); await navigation;
+    const snapshot = u.observer.snapshot(), sample = snapshot.responsiveTransitionSamples[0];
+    assert.equal(snapshot.filenameMatches, 1); assert.equal(snapshot.bodyErrors, 0);
+    assert.equal(u.calls.imageRequests, 1); assert.equal(u.calls.body, 1); assert.equal(u.calls.goto.length, 1);
+    assert(sample.requests[0].bodyReadEndedMs <= sample.firstNavigation.observedMs);
+    assert(u.calls.goto[0].timeout > 0 && u.calls.goto[0].timeout <= budget - (u.calls.goto[0].at - started) + 5);
+    assert.deepEqual(u.calls.wait, [], 'No page-global networkidle is used by the helper');
+  } finally { u.observer.stop(); }
+});
+
+test('UNIT_ONLY: a cancelled selected request remains a native failure without a response or body substitute', async () => {
+  const u = bannerNavigationUnit(true);
+  try {
+    u.frameReady.resolve(); u.decoded.resolve();
+    const navigation = realBannerNavigation.navigateAfterMediaSettles(u.page, 'http://127.0.0.1:3000/unit-target', { timeout: 220, waitUntil: 'domcontentloaded' });
+    await bannerUnitTick(); assert.equal(u.calls.goto.length, 0);
+    u.request.failure = () => ({ errorText: 'net::ERR_ABORTED' });
+    u.context.emit('request', u.request); u.context.emit('requestfailed', u.request); u.select();
+    await navigation;
+    const snapshot = u.observer.snapshot();
+    assert.deepEqual([snapshot.responses, snapshot.requestFailed, snapshot.bodyReads, snapshot.filenameMatches], [0, 1, 0, 0]);
+    assert.equal(snapshot.failures[0].classification, 'aborted');
+    assert.deepEqual([u.calls.imageRequests, u.calls.body], [1, 0], 'Cancellation is retained, never retried or accepted as bytes');
+  } finally { u.observer.stop(); }
+});
+
+test('UNIT_ONLY: late selected request still unfinished at the original deadline never navigates', async () => {
+  const u = bannerNavigationUnit(true), budget = 60;
+  try {
+    u.frameReady.resolve(); u.decoded.resolve();
+    const navigation = realBannerNavigation.navigateAfterMediaSettles(u.page, 'http://127.0.0.1:3000/unit-target', { timeout: budget, waitUntil: 'domcontentloaded' });
+    await bannerUnitTick();
+    u.context.emit('request', u.request); u.context.emit('response', u.response); u.select();
+    await assert.rejects(navigation, /original navigation deadline/);
+    assert.equal(u.calls.goto.length, 0); assert.equal(u.observer.snapshot().pendingBodies, 1);
+    u.body.resolve(u.bytes); await bannerUnitTick();
+    assert.equal(u.calls.goto.length, 0, 'Completion after timeout never restarts navigation');
   } finally { u.observer.stop(); }
 });

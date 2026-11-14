@@ -1,13 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { localStatus, assertHeightVideoEvidence, HEIGHT_VIDEO_FILE, acceptanceRunArgs, PUBLISHER_PROBE_TITLE } from './ci-runtime.mjs';
+import { localStatus, assertHeightVideoEvidence, HEIGHT_VIDEO_FILE, acceptanceRunArgs, PUBLISHER_PROBE_TITLE, CLEAR_TRACE_TITLE } from './ci-runtime.mjs';
 import { readFileSync } from 'node:fs';
 const key = role => `test.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.test`;
 
 test('the short publisher reproduction runs once and never excludes an original case', () => {
   const probe = acceptanceRunArgs('probe'), full = acceptanceRunArgs('full');
   assert.deepEqual(probe, ['--no-install', 'playwright', 'test', '--config', 'cinematic/playwright.config.ts', '--grep', `(?:^|\\s)${PUBLISHER_PROBE_TITLE}$`, '--reporter=json']);
-  assert.deepEqual(full, probe.map(value => value === '--grep' ? '--grep-invert' : value));
+  assert.equal(full.at(-3), '--grep-invert');
+  const trace = acceptanceRunArgs('trace');
+  assert.equal(trace.at(-3), '--grep'); assert.equal(trace.at(-2), `(?:^|\\s)${CLEAR_TRACE_TITLE}$`);
   for (const mode of [undefined, null, '', 'retry', 'skip']) assert.throws(() => acceptanceRunArgs(mode));
   const source = readFileSync(new URL('./dashboard.spec.ts', import.meta.url), 'utf8');
   const titles = [...source.matchAll(/^test\('([^']+)'/gm)].map(match => match[1]);
@@ -16,7 +18,8 @@ test('the short publisher reproduction runs once and never excludes an original 
   assert.equal(pattern.test(`project suite dashboard.spec.ts ${PUBLISHER_PROBE_TITLE}`), true);
   assert.equal(pattern.test(`dashboard.spec.ts ${PUBLISHER_PROBE_TITLE} extra`), false);
   assert.deepEqual(titles.filter(title => pattern.test(title)), [PUBLISHER_PROBE_TITLE]);
-  assert.deepEqual(titles.filter(title => !pattern.test(title)), [
+  assert.deepEqual(titles.filter(title => new RegExp(trace.at(-2)).test(title)), [CLEAR_TRACE_TITLE]);
+  assert.deepEqual(titles.filter(title => !new RegExp(full.at(-2)).test(title)), [
     'real owner Dashboard → Storage → publisher → save → live menu; replacement, clear and appearance',
     'independent banner → actual Edge → save/reload → replace/clear preserves other media',
   ]);

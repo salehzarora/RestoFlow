@@ -39,13 +39,12 @@ async function withinNavigationDeadline<T>(operation: Promise<T>, deadline: numb
   } finally { if (timer !== undefined) clearTimeout(timer); }
 }
 
-/** Finish existing resource reads before leaving their document. The quiet wait
- * consumes the caller's original navigation budget; no retry or new request. */
+/** Finish existing native picture selection and resource reads before leaving
+ * their document, within the caller's original budget; no retry or new request. */
 export async function navigateAfterMediaSettles(page: Page, url: string, options: Parameters<Page['goto']>[1]) {
   const budget = options?.timeout ?? 30_000;
   if (!Number.isFinite(budget) || budget <= 0) throw new Error('A finite navigation budget is required.');
   const deadline = Date.now() + budget;
-  await page.waitForLoadState('networkidle', { timeout: budget });
   const pending = pageImageEvidence.get(page);
   if (pending) {
     // A viewport change can start picture selection after an earlier networkidle
@@ -54,7 +53,24 @@ export async function navigateAfterMediaSettles(page: Page, url: string, options
     await withinNavigationDeadline(page.evaluate(async () => {
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
       const image = document.querySelector('[data-sf-menu-banner] img');
-      if (image instanceof HTMLImageElement && image.currentSrc) await image.decode();
+      if (image instanceof HTMLImageElement) {
+        // The resize can leave currentSrc on the old device image through this
+        // frame. Join the actual selected picture source before decoding it;
+        // decoding the old currentSrc does not fence the new native request.
+        const picture = image.closest('picture');
+        const source = picture && Array.from(picture.querySelectorAll('source'))
+          .find(candidate => !candidate.media || matchMedia(candidate.media).matches);
+        const selected = source?.srcset || image.srcset || image.getAttribute('src') || '';
+        const candidates = selected.split(',').map(candidate => candidate.trim().split(/\s+/)[0])
+          .filter(Boolean).map(candidate => new URL(candidate, document.baseURI).href);
+        if (candidates.length && !candidates.includes(image.currentSrc)) await new Promise<void>((resolve, reject) => {
+          const cleanup = () => { image.removeEventListener('load', loaded); image.removeEventListener('error', failed); };
+          const loaded = () => { if (candidates.includes(image.currentSrc)) { cleanup(); resolve(); } };
+          const failed = () => { cleanup(); reject(new Error('Current banner selection failed its native load.')); };
+          image.addEventListener('load', loaded); image.addEventListener('error', failed); loaded();
+        });
+        if (image.currentSrc) await image.decode();
+      }
     }), deadline);
     while (pending.size > 0) await withinNavigationDeadline(Promise.all([...pending]), deadline);
   }

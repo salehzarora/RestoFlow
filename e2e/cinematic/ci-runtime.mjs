@@ -28,13 +28,19 @@ export function localStatus(status) {
 // Playwright recordings and storage state stay in the private output directory.
 export const HEIGHT_VIDEO_FILE = 'responsive-banner-height-adjustment.webm';
 export const PUBLISHER_PROBE_TITLE = 'single publisher response - native body diagnostic';
+export const CLEAR_TRACE_TITLE = 'warm saved banner → one clear → ordinary menu read/render trace';
+// Temporary, source-pinned diagnostic selection. This head is deliberately not
+// a final-acceptance claim; it does not repeat the fourteen height comparisons.
+export const CLEAR_TRACE_DIAGNOSTIC_ONLY = true;
 export function acceptanceRunArgs(mode) {
-  assert.ok(mode === 'probe' || mode === 'full', 'Unknown acceptance selection');
+  assert.ok(mode === 'probe' || mode === 'trace' || mode === 'full', 'Unknown acceptance selection');
   // The short probe runs exactly once. The second command still selects every
   // pre-existing case; it excludes only this exact new title, never a stage or
   // an original assertion. Neither command retries a publication or a test.
   return ['--no-install', 'playwright', 'test', '--config', 'cinematic/playwright.config.ts',
-    mode === 'probe' ? '--grep' : '--grep-invert', `(?:^|\\s)${PUBLISHER_PROBE_TITLE}$`, '--reporter=json'];
+    mode === 'full' ? '--grep-invert' : '--grep', mode === 'full'
+      ? `(?:^|\\s)(?:${PUBLISHER_PROBE_TITLE}|${CLEAR_TRACE_TITLE})$`
+      : `(?:^|\\s)${mode === 'probe' ? PUBLISHER_PROBE_TITLE : CLEAR_TRACE_TITLE}$`, '--reporter=json'];
 }
 export function assertHeightVideoEvidence(name, bytes) {
   assert.equal(name, HEIGHT_VIDEO_FILE);
@@ -190,7 +196,7 @@ async function main(action) {
       return text.replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED JWT]').trim().split('\n')[0].slice(0, 400);
     };
     const runCases = mode => {
-      const stem = mode === 'probe' ? 'publisher-response-probe' : 'playwright';
+      const stem = mode === 'probe' ? 'publisher-response-probe' : mode === 'trace' ? 'warm-clear-trace' : 'playwright';
       const report = resolve(privateDir, `${stem}.json`);
       const fd = openSync(resolve(privateDir, `${stem}.log`), 'w', 0o600);
       const result = spawnSync('npx', acceptanceRunArgs(mode),
@@ -211,10 +217,17 @@ async function main(action) {
         status: result.status === 0 ? 'PASS' : 'FAIL', exitCode: result.status,
         actualServices: true, retries: 0, cases, errors,
       };
-      writeFileSync(resolve(publicDir, mode === 'probe' ? 'publisher-response-probe-result.json' : 'browser-result.json'), JSON.stringify(outcome, null, 2));
+      writeFileSync(resolve(publicDir, mode === 'probe' ? 'publisher-response-probe-result.json' : mode === 'trace' ? 'warm-clear-trace-result.json' : 'browser-result.json'), JSON.stringify(outcome, null, 2));
       for (const item of cases) console.log(`${item.status}: ${item.title}`);
       return outcome;
     };
+    const trace = runCases('trace');
+    if (CLEAR_TRACE_DIAGNOSTIC_ONLY) {
+      writeFileSync(resolve(publicDir, 'browser-result.json'), JSON.stringify({ status: 'NOT_RUN', reason: 'SOURCE_PINNED_WARM_CLEAR_DIAGNOSTIC_ONLY',
+        actualServices: true, retries: 0, cases: [] }, null, 2));
+      throw new Error(`Diagnostic-only source: warm clear ${trace.status}; full acceptance NOT_RUN, no green release claim`);
+    }
+    assert.equal(trace.status, 'PASS', 'Warm clear trace failed; full journeys not repeated');
     const probe = runCases('probe');
     // Stop before the expensive height/readback comparisons if the one-POST
     // reproduction failed. HTTP200 or a later UI message cannot unlock them.

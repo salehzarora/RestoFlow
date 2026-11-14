@@ -1,5 +1,6 @@
 import { test, expect, type BrowserContext, type Page, type Response, type Locator } from '@playwright/test';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { enableFlutterSemantics, waitForFlutterBoot, readAccessibleText } from '../lib/flutter';
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
@@ -14,6 +15,7 @@ import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, evid
 import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
+import { bannerPublicProjection, bannerHtmlProjection, safeRegenerationErrors } from './banner-clear-trace.mjs';
 
 // This suite drives the shipped Flutter app. It never installs a mocked
 // repository, calls a privileged client, or writes SQL. Auth acceptance signs in
@@ -1907,6 +1909,115 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
   }
 }
 
+async function traceRenderedBanner(menu: Page, url: string, previousPaths: string[], sample: Obj): Promise<boolean> {
+  sample.requestAt = Date.now();
+  const response = await navigateAfterMediaSettles(menu, url, { waitUntil: 'domcontentloaded' });
+  sample.responseAt = Date.now(); sample.httpStatus = response?.status();
+  const headers = response?.headers() ?? {};
+  sample.cache = ['HIT', 'STALE', 'MISS', 'REVALIDATED'].includes(headers['x-nextjs-cache']) ? headers['x-nextjs-cache'] : 'unclassified';
+  sample.cacheControl = /^s-maxage=\d+(?:, stale-while-revalidate=\d+)?$/.test(headers['cache-control'] ?? '') ? headers['cache-control'] : null;
+  // Read this actual document response before the next navigation. No API GET
+  // replaces it; raw HTML/serialized tenant data never leaves this process.
+  const html = await response!.text();
+  sample.html = { sha256: createHash('sha256').update(html).digest('hex'), ...bannerHtmlProjection(html, previousPaths) };
+  sample.dom = await menu.evaluate(() => {
+    const top = document.querySelectorAll('[data-sf-menu-top]'), banners = document.querySelectorAll('[data-sf-menu-banner]');
+    return { topCount: top.length, bannerCount: banners.length,
+      readyState: document.readyState, images: Array.from(banners).flatMap(b => Array.from(b.querySelectorAll('img')).map(image => {
+        const r = image.getBoundingClientRect(), style = getComputedStyle(image);
+        return { src: image.getAttribute('src'), currentSrc: image.currentSrc, complete: image.complete,
+          naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight,
+          width: r.width, height: r.height, visible: r.width > 0 && r.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' };
+      })) };
+  });
+  sample.observedAt = Date.now();
+  return sample.dom.topCount === 1 && sample.dom.bannerCount === 0;
+}
+function traceDecodedBanner(envelope: unknown): Obj {
+  return JSON.parse(execFileSync(process.execPath, [resolve(process.env.GITHUB_WORKSPACE!, 'e2e/cinematic/banner-clear-decode.mjs')], {
+    input: JSON.stringify(envelope), encoding: 'utf8', timeout: 5000, maxBuffer: 65536, stdio: ['pipe', 'pipe', 'pipe'],
+  }));
+}
+
+// One saved banner, one warm ordinary URL, one real clear/save. This is an
+// isolated source-state trace, not a replacement for the three full journeys.
+test('warm saved banner → one clear → ordinary menu read/render trace', async ({ page, context }) => {
+  test.setTimeout(3 * 60_000);
+  const f = fixture(), network = await guardBrowser(context), media = observeLogicalMedia(context, { dashboard: DASHBOARD, storefront: STOREFRONT });
+  const receipt: Obj = { status: 'FAIL', scope: 'ownerA synthetic data; ordinary warmed URL; no cache busting', samples: [], contentSaveCalls: 0 };
+  const diagnostics = new UploadDiagnostics(); let primary: unknown, hasPrimary = false, guardError: unknown;
+  const byteGuard: Obj = { status: 'NOT_RUN' };
+  try {
+    await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();
+    await fillField(page, L.email, f.ownerA.email); await enterLoginPassword(page, f.ownerA.password);
+    const observed = observeResponse(page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API)));
+    const auth = await responseAfterAction(observed, () => tapButton(page, L.login, { which: 'last' }));
+    expect(auth.status()).toBe(200); const session = await auth.json(); expect(session.user.email).toBe(f.ownerA.email);
+    await openEditor(page); await openFoldedGroup(page, 'banner');
+    const before = await rpc(f, session.access_token, 'get_restaurant_storefront_content_v6');
+    receipt.before = bannerDocumentEvidence(before.document);
+    // A pre-existing independent desktop selection would be a different case;
+    // never erase it just to make the no-banner predicate true.
+    expect(before.document.appearance.menu_banner_desktop_media_id ?? null).toBeNull();
+    const bytes = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), 'ux003-banner-0.png'));
+    const published = await upload(page, 'warm-clear-native-probe.png', diagnostics, 200, 'banner', bytes);
+    await saveContent(page); receipt.contentSaveCalls++;
+    const saved = await rpc(f, session.access_token, 'get_restaurant_storefront_content_v6');
+    expect(saved.document.appearance.menu_banner_media_id).toBe(published.media.id);
+    receipt.saved = bannerDocumentEvidence(saved.document);
+    const menu = await context.newPage(); await menu.setViewportSize({ width: 390, height: 844 });
+    const url = STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu';
+    const publicRead = async () => {
+      const reply = await fetch(API + '/rest/v1/rpc/storefront_menu_v11', { method: 'POST', redirect: 'error',
+        headers: { apikey: f.anonKey, authorization: 'Bearer ' + f.anonKey, 'content-type': 'application/json' }, body: JSON.stringify({ p_slug: f.ownerA.slug }) });
+      expect(reply.status).toBe(200); const result = await reply.json(); expect(result.ok).toBe(true); return result;
+    };
+    const selected = await publicRead(), previousPath = selected.content_v1.appearance.menu_banner_url;
+    receipt.selected = traceDecodedBanner(selected);
+    receipt.warm = {}; media.phase('warm-clear-saved');
+    await traceRenderedBanner(menu, url, [previousPath], receipt.warm);
+    await expect(menu.locator('[data-sf-menu-banner] img')).toHaveCount(1);
+    await expect.poll(() => menu.locator('[data-sf-menu-banner] img').getAttribute('src')).toContain(previousPath);
+    receipt.warmedAt = Date.now();
+    await revealButton(page, L.bannerClear); await tapRevealedButton(page, L.bannerClear);
+    receipt.clearStartedAt = Date.now();
+    await saveContent(page, (phase, response, body) => {
+      if (phase === 'request') receipt.saveRequest = { at: Date.now(), status: response.status(),
+        document: bannerDocumentEvidence(response.request().postDataJSON()?.p_document) };
+      else receipt.saveResult = { at: Date.now(), status: response.status(), ok: body?.ok, version: body?.version };
+    }); receipt.contentSaveCalls++; receipt.savedAt = Date.now();
+    await openEditor(page, true);
+    const cleared = await rpc(f, session.access_token, 'get_restaurant_storefront_content_v6');
+    receipt.readback = bannerDocumentEvidence(cleared.document);
+    expect(cleared.document.appearance.menu_banner_media_id).toBeNull();
+    const retained = structuredClone(saved.document); retained.appearance.menu_banner_media_id = null;
+    expect(cleared.document, 'One clear preserves the desktop selection and every non-target content field').toEqual(retained);
+    receipt.nonTargetContentUnchanged = true;
+    receipt.cleared = traceDecodedBanner(await publicRead()); receipt.readAt = Date.now();
+    expect(receipt.cleared.decoder.accepted).toBe(true);
+    media.phase('warm-clear-render');
+    await expect.poll(async () => {
+      const sample: Obj = {}; receipt.samples.push(sample);
+      return traceRenderedBanner(menu, url, [previousPath], sample);
+    }, { timeout: 100000, intervals: [250, 500, 1000], message: 'The same warmed ordinary menu URL renders the actual cleared state' }).toBe(true);
+    receipt.status = 'PASS';
+  } catch (error) { primary = error; hasPrimary = true; receipt.failure = bannerAssertionFailure(error); }
+  finally {
+    // Independent original guard, even on primary clear failure; no later UI
+    // mutation or publication. Preserve both outcomes and the primary error.
+    try { await network.check(); byteGuard.status = 'PASS'; }
+    catch (error) { guardError = error; byteGuard.status = 'FAIL'; byteGuard.failure = bannerAssertionFailure(error); }
+    receipt.byteGuard = byteGuard; receipt.upload = diagnostics.snapshot(); receipt.logicalMedia = media.snapshot(); media.stop();
+    const serverLog = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), 'storefront.log'), 'utf8');
+    receipt.serverReads = serverLog.split(/\r?\n/).filter(line => line.startsWith('CINEMATIC_BANNER_READ ')).slice(-400)
+      .map(line => JSON.parse(line.slice('CINEMATIC_BANNER_READ '.length)));
+    receipt.serverErrors = safeRegenerationErrors(serverLog);
+    writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'warm-clear-trace.json'), JSON.stringify(receipt, null, 2));
+  }
+  if (hasPrimary) throw primary;
+  if (guardError) throw guardError;
+});
+
 // One independent short reproduction before the expensive original journeys.
 // Owner B has the existing isolated real onboarding/catalogue fixture. This
 // publishes one asset without selecting/saving it; owner A is never mutated.
@@ -2400,6 +2511,9 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
   const uploads: UploadDiagnostics[] = [];
   let signedIn = false, passed = false;
   let phase = 'baseline', failure: Obj | null = null;
+  let primaryFailure: { error: unknown } | null = null, guardError: { error: unknown } | null = null;
+  const byteGuard: Obj = { status: 'NOT_RUN', failure: null };
+  let failedPhase: string | null = null;
   const recordPhase = (value: string) => { phase = bannerEvidencePhase(value); mediaObservation.phase(phase); };
   try {
     await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();
@@ -2416,18 +2530,25 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
     await verifyBannerJourney(page, menu, f, session.access_token, () => {
       const value = new UploadDiagnostics(); uploads.push(value); return value;
     }, recordPhase);
-    await menu.waitForLoadState('networkidle', { timeout: 30000 });
-    recordPhase('final-byte-guard'); await network.check(); passed = true; recordPhase('complete');
   } catch (error) {
+    primaryFailure = { error }; failedPhase = phase;
     failure = bannerAssertionFailure(error); throw error;
   } finally {
+    // Independent read-only termination work. Preserve the exact primary error;
+    // a guard failure is recorded separately and never starts another UI write.
+    recordPhase('final-byte-guard');
+    try { await network.check(); byteGuard.status = 'PASS'; }
+    catch (error) { guardError = { error }; byteGuard.status = 'FAIL'; byteGuard.failure = bannerAssertionFailure(error); }
+    passed = primaryFailure === null && guardError === null;
+    if (passed) recordPhase('complete');
     try {
       if (signedIn && !passed) await failureScreenshot(page, resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-dashboard-failure-test-data.png'));
       writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-browser-result.json'), JSON.stringify({
-        status: passed ? 'PASS' : 'FAIL', phase, failure, realUiSignIn: signedIn, uploads: uploads.map(item => item.snapshot()),
+        status: passed ? 'PASS' : 'FAIL', phase, failedPhase, failure, byteGuard, realUiSignIn: signedIn, uploads: uploads.map(item => item.snapshot()),
         fonts: network.fonts(), mediaTransport: network.media(), logicalMediaObservation: mediaObservation.snapshot(),
       }, null, 2));
-    } catch (error) { if (!failure) throw error; }
+    } catch (error) { if (!primaryFailure && !guardError) throw error; }
     finally { mediaObservation.stop(); }
+    if (!primaryFailure && guardError) throw guardError.error;
   }
 });
