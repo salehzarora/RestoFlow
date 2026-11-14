@@ -25,6 +25,20 @@ const copy = {
   reset: 'إعادة هذا الارتفاع إلى التلقائي', clear: 'مسح اختيار الكمبيوتر فقط',
 };
 
+// Per owned test Page only. A request remains pending until its native browser
+// body observation finishes (success OR failure); failures still reach the
+// unchanged byte guard. This is not a cache, retry or alternative byte source.
+const pageImageEvidence = new WeakMap<Page, Set<Promise<void>>>();
+async function withinNavigationDeadline<T>(operation: Promise<T>, deadline: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([operation, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Current document image evidence exceeded the original navigation deadline.')),
+        Math.max(1, deadline - Date.now()));
+    })]);
+  } finally { if (timer !== undefined) clearTimeout(timer); }
+}
+
 /** Finish existing resource reads before leaving their document. The quiet wait
  * consumes the caller's original navigation budget; no retry or new request. */
 export async function navigateAfterMediaSettles(page: Page, url: string, options: Parameters<Page['goto']>[1]) {
@@ -32,6 +46,18 @@ export async function navigateAfterMediaSettles(page: Page, url: string, options
   if (!Number.isFinite(budget) || budget <= 0) throw new Error('A finite navigation budget is required.');
   const deadline = Date.now() + budget;
   await page.waitForLoadState('networkidle', { timeout: budget });
+  const pending = pageImageEvidence.get(page);
+  if (pending) {
+    // A viewport change can start picture selection after an earlier networkidle
+    // loadstate. Observe that rendering opportunity and decode only the current,
+    // already-visible banner; do not preload other images or request another URL.
+    await withinNavigationDeadline(page.evaluate(async () => {
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      const image = document.querySelector('[data-sf-menu-banner] img');
+      if (image instanceof HTMLImageElement && image.currentSrc) await image.decode();
+    }), deadline);
+    while (pending.size > 0) await withinNavigationDeadline(Promise.all([...pending]), deadline);
+  }
   return page.goto(url, { ...options, timeout: Math.max(1, deadline - Date.now()) });
 }
 
@@ -42,7 +68,13 @@ export function observeLogicalMedia(context: BrowserContext, surfaces: { dashboa
   const started = Date.now(), now = () => Date.now() - started;
   let phase = 'baseline', requestSequence = 0, pageSequence = 0, frameSequence = 0;
   const failures: Obj[] = [];
+  // Bounded positive evidence for exactly the six viewport transitions whose
+  // outgoing-document reads failed in the diagnostic run. All requests still
+  // count in the unchanged guard; this sample never selects accepted responses.
+  const transitions: Obj[] = [];
+  let transition: Obj | null = null;
   const facts = new WeakMap<Request, Obj>(), pages = new WeakMap<Page, Obj>(), frames = new WeakMap<Frame, Obj>();
+  const completeEvidence = new WeakMap<Request, () => void>();
   const removers: (() => void)[] = [];
   const frameState = (frame: Frame) => {
     let value = frames.get(frame);
@@ -53,11 +85,13 @@ export function observeLogicalMedia(context: BrowserContext, surfaces: { dashboa
   const watchPage = (page: Page) => {
     if (pages.has(page)) return;
     const state: Obj = { pageId: `p${++pageSequence}`, closedMs: null }; pages.set(page, state);
+    pageImageEvidence.set(page, new Set());
     const navigated = (frame: Frame) => { const value = frameState(frame); value.observerDocumentEpoch++; value.navigationCommittedMs = now(); };
     const detached = (frame: Frame) => { frameState(frame).detachedMs = now(); };
     const closed = () => { state.closedMs = now(); };
     page.on('framenavigated', navigated); page.on('framedetached', detached); page.on('close', closed);
-    removers.push(() => { page.off('framenavigated', navigated); page.off('framedetached', detached); page.off('close', closed); });
+    removers.push(() => { page.off('framenavigated', navigated); page.off('framedetached', detached); page.off('close', closed);
+      pageImageEvidence.delete(page); });
   };
   const location = (request: Request) => {
     try {
@@ -78,17 +112,33 @@ export function observeLogicalMedia(context: BrowserContext, surfaces: { dashboa
   const remember = (value: Obj) => { if (failures.length < 8) failures.push(value); };
   const requested = (request: Request) => {
     if (request.isNavigationRequest()) {
-      try { const value = frameState(request.frame()); value.navigationSequence++; value.navigationStartedMs = now(); } catch { /* Detached frame: diagnostic only. */ }
+      try { const value = frameState(request.frame()); value.navigationSequence++; value.navigationStartedMs = now();
+        const where = location(request);
+        if (transition && transition.firstNavigation === null && where.pageSurface === 'storefront' && where.frameKind === 'main')
+          transition.firstNavigation = { observedMs: now(), ...where };
+      } catch { /* Detached frame: diagnostic only. */ }
     }
-    if (admitted(request)) facts.set(request, { requestId: `r${++requestSequence}`, requestMs: now(), phaseAtRequest: phase,
-      atRequest: location(request), finishedMs: null, failedMs: null });
+    if (admitted(request)) {
+      facts.set(request, { requestId: `r${++requestSequence}`, requestMs: now(), phaseAtRequest: phase,
+        atRequest: location(request), finishedMs: null, failedMs: null });
+      const fact = facts.get(request)!;
+      if (transition && transition.firstNavigation === null && transition.requests.length < 4
+        && fact.atRequest.pageSurface === 'storefront' && fact.atRequest.frameKind === 'main') transition.requests.push(fact);
+      try {
+        const pending = pageImageEvidence.get(request.frame().page())!;
+        let resolve!: () => void;
+        const observation = new Promise<void>(done => { resolve = done; }); pending.add(observation);
+        completeEvidence.set(request, () => { pending.delete(observation); resolve(); });
+      } catch { /* A detached frame still fails the unchanged guard; no success is fabricated. */ }
+    }
   };
   const finished = (request: Request) => { if (admitted(request)) { requestFinished++;
     const value = facts.get(request); if (value) { value.finishedMs = now(); value.atFinish = location(request); } } };
   const failed = (request: Request) => { if (admitted(request)) { requestFailed++;
     const value = facts.get(request) ?? { requestId: 'unobserved' };
     value.failedMs = now(); value.atFailure = location(request);
-    remember({ stage: 'native-request', classification: classifyMediaReadError(request.failure()?.errorText), fact: value }); } };
+    remember({ stage: 'native-request', classification: classifyMediaReadError(request.failure()?.errorText), fact: value });
+    completeEvidence.get(request)?.(); } };
   const response = (reply: Response) => {
     if (!admitted(reply.request())) return;
     responses++;
@@ -97,19 +147,29 @@ export function observeLogicalMedia(context: BrowserContext, surfaces: { dashboa
     Object.assign(fact, { responseMs: now(), phaseAtResponse: phase, atResponse: location(reply.request()), bodyReadStartedMs: now() });
     void reply.body().then(bytes => {
       const matches = dashboardImageBytesMatch(hash, status, bytes);
+      Object.assign(fact, { bodyReadEndedMs: now(), bodyReadStatus: 'read', bodyMatched: matches,
+        bodyBytes: bytes.byteLength, atBodyRead: location(reply.request()) });
       bodyReads++;
       if (matches) filenameMatches++;
       else { otherPayloads++; fact.bodyReadEndedMs = now();
         remember({ stage: 'response-body', classification: 'digest-or-status', httpStatus: status, fact }); }
-    }).catch(error => { bodyErrors++; Object.assign(fact, { bodyReadEndedMs: now(), phaseAtBodyFailure: phase, atBodyFailure: location(reply.request()) });
-      remember({ stage: 'response-body', classification: classifyMediaReadError(error), detail: mediaReadErrorDetail(error), httpStatus: status, fact }); });
+    }).catch(error => { bodyErrors++; Object.assign(fact, { bodyReadEndedMs: now(), bodyReadStatus: 'unavailable', phaseAtBodyFailure: phase, atBodyFailure: location(reply.request()) });
+      remember({ stage: 'response-body', classification: classifyMediaReadError(error), detail: mediaReadErrorDetail(error), httpStatus: status, fact });
+    }).finally(() => completeEvidence.get(reply.request())?.());
   };
   context.pages().forEach(watchPage); context.on('page', watchPage); context.on('request', requested);
   context.on('requestfinished', finished); context.on('requestfailed', failed); context.on('response', response);
   return {
-    phase: (value: string) => { phase = bannerEvidencePhase(value); },
+    phase: (value: string) => {
+      phase = bannerEvidencePhase(value);
+      if (/^responsive-desktop-(?:replaced|selected|cleared)-(?:390|1280)$/.test(phase)
+        && !transitions.some(sample => sample.phase === phase) && transitions.length < 6) {
+        transition = { phase, markedMs: now(), firstNavigation: null, requests: [] }; transitions.push(transition);
+      } else if (transition?.phase !== phase) transition = null;
+    },
     snapshot: () => ({ responses, requestFinished, requestFailed, bodyReads, bodyErrors, filenameMatches, otherPayloads,
       pendingBodies: responses - bodyReads - bodyErrors, failures: structuredClone(failures),
+      responsiveTransitionSamples: structuredClone(transitions),
       scope: 'Passive native public-image diagnostics only; local observer epochs are not CDP loader IDs; original guard remains authoritative' }),
     stop: () => { context.off('page', watchPage); context.off('request', requested); context.off('requestfinished', finished);
       context.off('requestfailed', failed); context.off('response', response); removers.forEach(remove => remove()); },
