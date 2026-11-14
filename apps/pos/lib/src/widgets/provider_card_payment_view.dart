@@ -358,6 +358,17 @@ class _ProviderCardPaymentViewState
                 icon: Icons.science_outlined,
                 body: l10n.posCardTestBadge,
               ),
+              // D9 (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F-D9-SAFETY-COPY-001):
+              // beside the TEST notice, on every TEST attempt, never on LIVE.
+              // Its wording is conditional, so it stays true while this view
+              // shows a final TEST result. It describes the existing
+              // restriction and changes no action, timer or state.
+              const SizedBox(height: RestoflowSpacing.xs),
+              Text(
+                l10n.posCardTestOrderHoldSafety,
+                key: const Key('card-test-hold-safety'),
+                style: theme.textTheme.bodyMedium,
+              ),
             ],
             const SizedBox(height: RestoflowSpacing.md),
             Row(

@@ -8885,6 +8885,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posCardTestBadge => 'TEST — nothing is recorded';
 
   @override
+  String get posCardTestOrderHoldSafety =>
+      'An unresolved TEST attempt keeps this order blocked on this till until a status check confirms a final result or a manager/operator closes the attempt.';
+
+  @override
   String get posCardPreparingTitle => 'Preparing the card request';
 
   @override

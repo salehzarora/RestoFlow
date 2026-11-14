@@ -8824,6 +8824,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posCardTestBadge => 'اختبار — لا يُسجَّل أي شيء';
 
   @override
+  String get posCardTestOrderHoldSafety =>
+      'إذا بقيت محاولة TEST دون نتيجة نهائية، يبقى هذا الطلب محجوزًا على هذا الكاشير حتى يؤكد فحص الحالة نتيجة نهائية أو يغلق المدير أو المشغّل المحاولة.';
+
+  @override
   String get posCardPreparingTitle => 'جارٍ تجهيز طلب البطاقة';
 
   @override

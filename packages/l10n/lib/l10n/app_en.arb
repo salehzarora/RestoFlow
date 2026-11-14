@@ -5547,6 +5547,8 @@
   "@posCardAttemptTestTitle": {"description": "BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: title of a TEST attempt"},
   "posCardTestBadge": "TEST — nothing is recorded",
   "@posCardTestBadge": {"description": "BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: badge on every TEST attempt"},
+  "posCardTestOrderHoldSafety": "An unresolved TEST attempt keeps this order blocked on this till until a status check confirms a final result or a manager/operator closes the attempt.",
+  "@posCardTestOrderHoldSafety": {"description": "BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F-D9-SAFETY-COPY-001: card view: the owner-approved D9 sentence shown beside the TEST badge on every TEST attempt (never on LIVE); it states the existing restriction conditionally"},
   "posCardPreparingTitle": "Preparing the card request",
   "@posCardPreparingTitle": {"description": "BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: card view: the start request is being prepared or sent"},
   "posCardPreparingBody": "Do not take payment another way while this request is open.",

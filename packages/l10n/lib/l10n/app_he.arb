@@ -2668,6 +2668,7 @@
   "posCardAttemptTitle": "תשלום במסוף כרטיסים",
   "posCardAttemptTestTitle": "בדיקת מסוף כרטיסים",
   "posCardTestBadge": "בדיקה — דבר אינו נרשם",
+  "posCardTestOrderHoldSafety": "כל עוד ניסיון TEST לא הוכרע, ההזמנה נשארת חסומה בקופה זו עד שבדיקת הסטטוס מאשרת תוצאה סופית או שמנהל או מפעיל סוגר את הניסיון.",
   "posCardPreparingTitle": "מכינים את בקשת הכרטיס",
   "posCardPreparingBody": "אל תקבלו תשלום בדרך אחרת כל עוד הבקשה פתוחה.",
   "posCardNotSentTitle": "בקשת הכרטיס לא נשלחה",
