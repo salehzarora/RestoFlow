@@ -51,3 +51,12 @@ export function dashboardMediaReady(requests, verified, checks) {
   return Number.isInteger(requests) && requests > 0 && verified === requests
     && Array.isArray(checks) && checks.length === requests && checks.every(value => value === true);
 }
+
+// Diagnostic enums only. Never export an exception message or change a guard.
+export function classifyMediaReadError(error) {
+  const message = typeof error === 'string' ? error : error instanceof Error ? error.message : '';
+  if (/No data found for resource|No resource with given identifier|Network\.getResponseBody/i.test(message)) return 'body-unavailable';
+  if (/Target.*closed|page.*closed|context.*closed|browser.*closed/i.test(message)) return 'context-closed';
+  if (/net::ERR_ABORTED|\babort(?:ed)?\b|cancel(?:led|ed)/i.test(message)) return 'aborted';
+  return 'unclassified';
+}

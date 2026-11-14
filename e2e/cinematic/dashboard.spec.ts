@@ -8,7 +8,7 @@ import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } fro
 import { LOGICAL_ORIGIN, localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot, completeResponsiveFixture, responsiveFixtureMismatch } from './banner-responsive';
-import { verifyResponsiveBannerSettings, adjustBannerHeightWithKeyboard } from './responsive-banner-settings';
+import { verifyResponsiveBannerSettings, adjustBannerHeightWithKeyboard, navigateAfterMediaSettles, observeLogicalMedia } from './responsive-banner-settings';
 import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady } from './responsive-banner-settings.mjs';
 import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
@@ -1400,9 +1400,9 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
     stage = 'matching-saved-phone-preview-and-storefront';
     await expect.poll(async () => (await geometry(phone)).position).toBe('38% 9%');
     const afterPreview = await geometry(phone);
-    await menu.setViewportSize({ width: 390, height: 844 });
+    await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width: 390, height: 844 });
     await expect.poll(async () => {
-      await menu.goto(STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+      await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
       const image = menu.locator('[data-sf-menu-banner] img');
       return await image.count() === 1 ? image.evaluate(el => getComputedStyle(el).objectPosition) : '';
     }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe('38% 9%');
@@ -1465,9 +1465,9 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
   const target = { x: 38, y: 9 }, annotation = 'BANNER FIT — بيانات اختبار';
   let expectedPath = '';
   const render = async (width: number, state: string, enabled = true, theme?: string, annotated = false) => {
-    await menu.setViewportSize({ width, height: width > 650 ? 900 : 844 });
+    await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width, height: width > 650 ? 900 : 844 });
     await expect.poll(async () => {
-      await menu.goto(STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+      await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
       return menu.evaluate(marker => ({ state: document.querySelector('[data-sf-order-status] [data-state]')?.getAttribute('data-state'),
         images: document.querySelectorAll('[data-sf-menu-banner] img').length,
         light: getComputedStyle(document.querySelector('[data-sf-root]')!).getPropertyValue('--bg').trim().toLowerCase() === '#ffffff',
@@ -1663,7 +1663,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
       expect(dimensions).toEqual({ width: publication.media.width, height: publication.media.height });
       expect(Math.max(dimensions.width, dimensions.height)).toBeLessThanOrEqual(960);
       await expect.poll(async () => {
-        await menu.goto(STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+        await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
         const image = menu.locator('[data-sf-menu-banner] img');
         return await image.count() === 1 && (await image.getAttribute('src'))?.endsWith(path);
       }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe(true);
@@ -1677,7 +1677,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
         stage = 'restored-banner-public-read-and-render';
         expect((await publicMenu()).content_v1.appearance.menu_banner_url).toBe(path);
         await expect.poll(async () => {
-          await menu.goto(STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+          await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
           const restored = menu.locator('[data-sf-menu-banner] img');
           return await restored.count() === 1 ? {
             sameResource: (await restored.getAttribute('src'))?.endsWith(path),
@@ -1820,7 +1820,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
     await revealButton(page, L.bannerClear); await tapRevealedButton(page, L.bannerClear); await saveContent(page);
     await openEditor(page, true); expect((await read()).appearance.menu_banner_media_id).toBeNull(); await unchanged();
     await expect.poll(async () => {
-      await menu.goto(STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+      await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
       return await menu.locator('[data-sf-menu-top]').count() === 1 && await menu.locator('[data-sf-menu-banner]').count() === 0;
     }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe(true);
     receipt.status = 'BANNER_UPLOAD_E2E_PASS'; receipt.failedStage = null;
@@ -2115,9 +2115,9 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     const legacyColours = { ...referenceColours, primary: '#00ff00' };
     await renderMenu(menu, f, firstUrl, 15, legacyColours);
     await screenshot(menu, resolve(out, 'scene-same-source-legacy-desktop-test-data.png'));
-    await menu.setViewportSize({ width: 390, height: 844 });
+    await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width: 390, height: 844 });
     await screenshot(menu, resolve(out, 'scene-same-source-legacy-mobile-test-data.png'));
-    await menu.setViewportSize({ width: 1440, height: 1000 });
+    await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width: 1440, height: 1000 });
     await quality.captureScene(context.browser()!, menu.url(), pair, 'legacy', guardBrowser);
     stages.push(stage);
 
@@ -2160,12 +2160,12 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       if (dim === 15) {
         await verifyMenuGeometry(menu);
         await screenshot(menu, resolve(out, 'scene-same-source-reference-desktop-test-data.png'));
-        await menu.setViewportSize({ width: 390, height: 844 });
+        await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width: 390, height: 844 });
         await verifyReferenceScene(menu, dim);
         await verifyMenuGeometry(menu);
         await screenshot(menu, resolve(out, 'scene-same-source-reference-mobile-test-data.png'));
         await quality.captureScene(context.browser()!, menu.url(), pair, 'reference_dark', guardBrowser);
-        await menu.setViewportSize({ width: 1440, height: 1000 });
+        await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width: 1440, height: 1000 });
       }
       await invariants(f, token);
       stages.push(stage);
@@ -2210,7 +2210,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await renderMenu(menu, f, secondUrl, 15);
     await verifyMenuGeometry(menu);
     await screenshot(menu, resolve(out, 'storefront-desktop-test-data.png'));
-    await menu.setViewportSize({ width: 390, height: 844 });
+    await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width: 390, height: 844 });
     await verifyMenuGeometry(menu);
     await screenshot(menu, resolve(out, 'storefront-mobile-test-data.png'));
     await reveal(page, page.getByRole('slider'), 'dimming', page.getByRole('slider', { includeHidden: true }));
@@ -2269,7 +2269,7 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
   // The added independent device heights/media include fourteen live readbacks.
   // Use the same finite case budget as the other full Dashboard journey.
   test.setTimeout(20 * 60_000);
-  const f = fixture(), network = await guardBrowser(context);
+  const f = fixture(), network = await guardBrowser(context), mediaObservation = observeLogicalMedia(context, { dashboard: DASHBOARD, storefront: STOREFRONT });
   const uploads: UploadDiagnostics[] = [];
   let signedIn = false, passed = false;
   try {
@@ -2287,12 +2287,15 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
     await verifyBannerJourney(page, menu, f, session.access_token, () => {
       const value = new UploadDiagnostics(); uploads.push(value); return value;
     });
+    await menu.waitForLoadState('networkidle', { timeout: 30000 });
     await network.check(); passed = true;
   } finally {
-    if (signedIn && !passed) await failureScreenshot(page, resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-dashboard-failure-test-data.png'));
-    writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-browser-result.json'), JSON.stringify({
-      status: passed ? 'PASS' : 'FAIL', realUiSignIn: signedIn, uploads: uploads.map(item => item.snapshot()),
-      fonts: network.fonts(), mediaTransport: network.media(),
-    }, null, 2));
+    try {
+      if (signedIn && !passed) await failureScreenshot(page, resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-dashboard-failure-test-data.png'));
+      writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-browser-result.json'), JSON.stringify({
+        status: passed ? 'PASS' : 'FAIL', realUiSignIn: signedIn, uploads: uploads.map(item => item.snapshot()),
+        fonts: network.fonts(), mediaTransport: network.media(), logicalMediaObservation: mediaObservation.snapshot(),
+      }, null, 2));
+    } finally { mediaObservation.stop(); }
   }
 });

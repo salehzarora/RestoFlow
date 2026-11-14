@@ -1,9 +1,10 @@
-import { expect, type Locator, type Page, type Request } from '@playwright/test';
+import { expect, type Locator, type Page, type Request, type Response, type BrowserContext } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { bannerGeometry, bannerViewportScreenshot } from './banner-responsive';
-import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady } from './responsive-banner-settings.mjs';
+import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady, dashboardImageBytesMatch, classifyMediaReadError } from './responsive-banner-settings.mjs';
+import { LOGICAL_ORIGIN, localMediaTarget } from './live-transport.mjs';
 
 type Obj = Record<string, any>;
 type Dependencies = {
@@ -21,6 +22,56 @@ const copy = {
   mobileHeight: 'ارتفاع صورة الهاتف', desktopHeight: 'ارتفاع صورة الكمبيوتر',
   reset: 'إعادة هذا الارتفاع إلى التلقائي', clear: 'مسح اختيار الكمبيوتر فقط',
 };
+
+/** Finish existing resource reads before leaving their document. The quiet wait
+ * consumes the caller's original navigation budget; no retry or new request. */
+export async function navigateAfterMediaSettles(page: Page, url: string, options: Parameters<Page['goto']>[1]) {
+  const budget = options?.timeout ?? 30_000;
+  if (!Number.isFinite(budget) || budget <= 0) throw new Error('A finite navigation budget is required.');
+  const deadline = Date.now() + budget;
+  await page.waitForLoadState('networkidle', { timeout: budget });
+  return page.goto(url, { ...options, timeout: Math.max(1, deadline - Date.now()) });
+}
+
+/** Passive diagnostics beside the unchanged isolation guard. Playwright caches
+ * each native response-body promise; this neither re-fetches nor substitutes it. */
+export function observeLogicalMedia(context: BrowserContext, surfaces: { dashboard: string; storefront: string }) {
+  let responses = 0, requestFinished = 0, requestFailed = 0, bodyReads = 0, bodyErrors = 0, filenameMatches = 0, otherPayloads = 0;
+  const failures: Obj[] = [];
+  const admitted = (request: Request) => {
+    try { return new URL(request.url()).origin === LOGICAL_ORIGIN && request.resourceType() === 'image'
+      && typeof localMediaTarget(request.url(), request.method()) === 'string'; }
+    catch { return false; }
+  };
+  const remember = (value: Obj) => { if (failures.length < 8) failures.push(value); };
+  const surface = (request: Request) => {
+    try { const frame = request.frame(), origin = new URL(frame.page().url()).origin;
+      return { pageSurface: origin === surfaces.dashboard ? 'dashboard' : origin === surfaces.storefront ? 'storefront' : 'other',
+        frameKind: frame.parentFrame() === null ? 'main' : 'child' }; }
+    catch { return { pageSurface: 'detached', frameKind: 'detached' }; }
+  };
+  const finished = (request: Request) => { if (admitted(request)) requestFinished++; };
+  const failed = (request: Request) => { if (admitted(request)) { requestFailed++;
+    remember({ stage: 'native-request', classification: classifyMediaReadError(request.failure()?.errorText), ...surface(request) }); } };
+  const response = (reply: Response) => {
+    if (!admitted(reply.request())) return;
+    responses++;
+    const hash = new URL(reply.url()).pathname.split('/').at(-1)!.slice(0, -5), status = reply.status(), location = surface(reply.request());
+    void reply.body().then(bytes => {
+      const matches = dashboardImageBytesMatch(hash, status, bytes);
+      bodyReads++;
+      if (matches) filenameMatches++;
+      else { otherPayloads++; remember({ stage: 'response-body', classification: 'digest-or-status', httpStatus: status, ...location }); }
+    }).catch(error => { bodyErrors++; remember({ stage: 'response-body', classification: classifyMediaReadError(error), httpStatus: status, ...location }); });
+  };
+  context.on('requestfinished', finished); context.on('requestfailed', failed); context.on('response', response);
+  return {
+    snapshot: () => ({ responses, requestFinished, requestFailed, bodyReads, bodyErrors, filenameMatches, otherPayloads,
+      pendingBodies: responses - bodyReads - bodyErrors, failures: failures.map(value => ({ ...value })),
+      scope: 'Passive native public-image diagnostics only; original guard remains authoritative' }),
+    stop: () => { context.off('requestfinished', finished); context.off('requestfailed', failed); context.off('response', response); },
+  };
+}
 
 export async function adjustBannerHeightWithKeyboard(page: Page, reveal: (target: Locator) => Promise<void>, from: number, to: number): Promise<void> {
     const value = page.getByText(`${from} CSS px`, { exact: true });
@@ -228,14 +279,14 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
           return null;
         }
       };
-      await menu.setViewportSize({ width, height: index ? 900 : 844 });
+      await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width, height: index ? 900 : 844 });
       const warmStarted = Date.now(); let hydrated = false, reloadAt = 0, navigations = 0;
       await expect.poll(async () => {
         // Reuse renderMenu's existing bounded ISR/hydration pattern: do not
         // discard a pending hydration frame by navigating at every sample.
         if (navigations === 0 || (hydrated && Date.now() >= reloadAt)) {
           const remaining = Math.max(1, 100000 - (Date.now() - warmStarted));
-          await menu.goto(d.url, { waitUntil: 'domcontentloaded', timeout: Math.min(30000, remaining) });
+          await navigateAfterMediaSettles(menu, d.url, { waitUntil: 'domcontentloaded', timeout: Math.min(30000, remaining) });
           navigations++; hydrated = false; reloadAt = Date.now() + 5000;
         }
         const measured = await measure(menu.locator('[data-sf-menu-top]'), 'warm_navigation');
@@ -247,7 +298,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       // use a fresh, session-free context to prove native picture selection.
       const sample = await d.freshMenu(width), surface = sample.page;
       try {
-      await surface.goto(d.url, { waitUntil: 'domcontentloaded' });
+      await navigateAfterMediaSettles(surface, d.url, { waitUntil: 'domcontentloaded' });
       const source = surface.locator('[data-sf-menu-banner] img'); await expect(source).toHaveCount(1);
       await source.evaluate(async img => { await (img as HTMLImageElement).decode(); });
       await expect.poll(async () => {
@@ -312,6 +363,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
         resourceRelationship: site.publicPath === draft.publicPath ? 'SAME_PUBLISHED_RESOURCE' : 'DECLARED_SAME_SOURCE_COMPANION',
         imageHeight: site.height, viewportGeometryMatches: true, state: site.state, focus, natural: [site.naturalWidth, site.naturalHeight], requestedBannerResources: requested,
         dashboardCaptureViewport: captureViewport, zoom: 100 });
+      await surface.waitForLoadState('networkidle', { timeout: 30000 });
       await sample.check();
       receipt.comparisonPhase = 'complete';
       } finally { await sample.close(); }
@@ -413,9 +465,9 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       expect((await d.publicRead(11)).content_v1.appearance.menu_banner_layout).toBeNull();
       receipt.restoration.publicLayoutNull = true;
       receipt.restoration.stage = 'storefront-restored-legacy-document';
-      await menu.setViewportSize({ width: 390, height: 844 });
+      await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width: 390, height: 844 });
       await expect.poll(async () => {
-        const response = await menu.goto(d.url, { waitUntil: 'domcontentloaded' });
+        const response = await navigateAfterMediaSettles(menu, d.url, { waitUntil: 'domcontentloaded' });
         const observation = { restoredLegacy: await menu.locator('[data-sf-banner-layout="responsive"]').count() === 0,
           imageCount: await menu.locator('[data-sf-menu-banner] img').count() };
         const cache = response?.headers()['x-nextjs-cache'];

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { responsiveBannerKeys, responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady,
-  dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady } from './responsive-banner-settings.mjs';
+  dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, classifyMediaReadError } from './responsive-banner-settings.mjs';
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { createHash } from 'node:crypto';
 import { LOCAL_API } from './live-transport.mjs';
@@ -80,4 +80,12 @@ test('native Dashboard media proof cannot accept missing, failed or only partly 
   assert.equal(dashboardMediaReady(1, 1, [true]), true);
   for (const values of [[0, 0, []], [1, 0, [false]], [2, 1, [true, false]], [2, 2, [true]], [1, 1, [false]]])
     assert.equal(dashboardMediaReady(...values), false);
+});
+
+test('passive public media diagnostics expose fixed classes, never raw exception values', () => {
+  assert.equal(classifyMediaReadError(new Error('Protocol error (Network.getResponseBody): No data found for resource with given identifier')), 'body-unavailable');
+  assert.equal(classifyMediaReadError(new Error('Target page, context or browser has been closed')), 'context-closed');
+  assert.equal(classifyMediaReadError('net::ERR_ABORTED'), 'aborted');
+  assert.equal(classifyMediaReadError(new Error('private-value-must-not-escape')), 'unclassified');
+  assert.equal(classifyMediaReadError({ message: 'private-value-must-not-escape' }), 'unclassified');
 });
