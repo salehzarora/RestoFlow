@@ -9,7 +9,7 @@ import { LOGICAL_ORIGIN, localMediaTarget, logicalMediaUrl } from './live-transp
 import { createHash, randomUUID } from 'node:crypto';
 import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot, completeResponsiveFixture, responsiveFixtureMismatch } from './banner-responsive';
 import { verifyResponsiveBannerSettings, adjustBannerHeightWithKeyboard, navigateAfterMediaSettles, observeLogicalMedia } from './responsive-banner-settings';
-import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady } from './responsive-banner-settings.mjs';
+import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, bannerEvidencePhase } from './responsive-banner-settings.mjs';
 import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
@@ -608,12 +608,14 @@ async function captureMediaLibrary(page: Page, mediaId: string, path: string): P
   await settleScroll(page, await scrollScope(page, row), true);
   await screenshot(page, path);
 }
-async function saveContent(page: Page): Promise<void> {
+async function saveContent(page: Page, record?: (phase: 'request' | 'response', response: Response, body?: Obj) => void): Promise<void> {
   await revealButton(page, L.save);
   const saved = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_content_v1')));
   const response = await responseAfterAction(saved, () => tapRevealedButton(page, L.save));
+  record?.('request', response);
   expect(response.status(), 'Content writer HTTP result').toBe(200);
-  expect((await response.json()).ok, 'Content writer accepted actual owner session').toBe(true);
+  const body = await response.json(); record?.('response', response, body);
+  expect(body.ok, 'Content writer accepted actual owner session').toBe(true);
   await revealSavedStatus(page);
 }
 async function readCompanionUi(page: Page): Promise<CompanionUi> {
@@ -625,13 +627,18 @@ async function readCompanionUi(page: Page): Promise<CompanionUi> {
   await reveal(page, status, 'background-status');
   return classifyCompanion(await status.innerText());
 }
-async function invariants(f: Fixture, token: string): Promise<void> {
+async function invariants(f: Fixture, token: string, record?: (name: string, field: string, expected: unknown, actual: unknown) => void): Promise<void> {
   const profile = await rpc(f, token, 'get_restaurant_storefront_profile');
   const logo = await rpc(f, token, 'get_restaurant_receipt_logo');
+  record?.('Hero pointer unchanged', 'profile.hero_media_id', f.heroMediaId, profile.profile.hero_media_id);
   expect(profile.profile.hero_media_id, 'Hero pointer unchanged').toBe(f.heroMediaId);
+  record?.('Published logo pointer unchanged', 'profile.logo_media_id', f.initialInvariants.logoMediaId, profile.profile.logo_media_id);
   expect(profile.profile.logo_media_id, 'Published logo pointer unchanged').toBe(f.initialInvariants.logoMediaId);
+  record?.('Receipt logo pointer unchanged', 'receipt.receipt_logo_path', f.receiptLogoKey, logo.receipt_logo_path);
   expect(logo.receipt_logo_path, 'Receipt logo pointer unchanged').toBe(f.receiptLogoKey);
+  record?.('Receipt logo enabled state unchanged', 'receipt.receipt_logo_enabled', f.initialInvariants.receiptLogoEnabled, logo.receipt_logo_enabled);
   expect(logo.receipt_logo_enabled, 'Receipt logo enabled state unchanged').toBe(f.initialInvariants.receiptLogoEnabled);
+  record?.('Receipt logo version unchanged', 'receipt.receipt_logo_version', f.initialInvariants.receiptLogoVersion, logo.receipt_logo_version);
   expect(logo.receipt_logo_version, 'Receipt logo version unchanged').toBe(f.initialInvariants.receiptLogoVersion);
 }
 type UploadBoundary = 'reveal' | 'click' | 'filechooser' | 'file-set' | 'private-upload-response' | 'publisher-response' | 'publisher-body' | 'upload-assertion';
@@ -1609,7 +1616,7 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
   }
 }
 
-async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: string, diagnostics: () => UploadDiagnostics): Promise<void> {
+async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: string, diagnostics: () => UploadDiagnostics, recordPhase: (value: string) => void): Promise<void> {
   const out = process.env.CINEMATIC_ARTIFACT_DIR!;
   let stage = 'baseline';
   const receipt: Obj = { status: 'FAIL', failedStage: stage, data: 'actual isolated Dashboard/Auth/Storage/Edge; no mocked publication', publications: [] };
@@ -1620,9 +1627,19 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
     expect(response.status).toBe(200); const value = await response.json(); expect(value.ok).toBe(true); return value;
   };
   const baseline = await read();
+  receipt.baseline = bannerDocumentEvidence(baseline);
+  let originalFailure = false;
+  let lastRetainedOwnerDocument = baseline;
+  let protectedComparisons: Obj = {};
   const unchanged = async () => {
-    expect((await read()).appearance.menu_background_media_id).toBe(baseline.appearance.menu_background_media_id);
-    await invariants(f, token);
+    protectedComparisons = {};
+    if (stage === 'clear-banner-only') receipt.clearOnly.preservation = { comparisons: protectedComparisons };
+    const current = await read();
+    protectedComparisons.background = bannerComparisonEvidence('Background pointer unchanged', 'appearance.menu_background_media_id',
+      baseline.appearance.menu_background_media_id, current.appearance.menu_background_media_id);
+    if (stage === 'clear-banner-only') receipt.clearOnly.preservation.document = bannerDocumentEvidence(current);
+    expect(current.appearance.menu_background_media_id).toBe(baseline.appearance.menu_background_media_id);
+    await invariants(f, token, (name, field, expected, actual) => { protectedComparisons[field] = bannerComparisonEvidence(name, field, expected, actual); });
   };
   try {
     for (const [index, geometry] of [[900, 450], [1000, 750]].entries()) {
@@ -1630,15 +1647,16 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
       // Procedural test pixels through the existing fixture generator. Unique
       // sources avoid collisions with independent Hero/product security inputs.
       const chosen = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file));
-      stage = index === 0 ? 'upload-save-first-banner' : 'replace-save-banner';
+      stage = index === 0 ? 'upload-save-first-banner' : 'replace-save-banner'; recordPhase(stage);
       await openEditor(page, true); await openFoldedGroup(page, 'banner');
       const publication = await upload(page, file, diagnostics(), 200, 'banner', chosen);
       expect(publication.recipe).toBe('storefront-media-c4'); expect(publication.media.variant).toBe('w960');
       await saveContent(page); await openEditor(page, true); await openFoldedGroup(page, 'banner');
       const document = await read();
+      lastRetainedOwnerDocument = document;
       expect(document.appearance.menu_banner_media_id).toBe(publication.media.id);
       expect(document.appearance.menu_banner_enabled).toBe(true); await unchanged();
-      stage = 'verify-retained-private-source';
+      stage = 'verify-retained-private-source'; recordPhase(stage);
       const sourceResponse = await fetch(API + '/rest/v1/rpc/get_storefront_background_source_v1', { method: 'POST', redirect: 'error',
         headers: { apikey: f.anonKey, authorization: 'Bearer ' + token, 'content-type': 'application/json' },
         body: JSON.stringify({ p_organization_id: f.ownerA.orgId, p_restaurant_id: f.ownerA.restaurantId, p_branch_id: f.ownerA.branchId, p_base_media_id: publication.media.id }) });
@@ -1651,7 +1669,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
       const original = Buffer.from(await privateReply.arrayBuffer());
       const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
       expect(hash(original), 'Dashboard retains the exact private source bytes').toBe(hash(chosen));
-      stage = 'public-banner-read-and-render';
+      stage = 'public-banner-read-and-render'; recordPhase(stage);
       const current = await publicMenu(), path = current.content_v1.appearance.menu_banner_url;
       expect(path).toMatch(/^\/storage\/v1\/object\/public\/storefront-media\/[a-f0-9]{32}\/[a-f0-9]{64}\.webp$/);
       const actual = await fetch(API + path, { redirect: 'error' }); expect(actual.status).toBe(200);
@@ -1668,13 +1686,13 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
         return await image.count() === 1 && (await image.getAttribute('src'))?.endsWith(path);
       }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe(true);
       if (index === 0) {
-        stage = 'banner-focal-persistence';
+        stage = 'banner-focal-persistence'; recordPhase(stage);
         await verifyBannerFocalPersistence(page, menu, f, token);
-        stage = 'banner-responsive';
+        stage = 'banner-responsive'; recordPhase(stage);
         await verifyBannerResponsive(page, menu, f, token);
         // The responsive case ends on a no-banner document. Restoring the
         // synthetic server settings does not refresh this already loaded tab.
-        stage = 'restored-banner-public-read-and-render';
+        stage = 'restored-banner-public-read-and-render'; recordPhase(stage);
         expect((await publicMenu()).content_v1.appearance.menu_banner_url).toBe(path);
         await expect.poll(async () => {
           await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
@@ -1685,7 +1703,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
           } : null;
         }, { timeout: 100000, intervals: [250, 500, 1000] }).toEqual({ sameResource: true, position: '38% 9%' });
         receipt.responsiveReturn = { freshPublicRead: true, freshDocumentRead: true, samePublicPath: path, position: '38% 9%' };
-        stage = 'independent-responsive-settings-ui-save-readback';
+        stage = 'independent-responsive-settings-ui-save-readback'; recordPhase(stage);
         await verifyResponsiveBannerSettings(page, menu, {
           read: () => rpc(f, token, 'get_restaurant_storefront_content_v6'),
           readLegacy: () => rpc(f, token, 'get_restaurant_storefront_content_v5'),
@@ -1807,27 +1825,68 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
               includesLocalEditorBoot: true, values: [height, height + 20, height], contentWrites: 0, loginEntries: 0,
               syntheticStateInMemoryOnly: true, noOwnerBrowserSession: true, captures: videoEvidence.captures, nativeMedia: videoEvidence.nativeMedia };
           },
-          invariant: unchanged, url: STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', artifactDir: out,
+          invariant: unchanged, recordPhase, recordRestoredDocument: value => { receipt.afterResponsiveRestoration = bannerDocumentEvidence(value); },
+          url: STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', artifactDir: out,
         });
         receipt.independentResponsiveSettingsAcceptance = 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS';
+        recordPhase('after-responsive-restoration');
       }
       const image = menu.locator('[data-sf-menu-banner] img');
       await expect.poll(() => image.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
       await screenshot(menu, resolve(out, `banner-${index ? 'replacement' : 'first'}-test-data.png`));
       receipt.publications.push({ publicPath: path, originalBytes: original.length, originalSha256: hash(original), publishedBytes: bytes.length, publishedSha256: hash(bytes), ...dimensions });
     }
-    stage = 'clear-banner-only';
-    await revealButton(page, L.bannerClear); await tapRevealedButton(page, L.bannerClear); await saveContent(page);
-    await openEditor(page, true); expect((await read()).appearance.menu_banner_media_id).toBeNull(); await unchanged();
+    stage = 'clear-banner-only'; recordPhase(stage);
+    const clear: Obj = receipt.clearOnly = { substage: 'clear-interface',
+      target: 'appearance.menu_banner_media_id', meaning: 'Clear base selection only; enabled/desktop/Storage are not targeted',
+      beforeAction: bannerDocumentEvidence(lastRetainedOwnerDocument), beforeActionSource: 'Existing authenticated read after second base publication; no intervening content write',
+      previousProtectedComparisons: structuredClone(protectedComparisons), samples: [] };
+    const clearStep = (name: string) => { clear.substage = name; recordPhase(name); };
+    clearStep('clear-interface');
+    await revealButton(page, L.bannerClear);
+    await tapRevealedButton(page, L.bannerClear);
+    clearStep('clear-save-result');
+    await saveContent(page, (phase, response, body) => {
+      if (phase === 'request') {
+        let payload: Obj = {}; try { payload = response.request().postDataJSON() ?? {}; } catch { /* Preserve original save assertion. */ }
+        clear.saveRequest = { httpStatus: response.status(), expectedVersion: evidenceScalar(payload.p_expected_version, Object.hasOwn(payload, 'p_expected_version')),
+          organizationMatches: payload.p_organization_id === f.ownerA.orgId, restaurantMatches: payload.p_restaurant_id === f.ownerA.restaurantId,
+          branchMatches: payload.p_expected_storefront_branch_id === f.ownerA.branchId, document: bannerDocumentEvidence(payload.p_document) };
+      } else clear.saveResult = { httpStatus: response.status(), ok: evidenceScalar(body?.ok, !!body && Object.hasOwn(body, 'ok')),
+        version: evidenceScalar(body?.version, !!body && Object.hasOwn(body, 'version')) };
+    });
+    clearStep('clear-authenticated-readback'); await openEditor(page, true);
+    const afterClear = await read(); clear.authenticatedReadback = bannerDocumentEvidence(afterClear);
+    clear.baseNullAssertion = bannerComparisonEvidence('Base banner selection is explicitly null after reload', 'appearance.menu_banner_media_id', null, afterClear.appearance.menu_banner_media_id);
+    expect(afterClear.appearance.menu_banner_media_id).toBeNull();
+    clearStep('clear-preservation'); await unchanged();
+    clearStep('clear-public-read');
+    const clearedPublic = await publicMenu(), publicAppearance = clearedPublic.content_v1?.appearance;
+    clear.publicRead = { ok: evidenceScalar(clearedPublic.ok, Object.hasOwn(clearedPublic, 'ok')), appearance: Object.fromEntries(
+      ['menu_banner_url', 'menu_banner_desktop_url', 'menu_banner_enabled', 'menu_banner_layout', 'menu_banner_mobile_height_px',
+        'menu_banner_desktop_height_px', 'menu_banner_focal_x', 'menu_banner_focal_y', 'menu_banner_desktop_focal_x', 'menu_banner_desktop_focal_y']
+        .map(key => [key, evidenceScalar(publicAppearance?.[key], !!publicAppearance && Object.hasOwn(publicAppearance, key))])) };
+    clearStep('clear-storefront');
     await expect.poll(async () => {
-      await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
-      return await menu.locator('[data-sf-menu-top]').count() === 1 && await menu.locator('[data-sf-menu-banner]').count() === 0;
+      const response = await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+      const topCount = await menu.locator('[data-sf-menu-top]').count(), bannerCount = await menu.locator('[data-sf-menu-banner]').count();
+      const actual = topCount === 1 && bannerCount === 0, cache = response?.headers()['x-nextjs-cache'];
+      const sample = { topCount, bannerCount, predicate: bannerComparisonEvidence('One menu top and no base banner', 'topCount===1 && bannerCount===0', true, actual),
+        cache: ['HIT', 'STALE', 'MISS', 'REVALIDATED'].includes(cache ?? '') ? cache : 'unclassified' };
+      clear.samples.push(sample); if (clear.samples.length > 3) clear.samples.shift();
+      clear.lastRendered = sample;
+      return actual;
     }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe(true);
+    clear.substage = 'complete';
     receipt.status = 'BANNER_UPLOAD_E2E_PASS'; receipt.failedStage = null;
     receipt.backgroundAndWelcomePreserved = true;
+  } catch (error) {
+    originalFailure = true; receipt.failure = { stage, substage: receipt.clearOnly?.substage ?? null, ...bannerAssertionFailure(error) };
+    throw error;
   } finally {
     if (receipt.status !== 'BANNER_UPLOAD_E2E_PASS') receipt.failedStage = stage;
-    writeFileSync(resolve(out, 'banner-upload-result.json'), JSON.stringify(receipt, null, 2));
+    try { writeFileSync(resolve(out, 'banner-upload-result.json'), JSON.stringify(receipt, null, 2)); }
+    catch (error) { if (!originalFailure) throw error; }
   }
 }
 
@@ -2272,6 +2331,8 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
   const f = fixture(), network = await guardBrowser(context), mediaObservation = observeLogicalMedia(context, { dashboard: DASHBOARD, storefront: STOREFRONT });
   const uploads: UploadDiagnostics[] = [];
   let signedIn = false, passed = false;
+  let phase = 'baseline', failure: Obj | null = null;
+  const recordPhase = (value: string) => { phase = bannerEvidencePhase(value); mediaObservation.phase(phase); };
   try {
     await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();
     await fillField(page, L.email, f.ownerA.email); await enterLoginPassword(page, f.ownerA.password);
@@ -2286,16 +2347,19 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
     const menu = await context.newPage();
     await verifyBannerJourney(page, menu, f, session.access_token, () => {
       const value = new UploadDiagnostics(); uploads.push(value); return value;
-    });
+    }, recordPhase);
     await menu.waitForLoadState('networkidle', { timeout: 30000 });
-    await network.check(); passed = true;
+    recordPhase('final-byte-guard'); await network.check(); passed = true; recordPhase('complete');
+  } catch (error) {
+    failure = bannerAssertionFailure(error); throw error;
   } finally {
     try {
       if (signedIn && !passed) await failureScreenshot(page, resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-dashboard-failure-test-data.png'));
       writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-browser-result.json'), JSON.stringify({
-        status: passed ? 'PASS' : 'FAIL', realUiSignIn: signedIn, uploads: uploads.map(item => item.snapshot()),
+        status: passed ? 'PASS' : 'FAIL', phase, failure, realUiSignIn: signedIn, uploads: uploads.map(item => item.snapshot()),
         fonts: network.fonts(), mediaTransport: network.media(), logicalMediaObservation: mediaObservation.snapshot(),
       }, null, 2));
-    } finally { mediaObservation.stop(); }
+    } catch (error) { if (!failure) throw error; }
+    finally { mediaObservation.stop(); }
   }
 });

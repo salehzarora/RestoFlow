@@ -1,9 +1,9 @@
-import { expect, type Locator, type Page, type Request, type Response, type BrowserContext } from '@playwright/test';
+import { expect, type Locator, type Page, type Frame, type Request, type Response, type BrowserContext } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { bannerGeometry, bannerViewportScreenshot } from './banner-responsive';
-import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady, dashboardImageBytesMatch, classifyMediaReadError } from './responsive-banner-settings.mjs';
+import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady, dashboardImageBytesMatch, classifyMediaReadError, mediaReadErrorDetail, bannerEvidencePhase } from './responsive-banner-settings.mjs';
 import { LOGICAL_ORIGIN, localMediaTarget } from './live-transport.mjs';
 
 type Obj = Record<string, any>;
@@ -16,6 +16,8 @@ type Dependencies = {
   reveal: (target: Locator) => Promise<void>; tap: (target: Locator) => Promise<void>;
   freshMenu: (width: number) => Promise<{ page: Page; requestedMedia: string[]; check: () => Promise<void>; close: () => Promise<void> }>;
   invariant: () => Promise<void>; captureHeightVideo: (height: number, recordEvidence: (value: Obj) => void) => Promise<Obj>; url: string; artifactDir: string;
+  recordPhase?: (phase: string) => void;
+  recordRestoredDocument?: (document: Obj) => void;
 };
 const copy = {
   layout: 'بانر متجاوب مستقل', auto: 'تلقائي حسب نسبة الصورة', custom: 'ارتفاع مخصص',
@@ -37,39 +39,80 @@ export async function navigateAfterMediaSettles(page: Page, url: string, options
  * each native response-body promise; this neither re-fetches nor substitutes it. */
 export function observeLogicalMedia(context: BrowserContext, surfaces: { dashboard: string; storefront: string }) {
   let responses = 0, requestFinished = 0, requestFailed = 0, bodyReads = 0, bodyErrors = 0, filenameMatches = 0, otherPayloads = 0;
+  const started = Date.now(), now = () => Date.now() - started;
+  let phase = 'baseline', requestSequence = 0, pageSequence = 0, frameSequence = 0;
   const failures: Obj[] = [];
+  const facts = new WeakMap<Request, Obj>(), pages = new WeakMap<Page, Obj>(), frames = new WeakMap<Frame, Obj>();
+  const removers: (() => void)[] = [];
+  const frameState = (frame: Frame) => {
+    let value = frames.get(frame);
+    if (!value) { value = { frameId: `f${++frameSequence}`, observerDocumentEpoch: 0, navigationSequence: 0,
+      navigationStartedMs: null, navigationCommittedMs: null, detachedMs: null }; frames.set(frame, value); }
+    return value;
+  };
+  const watchPage = (page: Page) => {
+    if (pages.has(page)) return;
+    const state: Obj = { pageId: `p${++pageSequence}`, closedMs: null }; pages.set(page, state);
+    const navigated = (frame: Frame) => { const value = frameState(frame); value.observerDocumentEpoch++; value.navigationCommittedMs = now(); };
+    const detached = (frame: Frame) => { frameState(frame).detachedMs = now(); };
+    const closed = () => { state.closedMs = now(); };
+    page.on('framenavigated', navigated); page.on('framedetached', detached); page.on('close', closed);
+    removers.push(() => { page.off('framenavigated', navigated); page.off('framedetached', detached); page.off('close', closed); });
+  };
+  const location = (request: Request) => {
+    try {
+      const frame = request.frame(), page = frame.page(); watchPage(page);
+      const origin = new URL(page.url()).origin, f = frameState(frame), p = pages.get(page)!;
+      return { pageSurface: origin === surfaces.dashboard ? 'dashboard' : origin === surfaces.storefront ? 'storefront' : 'other',
+        frameKind: frame.parentFrame() === null ? 'main' : 'child', pageId: p.pageId, frameId: f.frameId,
+        observerDocumentEpoch: f.observerDocumentEpoch, navigationSequence: f.navigationSequence,
+        navigationStartedMs: f.navigationStartedMs, navigationCommittedMs: f.navigationCommittedMs,
+        pageClosedMs: p.closedMs, frameDetachedMs: f.detachedMs };
+    } catch { return { pageSurface: 'detached', frameKind: 'detached' }; }
+  };
   const admitted = (request: Request) => {
     try { return new URL(request.url()).origin === LOGICAL_ORIGIN && request.resourceType() === 'image'
       && typeof localMediaTarget(request.url(), request.method()) === 'string'; }
     catch { return false; }
   };
   const remember = (value: Obj) => { if (failures.length < 8) failures.push(value); };
-  const surface = (request: Request) => {
-    try { const frame = request.frame(), origin = new URL(frame.page().url()).origin;
-      return { pageSurface: origin === surfaces.dashboard ? 'dashboard' : origin === surfaces.storefront ? 'storefront' : 'other',
-        frameKind: frame.parentFrame() === null ? 'main' : 'child' }; }
-    catch { return { pageSurface: 'detached', frameKind: 'detached' }; }
+  const requested = (request: Request) => {
+    if (request.isNavigationRequest()) {
+      try { const value = frameState(request.frame()); value.navigationSequence++; value.navigationStartedMs = now(); } catch { /* Detached frame: diagnostic only. */ }
+    }
+    if (admitted(request)) facts.set(request, { requestId: `r${++requestSequence}`, requestMs: now(), phaseAtRequest: phase,
+      atRequest: location(request), finishedMs: null, failedMs: null });
   };
-  const finished = (request: Request) => { if (admitted(request)) requestFinished++; };
+  const finished = (request: Request) => { if (admitted(request)) { requestFinished++;
+    const value = facts.get(request); if (value) { value.finishedMs = now(); value.atFinish = location(request); } } };
   const failed = (request: Request) => { if (admitted(request)) { requestFailed++;
-    remember({ stage: 'native-request', classification: classifyMediaReadError(request.failure()?.errorText), ...surface(request) }); } };
+    const value = facts.get(request) ?? { requestId: 'unobserved' };
+    value.failedMs = now(); value.atFailure = location(request);
+    remember({ stage: 'native-request', classification: classifyMediaReadError(request.failure()?.errorText), fact: value }); } };
   const response = (reply: Response) => {
     if (!admitted(reply.request())) return;
     responses++;
-    const hash = new URL(reply.url()).pathname.split('/').at(-1)!.slice(0, -5), status = reply.status(), location = surface(reply.request());
+    const hash = new URL(reply.url()).pathname.split('/').at(-1)!.slice(0, -5), status = reply.status();
+    const fact = facts.get(reply.request()) ?? { requestId: 'unobserved' };
+    Object.assign(fact, { responseMs: now(), phaseAtResponse: phase, atResponse: location(reply.request()), bodyReadStartedMs: now() });
     void reply.body().then(bytes => {
       const matches = dashboardImageBytesMatch(hash, status, bytes);
       bodyReads++;
       if (matches) filenameMatches++;
-      else { otherPayloads++; remember({ stage: 'response-body', classification: 'digest-or-status', httpStatus: status, ...location }); }
-    }).catch(error => { bodyErrors++; remember({ stage: 'response-body', classification: classifyMediaReadError(error), httpStatus: status, ...location }); });
+      else { otherPayloads++; fact.bodyReadEndedMs = now();
+        remember({ stage: 'response-body', classification: 'digest-or-status', httpStatus: status, fact }); }
+    }).catch(error => { bodyErrors++; Object.assign(fact, { bodyReadEndedMs: now(), phaseAtBodyFailure: phase, atBodyFailure: location(reply.request()) });
+      remember({ stage: 'response-body', classification: classifyMediaReadError(error), detail: mediaReadErrorDetail(error), httpStatus: status, fact }); });
   };
+  context.pages().forEach(watchPage); context.on('page', watchPage); context.on('request', requested);
   context.on('requestfinished', finished); context.on('requestfailed', failed); context.on('response', response);
   return {
+    phase: (value: string) => { phase = bannerEvidencePhase(value); },
     snapshot: () => ({ responses, requestFinished, requestFailed, bodyReads, bodyErrors, filenameMatches, otherPayloads,
-      pendingBodies: responses - bodyReads - bodyErrors, failures: failures.map(value => ({ ...value })),
-      scope: 'Passive native public-image diagnostics only; original guard remains authoritative' }),
-    stop: () => { context.off('requestfinished', finished); context.off('requestfailed', failed); context.off('response', response); },
+      pendingBodies: responses - bodyReads - bodyErrors, failures: structuredClone(failures),
+      scope: 'Passive native public-image diagnostics only; local observer epochs are not CDP loader IDs; original guard remains authoritative' }),
+    stop: () => { context.off('page', watchPage); context.off('request', requested); context.off('requestfinished', finished);
+      context.off('requestfailed', failed); context.off('response', response); removers.forEach(remove => remove()); },
   };
 }
 
@@ -235,6 +278,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     expect(appearance.menu_banner_desktop_height_px).toBe(current.appearance.menu_banner_desktop_height_px);
     await expect(frames).toHaveCount(2);
     for (const [index, width] of [[0, 390], [1, 1280]]) {
+      d.recordPhase?.(`responsive-${label}-${width}`);
       await expect(frames.nth(index)).toHaveAttribute('sandbox', 'allow-same-origin');
       const frame = page.frameLocator('iframe[title="Storefront banner preview"]').nth(index);
       const policy = await frame.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
@@ -441,6 +485,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       await d.writeDocument(original);
       receipt.restoration.stage = 'v6-document-exact';
       const restored = (await d.read()).document;
+      d.recordRestoredDocument?.(restored);
       // Only schema-key names and equality flags leave this synthetic cleanup;
       // no document values, media identifiers, sessions or raw response bodies.
       const differingKeys = (expected: Obj, actual: Obj) => {

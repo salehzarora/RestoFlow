@@ -60,3 +60,63 @@ export function classifyMediaReadError(error) {
   if (/net::ERR_ABORTED|\babort(?:ed)?\b|cancel(?:led|ed)/i.test(message)) return 'aborted';
   return 'unclassified';
 }
+
+// Evidence for the synthetic banner case only. Never serialize a whole reply,
+// private object key, session, arbitrary string or customer-entered value.
+const appearanceEvidenceKeys = ['menu_banner_media_id', 'menu_banner_desktop_media_id', 'menu_banner_enabled',
+  'menu_banner_layout', 'menu_banner_focal_x', 'menu_banner_focal_y', 'menu_banner_desktop_focal_x',
+  'menu_banner_desktop_focal_y', 'menu_banner_mobile_height_px', 'menu_banner_desktop_height_px',
+  'menu_intro_visible', 'menu_background_media_id', 'menu_background_dim', 'site_theme', 'scene_preset',
+  'font_family', 'text_color', 'button_text_color'];
+export function evidenceScalar(value, present = true) {
+  const type = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+  const result = { present, type };
+  if (value === null || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) result.value = value;
+  else if (typeof value === 'number') result.specialNumber = String(value);
+  else if (typeof value === 'string') {
+    // Public presentation enums/colours are useful verbatim; identifiers and
+    // private keys are comparable through their digest, not exported verbatim.
+    if (['responsive', 'light', 'dark', 'legacy_brand', 'reference_dark', 'alexandria', 'rubik', 'system', 'default'].includes(value)
+      || /^#[0-9a-f]{3,8}$/i.test(value)) result.value = value;
+    else { result.sha256 = createHash('sha256').update(value).digest('hex'); result.length = value.length; }
+  }
+  return result;
+}
+export function bannerDocumentEvidence(document) {
+  const appearance = document?.appearance;
+  return { appearance: Object.fromEntries(appearanceEvidenceKeys.map(key => [key,
+    evidenceScalar(appearance?.[key], !!appearance && Object.hasOwn(appearance, key))])),
+    media: Object.fromEntries(['promo', 'story'].map(key => [key + '.editorial_media_id',
+      evidenceScalar(document?.[key]?.editorial_media_id, !!document?.[key] && Object.hasOwn(document[key], 'editorial_media_id'))])) };
+}
+export function bannerComparisonEvidence(assertion, field, expected, actual) {
+  return { assertion, field, expected: evidenceScalar(expected), actual: evidenceScalar(actual), equal: Object.is(expected, actual) };
+}
+export function bannerAssertionFailure(error) {
+  const matcher = error?.matcherResult;
+  const name = typeof matcher?.name === 'string' && /^to[A-Za-z]{1,40}$/.test(matcher.name) ? matcher.name : 'unclassified';
+  const locations = typeof error?.stack === 'string' ? [...error.stack.matchAll(/(dashboard\.spec|responsive-banner-settings)\.ts:(\d+):(\d+)/g)].slice(0, 6)
+    .map(match => ({ file: match[1] + '.ts', line: Number(match[2]), column: Number(match[3]) })) : [];
+  return { matcher: name, ...(matcher && Object.hasOwn(matcher, 'expected') ? { expected: evidenceScalar(matcher.expected) } : {}),
+    ...(matcher && Object.hasOwn(matcher, 'actual') ? { actual: evidenceScalar(matcher.actual) } : {}),
+    sourceLine: locations[0]?.line ?? null, sourceColumn: locations[0]?.column ?? null, sourceFrames: locations };
+}
+export function mediaReadErrorDetail(error) {
+  const message = typeof error === 'string' ? error : error instanceof Error ? error.message : '';
+  if (/No data found for resource/i.test(message)) return 'no-data';
+  if (/No resource with given identifier/i.test(message)) return 'no-resource';
+  if (/Network\.getResponseBody/i.test(message)) return 'get-body-error';
+  if (/Target.*closed|page.*closed|context.*closed|browser.*closed/i.test(message)) return 'context-closed';
+  if (/net::ERR_ABORTED|\babort(?:ed)?\b|cancel(?:led|ed)/i.test(message)) return 'aborted';
+  return 'unclassified';
+}
+const evidencePhases = new Set(['baseline', 'upload-save-first-banner', 'replace-save-banner', 'verify-retained-private-source',
+  'public-banner-read-and-render', 'banner-focal-persistence', 'banner-responsive', 'restored-banner-public-read-and-render',
+  'independent-responsive-settings-ui-save-readback', 'after-responsive-restoration', 'clear-banner-only', 'clear-interface',
+  'clear-save-result', 'clear-authenticated-readback', 'clear-preservation', 'clear-public-read', 'clear-storefront',
+  'final-byte-guard', 'complete']);
+export function bannerEvidencePhase(value) {
+  if (typeof value !== 'string') return 'unclassified';
+  return evidencePhases.has(value) || /^responsive-(?:phone-height|desktop-height|phone-auto|desktop-uploaded|desktop-replaced|desktop-selected|desktop-cleared)-(?:390|1280)$/.test(value)
+    ? value : 'unclassified';
+}

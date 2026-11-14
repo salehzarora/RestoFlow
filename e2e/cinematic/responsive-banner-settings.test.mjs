@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { responsiveBannerKeys, responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady,
-  dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, classifyMediaReadError } from './responsive-banner-settings.mjs';
+  dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, classifyMediaReadError,
+  evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, mediaReadErrorDetail, bannerEvidencePhase } from './responsive-banner-settings.mjs';
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { createHash } from 'node:crypto';
 import { LOCAL_API } from './live-transport.mjs';
@@ -88,4 +89,47 @@ test('passive public media diagnostics expose fixed classes, never raw exception
   assert.equal(classifyMediaReadError('net::ERR_ABORTED'), 'aborted');
   assert.equal(classifyMediaReadError(new Error('private-value-must-not-escape')), 'unclassified');
   assert.equal(classifyMediaReadError({ message: 'private-value-must-not-escape' }), 'unclassified');
+});
+
+test('banner evidence distinguishes omission, explicit null, booleans and numbers without exporting private strings', () => {
+  const result = bannerDocumentEvidence({ appearance: { menu_banner_media_id: null, menu_banner_enabled: false,
+    menu_banner_focal_x: 0, menu_banner_focal_y: 100, menu_banner_layout: 'responsive',
+    text_color: '#FFFFFF', not_an_allowed_field: 'private-content' }, story: { editorial_media_id: 'private-id' } });
+  assert.deepEqual(result.appearance.menu_banner_media_id, { present: true, type: 'null', value: null });
+  assert.deepEqual(result.appearance.menu_banner_desktop_media_id, { present: false, type: 'undefined' });
+  assert.deepEqual(result.appearance.menu_banner_enabled, { present: true, type: 'boolean', value: false });
+  assert.deepEqual(result.appearance.menu_banner_focal_x, { present: true, type: 'number', value: 0 });
+  assert.equal(result.appearance.menu_banner_focal_y.value, 100);
+  assert.equal(result.appearance.menu_banner_layout.value, 'responsive');
+  assert.equal(result.appearance.text_color.value, '#FFFFFF');
+  assert.equal(result.media['story.editorial_media_id'].sha256, createHash('sha256').update('private-id').digest('hex'));
+  assert.deepEqual(result.media['promo.editorial_media_id'], { present: false, type: 'undefined' });
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes('private-content'), false); assert.equal(serialized.includes('private-id'), false);
+  assert.equal(Object.hasOwn(result.appearance, 'not_an_allowed_field'), false);
+  assert.equal(evidenceScalar('a-private-session').sha256, createHash('sha256').update('a-private-session').digest('hex'));
+});
+
+test('failed assertion evidence preserves false versus true and only owned source coordinates', () => {
+  const failure = Object.assign(new Error('never export this message'), { matcherResult: { name: 'toBe', actual: false, expected: true } });
+  failure.stack = 'private stack https://private.invalid\n at helper (C:/private/dashboard.spec.ts:407:4)\n at clear (C:/private/dashboard.spec.ts:1880:9)';
+  const result = bannerAssertionFailure(failure);
+  assert.equal(result.matcher, 'toBe');
+  assert.deepEqual(result.actual, { present: true, type: 'boolean', value: false });
+  assert.deepEqual(result.expected, { present: true, type: 'boolean', value: true });
+  assert.deepEqual(result.sourceFrames, [{ file: 'dashboard.spec.ts', line: 407, column: 4 }, { file: 'dashboard.spec.ts', line: 1880, column: 9 }]);
+  assert.equal(JSON.stringify(result).includes('private'), false);
+  assert.equal(bannerComparisonEvidence('strict nullable pointer', 'appearance.menu_banner_media_id', null, undefined).equal, false);
+  assert.equal(bannerComparisonEvidence('zero stays zero', 'appearance.menu_banner_focal_x', 0, 0).equal, true);
+});
+
+test('media evidence uses fixed phases and error details without exporting arbitrary input', () => {
+  assert.equal(bannerEvidencePhase('clear-storefront'), 'clear-storefront');
+  assert.equal(bannerEvidencePhase('responsive-desktop-cleared-390'), 'responsive-desktop-cleared-390');
+  for (const value of ['private-value', 'responsive-desktop-cleared-392', 'responsive-unknown-390', { secret: 'hidden' }])
+    assert.equal(bannerEvidencePhase(value), 'unclassified');
+  assert.equal(mediaReadErrorDetail(new Error('No data found for resource with given identifier')), 'no-data');
+  assert.equal(mediaReadErrorDetail(new Error('No resource with given identifier found')), 'no-resource');
+  assert.equal(mediaReadErrorDetail(new Error('Protocol error Network.getResponseBody')), 'get-body-error');
+  assert.equal(mediaReadErrorDetail(new Error('unexported private exception')), 'unclassified');
 });
