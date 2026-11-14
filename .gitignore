@@ -52,6 +52,38 @@ google-services.json
 GoogleService-Info.plist
 
 # ----------------------------------------------------------------------------
+# Provider / vendor-private payment material
+# (BIZBOT-PAYMENTS-ZCREDIT-HYGIENE-001)
+# ----------------------------------------------------------------------------
+# Private payment-provider material (raw provider e-mails and their attachments,
+# credential packages, test-card data, private research) is kept OUTSIDE this
+# repository. These rules are a safety net for a copy that lands in the tree by
+# mistake. They do NOT untrack a file that is already tracked, and `git add -f`
+# walks past them: tools/check_secrets.sh refuses the same paths in both cases,
+# whatever the file is called (a "*.example" name included).
+#
+# Narrow on purpose. NOT matched: `vendor/` and `provider/` folders, zcredit-named
+# source, tests and documents, and longer or shorter names
+# (`vendor-private-notes/`, `docs/dejavoo.md`). Private material saved under any
+# other name or folder is not recognised by these rules.
+#
+# No trailing "/" on purpose: each pattern matches the entry with exactly that
+# name - a folder with everything below it, and also a file or a symbolic link
+# of that name. Git matches the names with the platform's own case rule
+# (core.ignorecase); the guard ignores ASCII case on every platform.
+#
+# P1 / P2 - where the material used to sit (repository root only):
+/docs/dejavoo
+/docs/cardcom
+/docs/payplus
+/docs/PAYMENTS_CARD_PRESENT_RESEARCH.md
+# P3 - at any depth: vendor-private and zcredit-raw are folder names of the
+# private store; provider-private is the twin spelling, so that either word is safe.
+vendor-private
+provider-private
+zcredit-raw
+
+# ----------------------------------------------------------------------------
 # Dart / Flutter
 # ----------------------------------------------------------------------------
 .dart_tool/
