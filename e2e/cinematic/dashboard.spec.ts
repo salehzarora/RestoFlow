@@ -4,6 +4,7 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import { enableFlutterSemantics, waitForFlutterBoot, readAccessibleText } from '../lib/flutter';
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { MAX_REVEAL_WHEELS, nextRevealMove, observeResponse, responseAfterAction } from './control-progress.mjs';
+import { observePublisherNative, type PublisherNativeObservation } from './publisher-native-observation';
 import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } from './auth-diagnostics.mjs';
 import { LOGICAL_ORIGIN, localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
 import { createHash, randomUUID } from 'node:crypto';
@@ -45,6 +46,7 @@ type Obj = Record<string, any>;
 type Fixture = {
   apiUrl: string; anonKey: string;
   ownerA: { email: string; password: string; orgId: string; restaurantId: string; branchId: string; slug: string };
+  ownerB: { email: string; password: string; orgId: string; restaurantId: string; branchId: string; slug: string };
   heroMediaId: string; heroUrl: string; receiptLogoKey: string;
   initialInvariants: { logoMediaId: string | null; receiptLogoEnabled: boolean; receiptLogoVersion: number };
 };
@@ -645,6 +647,7 @@ type UploadBoundary = 'reveal' | 'click' | 'filechooser' | 'file-set' | 'private
 type RouteClass = 'private-upload' | 'publisher' | 'auth' | 'private-read' | 'public-media' | 'application' | 'other-local' | 'external';
 type Observed<T> = { ok: true; value: T } | { ok: false; error: unknown };
 class UploadDiagnostics {
+  publisherNative: PublisherNativeObservation | null = null;
   private readonly started = Date.now();
   control: Awaited<ReturnType<typeof targetGeometry>> = null;
   private readonly events: { ms: number; boundary: string; event: string; status?: number }[] = [];
@@ -772,6 +775,7 @@ class UploadDiagnostics {
   snapshot(): Obj {
     return { events: this.events, transportFailures: this.transportFailures, publisherResponses: this.publisherResponses,
       publisherActivity: this.publisherActivity, pageLifecycle: this.pageLifecycle, bodyFailureObservation: this.bodyFailureObservation,
+      nativePublisher: this.publisherNative?.snapshot() ?? null,
       controlGeometry: this.control, firstObservedWaitFailure: this.firstObservedWaitFailure, firstFailure: this.first === null ? null : {
       ms: this.first.ms, boundary: this.first.boundary, errorType: this.first.errorType,
     } };
@@ -828,12 +832,17 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
   page.on('crash', onCrash);
   page.on('console', onConsole);
   let bodyReadFailed = false;
+  let native: PublisherNativeObservation | null = null;
   try {
     diagnostics.mark('reveal', 'started');
     const target = page.getByRole('button', { name: uploadName, exact: true });
     await diagnostics.value('reveal', diagnostics.observe('reveal', reveal(page, target, 'upload', page.getByRole('button', { name: uploadName, exact: true, includeHidden: true }))));
     diagnostics.control = await targetGeometry(page, target);
     diagnostics.beforeUpload(await editorStatus(page).catch(() => ['unreadable']));
+    if (expectedStatus === 200 && purpose !== 'background') {
+      native = await observePublisherNative(page, { apiOrigin: API, deadlineAt: Date.now() + 120_000, expectedSlot: 'hero' });
+      diagnostics.publisherNative = native;
+    }
     const uploaded = diagnostics.observe('private-upload-response', page.waitForResponse(r => {
       const u = new URL(r.url());
       return u.origin === API && u.pathname.startsWith('/storage/v1/object/restaurant-logos/') && r.request().method() === 'POST';
@@ -851,9 +860,14 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     expect(response.status(), 'Actual Edge publication response').toBe(expectedStatus);
     let body: Obj;
     diagnostics.mark('publisher-body', 'started');
-    try { body = await response.json() as Obj; diagnostics.mark('publisher-body', 'complete'); }
+    try {
+      body = await response.json() as Obj; // Original actual native Response.json is mandatory and unchanged.
+      await native?.assertComplete(response, body); // Banner-only additional strict evidence; never a replacement body.
+      diagnostics.mark('publisher-body', 'complete');
+    }
     catch (error) {
       bodyReadFailed = true;
+      native?.firstError('publisher-body');
       diagnostics.fail('publisher-body', error); // Preserve the first failure BEFORE observing app/lifecycle.
       throw error;
     }
@@ -866,12 +880,15 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     }
     return body;
   } catch (error) {
+    native?.firstError('upload-assertion');
     diagnostics.fail('upload-assertion', error);
     if (bodyReadFailed) await diagnostics.observeBodyFailure(page, page.getByRole('button', { name: uploadName, exact: true }))
       .catch(() => diagnostics.mark('publisher-body', 'diagnostic-unavailable'));
     diagnostics.control = await targetGeometry(page, page.getByRole('button', { name: uploadName, exact: true })).catch(() => null);
     throw diagnostics.original(error);
   } finally {
+    native?.cleanup('upload-finally');
+    try { await native?.stop(); } catch { /* Observer cleanup cannot mask the original failure. */ }
     page.off('request', onRequest);
     page.off('response', onResponse);
     page.off('requestfailed', onFailed);
@@ -1889,6 +1906,57 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
     catch (error) { if (!originalFailure) throw error; }
   }
 }
+
+// One independent short reproduction before the expensive original journeys.
+// Owner B has the existing isolated real onboarding/catalogue fixture. This
+// publishes one asset without selecting/saving it; owner A is never mutated.
+test('single publisher response - native body diagnostic', async ({ page, context }) => {
+  test.setTimeout(3 * 60_000);
+  const f = fixture(), b = { ...f, ownerA: f.ownerB };
+  const network = await guardBrowser(context), diagnostics = new UploadDiagnostics();
+  const receipt: Obj = { status: 'FAIL', scope: 'single actual UI publication, existing isolated ownerB',
+    uiPublicationCalls: 0, contentSaveCalls: 0, originalAssertionsUnchanged: true };
+  const previewResponses = new Set<string>();
+  const onPreview = (response: Response) => {
+    const u = new URL(response.url());
+    if (u.origin === API && u.pathname.startsWith('/storage/v1/object/public/storefront-media/') &&
+        response.request().resourceType() === 'image' && previewResponses.size < 8) previewResponses.add(response.url());
+  };
+  page.on('response', onPreview);
+  let failed = false;
+  try {
+    await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();
+    await fillField(page, L.email, b.ownerA.email); await enterLoginPassword(page, b.ownerA.password);
+    const observed = observeResponse(page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API)));
+    const auth = await responseAfterAction(observed, () => tapButton(page, L.login, { which: 'last' }));
+    expect(auth.status()).toBe(200); const session = await auth.json();
+    expect(session.user.email).toBe(b.ownerA.email); expect(typeof session.access_token).toBe('string');
+    await openEditor(page); await openFoldedGroup(page, 'banner');
+    const before = await rpc(b, session.access_token, 'get_restaurant_storefront_content_v6');
+    const bytes = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), 'ux003-banner-0.png'));
+    receipt.uiPublicationCalls = 1;
+    const published = await upload(page, 'publisher-native-probe.png', diagnostics, 200, 'banner', bytes);
+    expect(published.recipe).toBe('storefront-media-c4'); expect(published.media.variant).toBe('w960');
+    const expectedPreview = `${API}/storage/v1/object/public/storefront-media/${published.media.object_key}`;
+    await expect.poll(() => previewResponses.has(expectedPreview), {
+      message: 'The actual published resource appears in the Dashboard draft preview',
+    }).toBe(true);
+    const after = await rpc(b, session.access_token, 'get_restaurant_storefront_content_v6');
+    expect(after.document, 'Probe does not select a banner or save any content').toEqual(before.document);
+    expect(after.version).toBe(before.version);
+    receipt.contentUnchanged = true;
+    await network.checkDashboardMedia(value => { receipt.nativeDashboardImages = value; });
+    receipt.status = 'PASS';
+  } catch (error) {
+    failed = true; receipt.failure = bannerAssertionFailure(error); throw error;
+  } finally {
+    page.off('response', onPreview);
+    receipt.upload = diagnostics.snapshot();
+    receipt.mediaTransport = network.media();
+    try { writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'publisher-response-probe.json'), JSON.stringify(receipt, null, 2)); }
+    catch (error) { if (!failed) throw error; }
+  }
+});
 
 test('real owner Dashboard → Storage → publisher → save → live menu; replacement, clear and appearance', async ({ page, context }) => {
   // Leave both final clear checks their full render windows after the earlier

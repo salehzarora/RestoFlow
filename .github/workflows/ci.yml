@@ -438,6 +438,35 @@ jobs:
       - name: Confirm the installed CLI version
         run: test "$(supabase --version)" = 2.107.0
 
+      - name: Acquire and verify the exact pgTAP image before DB startup
+        run: |
+          set -euo pipefail
+          # CLI 2.107.0's test-db command has no per-image override. Keep its
+          # default registry and use a verified local alias of the identical official image.
+          test -z "${SUPABASE_INTERNAL_IMAGE_REGISTRY:-}"
+          test "$RUNNER_OS/$RUNNER_ARCH" = Linux/X64
+          pgprove_daemon_platform="$(docker info --format '{{.OSType}}/{{.Architecture}}')"
+          case "$pgprove_daemon_platform" in linux/x86_64|linux/amd64) ;; *) exit 1 ;; esac
+          echo "Runner $RUNNER_OS/$RUNNER_ARCH; Docker $pgprove_daemon_platform"
+          pgprove_source='ghcr.io/supabase/pg_prove@sha256:715739e7fdd07a8631c36ea2f1c88fc0144f99a8f5eaa6c3a9799be377f94f2c'
+          pgprove_expected_id='sha256:951c67c97a83803f250e88e189cc8caff3d648e6f59aa52a546b690b35cdedcc'
+          pgprove_cli_alias='public.ecr.aws/supabase/pg_prove:3.36'
+          echo "Acquiring official pg_prove 3.36, linux/amd64: $pgprove_source"
+          docker pull --platform linux/amd64 "$pgprove_source"
+          test "$(docker image inspect --format '{{.Id}}' "$pgprove_source")" = "$pgprove_expected_id"
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$pgprove_source")" = 'linux/amd64'
+          docker image inspect --format '{{json .RepoDigests}}' "$pgprove_source" |
+            node -e 'let s=""; process.stdin.on("data", b => s += b); process.stdin.on("end", () => { if (!JSON.parse(s).includes(process.argv[1])) process.exit(1); });' "$pgprove_source"
+          # The alias below is only the locator expected by the unchanged CLI.
+          # Identity comes from the pinned official manifest + config/platform checks above.
+          docker tag "$pgprove_source" "$pgprove_cli_alias"
+          test "$(docker image inspect --format '{{.Id}}' "$pgprove_cli_alias")" = "$pgprove_expected_id"
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$pgprove_cli_alias")" = 'linux/amd64'
+          echo "Verified local CLI alias: $pgprove_cli_alias -> $pgprove_expected_id"
+          pgprove_version="$(docker run --rm --pull=never --network none --platform linux/amd64 "$pgprove_cli_alias" pg_prove --version)"
+          test "$pgprove_version" = 'pg_prove 3.36'
+          echo "Verified executable on this runner: $pgprove_version"
+
       # Docker-local stack only (GitHub runners ship Docker). DB-only: exclude every
       # non-db service (valid CLI 2.107.0 names) so only Postgres starts — `db reset`
       # + `test db` need nothing else. `--ignore-health-check` is REQUIRED with this

@@ -27,6 +27,15 @@ export function localStatus(status) {
 // Exactly one owner-authorized, synthetic-only height-control recording. Raw
 // Playwright recordings and storage state stay in the private output directory.
 export const HEIGHT_VIDEO_FILE = 'responsive-banner-height-adjustment.webm';
+export const PUBLISHER_PROBE_TITLE = 'single publisher response - native body diagnostic';
+export function acceptanceRunArgs(mode) {
+  assert.ok(mode === 'probe' || mode === 'full', 'Unknown acceptance selection');
+  // The short probe runs exactly once. The second command still selects every
+  // pre-existing case; it excludes only this exact new title, never a stage or
+  // an original assertion. Neither command retries a publication or a test.
+  return ['--no-install', 'playwright', 'test', '--config', 'cinematic/playwright.config.ts',
+    mode === 'probe' ? '--grep' : '--grep-invert', `(?:^|\\s)${PUBLISHER_PROBE_TITLE}$`, '--reporter=json'];
+}
 export function assertHeightVideoEvidence(name, bytes) {
   assert.equal(name, HEIGHT_VIDEO_FILE);
   assert.ok(bytes.length >= 32 && bytes.length <= 8 * 1024 * 1024, 'Height video has a bounded size');
@@ -170,11 +179,6 @@ async function main(action) {
       waitUntil('http://127.0.0.1:57026/', r => r.ok, dashboard),
       waitUntil('http://127.0.0.1:3000/', r => r.status < 500, storefront),
     ]);
-    const report = resolve(privateDir, 'playwright.json');
-    const fd = openSync(resolve(privateDir, 'playwright.log'), 'w', 0o600);
-    const result = spawnSync('npx', ['--no-install', 'playwright', 'test', '--config', 'cinematic/playwright.config.ts', '--reporter=json'],
-      { cwd: resolve(root, 'e2e'), env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_NAME: report }, stdio: ['ignore', fd, fd] });
-    closeSync(fd);
     // Browser call logs can include fill(password). Never publish raw Playwright
     // output. Reduce it to titles/status/one-line errors and redact known fixture
     // values plus JWTs before emitting any diagnostic.
@@ -185,26 +189,45 @@ async function main(action) {
       for (const secret of privateValues) text = text.replaceAll(secret, '[REDACTED]');
       return text.replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED JWT]').trim().split('\n')[0].slice(0, 400);
     };
-    const cases = [];
-    const collect = suites => { for (const suite of suites || []) {
-      for (const spec of suite.specs || []) for (const item of spec.tests || []) {
-        cases.push({ title: clean(spec.title), status: item.status,
-          results: (item.results || []).map(r => ({ status: r.status, error: clean(r.error?.message) })) });
-      }
-      collect(suite.suites);
-    } };
-    const reported = existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : {};
-    collect(reported.suites);
-    const errors = (reported.errors || []).map(error => clean(error.message));
-    writeFileSync(resolve(publicDir, 'browser-result.json'), JSON.stringify({
-      status: result.status === 0 ? 'PASS' : 'FAIL', exitCode: result.status,
-      actualServices: true, retries: 0, cases, errors,
-    }, null, 2));
-    for (const item of cases) console.log(`${item.status}: ${item.title}`);
+    const runCases = mode => {
+      const stem = mode === 'probe' ? 'publisher-response-probe' : 'playwright';
+      const report = resolve(privateDir, `${stem}.json`);
+      const fd = openSync(resolve(privateDir, `${stem}.log`), 'w', 0o600);
+      const result = spawnSync('npx', acceptanceRunArgs(mode),
+        { cwd: resolve(root, 'e2e'), env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_NAME: report }, stdio: ['ignore', fd, fd] });
+      closeSync(fd);
+      const cases = [];
+      const collect = suites => { for (const suite of suites || []) {
+        for (const spec of suite.specs || []) for (const item of spec.tests || []) {
+          cases.push({ title: clean(spec.title), status: item.status,
+            results: (item.results || []).map(r => ({ status: r.status, error: clean(r.error?.message) })) });
+        }
+        collect(suite.suites);
+      } };
+      const reported = existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : {};
+      collect(reported.suites);
+      const errors = (reported.errors || []).map(error => clean(error.message));
+      const outcome = {
+        status: result.status === 0 ? 'PASS' : 'FAIL', exitCode: result.status,
+        actualServices: true, retries: 0, cases, errors,
+      };
+      writeFileSync(resolve(publicDir, mode === 'probe' ? 'publisher-response-probe-result.json' : 'browser-result.json'), JSON.stringify(outcome, null, 2));
+      for (const item of cases) console.log(`${item.status}: ${item.title}`);
+      return outcome;
+    };
+    const probe = runCases('probe');
+    // Stop before the expensive height/readback comparisons if the one-POST
+    // reproduction failed. HTTP200 or a later UI message cannot unlock them.
+    const full = probe.status === 'PASS' ? runCases('full') : {
+      status: 'NOT_RUN', exitCode: null, actualServices: true, retries: 0, cases: [], errors: [],
+      reason: 'PUBLISHER_RESPONSE_PROBE_FAILED',
+    };
+    if (full.status === 'NOT_RUN') writeFileSync(resolve(publicDir, 'browser-result.json'), JSON.stringify(full, null, 2));
     // Run only after the independent UI lifecycle has finished. A size failure
     // cannot prevent Edge acceptance from executing or erase its own receipt.
     const liveBudget = await measureLiveBudget(root, privateDir, publicDir, fixture.ownerA.slug);
-    assert.equal(result.status, 0, 'Real Dashboard acceptance failed; no automatic retry');
+    assert.equal(probe.status, 'PASS', 'Single publisher response reproduction failed; no publication/test retry');
+    assert.equal(full.status, 'PASS', 'Real Dashboard acceptance failed; no automatic retry');
     assert.equal(liveBudget.status, 'PASS', 'Actual live first-load budget failed; unchanged caps remain a release gate');
   } finally {
     for (const child of children) child.kill('SIGTERM');
