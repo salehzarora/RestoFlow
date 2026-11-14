@@ -2668,6 +2668,7 @@
   "posCardAttemptTitle": "الدفع عبر جهاز البطاقات",
   "posCardAttemptTestTitle": "اختبار جهاز البطاقات",
   "posCardTestBadge": "اختبار — لا يُسجَّل أي شيء",
+  "posCardTestOrderHoldSafety": "إذا بقيت محاولة TEST دون نتيجة نهائية، يبقى هذا الطلب محجوزًا على هذا الكاشير حتى يؤكد فحص الحالة نتيجة نهائية أو يغلق المدير أو المشغّل المحاولة.",
   "posCardPreparingTitle": "جارٍ تجهيز طلب البطاقة",
   "posCardPreparingBody": "لا تقبض الدفعة بطريقة أخرى ما دام هذا الطلب مفتوحًا.",
   "posCardNotSentTitle": "لم يُرسَل طلب البطاقة",
