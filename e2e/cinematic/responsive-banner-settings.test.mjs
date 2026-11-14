@@ -29,14 +29,17 @@ test('legacy management and public projections remove only the exact admitted ex
 });
 
 test('warm document readiness rejects a same-image stale height, wrong focus or legacy layout', () => {
-  const expected = { height: 540, focus: '38% 9%' };
-  const current = { height: 540, focus: '38% 9%', resourceMatch: true, layoutResponsive: true, hydrated: true };
+  const expected = { height: 540, focus: '38% 9%', serviceState: 'open' };
+  const current = { height: 540, focus: '38% 9%', resourceMatch: true, layoutResponsive: true, hydrated: true, serviceState: 'open' };
   assert.equal(responsiveBannerReady(expected, current), true);
   assert.equal(responsiveBannerReady(expected, { ...current, height: 520 }), false, 'Unchanged image URL does not admit the older saved height');
   assert.equal(responsiveBannerReady(expected, { ...current, focus: '50% 50%' }), false);
   assert.equal(responsiveBannerReady(expected, { ...current, layoutResponsive: false }), false);
   assert.equal(responsiveBannerReady(expected, { ...current, resourceMatch: false }), false);
   assert.equal(responsiveBannerReady(expected, { ...current, hydrated: false }), false);
+  assert.equal(responsiveBannerReady(expected, { ...current, serviceState: 'closed' }), false, 'A cached closing notice must not be compared with an open preview');
+  assert.equal(responsiveBannerReady(expected, { ...current, serviceState: undefined }), false);
+  assert.equal(responsiveBannerReady({ ...expected, serviceState: '' }, current), false);
   assert.equal(responsiveBannerReady(expected, { ...current, height: NaN }), false);
   assert.equal(responsiveBannerReady(expected, null), false, 'A swallowed geometry error cannot count as ready');
   assert.equal(responsiveBannerReady(expected, { ...current, height: 540.021 }), false, 'The existing strict .02px bound is retained');

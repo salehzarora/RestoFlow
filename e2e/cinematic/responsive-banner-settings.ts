@@ -214,9 +214,11 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
               search: !!doc.querySelector('[role="search"]'), categories: !!doc.querySelector('[data-sf-module="categories"]') };
           }) };
           const geometry = await bannerGeometry(root);
-          const actual = { height: geometry.height, focus: geometry.position, resourceMatch: allowed.has(geometry.publicPath), layoutResponsive: required.layoutResponsive, hydrated: required.hydrated };
+          const actual = { height: geometry.height, focus: geometry.position, resourceMatch: allowed.has(geometry.publicPath), layoutResponsive: required.layoutResponsive, hydrated: required.hydrated, serviceState: geometry.state };
           receipt.readinessObservation = { phase, width, expectedHeight: safeHeight(expectedHeight), actualHeight: safeHeight(geometry.height),
             expectedFocus: safeFocus(focus), actualFocus: safeFocus(geometry.position), resourceMatch: actual.resourceMatch,
+            expectedServiceState: ['open','closed'].includes(latest.service.state) ? latest.service.state : 'unclassified',
+            actualServiceState: ['open','closed'].includes(geometry.state) ? geometry.state : 'unclassified',
             ...required, errorType: null };
           return { geometry, actual };
         } catch (error) {
@@ -239,7 +241,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
         const measured = await measure(menu.locator('[data-sf-menu-top]'), 'warm_navigation');
         hydrated = receipt.readinessObservation?.hydrated === true;
         receipt.readinessObservation.navigations = navigations;
-        return responsiveBannerReady({ height: expectedHeight, focus }, measured?.actual);
+        return responsiveBannerReady({ height: expectedHeight, focus, serviceState: latest.service.state }, measured?.actual);
       }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe(true);
       // Warm the actual app until it serves this newly saved version, then
       // use a fresh, session-free context to prove native picture selection.
@@ -250,25 +252,25 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       await source.evaluate(async img => { await (img as HTMLImageElement).decode(); });
       await expect.poll(async () => {
         const measured = await measure(surface.locator('[data-sf-menu-top]'), 'fresh_context');
-        return measured ? { heightMatches: Math.abs(measured.geometry.height - expectedHeight) < .02, focus: measured.geometry.position } : null;
+        return measured ? { heightMatches: Math.abs(measured.geometry.height - expectedHeight) < .02, focus: measured.geometry.position,
+          resourceMatches: measured.actual.resourceMatch, serviceState: measured.geometry.state } : null;
       },
-        { message: 'Fresh application hydrates its actual height/focal CSSOM before measurement' }).toEqual({ heightMatches: true, focus });
-      await expect.poll(async () => (await measure(preview(index), 'preview_resource'))?.geometry.publicPath ?? null).toBe(base);
-      const site = await bannerGeometry(surface.locator('[data-sf-menu-top]')), draft = await bannerGeometry(preview(index));
-      expect(allowed.has(site.publicPath), 'Fresh Storefront uses exactly an admitted resource for this device').toBe(true);
-      const candidates = new Set([appearance.menu_banner_url, appearance.menu_banner_desktop_url,
-        ...(latest.menu_banner_desktop_images_v1?.variants?.map((v: Obj) => v.url) ?? [])]);
-      const requested = [...new Set(sample.requestedMedia.filter(path => candidates.has(path)))];
-      expect(requested, 'A fresh native picture loads one chosen banner resource, never both device images').toEqual([site.publicPath]);
-      expect(site.fit).toBe('cover'); expect(draft.fit).toBe('cover');
-      expect(site.position).toBe(focus); expect(draft.position).toBe(focus);
-
-      expect(Math.abs(site.height - expectedHeight), 'The image alone uses its saved CSS height or bounded natural ratio').toBeLessThan(.02);
-      for (const key of ['viewportWidth', 'width', 'height', 'position', 'searchY', 'categoriesY', 'state', 'themeBackground'])
-        expect(draft[key], `Real Dashboard preview and actual Storefront match ${key} at ${width}`).toEqual(site[key]);
-      expect(site.bannerWidth).toBe(width); expect(site.borderWidth).toBe('0px'); expect(site.borderRadius).toBe('0px');
-      expect(site.maxControlOverlapArea, 'Real identity/status/announcement/search do not cover the visible photo').toBeLessThan(.1);
-      expect(site.imageCount).toBe(1); expect(site.naturalWidth).toBeGreaterThan(0); expect(site.naturalHeight).toBeGreaterThan(0);
+        { message: 'Fresh application hydrates the saved height/focal/resource and same public service state before measurement' })
+        .toEqual({ heightMatches: true, focus, resourceMatches: true, serviceState: latest.service.state });
+      await expect.poll(async () => {
+        const geometry = (await measure(preview(index), 'preview_resource'))?.geometry;
+        return geometry ? { publicPath: geometry.publicPath, serviceState: geometry.state } : null;
+      }).toEqual({ publicPath: base, serviceState: latest.service.state });
+      const comparisonKeys = ['viewportWidth', 'width', 'height', 'position', 'searchY', 'categoriesY', 'state', 'themeBackground'];
+      const scrollEvidence = (root: Locator) => root.evaluate(el => ({ x: el.ownerDocument.defaultView!.scrollX,
+        y: el.ownerDocument.defaultView!.scrollY, viewportHeight: el.ownerDocument.documentElement.clientHeight,
+        documentHeight: el.ownerDocument.documentElement.scrollHeight, fontsLoaded: el.ownerDocument.fonts.status === 'loaded' }));
+      const beforeSite = await bannerGeometry(surface.locator('[data-sf-menu-top]')), beforeDraft = await bannerGeometry(preview(index));
+      receipt.beforeCaptureComparison = { label, width,
+        site: Object.fromEntries(comparisonKeys.map(key => [key, beforeSite[key]])),
+        preview: Object.fromEntries(comparisonKeys.map(key => [key, beforeDraft[key]])),
+        siteScroll: await scrollEvidence(surface.locator('[data-sf-menu-top]')), previewScroll: await scrollEvidence(preview(index)) };
+      receipt.comparisonPhase = 'capture-same-inputs-before-equality';
       await bannerViewportScreenshot(surface, resolve(d.artifactDir, `responsive-settings-${label}-${width}.png`), `RESPONSIVE SETTINGS ${label} ${width}`);
       // A truthful custom-height phone preview can exceed the interactive
       // 1000px Dashboard viewport. Enlarge only this read-only capture surface;
@@ -283,11 +285,35 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
         await d.reveal(frames.nth(index));
         await frames.nth(index).screenshot({ path: resolve(d.artifactDir, `responsive-settings-dashboard-${label}-${width}.png`) });
       } finally { await page.setViewportSize(dashboardViewport!); }
+      const site = await bannerGeometry(surface.locator('[data-sf-menu-top]')), draft = await bannerGeometry(preview(index));
+      expect(allowed.has(site.publicPath), 'Fresh Storefront uses exactly an admitted resource for this device').toBe(true);
+      const candidates = new Set([appearance.menu_banner_url, appearance.menu_banner_desktop_url,
+        ...(latest.menu_banner_desktop_images_v1?.variants?.map((v: Obj) => v.url) ?? [])]);
+      const requested = [...new Set(sample.requestedMedia.filter(path => candidates.has(path)))];
+      expect(requested, 'A fresh native picture loads one chosen banner resource, never both device images').toEqual([site.publicPath]);
+      expect(site.fit).toBe('cover'); expect(draft.fit).toBe('cover');
+      expect(site.position).toBe(focus); expect(draft.position).toBe(focus);
+
+      expect(Math.abs(site.height - expectedHeight), 'The image alone uses its saved CSS height or bounded natural ratio').toBeLessThan(.02);
+      receipt.comparisonPhase = 'strict-equality';
+      receipt.lastComparison = { label, width, expectedServiceState: latest.service.state,
+        site: Object.fromEntries(comparisonKeys.map(key => [key, site[key]])),
+        preview: Object.fromEntries(comparisonKeys.map(key => [key, draft[key]])),
+        differingFields: comparisonKeys.filter(key => !isDeepStrictEqual(draft[key], site[key])),
+        announcementEqual: site.announcement === draft.announcement,
+        siteScroll: await scrollEvidence(surface.locator('[data-sf-menu-top]')), previewScroll: await scrollEvidence(preview(index)),
+        imagesCapturedBeforeEquality: true };
+      for (const key of comparisonKeys)
+        expect(draft[key], `Real Dashboard preview and actual Storefront match ${key} at ${width}`).toEqual(site[key]);
+      expect(site.bannerWidth).toBe(width); expect(site.borderWidth).toBe('0px'); expect(site.borderRadius).toBe('0px');
+      expect(site.maxControlOverlapArea, 'Real identity/status/announcement/search do not cover the visible photo').toBeLessThan(.1);
+      expect(site.imageCount).toBe(1); expect(site.naturalWidth).toBeGreaterThan(0); expect(site.naturalHeight).toBeGreaterThan(0);
       receipt.rows.push({ label, width, basePublicPath: base, actualResource: site.publicPath, iframeResource: draft.publicPath,
         resourceRelationship: site.publicPath === draft.publicPath ? 'SAME_PUBLISHED_RESOURCE' : 'DECLARED_SAME_SOURCE_COMPANION',
         imageHeight: site.height, viewportGeometryMatches: true, state: site.state, focus, natural: [site.naturalWidth, site.naturalHeight], requestedBannerResources: requested,
         dashboardCaptureViewport: captureViewport, zoom: 100 });
       await sample.check();
+      receipt.comparisonPhase = 'complete';
       } finally { await sample.close(); }
     }
   };

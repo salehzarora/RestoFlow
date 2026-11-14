@@ -30,7 +30,8 @@ export function legacyBannerMenu(envelope) {
 export function responsiveBannerReady(expected, actual) {
   return Number.isFinite(expected?.height) && expected.height > 0 && Number.isFinite(actual?.height)
     && Math.abs(actual.height - expected.height) < .02 && actual.focus === expected.focus
-    && actual.resourceMatch === true && actual.layoutResponsive === true && actual.hydrated === true;
+    && actual.resourceMatch === true && actual.layoutResponsive === true && actual.hydrated === true
+    && typeof expected.serviceState === 'string' && expected.serviceState.length > 0 && actual.serviceState === expected.serviceState;
 }
 
 // Observe an already-issued native Dashboard image request. The existing URL
