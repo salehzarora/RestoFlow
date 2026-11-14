@@ -23,7 +23,11 @@
 #   6. the established env / key / signing / credential-value checks still
 #      block, still redact, and still allow a placeholder template,
 #   7. the check does not pass because a command broke: with a failing `sort`
-#      and with an unreadable index the run still ends in exit 1.
+#      and with an unreadable index the run still ends in exit 1,
+#   8. a root file named like an option (an empty `-q`) does not switch off
+#      the content checks: a literal signing value and a credential-shaped
+#      value are still reported, with the files tracked and untracked, and a
+#      clean repository holding `-q` passes without a basename error.
 #
 # What a run does not prove: it shows the behaviour on the machine and shell it
 # is started on, nothing about another one. The "only ASCII case" assertion of
@@ -347,6 +351,67 @@ printf 'not an index\n' > "$REPO/.git/index"
 run_guard
 rc_is 1 "an unreadable index is a finding, not a clean run"
 line "BLOCK  provider/vendor-private path check: Git could not list the files" "the failed listing is reported"
+
+# ---- 8. a root file named like an option must not switch the content checks off
+# Git lists an empty root file named -q first. While the file names reached grep
+# as arguments without a "--" in front of them, grep took it as its option -q
+# (quiet) and printed nothing, so both content checks passed. Each case holds
+# only what it tests - no forbidden file name and no private path - so nothing
+# but the content check can fail the run. Every case runs twice: with the files
+# untracked (and not ignored), and with them tracked.
+in_state() {            # in_state <tracked|untracked> <path>...: Git lists these paths in that state
+  local state="$1" listed
+  shift
+  if [ "$state" = "tracked" ]; then
+    listed="$(git -C "$REPO" ls-files --cached -z -- "$@" | tr -cd '\0' | wc -c | tr -d ' ')"
+  else
+    listed="$(git -C "$REPO" ls-files --others --exclude-standard -z -- "$@" | tr -cd '\0' | wc -c | tr -d ' ')"
+  fi
+  if [ "$listed" = "$#" ]; then ok "$state: Git lists $* as $state"; else bad "$state: Git lists $listed of the $# paths $* as $state"; fi
+}
+track() {               # track <tracked|untracked> <path>...: commit the paths when the case is the tracked one
+  local state="$1"
+  shift
+  if [ "$state" = "tracked" ]; then
+    git -C "$REPO" add -- "$@" && git -C "$REPO" commit --quiet -m "fixture"
+  fi
+}
+for state in untracked tracked; do
+  new_repo
+  : > "$REPO/-q"
+  put "app/notes.md" "$SP=$FAKE_PW"
+  track "$state" -q app/notes.md
+  in_state "$state" -q app/notes.md
+  run_guard
+  rc_is 1 "$state, -q present: a literal signing value still fails the run"
+  line "BLOCK  Android signing password in app/notes.md at line 1 (value redacted)" \
+    "$state, -q present: the signing finding is reported"
+  count_is 1 "$state, -q present: the signing finding is the only finding"
+  silent "$FAKE_PW" "$state, -q present: the signing value is not printed"
+
+  new_repo
+  : > "$REPO/-q"
+  put "app/config.txt" "synthetic fixture" "token: $FAKE_JWT"
+  track "$state" -q app/config.txt
+  in_state "$state" -q app/config.txt
+  run_guard
+  rc_is 1 "$state, -q present: a credential-shaped value still fails the run"
+  line "BLOCK  possible credential value in app/config.txt at line(s): 2 (value redacted)" \
+    "$state, -q present: the credential-value finding is reported"
+  count_is 1 "$state, -q present: the credential-value finding is the only finding"
+  silent "$FAKE_JWT" "$state, -q present: the credential-shaped value is not printed"
+
+  new_repo
+  : > "$REPO/-q"
+  put "app/readme.md" "synthetic fixture"
+  track "$state" -q app/readme.md
+  in_state "$state" -q app/readme.md
+  run_guard
+  rc_is 0 "$state, -q present: a clean repository passes"
+  line "OK: no committable secrets detected (scanned tracked + non-ignored files)." \
+    "$state, -q present: the closing OK line is printed"
+  silent "basename" "$state, -q present: no basename option error"
+done
 
 # ---- the real repository was not touched -----------------------------------
 [ "$(real_index)" = "$INDEX_BEFORE" ] && ok "the real repository's index is the same before and after" \

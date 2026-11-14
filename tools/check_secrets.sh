@@ -71,8 +71,8 @@ VALUE_PATTERNS+='|xox[baprs]-[A-Za-z0-9-]{10,}'
 # no public, recognisable shape - the configuration schema in
 # supabase/functions/pos-card-charge/lib/config.mjs accepts any run of 1 to 256
 # printable ASCII characters without blanks - and no pattern may be learnt from
-# the private material itself. Checks 1), 1b) and 2) are unchanged and are
-# applied to the paths outside these families as before.
+# the private material itself. Checks 1), 1b) and 2) keep their rules and
+# patterns and are applied to the paths outside these families.
 #
 # P1 and P2 are where the material used to sit. Of P3, vendor-private and
 # zcredit-raw are folder names of the private store; provider-private is the
@@ -169,7 +169,7 @@ while IFS= read -r -d '' f; do
   case "$f" in
     *.example) continue ;;   # placeholder templates are allowed
   esac
-  base="$(basename "$f")"
+  base="$(basename -- "$f")"
   # Match env files by ANY prefix, not just the ".env"-leading dotfile forms, so
   # a non-dotfile secret env file (e.g. supabasekey.env.local) is blocked by name
   # even if a .gitignore gap let it slip past --exclude-standard (RF-LIVE-001).
@@ -212,7 +212,7 @@ SIGNING_EXEMPT='tools/test_check_secrets_signing.sh'  # holds this guard's own f
 # processes. -I skips binaries, -H forces the filename prefix even when a batch
 # happens to contain a single file.
 signing_hits="$(scan_list \
-  | xargs -0 grep -IHnEi "${SIGNING_KEYS}[[:space:]]*=" 2>/dev/null \
+  | xargs -0 grep -IHnEi -- "${SIGNING_KEYS}[[:space:]]*=" 2>/dev/null \
   | grep -vE "^($SELF|$SIGNING_EXEMPT|[^:]*\.example):" \
   | grep -vEi "$SIGNING_PLACEHOLDER" \
   | grep -vEi "$SIGNING_CODE")"
@@ -230,7 +230,7 @@ fi
 # output - only the process count changed. -I skips binaries (replacing the old
 # per-file `grep -Iq .` probe) and -H forces the filename prefix.
 value_hits="$(scan_list \
-  | xargs -0 grep -IHnE "$VALUE_PATTERNS" 2>/dev/null \
+  | xargs -0 grep -IHnE -- "$VALUE_PATTERNS" 2>/dev/null \
   | grep -vE "^$SELF:")"
 if [ -n "$value_hits" ]; then
   printf '%s\n' "$value_hits" | cut -d: -f1,2 | sort -t: -k1,1 -k2,2n -u | awk -F: '

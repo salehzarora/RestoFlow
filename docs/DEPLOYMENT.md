@@ -271,8 +271,11 @@ private store; `provider-private` is the twin spelling, added so that either wor
 
 - **Path/name rules only.** Every rule looks at the path Git reports and never opens the file.
   There is no provider content rule: the provider's secrets have no public, recognisable shape,
-  and no pattern may be learnt from the private material itself. The guard's other checks are
-  unchanged and are applied to the paths outside these families as before.
+  and no pattern may be learnt from the private material itself. The guard's other checks keep
+  their rules, patterns and redacted output and are applied to the paths outside these families.
+  One inherited defect in them is fixed: file names now reach `basename` and `grep` after `--`,
+  so a file whose name starts with `-` (for example an empty `-q`) can no longer switch the
+  content checks off.
 - **What the guard does with a refused path.** It reports the entry that matched and never the
   names below it — `BLOCK  provider/vendor-private path (tracked, 2 path(s)): docs/dejavoo/<redacted>`,
   or for P2 the document's own path — says whether the path is `tracked` or `untracked`, and
