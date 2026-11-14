@@ -169,6 +169,10 @@ export const menuBannerSuccessor = Object.freeze({ label: 'menu banner',
 export const detailOriginalSuccessor = Object.freeze({ label: 'product detail original',
   name: '20261112011934_bizbot_storefront_product_detail_original_001.sql',
   sha256: 'c92d70304045a171de8660b8eaefc27f8df2072e6f213e0a28bfda49a1af3c73' });
+// PROPOSED PR397 responsive extension: requires the owner's reserved-file exception.
+export const responsiveBannerSuccessor = Object.freeze({ label: 'responsive banner',
+  name: '20261113134741_bizbot_storefront_responsive_banner_001.sql',
+  sha256: '734c339d116a3ae4d64544676bda78cc17d543f1f7d2ce95c23f884a8d2dd75d' });
 export const excludedSuccessors = Object.freeze([
   Object.freeze({ label: 'POS duty', name: '20261108085442_bizbot_pos_long_shift_alerts_001.sql',
     sha256: '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865' }),
@@ -177,6 +181,7 @@ export const excludedSuccessors = Object.freeze([
   siteThemeSuccessor,
   menuBannerSuccessor,
   detailOriginalSuccessor,
+  responsiveBannerSuccessor,
 ]);
 
 export const targetFunctions = [
@@ -310,4 +315,11 @@ export function detailOriginalReleaseSources(sources) {
   const banner = menuBannerReleaseSources(sources);
   const bytes = new Map(sources);
   return [...banner, [detailOriginalSuccessor.name, bytes.get(detailOriginalSuccessor.name)]];
+}
+
+// A distinct 191-file lifecycle plan; every prior plan keeps its exact sources.
+export function responsiveBannerReleaseSources(sources) {
+  const detail = detailOriginalReleaseSources(sources);
+  const bytes = new Map(sources);
+  return [...detail, [responsiveBannerSuccessor.name, bytes.get(responsiveBannerSuccessor.name)]];
 }

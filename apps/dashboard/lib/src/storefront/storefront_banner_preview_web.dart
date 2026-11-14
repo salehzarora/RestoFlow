@@ -150,7 +150,10 @@ class _FrameState extends State<StorefrontBannerPreviewFrame> {
       final image = images.item(i);
       if (image == null) continue;
       for (final type in ['load', 'error']) {
-        final callback = ((JSAny? _) => _queueMeasure()).toJS;
+        final callback = ((JSAny? _) {
+          _setFocal();
+          _queueMeasure();
+        }).toJS;
         image.addEventListener(type, callback);
         _imageEvents.add((image, type, callback));
       }
@@ -193,6 +196,26 @@ class _FrameState extends State<StorefrontBannerPreviewFrame> {
         'object-position',
         '${widget.focalX.clamp(0, 100)}% ${widget.focalY.clamp(0, 100)}%',
       );
+    final banner = _document?.querySelector('[data-sf-menu-banner]');
+    if (widget.data['layout'] == 'responsive' && banner != null) {
+      final photo = image == null ? null : BannerPreviewImage(image);
+      num dimension(String key, int? natural) => natural != null && natural > 0
+          ? natural
+          : widget.data[key] is num
+          ? widget.data[key] as num
+          : 0;
+      final phone = _width <= 650;
+      final height = storefrontResponsiveBannerHeight(
+        phone: phone,
+        viewportWidth: _width,
+        imageWidth: dimension('imageWidth', photo?.naturalWidth),
+        imageHeight: dimension('imageHeight', photo?.naturalHeight),
+        customHeight: widget.data['heightPx'] is int
+            ? widget.data['heightPx'] as int
+            : null,
+      );
+      _style(banner, 'height', '${height}px');
+    }
   }
 
   void _queueMeasure() {
@@ -229,9 +252,7 @@ class _FrameState extends State<StorefrontBannerPreviewFrame> {
     }
     final node = doc.querySelector('#banner-photo');
     final photo = node == null ? null : BannerPreviewImage(node);
-    final view =
-        doc.querySelector('[data-sf-menu-banner]')?.getBoundingClientRect() ??
-        rect;
+    final view = photo?.getBoundingClientRect() ?? rect;
     final crop = StorefrontBannerCrop.cover(
       photo?.naturalWidth ?? 0,
       photo?.naturalHeight ?? 0,
@@ -241,6 +262,12 @@ class _FrameState extends State<StorefrontBannerPreviewFrame> {
       widget.focalY,
       imageLoaded: photo?.complete == true && (photo?.naturalWidth ?? 0) > 0,
       documentHeight: measured,
+      contain:
+          node != null &&
+          bannerPreviewWindow
+                  .getComputedStyle(node)
+                  .getPropertyValue('object-fit') ==
+              'contain',
     );
     if (crop.sameAs(_lastCrop)) return;
     _lastCrop = crop;

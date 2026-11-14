@@ -13,9 +13,12 @@ const output = process.env.CINEMATIC_ARTIFACT_DIR;
 assert.ok(output, 'Sanitized artifact directory is required');
 const image = readFileSync(fileURLToPath(new URL('../../supabase/functions/storefront-media-publish/test/fixtures/base_420_900x450.jpg', import.meta.url)));
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
-async function check(name, operation) {
+async function check(name, operation, failureDiagnostic) {
   try { await operation(); results.push({ name, result: 'PASS' }); }
-  catch { results.push({ name, result: 'FAIL' }); throw new Error(`Real-service acceptance failed: ${name}`); }
+  catch (error) {
+    results.push({ name, result: 'FAIL', ...(failureDiagnostic ? failureDiagnostic(error) : {}) });
+    throw new Error(`Real-service acceptance failed: ${name}`);
+  }
 }
 
 // Independent security positive controls. These synthetic items are created
@@ -189,6 +192,59 @@ try {
   });
 
   let productA, productB;
+  const responsiveDiagnostic = { stage: 'initial', principal: 0, status: null, code: null };
+  const responsiveStage = stage => Object.assign(responsiveDiagnostic, { stage, status: null, code: null });
+  const responsiveResponse = result => {
+    responsiveDiagnostic.status = result.status;
+    responsiveDiagnostic.code = result.data?.code ?? null;
+    return result;
+  };
+  await check('v11 responsive public read retains v10 tenant boundaries and has no private media identifiers', async () => {
+    for (const owner of [fixture.ownerA, fixture.ownerB]) {
+      responsiveDiagnostic.principal++;
+      responsiveStage('v11-public-read');
+      const latest = responsiveResponse(await rpc(fixture, null, 'storefront_menu_v11', { p_slug: owner.slug }));
+      assert.equal(latest.status, 200); assert.equal(latest.data?.ok, true);
+      responsiveDiagnostic.stage = 'v11-tenant-slug';
+      assert.equal(latest.data.restaurant.slug, owner.slug);
+      responsiveStage('anonymous-v6-denial');
+      const denied = responsiveResponse(await rpc(fixture, null, 'get_restaurant_storefront_content_v6', scope(owner)));
+      // service.request omits Authorization for null tokens. PostgREST maps
+      // SQL42501 to401 for an anonymous request, to403 for an authenticated one:
+      // https://docs.postgrest.org/en/stable/references/errors.html#http-status-codes
+      // Keep assertRpcDenied unchanged for the authenticated negative controls.
+      assert.equal(denied.status, 401, 'Anonymous v6 requires its exact typed permission refusal, never a missing route');
+      assert.ok(denied.data && typeof denied.data === 'object' && !Array.isArray(denied.data), 'Anonymous v6 denial is a nonempty PostgreSQL envelope');
+      assert.deepEqual(Object.keys(denied.data).sort(), ['code', 'details', 'hint', 'message'], 'Anonymous v6 denial exposes only the PostgreSQL error envelope');
+      assert.equal(denied.data.code, '42501', 'Anonymous v6 denial is insufficient privilege, never JWT/schema infrastructure');
+      assert.equal(typeof denied.data.message, 'string');
+      assert.ok(denied.data.message.trim().length > 0, 'Anonymous v6 permission refusal has a message');
+      assert.equal(denied.data.details, null); assert.equal(denied.data.hint, null);
+      responsiveStage('v10-public-read');
+      const legacy = responsiveResponse(await rpc(fixture, null, 'storefront_menu_v10', { p_slug: owner.slug }));
+      assert.equal(legacy.status, 200); assert.equal(legacy.data?.ok, true);
+      responsiveDiagnostic.stage = 'exact-v10-projection';
+      const projection = structuredClone(latest.data);
+      delete projection.menu_banner_desktop_images_v1;
+      for (const key of ['menu_banner_layout', 'menu_banner_desktop_url', 'menu_banner_width', 'menu_banner_height',
+        'menu_banner_desktop_width', 'menu_banner_desktop_height', 'menu_banner_mobile_height_px',
+        'menu_banner_desktop_height_px', 'menu_banner_desktop_focal_x', 'menu_banner_desktop_focal_y']) delete projection.content_v1?.appearance?.[key];
+      projection.server_ts = legacy.data.server_ts;
+      assert.deepEqual(projection, legacy.data);
+      responsiveDiagnostic.stage = 'no-private-media-id';
+      assert.equal(Object.hasOwn(latest.data.content_v1?.appearance ?? {}, 'menu_banner_desktop_media_id'), false);
+    }
+  }, error => {
+    // Fixed stages, bounded numeric status and allowlisted code/name only.
+    // Never publish an AssertionError message, raw response, IDs or tokens.
+    const code = ['42501', '42883', 'PGRST202', 'PGRST301', 'PGRST302'].includes(responsiveDiagnostic.code)
+      ? responsiveDiagnostic.code : 'OTHER_OR_ABSENT';
+    return { stage: responsiveDiagnostic.stage, principal: responsiveDiagnostic.principal,
+      errorName: error instanceof assert.AssertionError ? 'AssertionError' : error instanceof TypeError ? 'TypeError' : 'Error',
+      httpStatus: Number.isInteger(responsiveDiagnostic.status) && responsiveDiagnostic.status >= 100 && responsiveDiagnostic.status <= 599
+        ? responsiveDiagnostic.status : null, rpcCode: code };
+  });
+
   await check('both owners can publish and select their own complete product pairs with real Auth/Storage/Edge', async () => {
     productA = await productFixture(fixture.ownerA, a, true);
     productB = await productFixture(fixture.ownerB, b);
@@ -218,7 +274,7 @@ try {
   });
 
   await check('owner A can read every private RPC and use real Storage read/list/sign endpoints', async () => {
-    for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
+    for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_content_v6', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
       const read = await rpc(fixture, a, name, scope(fixture.ownerA));
       assert.equal(read.status, 200);
       assert.equal(read.data?.ok, true);
@@ -295,7 +351,7 @@ try {
       }
     });
     await check(`${label}: A private content/profile/media/receipt reads denied`, async () => {
-      for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
+      for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_content_v6', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
         assertRpcDenied(await rpc(fixture, token, name, scope(fixture.ownerA)), `${label} ${name}`);
       }
       assertDenied(await request(fixture, token, originalPath), `${label} private original`);

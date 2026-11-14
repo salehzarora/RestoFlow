@@ -52,6 +52,75 @@ void main() {
     },
   };
   test(
+    'responsive image height uses the selected ratio, independent custom bounds and finite fallback',
+    () {
+      double h(bool phone, num width, num iw, num ih, [int? custom]) =>
+          storefrontResponsiveBannerHeight(
+            phone: phone,
+            viewportWidth: width,
+            imageWidth: iw,
+            imageHeight: ih,
+            customHeight: custom,
+          );
+      expect(h(true, 390, 960, 536), 320);
+      expect(h(true, 390, 600, 1000), 640);
+      expect(h(false, 1280, 2560, 640), 320);
+      expect(h(false, 1920, 960, 536), 480);
+      expect(h(true, 390, 960, 536, 520), 520);
+      expect(h(false, 1920, 960, 536, 560), 560);
+      expect(h(true, double.nan, 0, 0), 320);
+      expect(h(false, 1280, 0, 0), 240);
+    },
+  );
+  test(
+    'responsive preview has real UI before its selected image and no legacy spacer; slider ticks retain its document',
+    () {
+      final responsive = {
+        ...data(),
+        'layout': 'responsive',
+        'device': 'phone',
+        'imageWidth': 960,
+        'imageHeight': 536,
+        'heightPx': 520,
+      };
+      final html = storefrontBannerPreviewDocument(responsive, base);
+      expect(html, contains('class="menuBanner responsiveBanner"'));
+      expect(html, contains('data-sf-banner-device="phone"'));
+      expect(
+        html.indexOf('orderStatus'),
+        lessThan(html.indexOf('id="banner-photo"')),
+      );
+      expect(
+        html.indexOf('id="banner-photo"'),
+        lessThan(html.indexOf('searchControls')),
+      );
+      expect(html, isNot(contains('class="sceneWindow"')));
+      expect(html, contains('width="960" height="536"'));
+      final signature = storefrontBannerPresentationSignature(responsive);
+      expect(
+        storefrontBannerPresentationSignature({
+          ...responsive,
+          'heightPx': 640,
+          'focalX': 0,
+        }),
+        signature,
+      );
+      expect(
+        storefrontBannerPresentationSignature({
+          ...responsive,
+          'device': 'desktop',
+        }),
+        isNot(signature),
+      );
+      expect(html, contains("script-src &#39;none&#39;"));
+      expect(html, isNot(contains('<script')));
+      expect(
+        storefrontBannerPreviewDocument(data(), base),
+        isNot(contains('responsiveBanner')),
+      );
+    },
+  );
+  test(
     'cover preserves original pixels and physical X endpoints in every direction',
     () {
       final left = StorefrontBannerCrop.cover(1000, 500, 400, 400, 0, 50);
@@ -78,6 +147,56 @@ void main() {
     expect(missing.offsetX.isFinite, isTrue);
     expect(missing.clippedX, 0);
   });
+  test(
+    'desktop contain keeps the whole photograph and physical focal axes',
+    () {
+      for (final width in [960, 1280, 1920]) {
+        for (final x in [0, 38, 50, 100]) {
+          final fitted = StorefrontBannerCrop.cover(
+            960,
+            536,
+            width,
+            300,
+            x,
+            9,
+            contain: true,
+          );
+          expect(fitted.renderedHeight, closeTo(300, .001));
+          expect(fitted.renderedWidth, closeTo(960 * 300 / 536, .001));
+          expect(fitted.clippedX, 0);
+          expect(fitted.clippedY, 0);
+          expect(fitted.sourceLeft, 0);
+          expect(fitted.sourceTop, 0);
+          expect(
+            fitted.offsetX,
+            closeTo((width - fitted.renderedWidth) * x / 100, .001),
+          );
+        }
+      }
+      final tall = StorefrontBannerCrop.cover(
+        360,
+        480,
+        960,
+        300,
+        50,
+        100,
+        contain: true,
+      );
+      expect(tall.renderedHeight, 300);
+      expect(tall.clippedX + tall.clippedY, 0);
+      final wide = StorefrontBannerCrop.cover(
+        1600,
+        300,
+        960,
+        300,
+        50,
+        100,
+        contain: true,
+      );
+      expect(wide.renderedWidth, 960);
+      expect(wide.offsetY, 120);
+    },
+  );
   test('focal ticks are excluded from the document signature', () {
     final before = data()..['focalX'] = 0;
     final after = data()..['focalX'] = 100;

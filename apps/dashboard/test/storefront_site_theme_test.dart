@@ -113,7 +113,7 @@ void main() {
       expect(read.isOk, isTrue);
       expect(
         transport.calls.single.function,
-        'get_restaurant_storefront_content_v5',
+        'get_restaurant_storefront_content_v6',
       );
       final attempt = repo.prepareContent(
         expectedVersion: read.snapshot!.version,
@@ -198,7 +198,7 @@ void main() {
       expect(contentFieldPath('appearance.site_theme'), isTrue);
       expect(
         SupabaseStorefrontContentRepository.readFunction,
-        'get_restaurant_storefront_content_v5',
+        'get_restaurant_storefront_content_v6',
       );
       expect(
         SupabaseStorefrontContentRepository.writeFunction,

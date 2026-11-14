@@ -48,6 +48,74 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
       'תצוגת חיתוך לא הרסנית — טלפון / מחשב',
     ],
 
+    'bannerResponsiveLayout': [
+      'Separate responsive banner',
+      'بانر متجاوب مستقل',
+      'באנר רספונסיבי נפרד',
+    ],
+    'bannerResponsiveHelp': [
+      'Opt in to an image below the identity and status. Turning this off retains prepared images and heights.',
+      'تفعيل صورة أسفل الهوية والحالة. إيقافه يحفظ الصور والارتفاعات المُعدّة.',
+      'הפעלת תמונה מתחת לזהות ולמצב. כיבוי שומר תמונות וגבהים שהוכנו.',
+    ],
+    'bannerEditPhone': ['Phone', 'الهاتف', 'טלפון'],
+    'bannerEditDesktop': ['Desktop', 'الكمبيوتر', 'מחשב'],
+    'bannerPhoneHeight': [
+      'Phone image height',
+      'ارتفاع صورة الهاتف',
+      'גובה תמונת הטלפון',
+    ],
+    'bannerDesktopHeight': [
+      'Desktop image height',
+      'ارتفاع صورة الكمبيوتر',
+      'גובה תמונת המחשב',
+    ],
+    'bannerHeightauto': [
+      'Automatic from image ratio',
+      'تلقائي حسب نسبة الصورة',
+      'אוטומטי לפי יחס התמונה',
+    ],
+    'bannerHeightcustom': ['Custom height', 'ارتفاع مخصص', 'גובה מותאם'],
+    'bannerHeightLow': ['Low', 'منخفض', 'נמוך'],
+    'bannerHeightMedium': ['Medium', 'متوسط', 'בינוני'],
+    'bannerHeightHigh': ['High', 'مرتفع', 'גבוה'],
+    'bannerCssPixels': ['{value} CSS px', '{value} CSS px', '{value} CSS px'],
+    'bannerPixels': ['{value} px', '{value} px', '{value} px'],
+    'bannerHeightReset': [
+      'Reset this height to automatic',
+      'إعادة هذا الارتفاع إلى التلقائي',
+      'איפוס גובה זה לאוטומטי',
+    ],
+    'bannerHeightHelp': [
+      'Height changes the image area only. Preview crop depends on image ratio and focal position; changes remain a draft until Save content.',
+      'الارتفاع يغيّر مساحة الصورة فقط. القص يعتمد على نسبة الصورة وموضع التركيز؛ تبقى التغييرات مسودة حتى حفظ المحتوى.',
+      'הגובה משנה את שטח התמונה בלבד. החיתוך תלוי ביחס ובמוקד; השינויים נשארים טיוטה עד שמירת תוכן.',
+    ],
+    'bannerDesktopImage': [
+      'Optional desktop image',
+      'صورة كمبيوتر اختيارية',
+      'תמונת מחשב אופציונלית',
+    ],
+    'bannerDesktopFallback': [
+      'Use the phone image',
+      'استخدام صورة الهاتف',
+      'שימוש בתמונת הטלפון',
+    ],
+    'bannerDesktopUpload': [
+      'Upload a desktop image',
+      'رفع صورة للكمبيوتر',
+      'העלאת תמונת מחשב',
+    ],
+    'bannerDesktopClear': [
+      'Clear desktop selection only',
+      'مسح اختيار الكمبيوتر فقط',
+      'ניקוי בחירת המחשב בלבד',
+    ],
+    'bannerDesktopHelp': [
+      'An independent published image. Clearing it falls back to the phone image without deleting either original.',
+      'صورة منشورة مستقلة. مسحها يعيد استخدام صورة الهاتف دون حذف أي أصل.',
+      'תמונה מפורסמת נפרדת. ניקוי מחזיר לתמונת הטלפון בלי למחוק מקור.',
+    ],
     'bannerPhone': ['Phone preview', 'معاينة الهاتف', 'תצוגת טלפון'],
     'bannerWidth': ['{width}px', '{width}px', '{width}px'],
     'bannerWebOnly': [

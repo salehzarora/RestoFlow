@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { requireEphemeralCi } from '../../supabase/tests/support/cinematic_001b_migration_contract.mjs';
 import { createMenuTransport, LOGICAL_ORIGIN, LOCAL_API } from './live-transport.mjs';
 import { installLoopbackNetworkBoundary, networkCanaries, installChildProcessBoundary } from './loopback-network.mjs';
+import { bannerPublicProjection } from './banner-clear-trace.mjs';
 
 requireEphemeralCi(process.env);
 const root = resolve(process.env.GITHUB_WORKSPACE);
@@ -28,7 +29,26 @@ assert.ok([preload, `${preload} --enable-source-maps`].includes(process.env.NODE
 installLoopbackNetworkBoundary();
 const deniedNetworkCanaries = networkCanaries();
 installChildProcessBoundary(resolve(root, 'storefront'), preload, process.argv.includes('build') ? 'build' : 'runtime');
-globalThis.fetch = createMenuTransport(globalThis.fetch, { anonKey: status.ANON_KEY, slug: fixture.ownerA.slug });
+const menuTransport = createMenuTransport(globalThis.fetch, { anonKey: status.ANON_KEY, slug: fixture.ownerA.slug });
+let menuReadSequence = 0;
+globalThis.fetch = async (...args) => {
+  const sequence = ++menuReadSequence, startedAt = Date.now();
+  let response;
+  try { response = await menuTransport(...args); }
+  catch (error) {
+    if (sequence <= 400) console.log('CINEMATIC_BANNER_READ ' + JSON.stringify({ sequence, startedAt,
+      endedAt: Date.now(), failed: true, classification: ['AbortError', 'TimeoutError', 'TypeError'].includes(error?.name) ? error.name : 'unclassified' }));
+    throw error;
+  }
+  // Passive clone of the actual admitted loopback read. Return the original
+  // Response unchanged; no request, cache option or transport rule is added.
+  if (sequence <= 400) void response.clone().json().then(envelope => {
+    console.log('CINEMATIC_BANNER_READ ' + JSON.stringify({ sequence, startedAt, endedAt: Date.now(),
+      status: response.status, banner: bannerPublicProjection(envelope) }));
+  }).catch(() => console.log('CINEMATIC_BANNER_READ ' + JSON.stringify({ sequence, startedAt,
+    endedAt: Date.now(), status: response.status, body: 'unavailable' })));
+  return response;
+};
 // Fixed scalar receipt, emitted by the real bounded child before Next starts.
 writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR, 'storefront-transport-boundary.json'),
-  JSON.stringify({ status: 'PASS', deniedNetworkCanaries, onlyMenuV10Read: true, onlyLoopbackDestination: true, responseRewriting: false }));
+  JSON.stringify({ status: 'PASS', deniedNetworkCanaries, onlyMenuV11Read: true, onlyLoopbackDestination: true, responseRewriting: false }));

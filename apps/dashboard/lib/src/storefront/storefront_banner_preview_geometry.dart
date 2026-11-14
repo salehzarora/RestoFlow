@@ -1,6 +1,29 @@
 import 'dart:math' as math;
 
-/// Physical CSS cover geometry. X is measured from the left even in RTL.
+/// Same bounded CSS-pixel image area as the responsive Storefront. Null means
+/// automatic ratio only after the owner explicitly enables responsive layout.
+double storefrontResponsiveBannerHeight({
+  required bool phone,
+  required num viewportWidth,
+  required num imageWidth,
+  required num imageHeight,
+  int? customHeight,
+}) {
+  final low = phone ? 320 : 240,
+      high = customHeight == null ? (phone ? 640 : 480) : (phone ? 640 : 560);
+  final ratioHeight =
+      viewportWidth.isFinite &&
+          viewportWidth > 0 &&
+          imageWidth.isFinite &&
+          imageWidth > 0 &&
+          imageHeight.isFinite &&
+          imageHeight > 0
+      ? viewportWidth * imageHeight / imageWidth
+      : low.toDouble();
+  return (customHeight?.toDouble() ?? ratioHeight).clamp(low, high).toDouble();
+}
+
+/// Physical CSS image-fit geometry. X is measured from the left even in RTL.
 /// Clipped distances are original-image pixels; offsets are logical CSS pixels.
 class StorefrontBannerCrop {
   const StorefrontBannerCrop._({
@@ -30,12 +53,15 @@ class StorefrontBannerCrop {
     num y, {
     bool imageLoaded = true,
     num? documentHeight,
+    bool contain = false,
   }) {
     double dimension(num n) => n.isFinite && n > 0 ? n.toDouble() : 0;
     final iw = dimension(imageWidth), ih = dimension(imageHeight);
     final vw = dimension(viewWidth), vh = dimension(viewHeight);
     final loaded = imageLoaded && iw > 0 && ih > 0 && vw > 0 && vh > 0;
-    final scale = loaded ? math.max(vw / iw, vh / ih) : 0.0;
+    final scale = loaded
+        ? (contain ? math.min(vw / iw, vh / ih) : math.max(vw / iw, vh / ih))
+        : 0.0;
     final rw = iw * scale, rh = ih * scale;
     double point(num n) => n.isFinite ? n.clamp(0, 100).toDouble() / 100 : .5;
     final dx = loaded ? (vw - rw) * point(x) : 0.0;
@@ -51,8 +77,8 @@ class StorefrontBannerCrop {
       renderedHeight: rh,
       offsetX: dx,
       offsetY: dy,
-      sourceLeft: loaded ? -dx / scale : 0,
-      sourceTop: loaded ? -dy / scale : 0,
+      sourceLeft: loaded ? math.max(0, -dx / scale) : 0,
+      sourceTop: loaded ? math.max(0, -dy / scale) : 0,
       clippedX: loaded ? math.max(0, iw - vw / scale) : 0,
       clippedY: loaded ? math.max(0, ih - vh / scale) : 0,
       imageLoaded: loaded,
