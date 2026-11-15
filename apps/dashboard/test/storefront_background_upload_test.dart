@@ -777,4 +777,50 @@ void main() {
     expect(rig.repo.writes, isEmpty);
     expect(rig.repo.document.json, original);
   });
+  for (final uncertain in [false, true]) {
+    testWidgets(
+      'desktop banner ${uncertain ? 'uncertain replay' : 'upload'} retains its destination and uses the existing optional background companion',
+      (tester) async {
+        final rig = _Rig(highResolution: true);
+        if (uncertain) rig.invoker.outcome = 'uncertain';
+        rig.repo.document = StorefrontContentDocument.fromJson(
+          rig.repo.document.editableCopy()
+            ..['appearance'] = {
+              'text_color': null,
+              'button_text_color': null,
+              'menu_banner_layout': 'responsive',
+              'menu_banner_media_id': _image,
+              'menu_banner_enabled': false,
+              'menu_banner_mobile_height_px': 520,
+              'menu_banner_desktop_height_px': 400,
+            },
+        );
+        await _mount(tester, rig);
+        await setContentGroup(tester, 'menu-banner');
+        await _tap(tester, 'content-menu-banner-device-desktop');
+        await _tap(tester, 'content-menu-banner-desktop-upload');
+        final request = rig.invoker.calls.first['request_id'];
+        if (uncertain) {
+          rig.invoker.outcome = 'published';
+          await _tap(tester, 'content-retry-publish');
+        }
+        expect(rig.storage.uploads, hasLength(1));
+        expect(rig.invoker.calls.map((c) => c['request_id']).toSet(), {
+          request,
+        });
+        expect(rig.qualityInvoker.calls.single['slot'], 'background');
+        expect(rig.qualityInvoker.calls.single['base_media_id'], _media);
+        expect(rig.repo.writes, isEmpty);
+        await _tap(tester, 'content-save');
+        final saved = rig.repo.document.json['appearance'] as Map;
+        expect(saved['menu_banner_desktop_media_id'], _media);
+        expect(saved['menu_banner_media_id'], _image);
+        expect(saved['menu_background_media_id'], isNull);
+        expect(saved['menu_banner_enabled'], isFalse);
+        expect(saved['menu_banner_mobile_height_px'], 520);
+        expect(saved['menu_banner_desktop_height_px'], 400);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

@@ -117,7 +117,7 @@ class _ContentState extends State<StorefrontContentSection> {
     String requestId,
     String branchId,
     bool background,
-    bool banner,
+    String? bannerField,
   })?
   _pendingPublish;
   ({
@@ -126,6 +126,7 @@ class _ContentState extends State<StorefrontContentSection> {
     String branchId,
     String? backgroundMediaId,
     String? bannerMediaId,
+    String? bannerField,
   })?
   _confirmedPublish;
   String c(String key) =>
@@ -387,11 +388,12 @@ class _ContentState extends State<StorefrontContentSection> {
           };
           _put(
             bannerMediaId != null
-                ? 'appearance.menu_banner_media_id'
+                ? 'appearance.${_confirmedPublish!.bannerField!}'
                 : 'appearance.menu_background_media_id',
             selectedMediaId,
           );
-          if (bannerMediaId != null)
+          if (bannerMediaId != null &&
+              _confirmedPublish!.bannerField == 'menu_banner_media_id')
             _put('appearance.menu_banner_enabled', true);
           _notifyDraft(true);
           // Refresh happened before this unsaved selection. Rebuild the picker
@@ -1549,7 +1551,10 @@ class _ContentState extends State<StorefrontContentSection> {
     // image. The existing base and whole-document CAS remain usable.
   }
 
-  Future<void> _uploadMenuBackground({bool banner = false}) async {
+  Future<void> _uploadMenuBackground({
+    bool banner = false,
+    bool desktop = false,
+  }) async {
     final upload = widget.backgroundUpload;
     if (!_editable || _dirty || upload == null || widget.publisher == null)
       return;
@@ -1567,13 +1572,18 @@ class _ContentState extends State<StorefrontContentSection> {
     _uploadingBackground = false;
     _setBusy(false);
     if (source != null)
-      await _publish(uploadedBackground: source, bannerUpload: banner);
+      await _publish(
+        uploadedBackground: source,
+        bannerUpload: banner,
+        desktopBannerUpload: desktop,
+      );
   }
 
   Future<void> _publish({
     bool replay = false,
     StorefrontMediaSource? uploadedBackground,
     bool bannerUpload = false,
+    bool desktopBannerUpload = false,
   }) async {
     if (!mounted ||
         _busy ||
@@ -1587,7 +1597,16 @@ class _ContentState extends State<StorefrontContentSection> {
     final branch = widget.savedBranchId;
     final background =
         uploadedBackground != null || (replay && _pendingPublish!.background);
-    final banner = replay ? _pendingPublish!.banner : bannerUpload;
+    // The exact destination survives a delayed response or explicit replay.
+    // Publishing a desktop asset must never overwrite the phone selection.
+    final bannerField = replay
+        ? _pendingPublish!.bannerField
+        : desktopBannerUpload
+        ? 'menu_banner_desktop_media_id'
+        : bannerUpload
+        ? 'menu_banner_media_id'
+        : null;
+    final banner = bannerField != null;
     if (publisher == null) return;
     final initial = _sources(
       widget.sources,
@@ -1633,7 +1652,7 @@ class _ContentState extends State<StorefrontContentSection> {
       requestId: requestId,
       branchId: branch,
       background: background,
-      banner: banner,
+      bannerField: bannerField,
     );
     try {
       result = await publisher.publish(
@@ -1661,7 +1680,9 @@ class _ContentState extends State<StorefrontContentSection> {
       return;
     }
     if (result.isPublished) {
-      if (background && !banner && widget.backgroundPublisher != null) {
+      if (background &&
+          (!banner || bannerField == 'menu_banner_desktop_media_id') &&
+          widget.backgroundPublisher != null) {
         final media = result.media!;
         await _prepareBackgroundQuality(
           mediaId: media.id,
@@ -1680,6 +1701,7 @@ class _ContentState extends State<StorefrontContentSection> {
         branchId: branch,
         backgroundMediaId: background && !banner ? result.media!.id : null,
         bannerMediaId: banner ? result.media!.id : null,
+        bannerField: bannerField,
       );
       await _refreshConfirmed(binding);
     } else if (result.status == StorefrontPublishStatus.uncertain) {
@@ -1689,7 +1711,7 @@ class _ContentState extends State<StorefrontContentSection> {
           requestId: requestId,
           branchId: branch,
           background: background,
-          banner: banner,
+          bannerField: bannerField,
         );
         _busy = false;
         _message = 'publishUncertain';
@@ -1919,6 +1941,20 @@ class _ContentState extends State<StorefrontContentSection> {
                       widget.backgroundUpload?.supported == true &&
                       widget.publisher != null
                   ? () => _uploadMenuBackground(banner: true)
+                  : null,
+              desktopQualityMessage:
+                  _backgroundQuality != null &&
+                      _backgroundQuality!.mediaId ==
+                          (_draft?['appearance']
+                              as Map?)?['menu_banner_desktop_media_id']
+                  ? _backgroundQualityText()
+                  : null,
+              onDesktopUpload:
+                  _editable &&
+                      !_dirty &&
+                      widget.backgroundUpload?.supported == true &&
+                      widget.publisher != null
+                  ? () => _uploadMenuBackground(banner: true, desktop: true)
                   : null,
             ),
           ),

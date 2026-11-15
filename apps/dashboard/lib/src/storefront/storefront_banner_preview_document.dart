@@ -14,6 +14,10 @@ String storefrontBannerPresentationSignature(Map<String, Object?> data) =>
     jsonEncode({
       for (final key in const [
         'imageUrl',
+        'imageWidth',
+        'imageHeight',
+        'layout',
+        'device',
         'mediaOrigin',
         'enabled',
         'showIntro',
@@ -301,6 +305,12 @@ String storefrontBannerPreviewDocument(
   );
   final enabled = data['enabled'] == true && banner != null;
   final showIntro = data['showIntro'] != false;
+  final responsive = data['layout'] == 'responsive';
+  final phone = data['device'] != 'desktop';
+  int dimension(Object? value, int fallback) =>
+      value is int && value > 0 && value <= 8192 ? value : fallback;
+  final imageWidth = dimension(data['imageWidth'], 960);
+  final imageHeight = dimension(data['imageHeight'], 420);
   final hero = _map(data['hero']);
   final hasHero = hero.isNotEmpty;
   final empty = data['empty'] == true;
@@ -336,7 +346,6 @@ String storefrontBannerPreviewDocument(
       '<link rel="stylesheet" href="${_escape(preview.toString())}"></head>'
       '<body inert><div class="root variables previewRoot" data-banner-preview-root="" ${data['scenePreset'] == 'reference_dark' ? 'data-sf-scene="reference_dark"' : ''}>'
       '<main class="page previewSurface" data-sf-screen="home"><div class="topScene" data-sf-menu-top="" ${enabled ? 'data-sf-has-banner=""' : ''}>'
-      '${enabled ? '<div class="menuBanner" data-sf-menu-banner="" aria-hidden="true"><img id="banner-photo" src="${_escape(banner)}" alt="" width="960" height="420" decoding="async" fetchpriority="high"></div>' : ''}'
       '<header class="header" data-sf-module="compact"><div class="inner headerInner flexRow">'
       '<a class="brandLink"><div class="lockup flexRow">${logo == null ? '' : '<img class="brandLogo" src="${_escape(logo)}" alt="" width="84" height="84" decoding="async">'}'
       '<span class="lockupText"><span class="brandName">${_tenant(data['displayName'])}</span><span class="brandCity">${_tenant(data['city'])}</span></span></div></a>'
@@ -354,7 +363,8 @@ String storefrontBannerPreviewDocument(
               final notice = _map(n);
               return '<div class="notice"><span class="noticeIcon" aria-hidden="true">${_svg(_clock)}</span><span class="noticeCopy"><span class="noticeTitle">${_escape(notice['title'])}</span><span class="noticeBody">${_tenant(notice['body'])}</span></span></div>';
             }).join()}</div>'}'
-      '${enabled ? '<div class="sceneWindow" data-sf-scene-window="" ${showIntro && hasHero ? 'data-sf-hero=""' : ''} aria-hidden="true"></div>' : ''}'
+      '${enabled ? '<div class="menuBanner${responsive ? ' responsiveBanner' : ''}" data-sf-menu-banner="" ${responsive ? 'data-sf-banner-device="${phone ? 'phone' : 'desktop'}"' : ''} aria-hidden="true"><img id="banner-photo" src="${_escape(banner)}" alt="" width="${responsive ? imageWidth : 960}" height="${responsive ? imageHeight : 420}" decoding="async" fetchpriority="high"></div>' : ''}'
+      '${enabled && !responsive ? '<div class="sceneWindow" data-sf-scene-window="" ${showIntro && hasHero ? 'data-sf-hero=""' : ''} aria-hidden="true"></div>' : ''}'
       '${empty ? '' : '<div class="inner topControls menuHeading">${showIntro ? '<div class="menuIntro"><p class="eyebrow flexRow">${_escape(data['eyebrow'])}<span>${_escape(data['menuCaption'])}</span></p><h2>${_menuTitle(data['menuHeading'], locale)}</h2></div>' : ''}<div class="searchControls"><div class="searchBox flexRow" role="search">$_search<input type="search" placeholder="${_escape(data['searchText'])}" tabindex="-1"><kbd aria-hidden="true">/</kbd></div>${hasHero ? '' : '<div class="suggestionSlot"><button class="suggest">$_suggest${c('suggestLabel')}</button></div>'}</div></div>'}'
       '</div>${empty ? '' : '<section class="inner menu"><div class="categoryWrap" data-preview-categories=""><nav class="rail" data-sf-module="categories">${categories.indexed.map((entry) {
               final raw = entry.$2;

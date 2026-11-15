@@ -39,7 +39,7 @@ import { fetchStorefrontMenu, liveConfig, type LiveConfig } from './client';
 import type { StorefrontMenuOk } from './decode';
 import type { StorefrontMenuV2Ok } from './decodeHomeContent';
 import type { StorefrontMenuV3Ok } from './decodeFeaturedItems';
-import type { StorefrontMenuV4Ok, StorefrontMenuV8Ok, StorefrontMenuV10Ok } from './decodeContentV1';
+import type { StorefrontMenuV4Ok, StorefrontMenuV8Ok, StorefrontMenuV10Ok, StorefrontMenuV11Ok } from './decodeContentV1';
 import { iconPathFor } from './icons';
 import { liveOrderingEnabled, orderEndpointOrigin } from './ordering';
 
@@ -81,7 +81,7 @@ export function nextOpenParts(iso: string | null, timeZone: string): NextOpenAt 
   }
 }
 
-export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok | StorefrontMenuV4Ok | StorefrontMenuV8Ok | StorefrontMenuV10Ok, origin: string): StorefrontResolution {
+export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok | StorefrontMenuV4Ok | StorefrontMenuV8Ok | StorefrontMenuV10Ok | StorefrontMenuV11Ok, origin: string): StorefrontResolution {
   const r = envelope.restaurant;
   const home = 'home_content' in envelope ? envelope.home_content : null;
   const featured = new Set('featured_item_ids' in envelope ? envelope.featured_item_ids : []);
@@ -129,6 +129,16 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
         showIntro: content.appearance.menu_intro_visible ?? true,
         focalX: content.appearance.menu_banner_focal_x ?? 50,
         focalY: content.appearance.menu_banner_focal_y ?? 50,
+        ...(content.appearance.menu_banner_layout === undefined ? {} : {
+          layout: content.appearance.menu_banner_layout,
+          width: content.appearance.menu_banner_width, height: content.appearance.menu_banner_height,
+          desktopImage: mediaUrl(content.appearance.menu_banner_desktop_url ?? null, origin),
+          desktopWidth: content.appearance.menu_banner_desktop_width, desktopHeight: content.appearance.menu_banner_desktop_height,
+          mobileHeightPx: content.appearance.menu_banner_mobile_height_px, desktopHeightPx: content.appearance.menu_banner_desktop_height_px,
+          desktopFocalX: content.appearance.menu_banner_desktop_focal_x, desktopFocalY: content.appearance.menu_banner_desktop_focal_y,
+          ...('menu_banner_desktop_images_v1' in envelope && envelope.menu_banner_desktop_images_v1
+            ? { desktopVariants: envelope.menu_banner_desktop_images_v1.variants.map(v=>({...v,url:mediaUrl(v.url,origin)!})) } : {}),
+        }),
       },
     } : {}),
     currency: 'ILS',

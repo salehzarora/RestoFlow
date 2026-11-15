@@ -32,7 +32,7 @@ class _ReadinessTransport implements SyncRpcTransport {
         'media': <Object?>[],
       };
     }
-    if (function != 'get_restaurant_storefront_content_v5') {
+    if (function != 'get_restaurant_storefront_content_v6') {
       throw StateError('Unexpected RPC: $function');
     }
     if (missing) {
@@ -88,7 +88,7 @@ void main() {
     final result = await _repository(transport).readContent();
     expect(result.status, StorefrontContentReadStatus.unavailable);
     expect(result.snapshot, isNull);
-    expect(transport.calls, ['get_restaurant_storefront_content_v5']);
+    expect(transport.calls, ['get_restaurant_storefront_content_v6']);
   });
 
   for (final failure in const [
@@ -108,7 +108,7 @@ void main() {
         );
         expect(await repo.listContentMedia(), isNull);
         expect(transport.calls, [
-          'get_restaurant_storefront_content_v5',
+          'get_restaurant_storefront_content_v6',
           'list_storefront_content_media_v2',
         ]);
       },
@@ -168,7 +168,7 @@ void main() {
     );
     expect(find.byType(TextButton), findsOneWidget);
     expect(catalog.calls, 0);
-    expect(transport.calls, contains('get_restaurant_storefront_content_v5'));
+    expect(transport.calls, contains('get_restaurant_storefront_content_v6'));
     expect(
       transport.calls,
       isNot(contains('get_restaurant_storefront_content_v1')),

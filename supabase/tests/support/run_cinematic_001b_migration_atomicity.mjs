@@ -19,6 +19,7 @@ import {
   requireEphemeralCi, sha256, predecessorVersion, followUpName, followUpVersion, targetFunctions, proveMigrationSequence,
   targetPrefixSources, visualReleaseSources, siteThemeSuccessor, siteThemeReleaseSources,
   menuBannerSuccessor, menuBannerReleaseSources, detailOriginalSuccessor, detailOriginalReleaseSources,
+  responsiveBannerSuccessor, responsiveBannerReleaseSources,
 } from './cinematic_001b_migration_contract.mjs';
 
 requireEphemeralCi(process.env); // Must precede subprocesses, including Docker.
@@ -135,6 +136,51 @@ const detailLegacyReadersQuery = `select jsonb_agg(jsonb_build_object(
     'public.storefront_menu_v5(text)'::regprocedure,'public.storefront_menu_v6(text)'::regprocedure,
     'public.storefront_menu_v7(text)'::regprocedure,'public.storefront_menu_v8(text)'::regprocedure,
     'public.storefront_menu_v9(text)'::regprocedure);`;
+
+// PROPOSED PR397-only readiness, grants and exact legacy catalog preservation.
+const responsiveBannerReadinessQuery = `select json_build_object(
+  'content_v6', to_regprocedure('public.get_restaurant_storefront_content_v6(uuid,uuid)') is not null,
+  'menu_v11', to_regprocedure('public.storefront_menu_v11(text)') is not null)::text;`;
+const responsiveBannerGrantsQuery = `select json_build_object(
+  'content_v6_authenticated', has_function_privilege('authenticated','public.get_restaurant_storefront_content_v6(uuid,uuid)','EXECUTE'),
+  'content_v6_app_authenticated', has_function_privilege('authenticated','app.get_restaurant_storefront_content_v6(uuid,uuid)','EXECUTE'),
+  'content_v6_anon', has_function_privilege('anon','public.get_restaurant_storefront_content_v6(uuid,uuid)','EXECUTE'),
+  'content_v6_app_anon', has_function_privilege('anon','app.get_restaurant_storefront_content_v6(uuid,uuid)','EXECUTE'),
+  'content_v6_service_role', has_function_privilege('service_role','public.get_restaurant_storefront_content_v6(uuid,uuid)','EXECUTE'),
+  'content_v6_app_service_role', has_function_privilege('service_role','app.get_restaurant_storefront_content_v6(uuid,uuid)','EXECUTE'),
+  'menu_v11_anon', has_function_privilege('anon','public.storefront_menu_v11(text)','EXECUTE'),
+  'menu_v11_authenticated', has_function_privilege('authenticated','public.storefront_menu_v11(text)','EXECUTE'),
+  'menu_v11_service_role', has_function_privilege('service_role','public.storefront_menu_v11(text)','EXECUTE'),
+  'content_v6_invoker', not (select prosecdef from pg_proc where oid='public.get_restaurant_storefront_content_v6(uuid,uuid)'::regprocedure),
+  'no_public_execute', not exists(select 1 from pg_proc p cross join lateral
+    aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+    where p.oid in('public.get_restaurant_storefront_content_v6(uuid,uuid)'::regprocedure,
+      'app.get_restaurant_storefront_content_v6(uuid,uuid)'::regprocedure,'public.storefront_menu_v11(text)'::regprocedure)
+      and a.grantee=0 and a.privilege_type='EXECUTE'))::text;`;
+const responsiveLegacyReadersQuery = `select jsonb_agg(jsonb_build_object(
+  'identity',p.oid::regprocedure::text,'definition',pg_get_functiondef(p.oid),
+  'acl',p.proacl,'owner',p.proowner) order by p.oid::regprocedure::text)::text
+  from pg_proc p where p.oid in(
+    'app.get_restaurant_storefront_content_v1(uuid,uuid)'::regprocedure,
+    'app.get_restaurant_storefront_content_v2(uuid,uuid)'::regprocedure,
+    'app.get_restaurant_storefront_content_v3(uuid,uuid)'::regprocedure,
+    'app.get_restaurant_storefront_content_v4(uuid,uuid)'::regprocedure,
+    'app.get_restaurant_storefront_content_v5(uuid,uuid)'::regprocedure,
+    'public.get_restaurant_storefront_content_v1(uuid,uuid)'::regprocedure,
+    'public.get_restaurant_storefront_content_v2(uuid,uuid)'::regprocedure,
+    'public.get_restaurant_storefront_content_v3(uuid,uuid)'::regprocedure,
+    'public.get_restaurant_storefront_content_v4(uuid,uuid)'::regprocedure,
+    'public.get_restaurant_storefront_content_v5(uuid,uuid)'::regprocedure,
+    'public.storefront_menu(text)'::regprocedure,
+    'public.storefront_menu_v2(text)'::regprocedure,
+    'public.storefront_menu_v3(text)'::regprocedure,
+    'public.storefront_menu_v4(text)'::regprocedure,
+    'public.storefront_menu_v5(text)'::regprocedure,
+    'public.storefront_menu_v6(text)'::regprocedure,
+    'public.storefront_menu_v7(text)'::regprocedure,
+    'public.storefront_menu_v8(text)'::regprocedure,
+    'public.storefront_menu_v9(text)'::regprocedure,
+    'public.storefront_menu_v10(text)'::regprocedure);`;
 
 const historyVersionsQuery = "select coalesce(jsonb_agg(version order by version),'[]'::jsonb)::text from supabase_migrations.schema_migrations;";
 const historyThroughTargetQuery = `select coalesce(jsonb_agg(to_jsonb(h) order by version),'[]'::jsonb)::text
@@ -467,10 +513,50 @@ end;\n$cinematic_late_failure$;\n`;
     readiness: detailReadiness, grants: detailGrants, legacy_readers_unchanged: true,
     legacy_readers_before_sha256: sha256(beforeDetailLegacy), legacy_readers_after_sha256: sha256(sql(detailLegacyReadersQuery)),
     pending_payment_schema_absent: true, schema_sha256: sha256(schemaSnapshot()), history_sha256: sha256(sql(historyQuery)),
-    ready_for_real_service_lifecycle: true, lifecycle_stack: 'post_product_detail_original_release',
+    ready_for_real_service_lifecycle: false, lifecycle_stack: 'post_product_detail_original_release',
     menu_banner_release_describes: 'historical_pre_detail_original_stack', site_theme_release_describes: 'historical_pre_banner_stack' };
   const finalDetailSources = await readMigrationSources(migrationsDirectory);
   assert.ok(finalDetailSources.length === sources.length && finalDetailSources.every(([name, bytes], index) =>
+    name === sources[index][0] && bytes.equals(sources[index][1])), 'Every tracked migration source must remain byte-identical');
+
+  phase = 'apply_reviewed_responsive_banner';
+  assert.deepEqual(JSON.parse(sql(responsiveBannerReadinessQuery)), { content_v6: false, menu_v11: false },
+    'Responsive readers must be absent before their separate phase');
+  const beforeResponsiveLegacy = sql(responsiveLegacyReadersQuery);
+  const responsivePlan = responsiveBannerReleaseSources(sources);
+  await writeFile(join(releaseWorkdir, 'supabase/migrations', responsiveBannerSuccessor.name), sourceBytes.get(responsiveBannerSuccessor.name));
+  const responsiveWritten = await readMigrationSources(join(releaseWorkdir, 'supabase/migrations'));
+  assert.deepEqual(responsiveWritten.map(([name]) => name), responsivePlan.map(([name]) => name), 'Responsive plan names must match exactly');
+  assert.ok(responsiveWritten.every(([name, bytes]) => bytes.equals(sourceBytes.get(name))), 'Responsive plan bytes must match exactly');
+  checked('supabase', ['migration', 'up', '--local', '--workdir', releaseWorkdir]);
+  const responsiveVersion = responsiveBannerSuccessor.name.slice(0, 14);
+  const responsiveHistory = JSON.parse(sql(historyQuery));
+  assert.deepEqual(responsiveHistory.map(row => row.version), versionsOf(responsivePlan.map(([name]) => name)), 'Only the exact responsive plan may be applied');
+  assert.equal(responsiveHistory.filter(row => row.version === responsiveVersion).length, 1, 'Responsive history row must exist exactly once');
+  assert.deepEqual(responsiveHistory.filter(row => row.version !== responsiveVersion), detailHistory, 'Every prior detail/history row must remain unchanged');
+  const responsiveReadiness = JSON.parse(sql(responsiveBannerReadinessQuery));
+  const responsiveGrants = JSON.parse(sql(responsiveBannerGrantsQuery));
+  assert.deepEqual(responsiveReadiness, { content_v6: true, menu_v11: true }, 'Responsive phase must produce management v6 and public v11');
+  assert.deepEqual(responsiveGrants, { content_v6_authenticated: true, content_v6_app_authenticated: true,
+    content_v6_anon: false, content_v6_app_anon: false, content_v6_service_role: false, content_v6_app_service_role: false,
+    menu_v11_anon: true, menu_v11_authenticated: true, menu_v11_service_role: false,
+    content_v6_invoker: true, no_public_execute: true }, 'Responsive reader grants must match exact approved authority');
+  assert.equal(sql(responsiveLegacyReadersQuery), beforeResponsiveLegacy, 'Responsive must preserve every previous management/menu reader definition, ACL and owner');
+  assert.deepEqual(JSON.parse(sql(detailOriginalReadinessQuery)), detailReadiness, 'Detail-original readiness must survive responsive');
+  assert.deepEqual(JSON.parse(sql(menuBannerReadinessQuery)), bannerReadiness, 'Banner readiness must survive responsive');
+  assert.deepEqual(JSON.parse(sql(siteThemeReadinessQuery)), siteThemeReadiness, 'Theme readiness must survive responsive');
+  assert.deepEqual(JSON.parse(sql(followupReadinessQuery)), followupReadiness, 'Existing follow-up readiness must survive responsive');
+  assert.equal(sql("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname in ('card_provider_attempts','card_provider_private_events','card_payments_pilot_revisions','payment_terminals','card_attempt_identity_tombstones');"), '0',
+    'No unrelated payment schema may be introduced by responsive');
+  receipt.responsive_banner_release = { status: 'PASS', applied_version: responsiveVersion,
+    migration_versions: responsiveHistory.map(row => row.version), prior_history_unchanged: true,
+    readiness: responsiveReadiness, grants: responsiveGrants, legacy_readers_unchanged: true,
+    legacy_readers_before_sha256: sha256(beforeResponsiveLegacy), legacy_readers_after_sha256: sha256(sql(responsiveLegacyReadersQuery)),
+    pending_payment_schema_absent: true, schema_sha256: sha256(schemaSnapshot()), history_sha256: sha256(sql(historyQuery)),
+    ready_for_real_service_lifecycle: true, lifecycle_stack: 'post_responsive_banner_release',
+    product_detail_original_release_describes: 'historical_pre_responsive_stack' };
+  const finalResponsiveSources = await readMigrationSources(migrationsDirectory);
+  assert.ok(finalResponsiveSources.length === sources.length && finalResponsiveSources.every(([name, bytes], index) =>
     name === sources[index][0] && bytes.equals(sources[index][1])), 'Every tracked migration source must remain byte-identical');
 
   receipt.status = 'PASS';

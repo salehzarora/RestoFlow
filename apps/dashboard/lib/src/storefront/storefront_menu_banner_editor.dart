@@ -15,6 +15,8 @@ class StorefrontMenuBannerEditor extends StatefulWidget {
     required this.onChanged,
     this.publicUrlFor,
     this.onUpload,
+    this.onDesktopUpload,
+    this.desktopQualityMessage,
     this.previewIdentity = '',
     this.previewDataFor,
     this.loadPreview,
@@ -25,7 +27,8 @@ class StorefrontMenuBannerEditor extends StatefulWidget {
   final bool editable;
   final void Function(String, Object?) onChanged;
   final Uri Function(String)? publicUrlFor;
-  final VoidCallback? onUpload;
+  final VoidCallback? onUpload, onDesktopUpload;
+  final String? desktopQualityMessage;
 
   final String previewIdentity;
   final Map<String, Object?> Function(Map<String, dynamic>?)? previewDataFor;
@@ -37,6 +40,7 @@ class StorefrontMenuBannerEditor extends StatefulWidget {
 
 class _BannerEditorState extends State<StorefrontMenuBannerEditor> {
   int _phoneWidth = 390;
+  bool _editingPhone = true;
   int _readGeneration = 0;
   bool _readStarted = false, _reading = false;
   Map<String, dynamic>? _published;
@@ -104,8 +108,212 @@ class _BannerEditorState extends State<StorefrontMenuBannerEditor> {
   String c(String key) =>
       storefrontContentCopy(AppLocalizations.of(context), key);
 
+  String _pixels(int value, {bool css = true}) => c(
+    css ? 'bannerCssPixels' : 'bannerPixels',
+  ).replaceAll('{value}', value.toString());
+
+  Widget _heightControl(bool phone) {
+    final device = phone ? 'mobile' : 'desktop';
+    final field = 'menu_banner_${device}_height_px';
+    final value = widget.appearance?[field] as int?;
+    final low = phone ? 320 : 240, high = phone ? 640 : 560;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<String>(
+          key: ValueKey(
+            'content-menu-banner-$device-height-mode-${value == null}',
+          ),
+          isExpanded: true,
+          initialValue: value == null ? 'auto' : 'custom',
+          decoration: InputDecoration(
+            labelText: c(phone ? 'bannerPhoneHeight' : 'bannerDesktopHeight'),
+          ),
+          items: [
+            for (final mode in ['auto', 'custom'])
+              DropdownMenuItem(
+                value: mode,
+                child: Text(c('bannerHeight$mode')),
+              ),
+          ],
+          onChanged: widget.editable
+              ? (mode) => widget.onChanged(
+                  field,
+                  mode == 'custom' ? (phone ? 520 : 400) : null,
+                )
+              : null,
+        ),
+        if (value != null) ...[
+          Text(_pixels(value), textDirection: TextDirection.ltr),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Slider(
+              key: ValueKey('content-menu-banner-$device-height'),
+              value: value.toDouble(),
+              min: low.toDouble(),
+              max: high.toDouble(),
+              divisions: high - low,
+              label: _pixels(value),
+              semanticFormatterCallback: (v) => _pixels(v.round()),
+              onChanged: widget.editable
+                  ? (v) => widget.onChanged(field, v.round())
+                  : null,
+            ),
+          ),
+          Row(
+            // Physical low-to-high order matches the LTR slider in every locale.
+            textDirection: TextDirection.ltr,
+            children: [
+              for (final (label, stop) in [
+                ('bannerHeightLow', low),
+                ('bannerHeightMedium', (low + high) ~/ 2),
+                ('bannerHeightHigh', high),
+              ])
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(
+                        c(label),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      Text(
+                        _pixels(stop, css: false),
+                        textDirection: TextDirection.ltr,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          TextButton(
+            key: ValueKey('content-menu-banner-$device-height-reset'),
+            onPressed: widget.editable
+                ? () => widget.onChanged(field, null)
+                : null,
+            child: Text(c('bannerHeightReset')),
+          ),
+        ],
+        Text(
+          c('bannerHeightHelp'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  Widget _desktopControls(List<StorefrontContentMediaRow> available) {
+    final id = widget.appearance?['menu_banner_desktop_media_id'] as String?;
+    final selected = available.any((row) => row.media.id == id);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 16),
+        Text(
+          c('bannerDesktopImage'),
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        DropdownButtonFormField<String>(
+          key: ValueKey('content-menu-banner-desktop-media-${id ?? ''}'),
+          initialValue: selected ? id : '',
+          isExpanded: true,
+          decoration: InputDecoration(labelText: c('bannerDesktopImage')),
+          items: [
+            DropdownMenuItem(
+              value: '',
+              child: Text(c('bannerDesktopFallback')),
+            ),
+            for (final row in available)
+              DropdownMenuItem(
+                value: row.media.id,
+                child: Text(
+                  '${row.media.width}×${row.media.height} · ${row.media.id.substring(0, 8)}',
+                  textDirection: TextDirection.ltr,
+                ),
+              ),
+          ],
+          onChanged: widget.editable
+              ? (value) => widget.onChanged(
+                  'menu_banner_desktop_media_id',
+                  value == '' ? null : value,
+                )
+              : null,
+        ),
+        Wrap(
+          spacing: 12,
+          children: [
+            TextButton.icon(
+              key: const Key('content-menu-banner-desktop-upload'),
+              onPressed: widget.onDesktopUpload,
+              icon: const Icon(Icons.upload_outlined),
+              label: Text(c('bannerDesktopUpload')),
+            ),
+            TextButton.icon(
+              key: const Key('content-menu-banner-desktop-clear'),
+              onPressed: widget.editable && id != null
+                  ? () => widget.onChanged('menu_banner_desktop_media_id', null)
+                  : null,
+              icon: const Icon(Icons.clear),
+              label: Text(c('bannerDesktopClear')),
+            ),
+          ],
+        ),
+        Text(
+          c('bannerDesktopHelp'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        if (widget.desktopQualityMessage != null)
+          Text(
+            widget.desktopQualityMessage!,
+            key: const Key('content-desktop-banner-quality-status'),
+          ),
+        for (final axis in ['x', 'y']) ...[
+          Text(
+            '${c(axis == 'x' ? 'menuBannerFocusX' : 'menuBannerFocusY')} — ${widget.appearance?['menu_banner_desktop_focal_$axis'] ?? 50}%',
+          ),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Slider(
+              key: ValueKey('content-menu-banner-desktop-focal-$axis'),
+              value:
+                  ((widget.appearance?['menu_banner_desktop_focal_$axis']
+                              as int?) ??
+                          50)
+                      .toDouble(),
+              min: 0,
+              max: 100,
+              divisions: 100,
+              semanticFormatterCallback: (v) => '${v.round()}%',
+              onChanged: widget.editable
+                  ? (v) => widget.onChanged(
+                      'menu_banner_desktop_focal_$axis',
+                      v.round(),
+                    )
+                  : null,
+            ),
+          ),
+        ],
+        _heightControl(false),
+      ],
+    );
+  }
+
   Widget _frame(bool phone, Map<String, Object?> data, int x, int y) {
     final crop = phone ? _phoneCrop : _desktopCrop;
+    final desktop = !phone && data['layout'] == 'responsive';
+    final hasDesktopImage = desktop && data['desktopImageUrl'] is String;
+    final resolved = <String, Object?>{
+      ...data,
+      'imageUrl': hasDesktopImage ? data['desktopImageUrl'] : data['imageUrl'],
+      'imageWidth': hasDesktopImage
+          ? data['desktopImageWidth']
+          : data['imageWidth'],
+      'imageHeight': hasDesktopImage
+          ? data['desktopImageHeight']
+          : data['imageHeight'],
+      'heightPx': desktop ? data['desktopHeightPx'] : data['mobileHeightPx'],
+      'device': phone ? 'phone' : 'desktop',
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -116,7 +324,7 @@ class _BannerEditorState extends State<StorefrontMenuBannerEditor> {
         const SizedBox(height: 8),
         StorefrontBannerPreviewFrame(
           key: ValueKey(phone ? 'banner-phone-frame' : 'banner-desktop-frame'),
-          data: data,
+          data: resolved,
           focalX: x,
           focalY: y,
           logicalWidth: (phone ? _phoneWidth : 1280).toDouble(),
@@ -150,10 +358,31 @@ class _BannerEditorState extends State<StorefrontMenuBannerEditor> {
     final selected = available.where((row) => row.media.id == id).firstOrNull;
     final x = widget.appearance?['menu_banner_focal_x'] as int? ?? 50;
     final y = widget.appearance?['menu_banner_focal_y'] as int? ?? 50;
+    final responsive = widget.appearance?['menu_banner_layout'] == 'responsive';
+    final desktopId =
+        widget.appearance?['menu_banner_desktop_media_id'] as String?;
+    final desktop = available
+        .where((row) => row.media.id == desktopId)
+        .firstOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(c('menuBannerHelp')),
+        SwitchListTile(
+          key: const Key('content-menu-banner-layout'),
+          title: Text(c('bannerResponsiveLayout')),
+          subtitle: Text(c('bannerResponsiveHelp')),
+          value: responsive,
+          onChanged: widget.editable
+              ? (enabled) {
+                  setState(() => _editingPhone = true);
+                  widget.onChanged(
+                    'menu_banner_layout',
+                    enabled ? 'responsive' : null,
+                  );
+                }
+              : null,
+        ),
         SwitchListTile(
           key: const Key('content-menu-banner-enabled'),
           title: Text(c('menuBannerEnabled')),
@@ -170,73 +399,94 @@ class _BannerEditorState extends State<StorefrontMenuBannerEditor> {
               ? (value) => widget.onChanged('menu_intro_visible', value)
               : null,
         ),
-        DropdownButtonFormField<String>(
-          key: ValueKey('content-menu-banner-media-${id ?? ''}'),
-          initialValue: selected != null ? id : '',
-          isExpanded: true,
-          decoration: InputDecoration(labelText: c('menuBannerImage')),
-          items: [
-            DropdownMenuItem(value: '', child: Text(c('menuBannerNone'))),
-            for (final row in available)
-              DropdownMenuItem(
-                value: row.media.id,
-                child: Text(
-                  '${row.media.width}×${row.media.height} · ${row.media.id.substring(0, 8)}',
-                  textDirection: TextDirection.ltr,
+        if (responsive)
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final phone in [true, false])
+                ChoiceChip(
+                  key: ValueKey(
+                    'content-menu-banner-device-${phone ? 'phone' : 'desktop'}',
+                  ),
+                  label: Text(
+                    c(phone ? 'bannerEditPhone' : 'bannerEditDesktop'),
+                  ),
+                  selected: _editingPhone == phone,
+                  onSelected: (_) => setState(() => _editingPhone = phone),
+                ),
+            ],
+          ),
+        if (!responsive || _editingPhone) ...[
+          DropdownButtonFormField<String>(
+            key: ValueKey('content-menu-banner-media-${id ?? ''}'),
+            initialValue: selected != null ? id : '',
+            isExpanded: true,
+            decoration: InputDecoration(labelText: c('menuBannerImage')),
+            items: [
+              DropdownMenuItem(value: '', child: Text(c('menuBannerNone'))),
+              for (final row in available)
+                DropdownMenuItem(
+                  value: row.media.id,
+                  child: Text(
+                    '${row.media.width}×${row.media.height} · ${row.media.id.substring(0, 8)}',
+                    textDirection: TextDirection.ltr,
+                  ),
+                ),
+            ],
+            onChanged: widget.editable
+                ? (value) => widget.onChanged(
+                    'menu_banner_media_id',
+                    value == '' ? null : value,
+                  )
+                : null,
+          ),
+          Wrap(
+            spacing: 12,
+            children: [
+              TextButton.icon(
+                key: const Key('content-menu-banner-upload'),
+                onPressed: widget.onUpload,
+                icon: const Icon(Icons.upload_outlined),
+                label: Text(c('menuBannerUpload')),
+              ),
+              TextButton.icon(
+                key: const Key('content-menu-banner-clear'),
+                onPressed: widget.editable && id != null
+                    ? () => widget.onChanged('menu_banner_media_id', null)
+                    : null,
+                icon: const Icon(Icons.clear),
+                label: Text(c('menuBannerClear')),
+              ),
+            ],
+          ),
+          if (selected != null) ...[
+            for (final axis in ['x', 'y']) ...[
+              Text(
+                '${c(axis == 'x' ? 'menuBannerFocusX' : 'menuBannerFocusY')} — ${axis == 'x' ? x : y}%',
+              ),
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: Slider(
+                  key: ValueKey('content-menu-banner-focal-$axis'),
+                  value: (axis == 'x' ? x : y).toDouble(),
+                  min: 0,
+                  max: 100,
+                  divisions: 100,
+                  label: '${axis == 'x' ? x : y}%',
+                  semanticFormatterCallback: (value) => '${value.round()}%',
+                  onChanged: widget.editable
+                      ? (value) => widget.onChanged(
+                          'menu_banner_focal_$axis',
+                          value.round(),
+                        )
+                      : null,
                 ),
               ),
+            ],
           ],
-          onChanged: widget.editable
-              ? (value) => widget.onChanged(
-                  'menu_banner_media_id',
-                  value == '' ? null : value,
-                )
-              : null,
-        ),
-        Wrap(
-          spacing: 12,
-          children: [
-            TextButton.icon(
-              key: const Key('content-menu-banner-upload'),
-              onPressed: widget.onUpload,
-              icon: const Icon(Icons.upload_outlined),
-              label: Text(c('menuBannerUpload')),
-            ),
-            TextButton.icon(
-              key: const Key('content-menu-banner-clear'),
-              onPressed: widget.editable && id != null
-                  ? () => widget.onChanged('menu_banner_media_id', null)
-                  : null,
-              icon: const Icon(Icons.clear),
-              label: Text(c('menuBannerClear')),
-            ),
-          ],
-        ),
-        if (selected != null) ...[
-          for (final axis in ['x', 'y']) ...[
-            Text(
-              '${c(axis == 'x' ? 'menuBannerFocusX' : 'menuBannerFocusY')} — ${axis == 'x' ? x : y}%',
-            ),
-            Directionality(
-              textDirection: TextDirection.ltr,
-              child: Slider(
-                key: ValueKey('content-menu-banner-focal-$axis'),
-                value: (axis == 'x' ? x : y).toDouble(),
-                min: 0,
-                max: 100,
-                divisions: 100,
-                label: '${axis == 'x' ? x : y}%',
-                semanticFormatterCallback: (value) => '${value.round()}%',
-                onChanged: widget.editable
-                    ? (value) => widget.onChanged(
-                        'menu_banner_focal_$axis',
-                        value.round(),
-                      )
-                    : null,
-              ),
-            ),
-          ],
+          if (responsive) _heightControl(true),
         ],
+        if (responsive && !_editingPhone) _desktopControls(available),
         const SizedBox(height: 12),
         Text(c('menuBannerPreview')),
         Text(
@@ -273,10 +523,22 @@ class _BannerEditorState extends State<StorefrontMenuBannerEditor> {
                     : widget.publicUrlFor
                           ?.call(selected.media.objectKey)
                           .toString(),
-                'enabled':
-                    selected != null &&
-                    widget.appearance?['menu_banner_enabled'] == true,
+                'enabled': widget.appearance?['menu_banner_enabled'] == true,
                 'showIntro': widget.appearance?['menu_intro_visible'] != false,
+                'layout': responsive ? 'responsive' : null,
+                'imageWidth': selected?.media.width,
+                'imageHeight': selected?.media.height,
+                'desktopImageUrl': desktop == null
+                    ? null
+                    : widget.publicUrlFor
+                          ?.call(desktop.media.objectKey)
+                          .toString(),
+                'desktopImageWidth': desktop?.media.width,
+                'desktopImageHeight': desktop?.media.height,
+                'mobileHeightPx':
+                    widget.appearance?['menu_banner_mobile_height_px'],
+                'desktopHeightPx':
+                    widget.appearance?['menu_banner_desktop_height_px'],
               };
               final imageUrl = data['imageUrl'];
               final resolved = imageUrl is String
@@ -309,7 +571,23 @@ class _BannerEditorState extends State<StorefrontMenuBannerEditor> {
                     runSpacing: 20,
                     children: [
                       SizedBox(width: width, child: _frame(true, data, x, y)),
-                      SizedBox(width: width, child: _frame(false, data, x, y)),
+                      SizedBox(
+                        width: width,
+                        child: _frame(
+                          false,
+                          data,
+                          responsive
+                              ? (widget.appearance?['menu_banner_desktop_focal_x']
+                                        as int? ??
+                                    50)
+                              : x,
+                          responsive
+                              ? (widget.appearance?['menu_banner_desktop_focal_y']
+                                        as int? ??
+                                    50)
+                              : y,
+                        ),
+                      ),
                     ],
                   );
                 },

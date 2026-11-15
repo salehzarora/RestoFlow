@@ -114,7 +114,7 @@ export interface Tenant {
   /** Versioned merchant choice, separate from legacy visual_preset and scene selection. */
   readonly siteTheme?: SiteTheme | null;
   /** Independent menu banner; absent preserves existing merchants. Published derivative only. */
-  readonly menuBanner?: { readonly image: string | null; readonly enabled: boolean; readonly showIntro: boolean; readonly focalX: number; readonly focalY: number };
+  readonly menuBanner?: { readonly image: string | null; readonly enabled: boolean; readonly showIntro: boolean; readonly focalX: number; readonly focalY: number; readonly layout?: 'responsive' | null; readonly width?: number | null; readonly height?: number | null; readonly desktopImage?: string | null; readonly desktopWidth?: number | null; readonly desktopHeight?: number | null; readonly desktopVariants?: readonly ImageVariant[]; readonly mobileHeightPx?: number | null; readonly desktopHeightPx?: number | null; readonly desktopFocalX?: number | null; readonly desktopFocalY?: number | null };
   readonly currency: 'ILS';
 }
 

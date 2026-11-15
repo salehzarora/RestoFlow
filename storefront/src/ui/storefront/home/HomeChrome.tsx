@@ -60,7 +60,7 @@ export function HomeChrome({ tenant, m, locale, slug, language, categories, item
   const count = cartApi?.ready ? cartApi.summary.itemCount : 0;
   const subtotal = cartApi?.ready ? cartApi.summary.subtotalMinor : 0;
   const showIntro = tenant.menuBanner?.showIntro !== false;
-  const hasBanner = Boolean(tenant.menuBanner?.enabled && tenant.menuBanner.image);
+  const hasBanner = Boolean(tenant.menuBanner?.enabled && (tenant.menuBanner.image || tenant.menuBanner.layout === 'responsive' && tenant.menuBanner.desktopImage));
   useEffect(() => { markIntroSeen(slug); }, [slug]);
   useLayoutEffect(() => { setDismissed(isAnnouncementDismissed(slug)); }, [slug]);
   useEffect(() => {
@@ -153,7 +153,6 @@ export function HomeChrome({ tenant, m, locale, slug, language, categories, item
   };
   return <>
     <div className={styles.topScene} data-sf-menu-top="" data-sf-has-banner={hasBanner ? '' : undefined}>
-    <MenuBanner className={styles.menuBanner} banner={tenant.menuBanner} />
     <header className={styles.header} data-sf-module="compact">
       <div className={`${styles.inner} ${styles.headerInner}`}>
         <a className={styles.brandLink} href="#" aria-label={tenant.displayName}><BrandLockup tenant={tenant} /></a>
@@ -169,7 +168,8 @@ export function HomeChrome({ tenant, m, locale, slug, language, categories, item
     {showIntro ? hero : null}
     {announcement === null || dismissed ? null : <div className={styles.announce} data-sf-module="announce" role="status"><span aria-hidden="true">✦</span><span dir="auto">{announcementSegments?.length ? announcementSegments.map((segment, index) => <Fragment key={index}>{index ? <span aria-hidden="true"> ✦ </span> : null}<TenantText>{segment}</TenantText></Fragment>) : <TenantText>{announcement}</TenantText>}</span><span aria-hidden="true">✦</span><button className={styles.announceClose} type="button" aria-label={m.close} onClick={() => { setDismissed(true); markAnnouncementDismissed(slug); }}><CloseIcon /></button></div>}
     {notice}
-    {hasBanner ? <div className={styles.sceneWindow} data-sf-scene-window="" data-sf-hero={showIntro && hero !== null ? '' : undefined} aria-hidden="true" /> : null}
+    <MenuBanner className={`${styles.menuBanner}${tenant.menuBanner?.layout === 'responsive' ? ' ' + styles.responsiveBanner : ''}`} banner={tenant.menuBanner} />
+    {hasBanner && tenant.menuBanner?.layout !== 'responsive' ? <div className={styles.sceneWindow} data-sf-scene-window="" data-sf-hero={showIntro && hero !== null ? '' : undefined} aria-hidden="true" /> : null}
     {empty == null ? <div className={`${styles.inner} ${styles.topControls} ${styles.menuHeading}`}>{showIntro ? <div className={styles.menuIntro}><p className={styles.eyebrow}>{m.menuEyebrow}<span>{m.menuCaption}</span></p><h2><MenuTitle text={m.menuHeading} locale={locale} /></h2></div> : null}<div className={styles.searchControls}><form className={styles.searchBox} role="search" onSubmit={e => e.preventDefault()}><SearchIcon /><input ref={search} type="search" autoComplete="off" maxLength={80} value={query} onChange={e => { setQuery(e.target.value); setPicks(false); }} placeholder={m.searchPh} aria-label={m.search} />{query ? <button type="button" aria-label={m.clearSearch} onClick={() => { setQuery(''); search.current?.focus(); }}><CloseIcon /></button> : <kbd aria-hidden="true">/</kbd>}</form>{heroItem ? null : <div className={styles.suggestionSlot}>{suggestion}</div>}</div></div> : null}
     </div>
     {empty ?? <section className={`${styles.inner} ${styles.menu}`} id="sf-menu" aria-label={m.menuLabel}>

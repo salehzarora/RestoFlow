@@ -30,6 +30,12 @@ const storefrontAppearanceOptionalKeys = {
   'menu_intro_visible',
   'menu_banner_focal_x',
   'menu_banner_focal_y',
+  'menu_banner_layout',
+  'menu_banner_desktop_media_id',
+  'menu_banner_mobile_height_px',
+  'menu_banner_desktop_height_px',
+  'menu_banner_desktop_focal_x',
+  'menu_banner_desktop_focal_y',
 };
 const storefrontFontFamilies = {'rubik', 'alexandria', 'system'};
 final storefrontAppearanceHex = RegExp(r'^#[0-9A-Fa-f]{6}$');
@@ -101,6 +107,12 @@ bool contentFieldPath(Object? value) => const {
   'appearance.menu_intro_visible',
   'appearance.menu_banner_focal_x',
   'appearance.menu_banner_focal_y',
+  'appearance.menu_banner_layout',
+  'appearance.menu_banner_desktop_media_id',
+  'appearance.menu_banner_mobile_height_px',
+  'appearance.menu_banner_desktop_height_px',
+  'appearance.menu_banner_desktop_focal_x',
+  'appearance.menu_banner_desktop_focal_y',
 }.contains(value);
 
 Object? _freeze(Object? value) => switch (value) {
@@ -173,12 +185,35 @@ class StorefrontContentDocument {
           'presentation_invalid',
         );
       }
-      final banner = appearance['menu_banner_media_id'];
-      if (banner != null && !contentId(banner)) {
+      for (final key in const [
+        'menu_banner_media_id',
+        'menu_banner_desktop_media_id',
+      ]) {
+        if (appearance[key] != null && !contentId(appearance[key])) {
+          throw StorefrontDecodeException('appearance.$key', 'media_invalid');
+        }
+      }
+      final layout = appearance['menu_banner_layout'];
+      if (layout != null && layout != 'responsive') {
         throw const StorefrontDecodeException(
-          'appearance.menu_banner_media_id',
-          'media_invalid',
+          'appearance.menu_banner_layout',
+          'presentation_invalid',
         );
+      }
+      for (final entry in const {
+        'menu_banner_mobile_height_px': (320, 640),
+        'menu_banner_desktop_height_px': (240, 560),
+      }.entries) {
+        final value = appearance[entry.key];
+        if (value != null &&
+            (value is! int ||
+                value < entry.value.$1 ||
+                value > entry.value.$2)) {
+          throw StorefrontDecodeException(
+            'appearance.${entry.key}',
+            'presentation_invalid',
+          );
+        }
       }
       for (final key in const ['menu_banner_enabled', 'menu_intro_visible']) {
         final value = appearance[key];
@@ -189,7 +224,12 @@ class StorefrontContentDocument {
           );
         }
       }
-      for (final key in const ['menu_banner_focal_x', 'menu_banner_focal_y']) {
+      for (final key in const [
+        'menu_banner_focal_x',
+        'menu_banner_focal_y',
+        'menu_banner_desktop_focal_x',
+        'menu_banner_desktop_focal_y',
+      ]) {
         final value = appearance[key];
         if (value != null && (value is! int || value < 0 || value > 100)) {
           throw StorefrontDecodeException(

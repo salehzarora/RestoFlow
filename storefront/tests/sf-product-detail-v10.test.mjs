@@ -59,7 +59,7 @@ test('detail manifest rejects private/signed/unknown URLs, dimensions, duplicate
   }
 });
 
-test('only exact missing v10 falls back to strict v9 with one body, public authority and shared deadline', async () => {
+test('only exact missing v11 then v10 falls back to strict v9 with one body, public authority and shared deadline', async () => {
   const old = globalThis.fetch, calls = [];
   const responses = (...queue) => {
     calls.length = 0;
@@ -71,12 +71,12 @@ test('only exact missing v10 falls back to strict v9 with one body, public autho
   try {
     responses([200, menu()]);
     assert.deepEqual((await fetchStorefrontMenu('sf-synth-a', config))[field], [row()]);
-    assert.equal(calls.length, 1); assert.equal(calls[0].url, origin + '/rest/v1/rpc/storefront_menu_v10');
+    assert.equal(calls.length, 1); assert.equal(calls[0].url, origin + '/rest/v1/rpc/storefront_menu_v11');
     for (const error of [missing(10), { code: '42883', message: 'function public.storefront_menu_v10(text) does not exist' }]) {
-      responses([404, error], [200, syntheticV4Envelope()]);
+      responses([404, missing(11)], [404, error], [200, syntheticV4Envelope()]);
       assert.deepEqual(await fetchStorefrontMenu('sf-synth-a', config), decoders.decodeStorefrontMenuV9(syntheticV4Envelope()));
-      assert.deepEqual(calls.map(c => c.url), [10, 9].map(v => origin + '/rest/v1/rpc/storefront_menu_v' + v));
-      assert.equal(calls[0].init, calls[1].init);
+      assert.deepEqual(calls.map(c => c.url), [11, 10, 9].map(v => origin + '/rest/v1/rpc/storefront_menu_v' + v));
+      assert.ok(calls.every(c => c.init === calls[0].init)); assert.equal(calls[0].init, calls[1].init);
       assert.equal(calls[0].init.body, JSON.stringify({ p_slug: 'sf-synth-a' }));
       assert.equal(calls[0].init.headers.apikey, config.anonKey);
       assert.equal(calls[0].init.signal, calls[1].init.signal);
@@ -85,8 +85,8 @@ test('only exact missing v10 falls back to strict v9 with one body, public autho
     for (const [status, value] of [[404, missing(9)], [403, missing(10)], [500, missing(10)], [404, { ...missing(10), code: '42501' }], [404, '<html>missing</html>'], [200, menu([{ ...row(), width: 0 }])]]) {
       responses([status, value]); await assert.rejects(() => fetchStorefrontMenu('sf-synth-a', config)); assert.equal(calls.length, 1);
     }
-    responses([404, missing(10)], [200, menu()]);
+    responses([404, missing(11)], [404, missing(10)], [200, menu()]);
     await assert.rejects(() => fetchStorefrontMenu('sf-synth-a', config), EnvelopeError, 'v9 never silently accepts the v10-only field');
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 3);
   } finally { globalThis.fetch = old; }
 });
