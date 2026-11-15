@@ -53,7 +53,9 @@ export async function bannerGeometry(root: Locator): Promise<Record<string, any>
       x: box.x + (box.width - image.naturalWidth * scale) * points[0],
       y: box.y + (box.height - image.naturalHeight * scale) * points[1] };
     const scene = el.getBoundingClientRect(), banner = image.closest('[data-sf-menu-banner]')!.getBoundingClientRect();
-    const controls = Array.from(el.children).filter(node => node !== image.closest('[data-sf-menu-banner]') && node.getAttribute('aria-hidden') !== 'true')
+    const chrome = el.querySelector('[data-sf-banner-chrome]');
+    const controls = [...Array.from(chrome?.children ?? []), ...Array.from(el.children).filter(node => node !== chrome)]
+      .filter(node => node !== image.closest('[data-sf-menu-banner]') && node.getAttribute('aria-hidden') !== 'true')
       .map(node => { const r = node.getBoundingClientRect(); return { width: r.width, height: r.height, x: r.x, y: r.y }; });
     // Only pixels inside the overflow-hidden banner are actually visible.
     // A cover image's off-box source pixels cannot obscure adjacent controls.
@@ -62,11 +64,18 @@ export async function bannerGeometry(root: Locator): Promise<Record<string, any>
     const overlap = controls.map(r => Math.max(0, Math.min(visiblePhoto.right, r.x + r.width) - Math.max(visiblePhoto.x, r.x))
       * Math.max(0, Math.min(visiblePhoto.bottom, r.y + r.height) - Math.max(visiblePhoto.y, r.y)));
     const bannerStyle = getComputedStyle(image.closest('[data-sf-menu-banner]')!);
+    const header = el.querySelector('header')!, status = el.querySelector('[data-sf-order-status]')!;
+    const headerBox = header.getBoundingClientRect(), statusBox = status.getBoundingClientRect();
     return { viewportWidth: doc.documentElement.clientWidth, width: box.width, height: box.height,
       naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight, fit,
       publicPath: new URL(image.currentSrc).pathname, position: style.objectPosition,
       clippedX: Math.max(0, image.naturalWidth - box.width / scale), clippedY: Math.max(0, image.naturalHeight - box.height / scale),
       photo, sceneWidth: scene.width, sceneHeight: scene.height, bannerWidth: banner.width,
+      bannerTop: banner.top - scene.top, bannerBottom: banner.bottom - scene.top,
+      headerTop: headerBox.top - scene.top, headerBottom: headerBox.bottom - scene.top,
+      statusTop: statusBox.top - scene.top, statusBottom: statusBox.bottom - scene.top,
+      headerBackground: getComputedStyle(header).backgroundColor, headerBackdrop: getComputedStyle(header).backdropFilter,
+      bannerMask: bannerStyle.maskImage,
       maxControlOverlapArea: Math.max(0, ...overlap), imageCount: doc.querySelectorAll('[data-sf-menu-banner] img').length,
       borderWidth: bannerStyle.borderTopWidth, borderRadius: bannerStyle.borderTopLeftRadius, shadow: bannerStyle.boxShadow,
       sceneBackground: getComputedStyle(el).backgroundImage, imageFilter: style.filter,
@@ -74,6 +83,8 @@ export async function bannerGeometry(root: Locator): Promise<Record<string, any>
       state: doc.querySelector('[data-sf-order-status] [data-state]')!.getAttribute('data-state'),
       announcement: doc.querySelector('[data-sf-module="announce"]')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
       searchY: doc.querySelector('[role="search"]')!.getBoundingClientRect().y,
+      searchTop: doc.querySelector('[role="search"]')!.getBoundingClientRect().top - scene.top,
+      categoriesTop: doc.querySelector('[data-sf-module="categories"]')!.getBoundingClientRect().top - scene.top,
       categoriesY: doc.querySelector('[data-sf-module="categories"]')!.getBoundingClientRect().y };
   });
 }
