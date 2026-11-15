@@ -267,9 +267,24 @@ test('the category filter uses one named navigation and native focusable buttons
   assert.match(chrome, /categories\.some\(c => c\.id === active\) \? active : categories\[0\]\?\.id/, 'a refreshed category list cannot retain a removed selection');
 });
 
-test('approved header is sticky and category filters share its responsive offset', () => {
-  assert.match(css, /\.header\s*\{[^}]*position\s*:\s*sticky\s*;[^}]*inset-block-start\s*:\s*0/);
-  assert.match(css, /\.categoryWrap\s*\{[^}]*position\s*:\s*sticky\s*;[^}]*inset-block-start\s*:\s*var\(--header-height\)/);
+test('intro header stays sticky while home chrome scrolls and its category rail sticks at the viewport top', () => {
+  const introHeader = /\.header\s*\{[^}]*position\s*:\s*sticky\s*;[^}]*inset-block-start\s*:\s*0/;
+  const homeHeader = /\.topScene\s+\.header\s*\{[^}]*position\s*:\s*relative\s*[;}]/;
+  const categories = /\.categoryWrap\s*\{[^}]*position\s*:\s*sticky\s*;[^}]*inset-block-start\s*:\s*0\s*[;}]/;
+  // Home already overrode the old --header-height offset to zero. Folding that
+  // winning value into the base rule must retain its actual scrolling behavior.
+  const assertHeaderBindings = source => {
+    assert.match(source, introHeader);
+    assert.match(source, homeHeader);
+    assert.match(source, categories);
+  };
+  assertHeaderBindings(css);
+  for (const planted of [
+    css.replace(introHeader, '.header{position:static;inset-block-start:0}'),
+    css.replace(homeHeader, '.topScene .header{position:sticky}'),
+    css.replace(categories, '.categoryWrap{position:static;inset-block-start:0}'),
+    css.replace(categories, '.categoryWrap{position:sticky;inset-block-start:var(--header-height)}'),
+  ]) assert.throws(() => assertHeaderBindings(planted));
   assert.match(code('src/ui/storefront/home/HomeChrome.tsx'), /<header\b[^>]*className=\{styles\.header\}/);
 });
 
