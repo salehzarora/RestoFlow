@@ -263,6 +263,23 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       meaning: 'Semantic legacy restoration with explicit null; not missing-key byte identity.' },
     video: { status: 'NOT_RUN' }, uiWriteCount: 0 };
   let writes = 0, videoFailure: { error: unknown } | null = null;
+  const startedAt = Date.now();
+  const progress = (point: string) => {
+    try {
+      writeFileSync(resolve(d.artifactDir, 'responsive-banner-settings-progress.json'), JSON.stringify({
+        status: 'PARTIAL_DIAGNOSTIC_NOT_ACCEPTANCE', point,
+        elapsedMs: Date.now() - startedAt, stage: /^[a-z0-9_-]{1,120}$/.test(receipt.stage ?? '') ? receipt.stage : null,
+        comparisonPhase: receipt.comparisonPhase ?? null, uiWriteCount: writes, comparisonsCompleted: receipt.rows.length,
+        lastComparison: receipt.lastComparison ?? null, failureType: receipt.failureType ?? null,
+        progressWriteFailed: receipt.progressWriteFailed === true,
+      }, null, 2));
+    } catch {
+      // Optional diagnostics must never replace the acceptance error or skip restoration.
+      receipt.progressWriteFailed = true;
+    }
+  };
+  const pageClosed = () => progress('page-close');
+  page.on('close', pageClosed);
   const count = (request: Request) => {
     const u = new URL(request.url());
     if (u.origin === 'http://127.0.0.1:54321' && u.pathname === '/rest/v1/rpc/set_restaurant_storefront_content_v1'
@@ -281,6 +298,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
   };
   const recordControl = async (stage: string, target: Locator) => {
     receipt.stage = stage;
+    progress('control');
     receipt.control = { matches: await target.count(), samples: await target.evaluateAll(nodes => nodes.slice(0, 2).map(el => {
       const r = el.getBoundingClientRect(), hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
       return { role: el.getAttribute('role'), tabIndex: (el as HTMLElement).tabIndex, checked: el.getAttribute('aria-checked'),
@@ -332,6 +350,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     expect(await d.read(), 'Fresh real owner read retains pre-draft document and CAS version').toEqual(before);
   };
   const saveReload = async (expected: Obj) => {
+    progress('before-save');
     const before = writes; await d.save(); expect(writes).toBe(before + 1);
     const wire = await d.reload(), actual = await d.read();
     expect(wire, 'Actual Dashboard reload response equals an independent authenticated v6 read').toEqual(actual);
@@ -344,6 +363,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     // image handles. Initial srcdoc replacement is not a slider regression.
     const state = (await d.publicRead(11)).service.state;
     for (const index of [0, 1]) await expect.poll(() => bannerGeometry(preview(index)).then(g => g.state).catch(() => null)).toBe(state);
+    progress('save-readback-complete');
     return actual;
   };
   const compare = async (label: string) => {
@@ -354,6 +374,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     expect(appearance.menu_banner_desktop_height_px).toBe(current.appearance.menu_banner_desktop_height_px);
     await expect(frames).toHaveCount(2);
     for (const [index, width] of [[0, 390], [1, 1280]]) {
+      progress(`compare-${label}-${width}`);
       d.recordPhase?.(`responsive-${label}-${width}`);
       await expect(frames.nth(index)).toHaveAttribute('sandbox', 'allow-same-origin');
       const frame = page.frameLocator('iframe[title="Storefront banner preview"]').nth(index);
@@ -475,6 +496,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
         announcementEqual: site.announcement === draft.announcement,
         siteScroll: await scrollEvidence(surface.locator('[data-sf-menu-top]')), previewScroll: await scrollEvidence(preview(index)),
         imagesCapturedBeforeEquality: true };
+      progress('before-geometry-assertions');
       for (const key of comparisonKeys)
         expect(draft[key], `Real Dashboard preview and actual Storefront match ${key} at ${width}`).toEqual(site[key]);
       expect(site.bannerWidth).toBe(width); expect(site.borderWidth).toBe('0px'); expect(site.borderRadius).toBe('0px');
@@ -605,9 +627,12 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     if (videoFailure) { receipt.stage = receipt.auxiliaryFailureStage; throw videoFailure.error; }
     receipt.status = 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS'; receipt.stage = null;
   } catch (error) {
+    receipt.failureType = error instanceof Error && ['Error', 'AssertionError', 'TimeoutError', 'TypeError'].includes(error.name) ? error.name : 'unclassified';
+    progress('failure');
     receipt.error = error instanceof Error ? error.message.split('\n')[0] : 'acceptance failed'; throw error;
   } finally {
     page.off('request', count); receipt.uiWriteCount = writes;
+    progress('before-restoration');
     const succeeded = receipt.status === 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS';
     try {
       receipt.restoration.stage = 'write-original-owner-document';
@@ -656,6 +681,9 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       receipt.restoration.failedAt = receipt.restoration.stage;
       receipt.restoration.errorType = error instanceof Error && ['Error','TypeError','TimeoutError','AssertionError'].includes(error.name) ? error.name : 'unclassified';
       if (succeeded) { receipt.status = 'FAIL'; receipt.stage = 'restore-synthetic-settings'; throw error; }
-    } finally { writeFileSync(resolve(d.artifactDir, 'responsive-banner-settings-result.json'), JSON.stringify(receipt, null, 2)); }
+    } finally {
+      page.off('close', pageClosed);
+      writeFileSync(resolve(d.artifactDir, 'responsive-banner-settings-result.json'), JSON.stringify(receipt, null, 2));
+    }
   }
 }
