@@ -73,7 +73,7 @@ void main() {
     },
   );
   test(
-    'responsive preview has real UI before its selected image and no legacy spacer; slider ticks retain its document',
+    'responsive preview overlays real chrome in the image row without changing image height or slider document',
     () {
       final responsive = {
         ...data(),
@@ -84,6 +84,8 @@ void main() {
         'heightPx': 520,
       };
       final html = storefrontBannerPreviewDocument(responsive, base);
+      expect(html, contains('class="topScene"'));
+      expect(html, contains('<div data-sf-banner-chrome="">'));
       expect(html, contains('class="menuBanner responsiveBanner"'));
       expect(html, contains('data-sf-banner-device="phone"'));
       expect(
@@ -117,6 +119,13 @@ void main() {
       expect(
         storefrontBannerPreviewDocument(data(), base),
         isNot(contains('responsiveBanner')),
+      );
+      expect(
+        storefrontBannerPreviewDocument({
+          ...responsive,
+          'enabled': false,
+        }, base),
+        isNot(contains('data-sf-banner-chrome')),
       );
     },
   );

@@ -432,7 +432,8 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
         const geometry = (await measure(preview(index), 'preview_resource'))?.geometry;
         return geometry ? { publicPath: geometry.publicPath, serviceState: geometry.state } : null;
       }).toEqual({ publicPath: base, serviceState: latest.service.state });
-      const comparisonKeys = ['viewportWidth', 'width', 'height', 'position', 'searchY', 'categoriesY', 'state', 'themeBackground'];
+      const comparisonKeys = ['viewportWidth', 'width', 'height', 'position', 'searchY', 'categoriesY', 'state', 'themeBackground',
+        'bannerTop', 'bannerBottom', 'headerTop', 'headerBottom', 'statusTop', 'statusBottom', 'headerBackground', 'headerBackdrop', 'bannerMask'];
       const scrollEvidence = (root: Locator) => root.evaluate(el => ({ x: el.ownerDocument.defaultView!.scrollX,
         y: el.ownerDocument.defaultView!.scrollY, viewportHeight: el.ownerDocument.documentElement.clientHeight,
         documentHeight: el.ownerDocument.documentElement.scrollHeight, fontsLoaded: el.ownerDocument.fonts.status === 'loaded' }));
@@ -477,7 +478,20 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       for (const key of comparisonKeys)
         expect(draft[key], `Real Dashboard preview and actual Storefront match ${key} at ${width}`).toEqual(site[key]);
       expect(site.bannerWidth).toBe(width); expect(site.borderWidth).toBe('0px'); expect(site.borderRadius).toBe('0px');
-      expect(site.maxControlOverlapArea, 'Real identity/status/announcement/search do not cover the visible photo').toBeLessThan(.1);
+      // Owner-requested scene: real identity/status overlay the photo; search and
+      // categories remain below it. Image height and focal assertions above stay exact.
+      expect(Math.abs(site.bannerTop), 'The banner starts at the top of the scene').toBeLessThan(.02);
+      expect(site.headerTop).toBeGreaterThanOrEqual(site.bannerTop);
+      expect(site.headerBottom).toBeLessThanOrEqual(site.bannerBottom);
+      expect(site.statusTop).toBeGreaterThanOrEqual(site.headerBottom);
+      expect(site.statusBottom).toBeLessThanOrEqual(site.bannerBottom);
+      expect(site.searchTop).toBeGreaterThanOrEqual(site.bannerBottom);
+      expect(site.categoriesTop).toBeGreaterThanOrEqual(site.bannerBottom);
+      expect(site.headerBackdrop, 'Header chrome does not blur away the underlying artwork').toBe('none');
+      const fadeStops = [...site.bannerMask.matchAll(/([\d.]+)%/g)].map((match: RegExpMatchArray) => Number(match[1]));
+      expect(fadeStops, 'A gradual bottom fade, not a near-edge cutoff').toHaveLength(1);
+      expect(fadeStops[0]).toBeGreaterThanOrEqual(60);
+      expect(fadeStops[0]).toBeLessThan(95);
       expect(site.imageCount).toBe(1); expect(site.naturalWidth).toBeGreaterThan(0); expect(site.naturalHeight).toBeGreaterThan(0);
       receipt.rows.push({ label, width, basePublicPath: base, actualResource: site.publicPath, iframeResource: draft.publicPath,
         resourceRelationship: site.publicPath === draft.publicPath ? 'SAME_PUBLISHED_RESOURCE' : 'DECLARED_SAME_SOURCE_COMPANION',
@@ -485,6 +499,45 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
         dashboardCaptureViewport: captureViewport, zoom: 100 });
       await surface.waitForLoadState('networkidle', { timeout: 30000 });
       await sample.check();
+      if (label === 'phone-height' && (width === 390 || width === 1280)) {
+        // Render-only CSS edge probe, not a second save/readback: the already
+        // decoded resource and its src/currentSrc remain untouched throughout.
+        const fallback = await surface.evaluate(() => {
+          const banner = document.querySelector<HTMLElement>('[data-sf-menu-banner]')!;
+          const header = document.querySelector<HTMLElement>('[data-sf-menu-top] header')!;
+          const classes = banner.className, empty = banner.getAttribute('data-sf-phone-empty');
+          const source = banner.querySelector<HTMLImageElement>('img')!.currentSrc;
+          const normal = getComputedStyle(header).backgroundColor;
+          const categoryWidthsUnchanged = Array.from(document.querySelectorAll<HTMLElement>('[data-sf-module="categories"] button')).every(button => {
+            const width = button.getBoundingClientRect().width;
+            const value = button.style.getPropertyValue('min-width'), priority = button.style.getPropertyPriority('min-width');
+            try {
+              button.style.setProperty('min-width', 'max-content');
+              return Math.abs(button.getBoundingClientRect().width - width) < .02;
+            } finally {
+              if (value) button.style.setProperty('min-width', value, priority);
+              else button.style.removeProperty('min-width');
+            }
+          });
+          try {
+            banner.className = '';
+            const legacy = getComputedStyle(header).backgroundColor;
+            banner.className = classes; banner.setAttribute('data-sf-phone-empty', '');
+            return { legacy, normal, actual: getComputedStyle(header).backgroundColor,
+              display: getComputedStyle(banner).display,
+              sameResource: banner.querySelector<HTMLImageElement>('img')!.currentSrc === source, categoryWidthsUnchanged };
+          } finally {
+            banner.className = classes;
+            if (empty === null) banner.removeAttribute('data-sf-phone-empty');
+            else banner.setAttribute('data-sf-phone-empty', empty);
+          }
+        });
+        expect(fallback.sameResource).toBe(true);
+        expect(fallback.categoryWidthsUnchanged, 'The folded category min-width preserves actual button geometry').toBe(true);
+        expect(fallback.actual).toBe(width === 390 ? fallback.legacy : fallback.normal);
+        expect(fallback.display === 'none').toBe(width === 390);
+        receipt[width === 390 ? 'phoneNoImageCssProbe' : 'desktopOnlyCssProbe'] = 'PASS_RENDER_ONLY_NOT_A_PERSISTENCE_TEST';
+      }
       receipt.comparisonPhase = 'complete';
       } finally { await sample.close(); }
     }

@@ -258,7 +258,7 @@
 .hero[data-sf-hero-mode="editorial"] .heroVisual{display:none}
 .page[data-sf-screen="intro"] .hero{min-height:calc(100svh - 220px)}
 .page[data-sf-screen="intro"] .heroCopy{min-height:540px;align-self:stretch;justify-content:center}
-.menu{padding-block:40px 36px;scroll-margin-block-start:96px}
+.menu{padding-block:0 36px;scroll-margin-block-start:0}
 .menuHeading{align-items:center}.menuIntro{min-width:0}.menuHeading h2{font-size:40px;font-weight:800;letter-spacing:normal}
 .menuHeading .eyebrow{font-size:12px;margin-block-end:10px}.menuHeading .eyebrow::before,.menuHeading .eyebrow>span{display:none}
 .searchBox{min-height:48px;padding-inline:16px;border:1px solid var(--hair);border-radius:17px;background:color-mix(in srgb,var(--sf2) 80%,transparent)}
@@ -320,7 +320,7 @@
  .page[data-sf-screen="intro"] .service{gap:9px 16px;justify-content:space-between}.page[data-sf-screen="intro"] .serviceIcon svg{width:18px;height:18px}
  .page[data-sf-screen="intro"] .serviceOff{flex-basis:100%;justify-content:center}
  .page[data-sf-screen="intro"]>.footerInner{padding-block:20px 23px}
- .menu{padding-block:18px 30px;scroll-margin-block-start:74px}.menuHeading .eyebrow{margin-block-end:9px}
+ .menu{padding-block-end:30px}.menuHeading .eyebrow{margin-block-end:9px}
  .searchBox{padding-inline:14px}
  .sectionHead{padding-block:4px 10px}.sectionHead h3{font-size:12px;color:var(--tx2)}.sectionHead>span{font-size:10px}.card{border-radius:22px}.cardName{font-size:22px}.price{font-size:21px;margin:0;gap:5px}
  .gridWrap{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.cardMediaGrid{aspect-ratio:1}.cardBody{padding:12px}.card .cardName{font-size:16px}.card .price{font-size:18px}.card .priceFrom{font-size:10px}
@@ -340,7 +340,7 @@
 
 /* Final orbital menu: source-ordered categories stay mounted and browsable. */
 .menuSections[hidden]{display:none}
-.menuSections>.section{margin-block:24px 42px;scroll-margin-block-start:168px}
+.menuSections>.section{margin-block:24px 42px;scroll-margin-block-start:80px}
 .menuSections>.section:last-child{margin-block-end:38px}
 .menuSections .sectionHead{display:flex;flex-wrap:wrap;justify-content:center;padding:0;margin-block:0 18px;text-align:center;gap:8px}
 .menuSections .sectionHead h3{display:flex;align-items:center;justify-content:center;gap:24px;width:100%;font-size:38px;font-weight:850;line-height:1.5;color:var(--tx);letter-spacing:normal}
@@ -360,7 +360,6 @@
 @media(min-width:651px){.menuHeading{max-width:1060px;margin-inline:auto}.menuSections{max-width:1000px;margin-inline:auto}.searchControls{min-width:330px}.menuSections>.section{margin-block-end:48px}}
 @media(max-width:650px){
  .menuHeading h2{font-weight:850}.searchControls{width:100%;gap:8px}
- .menuSections>.section{scroll-margin-block-start:158px}
  .menuSections .sectionHead h3{gap:15px}.menuSections .sectionHead h3::before,.menuSections .sectionHead h3::after{max-width:72px}
  .page[data-sf-screen="intro"] .serviceWrap{border-color:color-mix(in srgb,var(--acc) 28%,var(--hair));background:color-mix(in srgb,var(--sf2) 78%,transparent)}.page[data-sf-screen="intro"] .serviceOff{font-size:12px;padding-block-start:4px;opacity:.85}
  .footerInner .brandName{font-size:27px}.footerTagline{font-weight:600}
@@ -390,7 +389,7 @@
  .headerInner{min-height:76px;height:auto;padding-block:10px}.headerActions button,.headerActions a{min-block-size:44px}
  .brandName{font-size:19px}.brandLogo{width:40px;height:44px}
  .menuHeading{gap:16px}.menuHeading h2{font-size:29px;line-height:1.6}
- .searchBox{border-color:var(--hair2)}.searchBox input{font-size:16px}.menuSections>.section{margin-block:25px 44px}
+ .searchBox{border-color:var(--hair2)}.searchBox input{font-size:16px}.menuSections>.section{margin-block:12px 44px}
  .menuSections .sectionHead h3{font-size:25px}.menuSections .sectionHead{margin-block-end:10px}
  .cartClose{width:46px;height:46px;inset-inline-start:calc(100% - 60px)}
  .cartDialog .asideLines{max-height:none;overflow:visible}.cartDialog{max-height:100dvh;scroll-padding-block:18px}
@@ -412,7 +411,7 @@
 
 /* Home-only feedback clearance; no flow/payment selector enters this scope. */
 :global([data-sf-root]):has(.page .dock) :global([data-sf-toast="product"]){inset-block-end:calc(120px + env(safe-area-inset-bottom))}
-@media(max-width:650px){.responsiveBanner[data-sf-phone-empty]{display:none}.page[data-sf-screen="home"]{--header-height:70px}.page[data-sf-screen="home"] .headerInner{min-height:70px;padding-block:7px}.menu{padding-block-start:14px}.menuSections>.section{margin-block-start:12px}}
+@media(max-width:650px){.responsiveBanner[data-sf-phone-empty]{display:none}.page[data-sf-screen="home"]{--header-height:70px}.page[data-sf-screen="home"] .headerInner{min-height:70px;padding-block:7px}}
 
 /* Home-only: search and payment never import this module. */
 .cartGlyph{position:relative;display:grid;place-items:center;width:36px;height:36px}
@@ -421,9 +420,9 @@
 .orderStatus>span{display:flex;align-items:center;justify-content:center;gap:5px;text-align:center;min-height:28px;overflow-wrap:anywhere}.orderStatus>span+span{border-inline-start:1px solid var(--hair2)}.orderStatus svg{width:18px;height:18px;flex:none;color:var(--acct)}.orderStatus>[data-state]{border:1px solid currentColor;border-radius:16px}
 .cartTrigger{display:flex;align-items:center;border:0;font:500 13px var(--font);cursor:pointer;background:transparent;color:var(--tx);padding:8px;min-height:48px;gap:12px;border-radius:22px;transition:transform .12s,background .12s}
 .cartTrigger b{position:absolute;inset-block-start:-5px;inset-inline-end:-8px;display:grid;place-items:center;background:var(--acc);color:var(--onacc);border-radius:50%;width:22px;height:22px;font-size:11px}.cartTrigger svg{width:24px;height:24px}
-.categoryWrap{position:sticky;inset-block-start:var(--header-height);z-index:20;padding-block:10px}
+.categoryWrap{position:sticky;inset-block-start:0;z-index:20;padding-block:10px}
 .rail{display:flex;overflow:auto;scrollbar-width:none;gap:9px}
-.chip{display:flex;align-items:center;justify-content:center;flex:none;min-width:max-content;min-height:54px;padding:11px 16px;gap:9px;border:1px solid var(--hair2);border-radius:20px;font:650 14px var(--font);color:inherit;white-space:nowrap;cursor:pointer;background:var(--sf);background:linear-gradient(130deg in srgb,var(--menuChipPaintFrom,var(--menuChipFrom,var(--sf))),var(--menuChipPaintTo,var(--menuChipTo,var(--sf))));box-shadow:0 3px 7px #0001;transition:transform .12s,box-shadow .12s}
+.chip{display:flex;align-items:center;justify-content:center;flex:none;min-height:54px;padding:11px 16px;gap:9px;border:1px solid var(--hair2);border-radius:20px;font:650 14px var(--font);color:inherit;white-space:nowrap;cursor:pointer;background:var(--sf);background:linear-gradient(130deg in srgb,var(--menuChipPaintFrom,var(--menuChipFrom,var(--sf))),var(--menuChipPaintTo,var(--menuChipTo,var(--sf))));box-shadow:0 3px 7px #0001;transition:transform .12s,box-shadow .12s}
 .chipActive{background:var(--acc);background:linear-gradient(135deg in srgb,var(--menuActiveFrom,var(--acc)),var(--menuActiveTo,var(--acc)));color:var(--onacc);border-color:var(--acc);font-weight:750;box-shadow:0 4px 12px #0002}
 .chip:hover:not(.chipActive):not(:disabled){background:var(--sf2);color:var(--tx)}.chip:disabled{cursor:default;border-style:dashed}.chip svg,.chip img{display:block;flex:none;width:24px;height:24px;color:var(--acct)}.chip small{display:none}.chipActive svg{color:inherit}
 @media (max-width:650px){
@@ -435,14 +434,15 @@
 @media (max-width:365px){.headerTotal.headerTotal{font-size:12px}.orderStatus{font-size:10px}.cartTrigger{gap:7px}.chip{font-size:12px}}
 
 /* UX-003: the selected banner paints only the scrolling top section. */
-.topScene{position:relative;z-index:21;isolation:isolate;padding-block-end:14px}.topScene .header{position:relative}
+.topScene{position:relative;z-index:21;padding-block-end:14px}.topScene .header{position:relative}
 .sceneWindow{height:clamp(181px,16vw,190px)}.sceneWindow[data-sf-hero]{height:56px}.topControls{padding-block:12px 0}
 .topScene[data-sf-has-banner] .header{background:color-mix(in srgb,var(--bg) 88%,transparent)}
 .topScene[data-sf-has-banner] .searchBox,.topScene[data-sf-has-banner] .suggestionSlot .suggest,.topScene[data-sf-has-banner] .menuIntro,.topScene[data-sf-has-banner] .announce{background:var(--sf);color:var(--tx)}
 .topScene[data-sf-has-banner] .menuIntro{padding:12px;border-radius:16px}
-.page[data-sf-screen="home"] .categoryWrap{inset-block-start:0}
-.page[data-sf-screen="home"] .menu{padding-block-start:0;scroll-margin-block-start:0}
-.page[data-sf-screen="home"] .menuSections>.section{scroll-margin-block-start:80px}
 
-/* Explicit responsive banner: height belongs only to the image. */
-.responsiveBanner{position:relative;z-index:0;height:320px;mask-image:linear-gradient(#000 99.5%,transparent)}
+/* Image height stays independent; real identity/status overlay its first row. */
+.topScene:has(>.responsiveBanner){display:grid;grid:auto/100%}
+.topScene:has(>.responsiveBanner)>:first-child,.responsiveBanner{grid-area:1/1}
+.topScene:has(>.responsiveBanner:not([data-sf-phone-empty])) .header{background:color-mix(in srgb,var(--bg) 55%,transparent);backdrop-filter:none;-webkit-backdrop-filter:none}
+@media(min-width:651px){.topScene:has(>.responsiveBanner) .header{background:color-mix(in srgb,var(--bg) 55%,transparent);backdrop-filter:none;-webkit-backdrop-filter:none}}
+.responsiveBanner{position:relative;height:320px;mask-image:linear-gradient(#000 80%,transparent)}
