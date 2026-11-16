@@ -114,3 +114,66 @@ The authenticated stage and finalize RPCs recheck the base, source generation an
 - HTTP 202 with `{ok:false,status:"ladder_next",next_rung}` advances the high-resolution ladder by one rung.
 - HTTP 422 with `{ok:false,status:"refused",code:"base_mismatch"}` means the supplied base rung did not reproduce the base. This occurs before any stage or public upload. For a legacy image with unknown rung, an explicit republish can try the next base rung. A confirmed matching rung stays fixed while the high ladder advances.
 - Missing sources, stale generations, immutable conflicts, oversized output and uncertain runtime failures retain their existing typed outcomes. The editor can continue using the published base.
+# Optional welcome video — local candidate
+
+Work ID: `BIZBOT-STOREFRONT-WELCOME-VIDEO-PUBLISH-001`.
+
+This separately dispatched request reuses this function's existing authenticated,
+non-anonymous caller, JWT/anon-only HTTP client and CORS handling. The existing
+image requests, image recipe, ladders, buckets, static assets and responses are
+unchanged. An unknown `kind`, mixed image/video body, missing key or extra key is
+refused; the video branch does not initialize an image codec.
+
+Exact request:
+
+```json
+{"kind":"welcome_video_v1","request_id":"uuid","organization_id":"uuid","restaurant_id":"uuid","source_key":"organizationUUID/restaurantUUID/imageUUID.mp4"}
+```
+
+The source is an existing, immutable private object in
+`storefront-welcome-video-originals`. The function first calls
+`preflight_storefront_welcome_video_v1` as the user. Scope comes from the database's
+owner/manager authorization, never from trusting path identifiers. A path must also
+match the explicit organization and restaurant. It then reads at most20MiB, checks
+the actual container/AVC configuration, SPS dimensions, bounded sample tables,
+sample offsets, NAL lengths and slice-header references. Duration comes from the
+movie/track/sample timing, not client claims. Limits are1920px wide,1080px high,
+30,000ms and20,971,520bytes. Supported input is self-contained, non-fragmented MP4
+with one progressive H.264 video track, square pixels and at most one AAC-LC
+mono/stereo track. Other codecs, transformed/fragmented layouts, invalid critical
+tables and truncated containers receive typed refusals.
+
+**This is a bounded, validated copy, not a transcode, compression operation,
+metadata scrub or full video/audio decoder.** Embedded metadata can remain in the
+published bytes. The owner must explicitly choose publication knowing this. The
+private Storage object and its key remain private; only the copied public object
+is intentionally exposed. Actual browser playback and a real Edge upload/save
+journey require the existing isolated integration environment; Node test doubles
+are not acceptance evidence for them.
+
+The handler registers measured hash/width/height/duration/bytes through
+`register_storefront_welcome_video_v1`, reads the registered public key before any
+insertion, and copies only if absent. Public objects use
+`storefront-welcome-videos/<existing32hexRestaurantPrefix>/<sha256>.mp4` with
+`x-upsert:false`. A concurrent-existing object and a newly created object both
+require actual byte readback/hash equality before
+`publish_storefront_welcome_video_v1` finalizes the row. No Storage object is
+overwritten, moved, deleted or signed. There is at most one public upload attempt
+per invocation. All three RPCs receive the original request UUID, and database
+idempotency binds it to this actor/scope/source. A later **manual** reconciliation
+can reuse it; this function does not automatically repeat a failed POST.
+
+Exact success keys are `ok,status,kind,organization_id,restaurant_id,request_id,media`.
+`status` is `published`, `kind` is `welcome_video_v1`, and the three scope UUIDs
+match the request. `media` has exactly
+`id,object_key,content_hash,mime_type,width,height,duration_ms,bytes,published,url`;
+the MIME is `video/mp4`, `published` is true, and `url` is the canonical relative
+public Storage path. No private source key/bytes or worker state is returned.
+
+Video refusals (`422`, `status:refused`) have the bounded codes `invalid_mp4`,
+`unsupported_video_codec`, `unsupported_audio_codec`, `unsupported_video_layout`,
+`input_too_large`, `duration_too_long`, `dimensions_exceeded`, `source_unavailable`.
+The existing transport/auth statuses remain applicable. A registration/upload/
+finalization loss remains `uncertain:true`; a missing original response, HTTP200
+alone or a UI message cannot turn it into success. No hosted deployment, database
+apply or production media write is performed by this local implementation.
