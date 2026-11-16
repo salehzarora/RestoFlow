@@ -116,6 +116,46 @@ function addStructuralAac() {
   return new Uint8Array(Buffer.concat(children(real).map(b => b.type === 'moov' ? moov : b.type === 'mdat' ? box('mdat', real.subarray(b.p, b.end), Buffer.from([0x21, 0x10, 0x04, 0x60, 0x8c, 0x1c])) : Buffer.from(real.subarray(b.start, b.end)))));
 }
 
+function codedFrameFixture(codedWidth, codedHeight) {
+  // Container/SPS regression fixture, not playback/decode evidence. Existing
+  // sample bytes stay unchanged; only critical declared geometry is varied.
+  const ue = n => { const value = (n + 1).toString(2); return '0'.repeat(value.length - 1) + value; };
+  let binary = '01000010' + '00000000' + '00101010' +
+    ue(0) + ue(0) + ue(0) + ue(0) + ue(1) + '0' +
+    ue(codedWidth / 16 - 1) + ue(codedHeight / 16 - 1) + '111' +
+    ue(0) + ue((codedWidth - 1920) / 2) + ue(0) + ue((codedHeight - 1080) / 2) + '01';
+  binary = binary.padEnd(Math.ceil(binary.length / 8) * 8, '0');
+  const ebsp = [0x67]; let zeros = 0;
+  for (let i = 0; i < binary.length; i += 8) {
+    const value = parseInt(binary.slice(i, i + 8), 2);
+    if (zeros >= 2 && value <= 3) { ebsp.push(3); zeros = 0; }
+    ebsp.push(value); zeros = value === 0 ? zeros + 1 : 0;
+  }
+  const avcC = find(real, path('stsd', 'avc1', 'avcC')), view = new DataView(real.buffer, real.byteOffset, real.byteLength);
+  const ppsLengthAt = avcC.p + 6 + 2 + view.getUint16(avcC.p + 6) + 1;
+  const pps = real.subarray(ppsLengthAt + 2, ppsLengthAt + 2 + view.getUint16(ppsLengthAt));
+  const short = n => { const b = Buffer.alloc(2); b.writeUInt16BE(n); return b; };
+  const config = box('avcC', Buffer.from([1, 66, 0, 42, 255, 225]), short(ebsp.length), Buffer.from(ebsp), Buffer.from([1]), short(pps.length), pps);
+  const rewrite = b => {
+    if (b.type === 'avcC') return config;
+    if (b.type === 'tkhd') {
+      const data = Buffer.from(real.subarray(b.p, b.end)); assert.equal(data[0], 0);
+      data.writeUInt32BE(1920 * 65536, 76); data.writeUInt32BE(1080 * 65536, 80); return box('tkhd', data);
+    }
+    if (b.type === 'avc1') {
+      const header = Buffer.from(real.subarray(b.p, b.p + 78)); header.writeUInt16BE(1920, 24); header.writeUInt16BE(1080, 26);
+      return box('avc1', header, ...children(real, b.p + 78, b.end).map(rewrite));
+    }
+    if (b.type === 'stsd') return box('stsd', real.subarray(b.p, b.p + 8), ...children(real, b.p + 8, b.end).map(rewrite));
+    if (['moov', 'trak', 'mdia', 'minf', 'stbl'].includes(b.type)) return box(b.type, ...children(real, b.p, b.end).map(rewrite));
+    return Buffer.from(real.subarray(b.start, b.end));
+  };
+  const old = find(real, ['moov']), movie = rewrite(old), delta = movie.length - (old.end - old.start);
+  const chunk = find(movie, path('stco')), mv = new DataView(movie.buffer, movie.byteOffset, movie.byteLength);
+  for (let i = 0; i < mv.getUint32(chunk.p + 4); i++) mv.setUint32(chunk.p + 8 + i * 4, mv.getUint32(chunk.p + 8 + i * 4) + delta);
+  return new Uint8Array(Buffer.concat(children(real).map(b => b.type === 'moov' ? movie : Buffer.from(real.subarray(b.start, b.end)))));
+}
+
 test('welcome MP4: real repository H.264 bytes produce measured metadata, not caller claims', () => {
   assert.equal(real.length, 660459);
   assert.deepEqual(validateWelcomeMp4(real), { width: 540, height: 864, durationMs: 12042, byteLength: 660459, mimeType: 'video/mp4', audioTracks: 0 });
@@ -131,6 +171,12 @@ test('welcome MP4: input, duration and actual sample dimension limits are enforc
   mustReject(new Uint8Array(WELCOME_VIDEO_LIMITS.bytes + 1), 'input_too_large');
   mustReject(change((b, v) => { const m = find(b, ['moov', 'mvhd']); v.setUint32(m.p + 16, v.getUint32(m.p + 12) * 31); }), 'duration_too_long');
   mustReject(change((b, v) => { const d = find(b, path('stsd', 'avc1')); v.setUint16(d.p + 24, 1921); }), 'dimensions_exceeded');
+});
+test('welcome MP4: cropped display size cannot conceal an oversized coded macroblock frame', () => {
+  mustReject(codedFrameFixture(1936, 1088), 'dimensions_exceeded');
+  mustReject(codedFrameFixture(1920, 1104), 'dimensions_exceeded');
+  const aligned = validateWelcomeMp4(codedFrameFixture(1920, 1088));
+  assert.equal(aligned.width, 1920); assert.equal(aligned.height, 1080);
 });
 test('welcome MP4: an AVC label cannot hide a different codec, SPS mismatch or invalid AVC config', () => {
   mustReject(change((b) => { const d = find(b, path('stsd', 'avc1')); b.set(new TextEncoder().encode('hvc1'), d.start + 4); }), 'unsupported_video_codec');

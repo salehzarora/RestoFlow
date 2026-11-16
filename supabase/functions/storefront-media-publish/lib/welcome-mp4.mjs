@@ -58,6 +58,12 @@ function spsSize(nal) {
   if (b.ue() > 16) reject(); b.read(1);
   const macroWidth = b.ue() + 1, mapHeight = b.ue() + 1, frameOnly = b.read(1);
   if (!frameOnly) reject('unsupported_video_layout');
+  // A decoder allocates the coded macroblock raster BEFORE display cropping.
+  // Admit the normal 1088-coded ->1080-display alignment, never a larger frame
+  // hidden by cropping into the advertised display-size bounds.
+  const codedWidth = macroWidth * 16, codedHeight = mapHeight * 16 * (2 - frameOnly);
+  if (codedWidth > Math.ceil(WELCOME_VIDEO_LIMITS.width / 16) * 16 ||
+      codedHeight > Math.ceil(WELCOME_VIDEO_LIMITS.height / 16) * 16) reject('dimensions_exceeded');
   b.read(1);
   let left = 0, right = 0, top = 0, bottom = 0;
   if (b.read(1)) { left = b.ue(); right = b.ue(); top = b.ue(); bottom = b.ue(); }
@@ -67,7 +73,7 @@ function spsSize(nal) {
     else if (aspect !== 0 && aspect !== 1) reject('unsupported_video_layout');
   }
   const width = macroWidth * 16 - (left + right) * 2, height = mapHeight * 16 - (top + bottom) * 2;
-  if (width < 1 || height < 1 || macroWidth > 512 || mapHeight > 512) reject();
+  if (width < 1 || height < 1) reject();
   return { width, height, id, profile, level, macroblocks: macroWidth * mapHeight };
 }
 
