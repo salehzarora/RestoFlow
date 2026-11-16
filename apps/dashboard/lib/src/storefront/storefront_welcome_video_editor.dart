@@ -69,15 +69,21 @@ class _EditorState extends State<StorefrontWelcomeVideoEditor> {
   void didUpdateWidget(covariant StorefrontWelcomeVideoEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_sameBinding(oldWidget)) return;
+    final abandonedBusy = _busy;
+    final notifyPreviousOwner = oldWidget.onBusyChanged;
     final generation = ++_generation;
     _busy = false;
     _pending = null;
     _lastPublished = null;
     _message = 'bindingChanged';
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && generation == _generation && !_busy)
-        widget.onBusyChanged(false);
-    });
+    // An idle editor owns no parent lock. Release only an abandoned operation,
+    // through its original owner; a replacement binding owns its own state.
+    if (abandonedBusy) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && generation == _generation && !_busy)
+          notifyPreviousOwner(false);
+      });
+    }
   }
 
   @override

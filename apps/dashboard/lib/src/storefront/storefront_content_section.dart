@@ -186,6 +186,7 @@ class _ContentState extends State<StorefrontContentSection> {
         old.savedBranchId != widget.savedBranchId) {
       final abandonedUpload = _uploadingBackground;
       final abandonedQuality = _preparingBackgroundQuality;
+      final abandonedWelcomeVideo = _welcomeVideoBusy;
       _uploadingBackground = false;
       _welcomeVideoBusy = false;
       _welcomeVideos = null;
@@ -217,7 +218,7 @@ class _ContentState extends State<StorefrontContentSection> {
         });
       } else {
         _load();
-        if (abandonedUpload || abandonedQuality) {
+        if (abandonedUpload || abandonedQuality || abandonedWelcomeVideo) {
           final binding = _bindingGeneration;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_current(binding)) widget.onBusyChanged(false);

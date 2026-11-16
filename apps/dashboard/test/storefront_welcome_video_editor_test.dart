@@ -158,6 +158,20 @@ Future<void> press(WidgetTester tester, String key) async {
 
 void main() {
   testWidgets(
+    'idle binding replacement never publishes a busy ownership change',
+    (tester) async {
+      final invoker = VideoInvoker([]), storage = VideoStorage();
+      final key = await mount(tester, invoker, storage);
+      expect(key.currentState!.busyEvents, isEmpty);
+      key.currentState!.switchBinding();
+      await tester.pumpAndSettle();
+      expect(key.currentState!.busyEvents, isEmpty);
+      expect(key.currentState!.busy, isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'late publisher response from an old membership never changes the new editor',
     (tester) async {
       final invoker = _DelayedInvoker(), storage = VideoStorage();
