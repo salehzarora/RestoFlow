@@ -2,6 +2,7 @@
 // Application code/repositories are unchanged; credentials and raw logs never
 // enter the public evidence directory. Only the loopback anon key enters builds.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, openSync, closeSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
@@ -90,6 +91,109 @@ async function waitUntil(url, accepts, child) {
   throw new Error(`Local service did not become ready on port ${endpoint.port}`);
 }
 
+// Public evidence projection only. The reviewed SQL/ACL producer and the
+// generic credential predicate below remain unchanged.
+export const WELCOME_GRANT_IDENTITIES = Object.freeze([
+  'app.get_restaurant_storefront_content_v7(uuid,uuid)',
+  'app.list_storefront_welcome_videos_v1(uuid,uuid)',
+  'app.preflight_storefront_welcome_video_v1(uuid,uuid,text,uuid)',
+  'app.publish_storefront_welcome_video_v1(uuid,uuid,uuid,uuid)',
+  'app.register_storefront_welcome_video_v1(uuid,uuid,text,uuid,text,integer,integer,integer,integer)',
+  'get_restaurant_storefront_content_v7(uuid,uuid)',
+  'list_storefront_welcome_videos_v1(uuid,uuid)',
+  'preflight_storefront_welcome_video_v1(uuid,uuid,text,uuid)',
+  'publish_storefront_welcome_video_v1(uuid,uuid,uuid,uuid)',
+  'register_storefront_welcome_video_v1(uuid,uuid,text,uuid,text,integer,integer,integer,integer)',
+  'storefront_menu_v12(text)',
+]);
+const sha256 = text => createHash('sha256').update(text).digest('hex');
+const evidenceFailure = reason => { const error = new Error(reason); error.evidenceReason = reason; throw error; };
+export function assertPublicEvidenceJson(text) {
+  JSON.parse(text);
+  assert.ok(!/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|"(?:access_token|refresh_token|password|service_role|anonKey|ANON_KEY)"\s*:/i.test(text),
+    'Credential-shaped data must not be published');
+}
+function sourceMatches(source, current) {
+  return /^[0-9a-f]{40}$/.test(source?.testedCheckout ?? '') && /^[0-9a-f]{40}$/.test(source?.testedTree ?? '') &&
+    source.testedCheckout === current?.checkout && source.testedTree === current?.tree;
+}
+export function projectMigrationGrantReceipt(entry, text, source, current) {
+  if (entry !== 'migration-atomicity.json') evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID');
+  if (!sourceMatches(source, current)) evidenceFailure('SOURCE_IDENTITY_MISMATCH');
+  const data = JSON.parse(text);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID');
+  // An earlier failed migration phase has no new role-audit structure. Preserve
+  // that original failure byte-for-byte; the unchanged generic guard still runs.
+  if (!Object.hasOwn(data, 'welcome_video_release')) return { text, manifest: null };
+  if (data.tested_commit !== source.testedCheckout || data.tested_tree !== source.testedTree)
+    evidenceFailure('SOURCE_IDENTITY_MISMATCH');
+  const release = data.welcome_video_release;
+  const rows = release?.grants;
+  if (!release || typeof release !== 'object' || Array.isArray(release) || !['PASS','FAIL'].includes(data.status) || !['PASS','FAIL'].includes(release.status) || !Array.isArray(rows) || rows.length !== 11)
+    evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID');
+  const keys = ['anon','authenticated','definer','identity','owner','public_execute','search_path','service_role'];
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index];
+    if (!row || typeof row !== 'object' || Array.isArray(row) || JSON.stringify(Object.keys(row).sort()) !== JSON.stringify(keys) ||
+        row.identity !== WELCOME_GRANT_IDENTITIES[index] || typeof row.owner !== 'string' ||
+        !(row.search_path === null || Array.isArray(row.search_path) && row.search_path.every(value => typeof value === 'string')) ||
+        ['anon','authenticated','definer','public_execute','service_role'].some(key => typeof row[key] !== 'boolean'))
+      evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID');
+  }
+  // Replace only the eleven literal property-name tokens in the original text.
+  // Never reserialize other fields: duplicate password keys, token strings,
+  // whitespace and every failure value remain visible to the original guard.
+  const tokens = [...text.matchAll(/"service_role"(?=\s*:)/g)];
+  if (tokens.length !== 11) evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID');
+  const projected = text.replace(/"service_role"(?=\s*:)/g, '"serviceRoleExecute"');
+  const expected = structuredClone(data);
+  expected.welcome_video_release.grants = rows.map(({ service_role, ...other }) => ({ ...other, serviceRoleExecute: service_role }));
+  try { assert.deepEqual(JSON.parse(projected), expected); }
+  catch { evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID'); }
+  return { text: projected, manifest: {
+    status: 'DERIVED_PUBLIC_EVIDENCE', projection: 'WELCOME_VIDEO_GRANT_ROLE_KEY_V1', sourceFile: entry,
+    sourceSha256: sha256(text), projectedSha256: sha256(projected), rawOriginalRetainedPrivately: true,
+    testedCommit: source.testedCheckout, testedTree: source.testedTree, producerStatus: data.status,
+    renamedFields: rows.map((row, index) => ({ identity: row.identity,
+      sourcePath: `$.welcome_video_release.grants[${index}].service_role`,
+      publicPath: `$.welcome_video_release.grants[${index}].serviceRoleExecute`, value: row.service_role })),
+  } };
+}
+const diagnosticFiles = new Set(['source.json','migration-atomicity.json','migration-atomicity-public-projection.json',
+  'publisher-response-probe.json','publisher-response-probe-result.json','browser-result.json','welcome-browser-result.json']);
+export function evidenceSanitizeDiagnostic(entry, error) {
+  const reasons = new Set(['ROLE_AUDIT_PROJECTION_INVALID','SOURCE_IDENTITY_MISMATCH']);
+  const reason = reasons.has(error?.evidenceReason) ? error.evidenceReason : error instanceof SyntaxError ? 'JSON_INVALID' :
+    error?.message === 'Credential-shaped data must not be published' ? 'CREDENTIAL_PATTERN_REJECTED' : 'EVIDENCE_SANITIZE_FAILED';
+  return { file: diagnosticFiles.has(entry) ? entry : null, reason };
+}
+export function caseCollectionSummary(mode, result, report, reportPresent) {
+  const codes = new Set(['ENOENT','EACCES','EPERM','ETIMEDOUT','ENOBUFS','E2BIG']);
+  const signals = new Set(['SIGTERM','SIGKILL','SIGABRT','SIGINT','SIGSEGV']);
+  return { mode: ['probe','full','trace'].includes(mode) ? mode : 'unclassified', exitCode: Number.isInteger(result?.status) ? result.status : null,
+    signal: signals.has(result?.signal) ? result.signal : result?.signal ? 'OTHER' : null,
+    spawnError: result?.error ? { name: ['Error','TypeError','RangeError'].includes(result.error.name) ? result.error.name : 'OTHER',
+      code: codes.has(result.error.code) ? result.error.code : 'OTHER' } : null,
+    reportPresent: reportPresent === true, globalErrorCount: Array.isArray(report?.errors) ? report.errors.length : 0,
+    globalErrors: (Array.isArray(report?.errors) ? report.errors : []).slice(0, 3).map(error => ({
+      messageSha256: sha256(String(error?.message ?? '')), classification: ['Error','TypeError','SyntaxError','ReferenceError'].includes(error?.name) ? error.name : 'unclassified',
+      sourceFrame: String(error?.stack ?? '').match(/(?:^|[\s(/])(?:e2e\/)?(cinematic\/[a-z0-9_-]+(?:\.spec)?\.(?:ts|mjs):[0-9]+:[0-9]+)(?=[)\s]|$)/m)?.[1] ?? null,
+    })),
+  };
+}
+export function probeDiagnosticScalars(value) {
+  const phases = new Set(['dashboard-load','owner-login','open-banner-editor','legacy-authenticated-pre-read',
+    'ui-upload-original-publisher-response','published-resource-preview','legacy-authenticated-post-read','native-dashboard-image-byte-guard','complete']);
+  const readErrors = new Set(['no-data','no-resource','get-body-error','context-closed','aborted','unclassified']);
+  return { status: ['PASS','FAIL','NOT_RUN'].includes(value?.status) ? value.status : 'unclassified',
+    phase: phases.has(value?.phase) ? value.phase : 'unclassified',
+    uiPublicationCalls: [0,1].includes(value?.uiPublicationCalls) ? value.uiPublicationCalls : null,
+    contentSaveCalls: value?.contentSaveCalls === 0 ? 0 : null,
+    matcher: typeof value?.failure?.matcher === 'string' && /^to[A-Za-z]{1,40}$/.test(value.failure.matcher) ? value.failure.matcher : 'unclassified',
+    sourceLine: Number.isInteger(value?.failure?.sourceLine) && value.failure.sourceLine > 0 ? value.failure.sourceLine : null,
+    readErrorDetail: readErrors.has(value?.readErrorDetail) ? value.readErrorDetail : 'unclassified' };
+}
+
 async function main(action) {
   const { root, privateDir, publicDir } = setup();
   if (action === 'prepare') {
@@ -108,21 +212,43 @@ async function main(action) {
   if (action === 'sanitize') {
     // Only explicit receipts, PNG screenshots and the one bounded synthetic height video. Never raw server logs, traces,
     // browser storage state, request dumps or the fixture/status files.
-    for (const entry of readdirSync(publicDir, { recursive: true })) {
-      const path = resolve(publicDir, entry);
-      assert.ok(relative(publicDir, path) !== '..' && !relative(publicDir, path).startsWith(`..${sep}`));
-      if (statSync(path).isDirectory()) continue;
-      assert.ok(entry === HEIGHT_VIDEO_FILE || /^(?:[a-z0-9_-]+\.json|[a-z0-9_-]+\.png)$/i.test(entry), 'Unexpected evidence path');
-      if (entry.endsWith('.json')) {
-        const text = readFileSync(path, 'utf8');
-        JSON.parse(text);
-        assert.ok(!/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|"(?:access_token|refresh_token|password|service_role|anonKey|ANON_KEY)"\s*:/i.test(text),
-          'Credential-shaped data must not be published');
-      } else if (entry === HEIGHT_VIDEO_FILE) {
-        assertHeightVideoEvidence(entry, readFileSync(path));
-      } else {
-        assert.equal(readFileSync(path).subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+    let entry = 'source.json';
+    try {
+      const source = JSON.parse(readFileSync(resolve(publicDir, entry), 'utf8'));
+      const current = { checkout: checked('git', ['rev-parse','HEAD']), tree: checked('git', ['rev-parse','HEAD^{tree}']) };
+      if (!sourceMatches(source, current)) evidenceFailure('SOURCE_IDENTITY_MISMATCH');
+      for (entry of readdirSync(publicDir, { recursive: true })) {
+        const path = resolve(publicDir, entry);
+        assert.ok(relative(publicDir, path) !== '..' && !relative(publicDir, path).startsWith(`..${sep}`));
+        if (statSync(path).isDirectory()) continue;
+        assert.ok(entry === HEIGHT_VIDEO_FILE || /^(?:[a-z0-9_-]+\.json|[a-z0-9_-]+\.png)$/i.test(entry), 'Unexpected evidence path');
+        if (entry.endsWith('.json')) {
+          let text = readFileSync(path, 'utf8');
+          if (entry === 'migration-atomicity.json') {
+            const raw = resolve(privateDir, 'migration-atomicity.raw.json');
+            if (existsSync(raw)) assert.equal(readFileSync(raw,'utf8'),text,'Raw migration receipt identity changed');
+            else writeFileSync(raw,text,{mode:0o600,flag:'wx'});
+            const projection = projectMigrationGrantReceipt(entry,text,source,current);
+            text = projection.text;
+            if (projection.manifest) {
+              assertPublicEvidenceJson(text);
+              const manifest = JSON.stringify(projection.manifest,null,2)+'\n';
+              assertPublicEvidenceJson(manifest);
+              writeFileSync(path,text);
+              writeFileSync(resolve(publicDir,'migration-atomicity-public-projection.json'),manifest);
+            }
+          }
+          assertPublicEvidenceJson(text);
+        } else if (entry === HEIGHT_VIDEO_FILE) {
+          assertHeightVideoEvidence(entry, readFileSync(path));
+        } else {
+          assert.equal(readFileSync(path).subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+        }
       }
+    } catch (error) {
+      const diagnostic = evidenceSanitizeDiagnostic(entry,error);
+      console.error('CINEMATIC_EVIDENCE_REJECTED '+JSON.stringify(diagnostic));
+      throw new Error(`Evidence sanitization failed: ${diagnostic.reason}`);
     }
     return;
   }
@@ -207,11 +333,21 @@ async function main(action) {
         }
         collect(suite.suites);
       } };
-      const reported = existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : {};
+      const reportPresent = existsSync(report);
+      const reported = reportPresent ? JSON.parse(readFileSync(report, 'utf8')) : {};
       collect(reported.suites);
       const errors = (reported.errors || []).map(error => clean(error.message));
+      const collection = { ...caseCollectionSummary(mode,result,reported,reportPresent), cases: cases.length };
+      console.log('CINEMATIC_CASE_COLLECTION '+JSON.stringify(collection));
+      if (mode === 'probe') {
+        const probeReceipt = resolve(publicDir,'publisher-response-probe.json');
+        if (existsSync(probeReceipt)) {
+          try { console.log('CINEMATIC_PROBE_DIAGNOSTIC '+JSON.stringify(probeDiagnosticScalars(JSON.parse(readFileSync(probeReceipt,'utf8'))))); }
+          catch { console.log('CINEMATIC_PROBE_DIAGNOSTIC '+JSON.stringify({ status:'RECEIPT_UNREADABLE' })); }
+        } else console.log('CINEMATIC_PROBE_DIAGNOSTIC '+JSON.stringify({ status:'RECEIPT_ABSENT' }));
+      }
       const outcome = {
-        status: result.status === 0 ? 'PASS' : 'FAIL', exitCode: result.status,
+        status: result.status === 0 ? 'PASS' : 'FAIL', exitCode: result.status, collection,
         actualServices: true, retries: 0, cases, errors,
       };
       writeFileSync(resolve(publicDir, mode === 'probe' ? 'publisher-response-probe-result.json' : mode === 'trace' ? 'warm-clear-trace-result.json' : 'browser-result.json'), JSON.stringify(outcome, null, 2));
