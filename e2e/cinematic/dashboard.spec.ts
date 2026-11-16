@@ -11,7 +11,7 @@ import { LOGICAL_ORIGIN, localMediaTarget, localWelcomeVideoTarget, logicalMedia
 import { createHash, randomUUID } from 'node:crypto';
 import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot, completeResponsiveFixture, responsiveFixtureMismatch } from './banner-responsive';
 import { verifyResponsiveBannerSettings, adjustBannerHeightWithKeyboard, navigateAfterMediaSettles, observeLogicalMedia } from './responsive-banner-settings';
-import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, bannerEvidencePhase } from './responsive-banner-settings.mjs';
+import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, bannerEvidencePhase, mediaReadErrorDetail } from './responsive-banner-settings.mjs';
 import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
@@ -2088,7 +2088,9 @@ test('single publisher response - native body diagnostic', async ({ page, contex
   const f = fixture(), b = { ...f, ownerA: f.ownerB };
   const network = await guardBrowser(context), diagnostics = new UploadDiagnostics();
   const receipt: Obj = { status: 'FAIL', scope: 'single actual UI publication, existing isolated ownerB',
-    uiPublicationCalls: 0, contentSaveCalls: 0, originalAssertionsUnchanged: true };
+    uiPublicationCalls: 0, contentSaveCalls: 0, originalAssertionsUnchanged: true,
+    phase: 'dashboard-load', completedPhases: [] };
+  const advance = (phase: string) => { receipt.completedPhases.push(receipt.phase); receipt.phase = phase; };
   const previewResponses = new Set<string>();
   const onPreview = (response: Response) => {
     const u = new URL(response.url());
@@ -2099,29 +2101,40 @@ test('single publisher response - native body diagnostic', async ({ page, contex
   let failed = false;
   try {
     await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();
+    advance('owner-login');
     await fillField(page, L.email, b.ownerA.email); await enterLoginPassword(page, b.ownerA.password);
     const observed = observeResponse(page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API)));
     const auth = await responseAfterAction(observed, () => tapButton(page, L.login, { which: 'last' }));
     expect(auth.status()).toBe(200); const session = await auth.json();
     expect(session.user.email).toBe(b.ownerA.email); expect(typeof session.access_token).toBe('string');
+    advance('open-banner-editor');
     await openEditor(page); await openFoldedGroup(page, 'banner');
+    advance('legacy-authenticated-pre-read');
     const before = await rpc(b, session.access_token, 'get_restaurant_storefront_content_v6');
     const bytes = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), 'ux003-banner-0.png'));
     receipt.uiPublicationCalls = 1;
+    advance('ui-upload-original-publisher-response');
     const published = await upload(page, 'publisher-native-probe.png', diagnostics, 200, 'banner', bytes);
     expect(published.recipe).toBe('storefront-media-c4'); expect(published.media.variant).toBe('w960');
     const expectedPreview = `${API}/storage/v1/object/public/storefront-media/${published.media.object_key}`;
+    advance('published-resource-preview');
     await expect.poll(() => previewResponses.has(expectedPreview), {
       message: 'The actual published resource appears in the Dashboard draft preview',
     }).toBe(true);
+    advance('legacy-authenticated-post-read');
     const after = await rpc(b, session.access_token, 'get_restaurant_storefront_content_v6');
     expect(after.document, 'Probe does not select a banner or save any content').toEqual(before.document);
     expect(after.version).toBe(before.version);
     receipt.contentUnchanged = true;
+    advance('native-dashboard-image-byte-guard');
     await network.checkDashboardMedia(value => { receipt.nativeDashboardImages = value; });
+    advance('complete');
     receipt.status = 'PASS';
   } catch (error) {
-    failed = true; receipt.failure = bannerAssertionFailure(error); throw error;
+    failed = true; receipt.failedPhase = receipt.phase;
+    receipt.failure = bannerAssertionFailure(error);
+    receipt.readErrorDetail = mediaReadErrorDetail(error);
+    throw error;
   } finally {
     page.off('response', onPreview);
     receipt.upload = diagnostics.snapshot();
