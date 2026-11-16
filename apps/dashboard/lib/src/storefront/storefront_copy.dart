@@ -237,6 +237,31 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
       'احفظ أو تجاهل تعديلات بقية إعدادات المتجر أولًا.',
       'יש לשמור או לבטל תחילה שינויים בשאר הגדרות החנות.',
     ],
+    'welcomePageTitle': [
+      'Welcome page · before the menu',
+      'صفحة الترحيب · قبل المنيو',
+      'עמוד פתיחה · לפני התפריט',
+    ],
+    'welcomePageHelp': [
+      'Customize the page guests see before Explore the menu. Your logo, colors and font follow the current store appearance.',
+      'خصّص الصفحة التي يراها الزبون قبل «استكشاف المنيو». الشعار والألوان والخط تتبع مظهر المتجر الحالي.',
+      'ערכו את העמוד שהאורחים רואים לפני הכניסה לתפריט. הלוגו, הצבעים והגופן נשארים לפי מראה החנות.',
+    ],
+    'welcomeCopyHelp': [
+      'Welcome text — use Save content below. Publishing or choosing an image is a separate action.',
+      'نصوص الترحيب — استخدم «حفظ المحتوى» بالأسفل. نشر الصورة أو اختيارها إجراء مستقل.',
+      'טקסט פתיחה — שמרו באמצעות שמירת התוכן למטה. פרסום או בחירת תמונה הם פעולה נפרדת.',
+    ],
+    'welcomeSharedTextHelp': [
+      'These campaign texts also appear in the menu introduction when it is enabled. Selecting a featured product there does not replace the welcome image.',
+      'تظهر نصوص الحملة أيضًا في مقدمة المنيو عند إظهارها. اختيار منتج بارز هناك لا يستبدل صورة الترحيب.',
+      'טקסטי הקמפיין מופיעים גם בפתיח התפריט כאשר הוא מוצג. בחירת מוצר מוביל שם אינה מחליפה את תמונת הפתיחה.',
+    ],
+    'welcomeImageFallbackHelp': [
+      'The welcome image is also the menu background fallback when no separate menu background is selected. Clearing the selection does not delete the image file.',
+      'تُستخدم صورة الترحيب أيضًا خلفيةً بديلة للمنيو إذا لم تختر له خلفية مستقلة. مسح الاختيار لا يحذف ملف الصورة.',
+      'תמונת הפתיחה משמשת גם כרקע חלופי לתפריט כשלא נבחר רקע נפרד. ניקוי הבחירה אינו מוחק את קובץ התמונה.',
+    ],
     'headline': ['Hero headline', 'عنوان الواجهة الرئيسي', 'כותרת ראשית'],
     'subline': ['Hero subline', 'النص الفرعي للواجهة', 'כותרת משנה'],
     'announcement': ['Announcement text', 'نص الإعلان', 'טקסט הודעה'],

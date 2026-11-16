@@ -59,6 +59,7 @@ class StorefrontContentSection extends StatefulWidget {
     this.sources,
     this.reloadSources,
     this.publicUrlFor,
+    this.welcomeImageEditor,
     this.bannerPreviewProfile,
     this.bannerPreviewLogoUrl,
     this.loadBannerPreview,
@@ -78,6 +79,10 @@ class StorefrontContentSection extends StatefulWidget {
   final StorefrontSourceOptions? sources;
   final Future<StorefrontSourceOptions> Function()? reloadSources;
   final Uri Function(String)? publicUrlFor;
+
+  /// Existing profile media action; its CAS save remains separate from content.
+  final Widget? welcomeImageEditor;
+
   // Presentation-only context; content/profile saves remain independent.
   final StorefrontProfile? bannerPreviewProfile;
   final Uri? bannerPreviewLogoUrl;
@@ -1897,6 +1902,51 @@ class _ContentState extends State<StorefrontContentSection> {
             child: Text(c('otherEdits')),
           ),
           StorefrontSettingsGroup(
+            key: const Key('content-group-welcome'),
+            title: c('welcomePageTitle'),
+            initiallyExpanded: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(c('welcomePageHelp')),
+                if (widget.welcomeImageEditor != null) ...[
+                  const SizedBox(height: 12),
+                  widget.welcomeImageEditor!,
+                  Text(c('welcomeImageFallbackHelp')),
+                  const Divider(height: 32),
+                ],
+                Text(c('welcomeCopyHelp')),
+                TextField(
+                  key: const Key('content-hero-headline'),
+                  controller: _headline,
+                  enabled: _editable,
+                  decoration: InputDecoration(labelText: c('headline')),
+                  onChanged: (value) {
+                    if (!mounted || !_editable) return;
+                    _change('hero_headline', value);
+                    _put('hero.format', null);
+                    _selection.clear();
+                  },
+                ),
+                _text('hero_subline', 'subline', lines: 2),
+                _text('hero.eyebrow', 'eyebrow'),
+                _text('hero.stamp', 'stamp'),
+                _text('hero.footnote', 'footnote'),
+                _formatEditor(),
+                Text(c('welcomeSharedTextHelp')),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: FilledButton(
+                    key: const Key('content-welcome-save'),
+                    onPressed: _editable && _dirty ? () => _save() : null,
+                    child: Text(c('save')),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          StorefrontSettingsGroup(
             key: const Key('content-group-appearance'),
             title: c('appearance'),
             child: Column(
@@ -1972,19 +2022,6 @@ class _ContentState extends State<StorefrontContentSection> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextField(
-                  key: const Key('content-hero-headline'),
-                  controller: _headline,
-                  enabled: _editable,
-                  decoration: InputDecoration(labelText: c('headline')),
-                  onChanged: (value) {
-                    if (!mounted || !_editable) return;
-                    _change('hero_headline', value);
-                    _put('hero.format', null);
-                    _selection.clear();
-                  },
-                ),
-                _text('hero_subline', 'subline', lines: 2),
                 _text('announcement_text', 'announcement', lines: 2),
                 _title('hero'),
                 _select(
@@ -1998,10 +2035,6 @@ class _ContentState extends State<StorefrontContentSection> {
                   'item',
                   _options(_catalog?.items ?? []),
                 ),
-                _text('hero.eyebrow', 'eyebrow'),
-                _text('hero.stamp', 'stamp'),
-                _text('hero.footnote', 'footnote'),
-                _formatEditor(),
                 _stringList('announcement_segments', 'segments', 6),
                 _module('promo'),
                 _module('story'),
