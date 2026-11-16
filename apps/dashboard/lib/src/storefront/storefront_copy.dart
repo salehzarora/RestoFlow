@@ -4,6 +4,11 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 /// untouched. Keys are internal constants, never server-provided text.
 String storefrontContentCopy(AppLocalizations l10n, String key) {
   const copy = <String, List<String>>{
+    'mediaSourceUnavailable': [
+      'The source file is unavailable or could not be read completely. Choose an available source file.',
+      'الملف المصدر غير متاح أو تعذرت قراءته كاملًا. اختر ملفًا مصدرًا متاحًا.',
+      'קובץ המקור אינו זמין או שלא ניתן לקרוא אותו במלואו. יש לבחור קובץ מקור זמין.',
+    ],
     'menuBannerTitle': [
       'Menu top banner',
       'بانر المنيو العلوي',
