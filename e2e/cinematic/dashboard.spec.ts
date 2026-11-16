@@ -906,11 +906,18 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     }
     if (expectedStatus === 200) {
       expect(body.ok, 'Actual Edge publisher accepted bytes').toBe(true);
-      await textContains(page, purpose !== 'background' ? 'نُشرت الصورة؛ اخترها واحفظ المحتوى.' : L.selected);
     } else {
       expect(body.status, 'Cross-source duplicate is rejected').toBe('object_conflict');
-      await textContains(page, L.unavailable);
     }
+    // The live status is above the now-expanded welcome group. Like the saved
+    // status, reveal its actual semantics with ordinary bounded scrolling before
+    // reading it; a missing/wrong status still fails the original text assertion.
+    const statusText = expectedStatus === 200
+      ? purpose !== 'background' ? 'نُشرت الصورة؛ اخترها واحفظ المحتوى.' : L.selected
+      : L.unavailable;
+    const status = page.locator('flt-semantics').getByText(statusText, { exact: true });
+    await reveal(page, status, 'content-status');
+    await textContains(page, statusText);
     return body;
   } catch (error) {
     native?.firstError('upload-assertion');
