@@ -99,6 +99,76 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.79",
+      "versionCode": 79,
+      "signing": "restoflow-production",
+      "status": "BUILT / PRODUCTION-SIGNED / VERIFIED / CONSUMED / POS INSTALLED IN PLACE ON OPD2480 / KDS NOT INSTALLED / INSTALLED_ACTIVATION_PENDING",
+      "sourceSha": "28c41911fa3ae1ace9bcee1b793f810a3ac3990f",
+      "buildDate": "2026-11-08",
+      "consumption": "The official synchronized POS/KDS pair was built once from this source on 2026-11-08; code 79 is consumed and must never be reused or rebuilt.",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v79-28c4191.apk",
+          "packageId": "com.restoflow.pos",
+          "sizeBytes": 76704429,
+          "sha256": "85d785c39204819dc28a35ac7ea23fdb7fb3a417115fc192bdb5e36a12c2c35c"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v79-28c4191.apk",
+          "packageId": "com.restoflow.kds",
+          "sizeBytes": 57938786,
+          "sha256": "5d5e703850681e68f559e7750ac275c5ec80ef4b1bd4c85ab6f1c07c759b9b6b"
+        }
+      },
+      "installation": {
+        "pos": "Installed in place on the owner-designated OPD2480 on 2026-11-08; the installed bytes were verified equal to the built POS artifact.",
+        "kds": "Not installed. The KDS artifact is retained."
+      },
+      "activation": "INSTALLED_ACTIVATION_PENDING: the genuine eligible operational-shift observation remains pending and needs a disposition before a later installation replaces v79.",
+      "acceptance": "No successful activation, completed long-shift check, payment readiness or successful physical TEST is claimed.",
+      "evidence": {
+        "attribution": "Historical receipts of the PR #386 limited-release track (2026-11-08), inventoried with their SHA-256 in receipt A1 of the accepted BIZBOT-PAYMENTS-ZCREDIT-PILOT-001H-APK-PREP-001 addendum 1. They are cited, not reproduced; they record actions of that track, not of BIZBOT-PAYMENTS-ZCREDIT-PILOT-001H-APK-RELEASE-LEDGER-001.",
+        "receipts": [
+          {
+            "name": "OFFICIAL79-CONSUMPTION-VERIFIED.json",
+            "sha256": "61da86ff70e745c1bbdb6bee0d55c505b80bc051a425579693014b20902a3055"
+          },
+          {
+            "name": "OFFICIAL79-INSTALL-RESULT.json",
+            "sha256": "3220c6ea447eeb5e8dd5218e1e0dcf8d6656b6c529133e190be33c645e83ddcb"
+          },
+          {
+            "name": "OFFICIAL79-INSTALLED-BYTES-IDENTITY-VERIFIED.json",
+            "sha256": "d4ac8629cf88d4ed3973bd8bc456785a3150699cefcaa7047af16fe15cdb52c0"
+          },
+          {
+            "name": "CHECKPOINT.json",
+            "sha256": "0bc245e52533961fce823d80cc42d893d6ac457aff262b7c12ac9a36606007db"
+          }
+        ]
+      },
+      "reservationAsRecordedNote": "The former nextOfficialRelease object for v79, preserved unchanged. Its 'NOT BUILT / NOT INSTALLED' wording describes the reservation stage only; the dated build and installation evidence above supersedes that status. It is history, not today's state.",
+      "reservationAsRecorded": {
+        "versionName": "0.0.79",
+        "versionCode": 79,
+        "signing": "restoflow-production",
+        "status": "RESERVED - OWNER-APPROVED LIMITED RELEASE / NOT BUILT / NOT INSTALLED",
+        "intendedSource": "PR #386 reconciled with current main, followed by protected merge and final main CI before official build.",
+        "notes": [
+          "Official POS update limited to the authorized OPD2480. Same package and production certificate preserve the in-place Android update path. KDS is built by the unchanged synchronized-pair runner and retained without installation.",
+          "Fresh version survey found consumed codes through78. Canonical local reservation for79 is recorded atomically before building. The former69 reservation, currentOfficialRelease and previous release records are preserved.",
+          "12 hours from shift opening is the approved limited-rollout cap. Activation requires independent device/shift consent and owner AAL2. Branch sent-order-edit setting is unchanged.",
+          "This ledger reserves a candidate. Actual APK hashes, final merged build source, installation and physical results require their own verified release receipts."
+        ]
+      },
+      "notes": [
+        "Reconciled on 2026-11-16 by BIZBOT-PAYMENTS-ZCREDIT-PILOT-001H-APK-RELEASE-LEDGER-001 from the attributed receipts above. No build, signing, installation or device action was performed by this reconciliation.",
+        "currentOfficialRelease, latestPilotRelease and every earlier record, reservation and acceptance object are unchanged."
+      ]
+    },
+    {
       "versionName": "0.0.68",
       "versionCode": 68,
       "signing": "restoflow-production",
@@ -1025,16 +1095,17 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.79",
-    "versionCode": 79,
+    "versionName": "0.0.80",
+    "versionCode": 80,
     "signing": "restoflow-production",
-    "status": "RESERVED - OWNER-APPROVED LIMITED RELEASE / NOT BUILT / NOT INSTALLED",
-    "intendedSource": "PR #386 reconciled with current main, followed by protected merge and final main CI before official build.",
+    "status": "RESERVED - PILOT BUILD PENDING / NOT BUILT / NOT INSTALLED",
+    "intendedSource": "The protected main merge commit of BIZBOT-PAYMENTS-ZCREDIT-PILOT-001H-APK-RELEASE-LEDGER-001; its exact SHA must be recorded for the separately authorized official build.",
     "notes": [
-      "Official POS update limited to the authorized OPD2480. Same package and production certificate preserve the in-place Android update path. KDS is built by the unchanged synchronized-pair runner and retained without installation.",
-      "Fresh version survey found consumed codes through78. Canonical local reservation for79 is recorded atomically before building. The former69 reservation, currentOfficialRelease and previous release records are preserved.",
-      "12 hours from shift opening is the approved limited-rollout cap. Activation requires independent device/shift consent and owner AAL2. Branch sent-order-edit setting is unchanged.",
-      "This ledger reserves a candidate. Actual APK hashes, final merged build source, installation and physical results require their own verified release receipts."
+      "Proposed pilot POS update for the owner-designated OPD2480 in landscape. This reservation authorizes no build, installation, activation or payment.",
+      "The unchanged official runner will build the synchronized POS and KDS pair only under a later build approval. The KDS artifact is to be retained without installation.",
+      "Version 79 is consumed. Its reservation, build and installation history are preserved separately, with activation still pending. The pending activation observation needs a disposition before a later installation replaces v79.",
+      "Reconfirm the bounded numeric version survey and create the shared package/version claim exclusively before the later build. The claim convention is not a global lock.",
+      "The accepted D9 layout evidence is off-device and limited to the recorded OPD2480 landscape configuration. Signing, D9 presence in the new APK, installed-byte identity and the later installed TEST-view observation are not established by this reservation."
     ]
   },
   "ownerReportedAcceptanceRecords": [
