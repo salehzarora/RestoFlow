@@ -11,10 +11,6 @@
       "source": "/(.*)",
       "headers": [
         {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data: https://oqmevrndtivqxgyvcmwy.supabase.co; font-src 'self'; connect-src 'self' https://oqmevrndtivqxgyvcmwy.supabase.co; media-src 'none'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests"
-        },
-        {
           "key": "Strict-Transport-Security",
           "value": "max-age=63072000; includeSubDomains; preload"
         },
@@ -37,6 +33,33 @@
         {
           "key": "X-Robots-Tag",
           "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/((?!(?:(?:ar|he|en)/)?s/[^/]+/?$).*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data: https://oqmevrndtivqxgyvcmwy.supabase.co; font-src 'self'; connect-src 'self' https://oqmevrndtivqxgyvcmwy.supabase.co; media-src 'none'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests"
+        }
+      ]
+    },
+    {
+      "source": "/s/:slug",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data: https://oqmevrndtivqxgyvcmwy.supabase.co; font-src 'self'; connect-src 'self' https://oqmevrndtivqxgyvcmwy.supabase.co; media-src https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-welcome-videos/; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests"
+        }
+      ]
+    },
+    {
+      "source": "/:locale(ar|he|en)/s/:slug",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data: https://oqmevrndtivqxgyvcmwy.supabase.co; font-src 'self'; connect-src 'self' https://oqmevrndtivqxgyvcmwy.supabase.co; media-src https://oqmevrndtivqxgyvcmwy.supabase.co/storage/v1/object/public/storefront-welcome-videos/; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests"
         }
       ]
     },

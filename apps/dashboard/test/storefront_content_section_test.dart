@@ -130,6 +130,7 @@ Future<void> mount(
   double textScale = 1,
   Uri Function(String)? publicUrlFor,
   bool openGroups = true,
+  Widget? welcomeImageEditor,
 }) async {
   await tester.binding.setSurfaceSize(Size(width, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -158,6 +159,7 @@ Future<void> mount(
                   profileVersion: repo.version,
                   savedBranchId: branch,
                   enabled: enabled,
+                  welcomeImageEditor: welcomeImageEditor,
                   publicUrlFor: publicUrlFor,
                   onRefresh: () async {
                     update(() {});
@@ -209,6 +211,94 @@ Future<void> edit(WidgetTester tester, String key, String text) async {
 }
 
 void main() {
+  testWidgets(
+    'welcome groups each text and image once and saves only explicit content',
+    (tester) async {
+      final repo = ContentRepo();
+      var imageActions = 0;
+      await mount(
+        tester,
+        repo,
+        openGroups: false,
+        welcomeImageEditor: TextButton(
+          key: const Key('welcome-image-action'),
+          onPressed: () => imageActions++,
+          child: const Text('Existing image action'),
+        ),
+      );
+      final welcome = find.byKey(const Key('content-group-welcome'));
+      expect(welcome, findsOneWidget);
+      expect(
+        find.descendant(
+          of: welcome,
+          matching: find.byKey(const Key('content-hero-headline')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: welcome,
+          matching: find.byKey(const Key('welcome-image-action')),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('content-hero-headline')), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('content-welcome-save')))
+            .onPressed,
+        isNull,
+      );
+      await edit(tester, 'content-hero-headline', 'A new welcome');
+      expect(repo.calls, isEmpty);
+      final save = find.byKey(const Key('content-welcome-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(repo.calls, hasLength(1));
+      expect(repo.calls.single.expectedBranchId, branch);
+      expect(repo.calls.single.expectedVersion, 3);
+      expect(repo.calls.single.document.json['hero_headline'], 'A new welcome');
+      expect(
+        imageActions,
+        0,
+        reason:
+            'Content save never invokes the independent profile media action',
+      );
+      expect(repo.doc.json['hero_headline'], 'A new welcome');
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'Arabic welcome controls fit a narrow dashboard and disabled edits never write',
+    (tester) async {
+      final repo = ContentRepo();
+      await mount(
+        tester,
+        repo,
+        locale: 'ar',
+        width: 360,
+        textScale: 1.5,
+        enabled: false,
+        openGroups: false,
+      );
+      expect(find.text('صفحة الترحيب · قبل المنيو'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('content-hero-headline')))
+            .enabled,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('content-welcome-save')))
+            .onPressed,
+        isNull,
+      );
+      expect(repo.calls, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'site theme keeps legacy unset until an explicit content save and retains other draft appearance',
     (tester) async {
@@ -345,8 +435,9 @@ void main() {
       expect(find.byKey(Key('content-group-$name')), findsOneWidget);
     }
     final headline = find.byKey(const Key('content-hero-headline'));
+    await setContentGroup(tester, 'welcome', expanded: false);
     expect(headline, findsNothing);
-    await setContentGroup(tester, 'editorial');
+    await setContentGroup(tester, 'welcome');
     await edit(tester, 'content-hero-headline', 'Changed draft');
     final focus = tester
         .widget<EditableText>(
@@ -354,7 +445,7 @@ void main() {
         )
         .focusNode;
     expect(focus.hasFocus, isTrue);
-    await setContentGroup(tester, 'editorial', expanded: false);
+    await setContentGroup(tester, 'welcome', expanded: false);
     expect(headline, findsNothing);
     expect(
       focus.hasFocus,
@@ -363,12 +454,12 @@ void main() {
     );
     expect(repo.calls, isEmpty);
     expect(publisher.calls, isEmpty);
-    await setContentGroup(tester, 'editorial');
+    await setContentGroup(tester, 'welcome');
     expect(
       tester.widget<TextField>(headline).controller!.text,
       'Changed draft',
     );
-    await setContentGroup(tester, 'editorial', expanded: false);
+    await setContentGroup(tester, 'welcome', expanded: false);
     repo.status = StorefrontContentWriteStatus.uncertain;
     final save = find.byKey(const Key('content-save'));
     await tester.ensureVisible(save);
@@ -377,8 +468,8 @@ void main() {
     expect(repo.calls, hasLength(1));
     final attempt = repo.calls.single;
     expect(attempt.document.json, {...saved, 'hero_headline': 'Changed draft'});
-    await setContentGroup(tester, 'editorial');
-    await setContentGroup(tester, 'editorial', expanded: false);
+    await setContentGroup(tester, 'welcome');
+    await setContentGroup(tester, 'welcome', expanded: false);
     expect(repo.calls, hasLength(1));
     final retry = find.byKey(const Key('content-retry-save'));
     expect(tester.widget<OutlinedButton>(retry).onPressed, isNotNull);

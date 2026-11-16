@@ -42,6 +42,7 @@ import type { StorefrontMenuV3Ok } from './decodeFeaturedItems';
 import type { StorefrontMenuV4Ok, StorefrontMenuV8Ok, StorefrontMenuV10Ok, StorefrontMenuV11Ok } from './decodeContentV1';
 import { iconPathFor } from './icons';
 import { liveOrderingEnabled, orderEndpointOrigin } from './ordering';
+import type { StorefrontMenuV12Ok } from './decodeWelcomeVideo';
 
 const MEDIA_PATH = /^\/storage\/v1\/object\/public\/storefront-media\/[0-9a-f]{32}\/[0-9a-f]{64}\.webp$/;
 
@@ -81,8 +82,9 @@ export function nextOpenParts(iso: string | null, timeZone: string): NextOpenAt 
   }
 }
 
-export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok | StorefrontMenuV4Ok | StorefrontMenuV8Ok | StorefrontMenuV10Ok | StorefrontMenuV11Ok, origin: string): StorefrontResolution {
+export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok | StorefrontMenuV3Ok | StorefrontMenuV4Ok | StorefrontMenuV8Ok | StorefrontMenuV10Ok | StorefrontMenuV11Ok | StorefrontMenuV12Ok, origin: string): StorefrontResolution {
   const r = envelope.restaurant;
+  const welcome = 'welcome_media_type' in r ? r as StorefrontMenuV12Ok['restaurant'] : null;
   const home = 'home_content' in envelope ? envelope.home_content : null;
   const featured = new Set('featured_item_ids' in envelope ? envelope.featured_item_ids : []);
   const content = 'content_v1' in envelope ? envelope.content_v1 : null;
@@ -117,6 +119,14 @@ export function adaptStorefront(envelope: StorefrontMenuOk | StorefrontMenuV2Ok 
       orderingEnabled: liveOrderingEnabled(envelope.service),
     },
     heroImage: mediaUrl(r.hero_url, origin),
+    ...(welcome === null ? {} : {
+      welcomeMediaType: welcome.welcome_media_type,
+      welcomeVideo: welcome.welcome_video === null ? null : {
+        url: `${origin}${welcome.welcome_video.url}`, mimeType: welcome.welcome_video.mime_type,
+        width: welcome.welcome_video.width, height: welcome.welcome_video.height,
+        durationMs: welcome.welcome_video.duration_ms, bytes: welcome.welcome_video.bytes,
+      },
+    }),
     ...(content?.appearance?.menu_background_url === undefined ? {} : { menuBackgroundImage: mediaUrl(content.appearance.menu_background_url, origin) }),
     ...(backgroundImages ? { menuBackgroundVariants: backgroundImages.variants.map(v => ({ ...v, url: mediaUrl(v.url, origin)! })) } : {}),
     ...(content?.appearance?.menu_background_dim === undefined ? {} : { menuBackgroundDim: content.appearance.menu_background_dim }),

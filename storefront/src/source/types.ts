@@ -99,10 +99,13 @@ export interface Tenant {
   readonly service: TenantService;
   /**
    * Hero image URL, or null: a live tenant that published no hero renders the
-   * brand-colour panel without a photo (owner decision D11). Video is deferred
-   * out of UI-001 by approved decision 8.
+   * brand-colour panel without a photo (owner decision D11). Optional published
+   * welcome video is separate and never changes this legacy image field.
    */
   readonly heroImage: string | null;
+  /** Explicit welcome-only media; absent/null keeps the established welcome composition. */
+  readonly welcomeMediaType?: 'image' | 'video' | null;
+  readonly welcomeVideo?: { readonly url: string; readonly mimeType: 'video/mp4'; readonly width: number; readonly height: number; readonly durationMs: number; readonly bytes: number } | null;
   /** Optional menu-only media; missing/null retains the existing hero backdrop. */
   readonly menuBackgroundImage?: string | null;
   /** Published copies for the same selected menu photo, ordered by actual pixel width. */

@@ -12,6 +12,8 @@ import { SceneBackdrop } from './home/SceneBackdrop';
 import { hoursLabel } from './home/hoursCopy';
 import { DeliveryIcon, SearchIcon, StoreIcon } from './icons';
 import styles from './home/home.module.css';
+import welcomeStyles from './WelcomeMedia.module.css';
+import { WelcomeMedia } from './WelcomeMedia';
 
 const MOTION_CLASS = {
   calm: '', full: styles.motionFull,
@@ -26,7 +28,8 @@ export function Intro({ tenant, locale, campaign, motion = 'full' }: {
   const menuHref = `${storefrontPath(locale, tenant.slug)}/menu`;
   const stateLabel = service.state === 'open' ? m.openNow : service.state === 'closed' ? m.closed : m.paused;
   const stateTone = service.state === 'open' ? styles.stateOpen : service.state === 'closed' ? styles.stateClosed : styles.statePaused;
-  return <main className={`${styles.page} ${MOTION_CLASS[motion]}`} data-sf-screen="intro">
+  const customMedia = tenant.welcomeMediaType === 'image' || tenant.welcomeMediaType === 'video';
+  return <main className={`${styles.page} ${MOTION_CLASS[motion]} ${customMedia ? welcomeStyles.page : ''}`} data-sf-screen="intro">
     {tenant.siteTheme === 'light' ? null : <SceneBackdrop image={tenant.heroImage} />}
     <header className={styles.header}>
       <div className={`${styles.inner} ${styles.headerInner}`}>
@@ -37,7 +40,8 @@ export function Intro({ tenant, locale, campaign, motion = 'full' }: {
         </div>
       </div>
     </header>
-    <CampaignHero tenant={tenant} m={m} eyebrow={m.welcome} title={campaign?.title ?? tenant.displayName} subline={campaign?.subline ?? tenant.tagline} content={campaign?.hero ? { ...campaign.hero, mode: 'editorial' } : undefined} ctaHref={menuHref} ctaLabel={m.explore} />
+    <CampaignHero tenant={tenant} m={m} eyebrow={m.welcome} title={campaign?.title ?? tenant.displayName} subline={campaign?.subline ?? tenant.tagline} content={campaign?.hero ? { ...campaign.hero, mode: 'editorial' } : undefined} ctaHref={menuHref} ctaLabel={m.explore}
+      media={customMedia ? <WelcomeMedia key={`${tenant.slug}|${tenant.welcomeMediaType}|${tenant.welcomeVideo?.url ?? tenant.heroImage}`} video={tenant.welcomeMediaType === 'video' ? tenant.welcomeVideo : null} image={tenant.heroImage} label={`${m.welcome} · ${tenant.displayName}`} /> : undefined} />
     <div className={styles.serviceWrap} data-sf-intro-service="">
       <div className={styles.service}>
         <div className={`${styles.serviceCell} ${stateTone}`}><span className={styles.stateDot} aria-hidden="true" /><span>{stateLabel}</span></div>

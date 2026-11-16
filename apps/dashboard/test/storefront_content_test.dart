@@ -51,7 +51,17 @@ Map<String, dynamic> readEnvelope({
   'restaurant_id': restaurant,
   'version': version,
   'storefront_branch_id': branch,
-  'document': doc ?? document(),
+  'document':
+      doc ??
+      {
+        ...document(),
+        'appearance': {
+          'text_color': null,
+          'button_text_color': null,
+          'welcome_media_type': null,
+          'welcome_video_media_id': null,
+        },
+      },
   'warnings': [],
 };
 Map<String, dynamic> success({bool replay = false}) => {
@@ -96,6 +106,72 @@ StorefrontContentAttempt attempt(SupabaseStorefrontContentRepository r) =>
     );
 
 void main() {
+  test(
+    'welcome optional fields preserve omission and validate mode and canonical selection',
+    () {
+      final legacy = StorefrontContentDocument.fromJson(document());
+      expect(legacy.json.containsKey('appearance'), false);
+      for (final mode in [null, 'image', 'video']) {
+        final raw = document()
+          ..['appearance'] = {
+            'text_color': null,
+            'button_text_color': null,
+            'welcome_media_type': mode,
+            'welcome_video_media_id': media,
+          };
+        expect(
+          (StorefrontContentDocument.fromJson(raw).json['appearance']
+              as Map)['welcome_media_type'],
+          mode,
+        );
+      }
+      for (final mode in ['Video', false, 3, <String, dynamic>{}]) {
+        expect(
+          () => StorefrontContentDocument.fromJson(
+            document()
+              ..['appearance'] = {
+                'text_color': null,
+                'button_text_color': null,
+                'welcome_media_type': mode,
+              },
+          ),
+          throwsA(isA<StorefrontDecodeException>()),
+        );
+      }
+      expect(
+        () => StorefrontContentDocument.fromJson(
+          document()
+            ..['appearance'] = {
+              'text_color': null,
+              'button_text_color': null,
+              'welcome_video_media_id': 'other/source.mp4',
+            },
+        ),
+        throwsA(isA<StorefrontDecodeException>()),
+      );
+    },
+  );
+  test(
+    'v7 capability must return both optional welcome fields even when null',
+    () async {
+      final old = readEnvelope(doc: document());
+      final t = ScriptTransport([old, readEnvelope()]);
+      final r = repository(t);
+      expect(
+        (await r.readContent()).status,
+        StorefrontContentReadStatus.malformed,
+      );
+      expect((await r.readContent()).isOk, true);
+      expect(
+        t.calls.map((call) => call.function),
+        everyElement('get_restaurant_storefront_content_v7'),
+      );
+      expect(
+        t.calls.every((call) => call.params['p_restaurant_id'] == restaurant),
+        true,
+      );
+    },
+  );
   test(
     'optional appearance keeps legacy documents and roundtrips HEX colors',
     () {

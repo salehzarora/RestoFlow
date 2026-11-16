@@ -18,6 +18,11 @@ import 'storefront_settings_group.dart';
 import 'storefront_site_theme_preview.dart';
 import 'storefront_menu_banner_editor.dart';
 import 'storefront_banner_preview_data.dart';
+import 'storefront_welcome_video_library.dart';
+import 'storefront_welcome_video_models.dart';
+import 'storefront_welcome_video_editor.dart';
+import 'storefront_welcome_video_publisher.dart';
+import 'storefront_welcome_video_upload.dart';
 
 /// A read acknowledgment from the actual parent editor. A completed Future is
 /// not evidence that the profile and its media were both refreshed.
@@ -95,6 +100,9 @@ class _ContentState extends State<StorefrontContentSection> {
   StorefrontContentRead? _read;
   StorefrontContentCatalogData? _catalog;
   StorefrontContentMediaList? _media;
+  List<StorefrontWelcomeVideoMedia>? _welcomeVideos;
+  bool _welcomeVideoBusy = false;
+  int _videoLoadGeneration = 0;
   Map<String, dynamic>? _draft;
   StorefrontContentAttempt? _pending;
   StorefrontContentAttempt? _confirmedSave;
@@ -141,6 +149,7 @@ class _ContentState extends State<StorefrontContentSection> {
   bool get _editable =>
       widget.enabled &&
       !_busy &&
+      !_welcomeVideoBusy &&
       !_stale &&
       !_bindingHold &&
       _confirmedSave == null &&
@@ -178,6 +187,9 @@ class _ContentState extends State<StorefrontContentSection> {
       final abandonedUpload = _uploadingBackground;
       final abandonedQuality = _preparingBackgroundQuality;
       _uploadingBackground = false;
+      _welcomeVideoBusy = false;
+      _welcomeVideos = null;
+      _videoLoadGeneration++;
       _preparingBackgroundQuality = false;
       _backgroundQuality = null;
       _bindingGeneration++;
@@ -278,6 +290,7 @@ class _ContentState extends State<StorefrontContentSection> {
     // unrelated menu/catalog read on that path; positive reads still require
     // all three acknowledgments while the same operation owns the lock.
     StorefrontContentCatalogData? choices;
+    List<StorefrontWelcomeVideoMedia>? videos;
     if (propsMatch() &&
         read?.isOk == true &&
         snapshot != null &&
@@ -285,13 +298,22 @@ class _ContentState extends State<StorefrontContentSection> {
         snapshot.branchId == expectedBranch &&
         snapshot.version == expectedVersion &&
         media.version == snapshot.version) {
-      choices =
-          await _safeRead(
-                () =>
-                    catalog?.loadContent(expectedBranch) ??
-                    Future<StorefrontContentCatalogData?>.value(),
-              )
-              as StorefrontContentCatalogData?;
+      final related = await Future.wait<Object?>([
+        _safeRead(
+          () =>
+              catalog?.loadContent(expectedBranch) ??
+              Future<StorefrontContentCatalogData?>.value(),
+        ),
+        if (repository is StorefrontWelcomeVideoLibrary)
+          _safeRead(
+            () => (repository as StorefrontWelcomeVideoLibrary)
+                .listWelcomeVideos(),
+          ),
+      ]);
+      choices = related[0] as StorefrontContentCatalogData?;
+      videos = related.length > 1
+          ? related[1] as List<StorefrontWelcomeVideoMedia>?
+          : null;
     }
     if (!_current(binding) || generation != _generation) return false;
     final verified =
@@ -312,6 +334,7 @@ class _ContentState extends State<StorefrontContentSection> {
               StorefrontContentReadStatus.unavailable,
             );
         _media = media;
+        _welcomeVideos = videos;
         _catalog = choices;
       }
       _stale = !verified;
@@ -329,6 +352,56 @@ class _ContentState extends State<StorefrontContentSection> {
       }
     });
     return verified;
+  }
+
+  Future<void> _reloadWelcomeVideos() async {
+    final binding = _bindingGeneration, generation = ++_videoLoadGeneration;
+    final repository = widget.repository;
+    if (repository is! StorefrontWelcomeVideoLibrary) return;
+    final rows = await _safeRead(
+      () => (repository as StorefrontWelcomeVideoLibrary).listWelcomeVideos(),
+    );
+    if (!_current(binding) || generation != _videoLoadGeneration) return;
+    setState(() => _welcomeVideos = rows as List<StorefrontWelcomeVideoMedia>?);
+  }
+
+  Widget _welcomeVideoEditor() {
+    final appearance = _draft?['appearance'] as Map?;
+    final publisher = widget.publisher;
+    final storage = publisher?.welcomeVideoStorage;
+    final binding = _bindingGeneration;
+    return StorefrontWelcomeVideoEditor(
+      key: const Key('content-welcome-video'),
+      media: _welcomeVideos ?? const [],
+      libraryAvailable: _welcomeVideos != null,
+      mode: appearance?['welcome_media_type'] as String?,
+      selectedId: appearance?['welcome_video_media_id'] as String?,
+      onChanged: _changeAppearance,
+      onReload: _reloadWelcomeVideos,
+      enabled: _editable,
+      canPublish: !_dirty,
+      bindingIdentity: '${widget.savedBranchId}|$_bindingGeneration',
+      publisher: publisher == null
+          ? null
+          : StorefrontWelcomeVideoPublisher(
+              invoker: publisher.welcomeVideoInvoker,
+              organizationId: publisher.organizationId,
+              restaurantId: publisher.restaurantId,
+            ),
+      uploader: storage == null || publisher == null
+          ? null
+          : StorefrontWelcomeVideoUpload(
+              storage: storage,
+              organizationId: publisher.organizationId,
+              restaurantId: publisher.restaurantId,
+            ),
+      publicUrlFor: storage?.publicWelcomeVideoUrl,
+      onBusyChanged: (busy) {
+        if (!_current(binding)) return;
+        setState(() => _welcomeVideoBusy = busy);
+        widget.onBusyChanged(_busy || busy);
+      },
+    );
   }
 
   Future<Object?> _safeRead(Future<Object?> Function() action) async {
@@ -433,6 +506,7 @@ class _ContentState extends State<StorefrontContentSection> {
   Future<void> _reload() async {
     if (!mounted ||
         _busy ||
+        _welcomeVideoBusy ||
         _pending != null ||
         _pendingPublish != null ||
         _confirmedSave != null ||
@@ -440,7 +514,7 @@ class _ContentState extends State<StorefrontContentSection> {
       return;
     final binding = _bindingGeneration;
     if (_dirty && !await _confirm('discard')) return;
-    if (!_current(binding) || _busy) return;
+    if (!_current(binding) || _busy || _welcomeVideoBusy) return;
     _notifyDraft(false);
     _setBusy(true);
     _ownsRefresh = true;
@@ -1909,6 +1983,7 @@ class _ContentState extends State<StorefrontContentSection> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(c('welcomePageHelp')),
+                _welcomeVideoEditor(),
                 if (widget.welcomeImageEditor != null) ...[
                   const SizedBox(height: 12),
                   widget.welcomeImageEditor!,
@@ -2083,6 +2158,7 @@ class _ContentState extends State<StorefrontContentSection> {
               TextButton(
                 onPressed:
                     _busy ||
+                        _welcomeVideoBusy ||
                         _pending != null ||
                         _pendingPublish != null ||
                         _confirmedSave != null ||
