@@ -107,6 +107,57 @@ StorefrontContentAttempt attempt(SupabaseStorefrontContentRepository r) =>
 
 void main() {
   test(
+    'welcome library uses the same scoped transport and rejects malformed rows',
+    () async {
+      final key = '${'a' * 32}/${'b' * 64}.mp4';
+      final row = <String, dynamic>{
+        'id': media,
+        'object_key': key,
+        'content_hash': 'b' * 64,
+        'mime_type': 'video/mp4',
+        'width': 540,
+        'height': 864,
+        'duration_ms': 12042,
+        'bytes': 660459,
+        'published': true,
+        'url': '/storage/v1/object/public/storefront-welcome-videos/$key',
+      };
+      final t = ScriptTransport([
+        {
+          'ok': true,
+          'entity': 'storefront_welcome_video',
+          'media': [row],
+        },
+        {
+          'ok': true,
+          'entity': 'storefront_welcome_video',
+          'media': [
+            {...row, 'source_key': 'private'},
+          ],
+        },
+        {
+          'ok': false,
+          'entity': 'storefront_welcome_video',
+          'error': 'permission_denied',
+        },
+      ]);
+      final r = repository(t);
+      expect((await r.listWelcomeVideos())!.single.id, media);
+      expect(await r.listWelcomeVideos(), isNull);
+      expect(await r.listWelcomeVideos(), isNull);
+      expect(
+        t.calls.every(
+          (call) =>
+              call.function == 'list_storefront_welcome_videos_v1' &&
+              call.params.length == 2 &&
+              call.params['p_organization_id'] == org &&
+              call.params['p_restaurant_id'] == restaurant,
+        ),
+        true,
+      );
+    },
+  );
+  test(
     'welcome optional fields preserve omission and validate mode and canonical selection',
     () {
       final legacy = StorefrontContentDocument.fromJson(document());

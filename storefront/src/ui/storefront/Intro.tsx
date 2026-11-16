@@ -12,7 +12,7 @@ import { SceneBackdrop } from './home/SceneBackdrop';
 import { hoursLabel } from './home/hoursCopy';
 import { DeliveryIcon, SearchIcon, StoreIcon } from './icons';
 import styles from './home/home.module.css';
-import './WelcomeMedia.css';
+import welcomeStyles from './WelcomeMedia.module.css';
 import { WelcomeMedia } from './WelcomeMedia';
 
 const MOTION_CLASS = {
@@ -29,7 +29,7 @@ export function Intro({ tenant, locale, campaign, motion = 'full' }: {
   const stateLabel = service.state === 'open' ? m.openNow : service.state === 'closed' ? m.closed : m.paused;
   const stateTone = service.state === 'open' ? styles.stateOpen : service.state === 'closed' ? styles.stateClosed : styles.statePaused;
   const customMedia = tenant.welcomeMediaType === 'image' || tenant.welcomeMediaType === 'video';
-  return <main className={`${styles.page} ${MOTION_CLASS[motion]}`} data-sf-screen="intro" data-sf-welcome-custom={customMedia ? '' : undefined}>
+  return <main className={`${styles.page} ${MOTION_CLASS[motion]} ${customMedia ? welcomeStyles.page : ''}`} data-sf-screen="intro" data-sf-welcome-custom={customMedia ? '' : undefined}>
     {tenant.siteTheme === 'light' ? null : <SceneBackdrop image={tenant.heroImage} />}
     <header className={styles.header}>
       <div className={`${styles.inner} ${styles.headerInner}`}>

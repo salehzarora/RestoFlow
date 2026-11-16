@@ -9,6 +9,9 @@ import 'package:restoflow_dashboard/src/storefront/storefront_sources.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_scene_preset_dialog.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'package:restoflow_dashboard/src/storefront/storefront_welcome_video_library.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_welcome_video_models.dart';
+
 import 'helpers/storefront_content_groups.dart';
 
 const restaurant = '22222222-2222-4222-8222-222222222222';
@@ -71,6 +74,30 @@ class ContentRepo implements StorefrontContentRepository {
       reason: invalidReason,
       field: invalidField,
     );
+  }
+}
+
+class WelcomeContentRepo extends ContentRepo
+    implements StorefrontWelcomeVideoLibrary {
+  int videoReads = 0;
+  @override
+  Future<List<StorefrontWelcomeVideoMedia>?> listWelcomeVideos() async {
+    videoReads++;
+    final key = '${'a' * 32}/${'b' * 64}.mp4';
+    return [
+      StorefrontWelcomeVideoMedia.fromJson({
+        'id': request,
+        'object_key': key,
+        'content_hash': 'b' * 64,
+        'mime_type': 'video/mp4',
+        'width': 540,
+        'height': 864,
+        'duration_ms': 12042,
+        'bytes': 660459,
+        'published': true,
+        'url': '/storage/v1/object/public/storefront-welcome-videos/$key',
+      }),
+    ];
   }
 }
 
@@ -211,6 +238,64 @@ Future<void> edit(WidgetTester tester, String key, String text) async {
 }
 
 void main() {
+  testWidgets(
+    'welcome video selection stays draft until ordinary content CAS and reread',
+    (tester) async {
+      final repo = WelcomeContentRepo();
+      final appearance = <String, Object?>{
+        'text_color': '#fff1da',
+        'button_text_color': '#20140c',
+        'welcome_media_type': null,
+        'welcome_video_media_id': null,
+        'site_theme': 'light',
+        'menu_background_dim': 15,
+      };
+      repo.doc = StorefrontContentDocument.fromJson(
+        repo.doc.editableCopy()..['appearance'] = appearance,
+      );
+      await mount(tester, repo, openGroups: false);
+      final mode = find.byKey(const ValueKey('welcome-video-mode-legacy'));
+      tester.widget<DropdownButtonFormField<String>>(mode).onChanged!('video');
+      await tester.pumpAndSettle();
+      final selection = find.byKey(
+        const ValueKey('welcome-video-selection-none'),
+      );
+      tester.widget<DropdownButtonFormField<String>>(selection).onChanged!(
+        request,
+      );
+      await tester.pumpAndSettle();
+      expect(repo.calls, isEmpty);
+      final save = find.byKey(const Key('content-welcome-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(repo.calls, hasLength(1));
+      expect(repo.calls.single.expectedBranchId, branch);
+      expect(repo.calls.single.document.json['appearance'], {
+        ...appearance,
+        'welcome_media_type': 'video',
+        'welcome_video_media_id': request,
+      });
+      expect(repo.videoReads, greaterThanOrEqualTo(2));
+      expect(
+        find.byKey(const ValueKey('welcome-video-mode-video')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('welcome-video-selection-$request')),
+        findsOneWidget,
+      );
+    },
+  );
+  testWidgets('denied content read never loads the welcome video catalogue', (
+    tester,
+  ) async {
+    final repo = WelcomeContentRepo()
+      ..readStatus = StorefrontContentReadStatus.denied;
+    await mount(tester, repo, openGroups: false);
+    expect(repo.videoReads, 0);
+    expect(find.byKey(const Key('welcome-video-editor')), findsNothing);
+  });
   testWidgets(
     'welcome groups each text and image once and saves only explicit content',
     (tester) async {

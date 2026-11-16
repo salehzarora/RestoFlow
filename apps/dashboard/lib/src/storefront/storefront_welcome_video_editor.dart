@@ -213,10 +213,18 @@ class _EditorState extends State<StorefrontWelcomeVideoEditor> {
         DropdownButtonFormField<String>(
           key: ValueKey('welcome-video-mode-$mode'),
           initialValue: mode,
+          isExpanded: true,
           decoration: InputDecoration(labelText: c('mode')),
           items: [
             for (final value in ['legacy', 'image', 'video'])
-              DropdownMenuItem(value: value, child: Text(c(value))),
+              DropdownMenuItem(
+                value: value,
+                child: Text(
+                  c(value),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
           ],
           onChanged: _editable
               ? (value) => widget.onChanged(
@@ -234,19 +242,32 @@ class _EditorState extends State<StorefrontWelcomeVideoEditor> {
           isExpanded: true,
           decoration: InputDecoration(labelText: c('choose')),
           items: [
-            DropdownMenuItem(value: 'none', child: Text(c('none'))),
+            DropdownMenuItem(
+              value: 'none',
+              child: Text(
+                c('none'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             for (final row in rows)
               DropdownMenuItem(
                 value: row.id,
                 child: Text(
                   '${row.width}×${row.height} · ${(row.durationMs / 1000).toStringAsFixed(1)} s · ${row.id.substring(0, 8)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             if (widget.selectedId != null && selected == null)
               DropdownMenuItem(
                 value: widget.selectedId,
                 enabled: false,
-                child: Text(c('unavailableSelection')),
+                child: Text(
+                  c('unavailableSelection'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
           ],
           onChanged: _editable

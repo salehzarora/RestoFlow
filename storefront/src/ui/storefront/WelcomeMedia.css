@@ -1,6 +1,0 @@
-[data-sf-welcome-media]{margin:0;min-width:0;align-self:center;overflow:hidden;border:1px solid var(--hair);border-radius:24px;background:var(--sf)}
-[data-sf-welcome-media]>:is(video,img){display:block;width:100%;height:auto;max-height:min(420px,60svh);object-fit:contain}
-[data-sf-welcome-media]>div{min-height:180px}
-main[data-sf-screen][data-sf-welcome-custom] [data-sf-module="hero"]{min-height:0;gap:32px;padding-block:36px}
-main[data-sf-screen][data-sf-welcome-custom] [data-sf-hero-copy]{min-height:0}
-@media(max-width:780px){main[data-sf-screen][data-sf-welcome-custom] [data-sf-module="hero"]{grid-template-columns:minmax(0,1fr);gap:24px}[data-sf-welcome-media]{width:100%}}
