@@ -2697,6 +2697,8 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       requestId: request.request_id, httpStatus: response.status(), url: API + '/functions/v1/storefront-media-publish' };
     // Required original browser response, not a second API read or UI message.
     const body = await response.json();
+    receipt.originalPublisherBodies[kind].status = 'BODY_VALIDATION_PENDING';
+    receipt.originalPublisherBodies[kind].originalBodyRead = true;
     expect(body.ok).toBe(true); expect(body.status).toBe('published');
     expect(request.organization_id).toBe(f.ownerA.orgId);
     expect(request.restaurant_id).toBe(f.ownerA.restaurantId);
@@ -2828,15 +2830,27 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     expect(fallbackMenu.items).toEqual(originalMenu.items);expect(fallbackMenu.categories).toEqual(originalMenu.categories);
     receipt.fallback={status:'PASS',reason:'explicitly cleared selected video',imageSelection:image.id,storageDeletion:false};done();
     stage('original-browser-resource-byte-guards');
-    await network.check();
+    receipt.resourceByteGuard={status:'RUNNING'};
+    await network.check(); receipt.resourceByteGuard.status='PASS';
+    receipt.byteGuard={status:'RUNNING'};
     receipt.byteGuard=await network.checkWelcomeVideo();
-    await network.checkDashboardMedia(value=>{receipt.dashboardImageByteGuard={status:'PASS',...value};});
+    receipt.dashboardImageByteGuard={status:'RUNNING'};
+    await network.checkDashboardMedia(value=>{receipt.dashboardImageByteGuard={status:'ASSERTION_PENDING',...value};});
+    receipt.dashboardImageByteGuard.status='PASS';
     receipt.mappedMedia=network.media(); done();receipt.status='PASS'; stage('complete');
   } catch(error) { primary=error;receipt.failedPhase=phase;receipt.failure={classification:error instanceof Error ? error.name : 'unclassified'};throw error; }
   finally {
     // Persist fixed safe scalars even when an earlier phase failed. Never dump
     // sessions, private object paths, entire RPC replies or synthetic passwords.
     receipt.phase=phase; receipt.actualServices=true; receipt.retries=0;
+    for (const key of ['resourceByteGuard','byteGuard','dashboardImageByteGuard']) {
+      if (['RUNNING','ASSERTION_PENDING'].includes(receipt[key]?.status)) receipt[key].status='FAIL';
+    }
+    for (const kind of ['image','video']) {
+      const observed=receipt.originalPublisherBodies[kind];
+      if (observed?.status==='BODY_READ_PENDING') observed.status='BODY_READ_FAILED';
+      else if (observed?.status==='BODY_VALIDATION_PENDING') observed.status='BODY_VALIDATION_FAILED';
+    }
     writeFileSync(resolve(out,'welcome-browser-result.json'),JSON.stringify(receipt,null,2));
     if (!primary) expect(receipt.status).toBe('PASS');
   }
