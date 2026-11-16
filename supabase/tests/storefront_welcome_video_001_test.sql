@@ -52,6 +52,12 @@ select ok((select prosecdef and proowner='postgres'::regrole and proconfig=array
 
 select set_config('app.current_app_user_id',pg_temp.vid('manager')::text,true);
 set local role authenticated;
+-- Exercise the actual legacy management response before any content row exists.
+insert into video_facts values('legacy-empty-v6-document',public.get_restaurant_storefront_content_v6(pg_temp.vid('org'),pg_temp.vid('restaurant'))->'document');
+select ok(not ((public.get_restaurant_storefront_content_v6(pg_temp.vid('org'),pg_temp.vid('restaurant'))->'document') ? 'appearance'),'fixture really begins with legacy absent appearance');
+select is(public.get_restaurant_storefront_content_v7(pg_temp.vid('org'),pg_temp.vid('restaurant'))#>'{document,appearance}',
+ jsonb_build_object('text_color',null,'button_text_color',null,'welcome_media_type',null,'welcome_video_media_id',null),'actual v7 materializes all four nullable appearance keys for a legacy document');
+select is(public.get_restaurant_storefront_content_v6(pg_temp.vid('org'),pg_temp.vid('restaurant'))->'document',(select v from video_facts where k='legacy-empty-v6-document'),'v7 read does not materialize or change old v6 state');
 select lives_ok(format('insert into storage.objects(bucket_id,name,metadata) values(%L,%L,%L::jsonb)','storefront-welcome-video-originals',pg_temp.source_key('source'),'{"mimetype":"video/mp4","size":100}'),'same-scope manager can insert immutable original');
 select throws_ok(format('insert into storage.objects(bucket_id,name,metadata) values(%L,%L,%L::jsonb)','storefront-welcome-video-originals',pg_temp.source_key('foreign-insert',true),'{"mimetype":"video/mp4","size":100}'),'42501',null,'foreign original insert rejected');
 select is((select count(*)::integer from storage.objects where bucket_id='storefront-welcome-video-originals' and name=pg_temp.source_key('foreign-source',true)),0,'foreign original not visible');
@@ -79,16 +85,21 @@ select is(public.publish_storefront_welcome_video_v1(pg_temp.vid('org'),pg_temp.
 select is(jsonb_array_length(public.list_storefront_welcome_videos_v1(pg_temp.vid('org'),pg_temp.vid('restaurant'))->'media'),1,'published list contains one validated association');
 select is((select count(*)::integer from jsonb_object_keys(public.list_storefront_welcome_videos_v1(pg_temp.vid('org'),pg_temp.vid('restaurant'))#>'{media,0}')),10,'owner media row exact ten-key shape');
 insert into video_facts values('old-document',public.get_restaurant_storefront_content_v6(pg_temp.vid('org'),pg_temp.vid('restaurant'))->'document');
-insert into video_facts values('new-document',jsonb_set((select v from video_facts where k='old-document'),'{appearance}',((select v from video_facts where k='old-document')->'appearance')||jsonb_build_object('welcome_media_type','video','welcome_video_media_id',(select v#>>'{media,id}' from video_facts where k='published'))));
+insert into video_facts values('new-document',jsonb_set((public.get_restaurant_storefront_content_v7(pg_temp.vid('org'),pg_temp.vid('restaurant'))->'document'),'{appearance}',(public.get_restaurant_storefront_content_v7(pg_temp.vid('org'),pg_temp.vid('restaurant'))#>'{document,appearance}')||jsonb_build_object('welcome_media_type','video','welcome_video_media_id',(select v#>>'{media,id}' from video_facts where k='published'))));
+insert into video_facts values('expected-legacy-document',jsonb_set((select v from video_facts where k='new-document'),'{appearance}',((select v from video_facts where k='new-document')->'appearance')-array['welcome_media_type','welcome_video_media_id']));
 select is(pg_temp.save('select-video',(select v from video_facts where k='new-document'),10)->>'version','11','video selection uses ordinary content CAS');
 select is(public.get_restaurant_storefront_content_v7(pg_temp.vid('org'),pg_temp.vid('restaurant'))#>>'{document,appearance,welcome_media_type}','video','v7 re-reads mode');
 select is(public.get_restaurant_storefront_content_v7(pg_temp.vid('org'),pg_temp.vid('restaurant'))#>>'{document,appearance,welcome_video_media_id}',(select v#>>'{media,id}' from video_facts where k='published'),'v7 re-reads selected id');
-select is(public.get_restaurant_storefront_content_v6(pg_temp.vid('org'),pg_temp.vid('restaurant'))->'document',(select v from video_facts where k='old-document'),'v6 exact old document projection');
+select is(public.get_restaurant_storefront_content_v6(pg_temp.vid('org'),pg_temp.vid('restaurant'))->'document',(select v from video_facts where k='expected-legacy-document'),'v6 exact legacy projection after storing welcome fields');
+select is(public.get_restaurant_storefront_content_v5(pg_temp.vid('org'),pg_temp.vid('restaurant'))->'document',(select v from video_facts where k='expected-legacy-document'),'v5 exact legacy projection after storing welcome fields');
+select ok(not coalesce(public.storefront_menu_v11('welcome-video-001-a')#>'{content_v1,appearance}' ?| array['welcome_media_type','welcome_video_media_id'],false),'old public v11 appearance has neither private welcome setting');
 select is(public.storefront_menu_v12('welcome-video-001-a')#>>'{restaurant,welcome_media_type}','video','public explicit opt-in mode');
 select is((select count(*)::integer from jsonb_object_keys(public.storefront_menu_v12('welcome-video-001-a')#>'{restaurant,welcome_video}')),6,'public selected video exact six-key shape');
 select ok(position(pg_temp.source_key('source') in public.storefront_menu_v12('welcome-video-001-a')::text)=0,'public response never exposes private source key');
 select is((public.storefront_menu_v12('welcome-video-001-a')#-'{restaurant,welcome_media_type}'#-'{restaurant,welcome_video}')-'server_ts',public.storefront_menu_v11('welcome-video-001-a')-'server_ts','v12 stripping two public fields equals v11 exactly');
 select is(pg_temp.save('old-omission',(select v from video_facts where k='old-document'),11)->>'version','12','old client still saves');
+select is(public.get_restaurant_storefront_content_v6(pg_temp.vid('org'),pg_temp.vid('restaurant'))->'document',(select v from video_facts where k='expected-legacy-document'),'old v6 projection remains exact after an old-writer omission save');
+select is(public.get_restaurant_storefront_content_v5(pg_temp.vid('org'),pg_temp.vid('restaurant'))->'document',(select v from video_facts where k='expected-legacy-document'),'old v5 projection remains exact after an old-writer omission save');
 select is(public.get_restaurant_storefront_content_v7(pg_temp.vid('org'),pg_temp.vid('restaurant'))#>>'{document,appearance,welcome_media_type}','video','old omission preserves mode');
 select is(public.get_restaurant_storefront_content_v7(pg_temp.vid('org'),pg_temp.vid('restaurant'))#>>'{document,appearance,welcome_video_media_id}',(select v#>>'{media,id}' from video_facts where k='published'),'old omission preserves selected video');
 select is(pg_temp.save('stale',(select v from video_facts where k='new-document'),11)->>'error','version_conflict','stale client cannot overwrite selection');
@@ -101,6 +112,12 @@ reset role;
 select is(app.storefront_content_document_shape_v1(jsonb_set((select v from video_facts where k='new-document'),'{appearance,welcome_media_type}','"unknown"'))->>'field','appearance.welcome_media_type','unknown future mode rejected');
 select is(app.storefront_content_document_shape_v1(jsonb_set((select v from video_facts where k='new-document'),'{appearance,welcome_video_media_id}','"bad"'))->>'field','appearance.welcome_video_media_id','bad media identity rejected');
 
+-- Actual table CHECKs, with an otherwise valid stored appearance object.
+select throws_ok($$update app.storefront_content_profiles set appearance=jsonb_set(appearance,'{welcome_media_type}','"future"') where organization_id=pg_temp.vid('org') and restaurant_id=pg_temp.vid('restaurant') and storefront_branch_id=pg_temp.vid('branch')$$,'23514',null,'table CHECK rejects unknown mode, not only the document helper');
+select throws_ok($$update app.storefront_content_profiles set appearance=jsonb_set(appearance,'{welcome_video_media_id}','"bad-uuid"') where organization_id=pg_temp.vid('org') and restaurant_id=pg_temp.vid('restaurant') and storefront_branch_id=pg_temp.vid('branch')$$,'23514',null,'table CHECK rejects invalid video UUID, not only the document helper');
+select is(app.storefront_content_document_shape_v1(jsonb_set((select v from video_facts where k='new-document'),'{appearance}',bad)),
+ jsonb_build_object('error','presentation_invalid','field','appearance'),'legacy non-object appearance keeps exact original error for '||bad::text)
+ from unnest(array['null'::jsonb,'[]'::jsonb,'"text"'::jsonb,'3'::jsonb,'true'::jsonb]) x(bad);
 select is((select count(*)::integer from app.storefront_welcome_video_media where organization_id=pg_temp.vid('org') and request_id=pg_temp.vid('request')),1,'replay creates no extra registry row');
 select is((select count(*)::integer from audit_events where restaurant_id=pg_temp.vid('restaurant') and action='settings.storefront.welcome_video.registered'),1,'registration audit appended once');
 select is((select count(*)::integer from audit_events where restaurant_id=pg_temp.vid('restaurant') and action='settings.storefront.welcome_video.published'),1,'publication audit appended once');

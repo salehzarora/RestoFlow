@@ -26,3 +26,44 @@ test('new media stays private except intentional published bounded MP4, never wi
 test('all new manager RPCs expose exact grants and no service-role execution grant',()=>{for(const name of ['preflight_storefront_welcome_video_v1','register_storefront_welcome_video_v1','publish_storefront_welcome_video_v1','list_storefront_welcome_videos_v1']){assert.match(body(sql,'public.'+name),/security invoker set search_path=''/);assert.match(body(sql,'app.'+name),/security definer set search_path=''/);assert.match(sql,new RegExp(`revoke all on function public\\.${name}\\([^)]*\\) from public,anon,authenticated,service_role;`));assert.match(sql,new RegExp(`grant execute on function public\\.${name}\\([^)]*\\) to authenticated;`));}assert.doesNotMatch(sql,/grant execute[^;]*to [^;]*service_role/);});
 test('selection validation is same-scope published storage proof, and old omission merge remains exact',()=>{const selected=body(feature,'app.storefront_welcome_video_selected_v1');assert.match(selected,/m\.organization_id=p_org and m\.restaurant_id=p_restaurant/);assert.match(selected,/m\.published_at is not null/);assert.match(body(feature,'app.storefront_welcome_video_media_json_v1'),/o\.metadata->>'mimetype'='video\/mp4' and o\.metadata->>'size'=\(m\)\.bytes::text/);assert.match(body(feature,'app.set_restaurant_storefront_content_v1'),/coalesce\(app\.storefront_content_profiles\.appearance,'\{\}'::jsonb\).*\|\|excluded\.appearance/s);});
 test('immutable upload identity and all video bounds remain server enforced',()=>{assert.match(sql,/unique\(organization_id,restaurant_id,request_id\)/);for(const bound of ['width between 1 and 1920','height between 1 and 1080','duration_ms between 1 and 30000','bytes between 1 and 20971520'])assert.ok(sql.includes(bound));assert.match(body(feature,'app.register_storefront_welcome_video_v1'),/m\.created_by<>app\.current_app_user_id\(\).*m\.source_key<>p_source_key.*m\.content_hash<>p_content_hash.*m\.width<>p_width.*m\.height<>p_height.*m\.duration_ms<>p_duration_ms.*m\.bytes<>p_bytes/s);});
+
+function constraint(source) { return statements(source).find(row => row.text.startsWith('alter table app.storefront_content_profiles')).text; }
+function constraintPreservesGroupedBase(source) {
+ const current=constraint(source);
+ if (!current.includes("app.storefront_welcome_video_appearance_v1(appearance) and\n  (appearance is null or case")) return false;
+ return current.replace("  app.storefront_welcome_video_appearance_v1(appearance) and\n  (appearance is null or case","  appearance is null or case")
+  .replace("'menu_banner_desktop_focal_y','welcome_media_type','welcome_video_media_id'],array['text_color'","'menu_banner_desktop_focal_y'],array['text_color'")
+  .replace(' else false end)\n );',' else false end\n );')===constraint(base);
+}
+test('actual CHECK conjunct groups the complete old predicate; an ungrouped OR mutant fails',()=>{
+ assert.ok(constraintPreservesGroupedBase(feature));
+ const ungrouped=feature.replace('  (appearance is null or case','  appearance is null or case').replace(' else false end)\n );',' else false end\n );');
+ assert.equal(constraintPreservesGroupedBase(ungrouped),false,'helper cannot be bypassed by the object CASE branch');
+});
+function preservesLegacyReadProjection(source) {
+ return source.replace("'menu_banner_desktop_focal_y','welcome_media_type','welcome_video_media_id'];","'menu_banner_desktop_focal_y'];")===body(base,'app.storefront_content_read_v2');
+}
+test('shared legacy reader changes only the two-key projection strip and rejects a leaked-key mutant',()=>{
+ const current=body(feature,'app.storefront_content_read_v2');
+ assert.ok(preservesLegacyReadProjection(current));
+ assert.equal(preservesLegacyReadProjection(current.replace(",'welcome_media_type'",'')),false);
+ assert.equal(preservesLegacyReadProjection(current.replace(",'welcome_video_media_id'",'')),false);
+});
+function legacyTypeRejectionFirst(source) {
+ const previous=source.indexOf("if jsonb_typeof(a) is distinct from 'object' then");
+ const added=source.indexOf('if not app.storefront_welcome_video_appearance_v1(a) then');
+ return previous>=0 && added>previous;
+}
+test('old null/array/scalar appearance rejection precedes optional feature validation',()=>{
+ const current=body(feature,'app.storefront_content_document_shape_v1');assert.ok(legacyTypeRejectionFirst(current));
+ const oldBlock="  if jsonb_typeof(a) is distinct from 'object' then\n   return jsonb_build_object('error','presentation_invalid','field','appearance');\n  end if;";
+ const moved=current.replace(oldBlock,'').replace("  if not app.storefront_content_keys_v1(a-array",oldBlock+"\n  if not app.storefront_content_keys_v1(a-array");
+ assert.equal(legacyTypeRejectionFirst(moved),false,'moving old rejection after optional validation is rejected');
+});
+test('v7 materializes only its response appearance before adding nullable capability keys',()=>{
+ const current=body(feature,'app.get_restaurant_storefront_content_v7');
+ assert.match(current,/jsonb_set\(m,'\{document,appearance\}',jsonb_build_object\('text_color',null,'button_text_color',null\)\|\|/);
+ assert.ok(current.indexOf("jsonb_set(m,'{document,appearance}',")<current.indexOf("jsonb_set(m,'{document,appearance,welcome_media_type}',"));
+ assert.match(current,/when jsonb_typeof\(m#>'\{document,appearance\}'\)='object' then m#>'\{document,appearance\}' else '\{\}'::jsonb end/);
+ assert.doesNotMatch(current,/update |insert into |delete from /);
+});

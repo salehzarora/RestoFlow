@@ -23,7 +23,7 @@ alter table app.storefront_content_profiles
  drop constraint storefront_content_appearance_hex,
  add constraint storefront_content_appearance_hex check (
   app.storefront_welcome_video_appearance_v1(appearance) and
-  appearance is null or case when jsonb_typeof(appearance)='object' then coalesce(
+  (appearance is null or case when jsonb_typeof(appearance)='object' then coalesce(
    app.storefront_content_keys_v1(appearance-array['font_family','menu_background_media_id','menu_background_dim','scene_preset','site_theme','menu_banner_media_id','menu_banner_enabled','menu_intro_visible','menu_banner_focal_x','menu_banner_focal_y','menu_banner_layout','menu_banner_desktop_media_id','menu_banner_mobile_height_px','menu_banner_desktop_height_px','menu_banner_desktop_focal_x','menu_banner_desktop_focal_y','welcome_media_type','welcome_video_media_id'],array['text_color','button_text_color'])
    and (appearance->'text_color'='null'::jsonb or (jsonb_typeof(appearance->'text_color')='string' and length(appearance->>'text_color')=7 and appearance->>'text_color' ~ '^#[0-9a-f]{6}$'))
    and (appearance->'button_text_color'='null'::jsonb or (jsonb_typeof(appearance->'button_text_color')='string' and length(appearance->>'button_text_color')=7 and appearance->>'button_text_color' ~ '^#[0-9a-f]{6}$'))
@@ -53,7 +53,7 @@ alter table app.storefront_content_profiles
    and (not appearance ? 'menu_banner_desktop_height_px' or appearance->'menu_banner_desktop_height_px'='null'::jsonb or case when jsonb_typeof(appearance->'menu_banner_desktop_height_px')='number' then (appearance->>'menu_banner_desktop_height_px')::numeric between 240 and 560 and (appearance->>'menu_banner_desktop_height_px')::numeric=trunc((appearance->>'menu_banner_desktop_height_px')::numeric) else false end)
    and (not appearance ? 'menu_banner_desktop_focal_x' or appearance->'menu_banner_desktop_focal_x'='null'::jsonb or case when jsonb_typeof(appearance->'menu_banner_desktop_focal_x')='number' then (appearance->>'menu_banner_desktop_focal_x')::numeric between 0 and 100 and (appearance->>'menu_banner_desktop_focal_x')::numeric=trunc((appearance->>'menu_banner_desktop_focal_x')::numeric) else false end)
    and (not appearance ? 'menu_banner_desktop_focal_y' or appearance->'menu_banner_desktop_focal_y'='null'::jsonb or case when jsonb_typeof(appearance->'menu_banner_desktop_focal_y')='number' then (appearance->>'menu_banner_desktop_focal_y')::numeric between 0 and 100 and (appearance->>'menu_banner_desktop_focal_y')::numeric=trunc((appearance->>'menu_banner_desktop_focal_y')::numeric) else false end)
- else false end
+ else false end)
  );
 
 -- Existing strict validator, OID and grants retained; only the optional video keys are added.
@@ -74,13 +74,13 @@ begin
  -- Appearance is optional for older editors. Omission never clears saved colors.
  if d ? 'appearance' then
   a:=d->'appearance';
+  if jsonb_typeof(a) is distinct from 'object' then
+   return jsonb_build_object('error','presentation_invalid','field','appearance');
+  end if;
   if not app.storefront_welcome_video_appearance_v1(a) then
    return jsonb_build_object('error','presentation_invalid','field',case when a ? 'welcome_media_type' and a->'welcome_media_type'<>'null'::jsonb
     and (jsonb_typeof(a->'welcome_media_type') is distinct from 'string' or a->>'welcome_media_type' not in ('image','video'))
     then 'appearance.welcome_media_type' else 'appearance.welcome_video_media_id' end);
-  end if;
-  if jsonb_typeof(a) is distinct from 'object' then
-   return jsonb_build_object('error','presentation_invalid','field','appearance');
   end if;
   if not app.storefront_content_keys_v1(a-array['font_family','menu_background_media_id','menu_background_dim','scene_preset','site_theme','menu_banner_media_id','menu_banner_enabled','menu_intro_visible','menu_banner_focal_x','menu_banner_focal_y','menu_banner_layout','menu_banner_desktop_media_id','menu_banner_mobile_height_px','menu_banner_desktop_height_px','menu_banner_desktop_focal_x','menu_banner_desktop_focal_y','welcome_media_type','welcome_video_media_id'],array['text_color','button_text_color']) then
    return jsonb_build_object('error','presentation_invalid','field','appearance');
@@ -268,6 +268,94 @@ begin
  return jsonb_build_object('document',d);
 end; $$;
 
+-- Only known old appearance fields reach every legacy management projection.
+create or replace function app.storefront_content_read_v2(p_org uuid,p_restaurant uuid,p_branch uuid,p_headline text,p_subline text,p_announcement text,p_catalog jsonb)
+returns jsonb language plpgsql stable set search_path='' as $$
+declare r app.storefront_content_profiles%rowtype; cr app.storefront_category_presentation%rowtype;
+ ir app.storefront_item_presentation%rowtype; h jsonb; f jsonb:='null';promo jsonb:='null';story jsonb:='null';cats jsonb:='[]';items jsonb:='[]';warnings jsonb:='[]';
+ hero_id uuid;hero_mode text;url text;heading text;blurb text;fit text;layout text;media_id uuid;entry jsonb;v_doc jsonb;appearance jsonb;
+begin
+ select * into r from app.storefront_content_profiles c where c.organization_id=p_org and c.restaurant_id=p_restaurant and c.storefront_branch_id=p_branch and c.deleted_at is null;
+ -- Older management/public projections remain exact: the new getter appends
+ -- these optional keys only after the same old authentication/admission path.
+ appearance:=r.appearance-array['menu_banner_layout','menu_banner_desktop_media_id','menu_banner_mobile_height_px','menu_banner_desktop_height_px','menu_banner_desktop_focal_x','menu_banner_desktop_focal_y','welcome_media_type','welcome_video_media_id'];
+ if appearance->>'menu_background_media_id' is not null and
+  app.storefront_content_media_url_v1(p_org,p_restaurant,p_branch,(appearance->>'menu_background_media_id')::uuid) is null then
+  appearance:=jsonb_set(appearance,'{menu_background_media_id}','null'::jsonb);
+  warnings:=warnings||jsonb_build_array(jsonb_build_object('field','appearance.menu_background_media_id','reason','media_unavailable'));
+ end if;
+ if appearance->>'menu_banner_media_id' is not null and
+  app.storefront_content_media_url_v1(p_org,p_restaurant,p_branch,(appearance->>'menu_banner_media_id')::uuid) is null then
+  appearance:=jsonb_set(appearance,'{menu_banner_media_id}','null'::jsonb);
+  warnings:=warnings||jsonb_build_array(jsonb_build_object('field','appearance.menu_banner_media_id','reason','media_unavailable'));
+ end if;
+ hero_mode:=case when r.hero_mode in ('editorial','item') then r.hero_mode else 'editorial' end;
+ hero_id:=r.hero_item_id;
+ if (hero_mode='item' and hero_id is null) or (hero_id is not null and not app.storefront_content_item_member_v1(p_catalog,hero_id)) then
+  hero_id:=null;hero_mode:='editorial';warnings:=warnings||jsonb_build_array(jsonb_build_object('field','hero.item_id','reason','relation_unavailable'));
+ end if;
+ if r.headline_format_text is not null then
+  if convert_to(r.headline_format_text,'UTF8') is not distinct from convert_to(p_headline,'UTF8')
+   and app.storefront_content_hero_format_valid_v1(p_headline,r.headline_highlight_start,r.headline_highlight_end,r.headline_break_before) then
+   f:=jsonb_build_object('text',p_headline,'highlight',case when r.headline_highlight_start is null then 'null'::jsonb else jsonb_build_object('start',r.headline_highlight_start,'end',r.headline_highlight_end) end,'break_before',r.headline_break_before);
+  else warnings:=warnings||jsonb_build_array(jsonb_build_object('field','hero.format','reason','legacy_value_invalid'));end if;
+ end if;
+ h:=jsonb_build_object('mode',hero_mode,'item_id',hero_id,'format',f,
+  'eyebrow',case when app.storefront_content_text_v1(r.hero_eyebrow,60,false) then r.hero_eyebrow end,
+  'stamp',case when app.storefront_content_text_v1(r.hero_stamp,80,false) then r.hero_stamp end,
+  'footnote',case when app.storefront_content_text_v1(r.hero_footnote,120,false) then r.hero_footnote end);
+ if not app.storefront_content_text_v1(r.hero_eyebrow,60,false) then warnings:=warnings||jsonb_build_array(jsonb_build_object('field','hero.eyebrow','reason','legacy_value_invalid'));end if;
+ if not app.storefront_content_text_v1(r.hero_stamp,80,false) then warnings:=warnings||jsonb_build_array(jsonb_build_object('field','hero.stamp','reason','legacy_value_invalid'));end if;
+ if not app.storefront_content_text_v1(r.hero_footnote,120,false) then warnings:=warnings||jsonb_build_array(jsonb_build_object('field','hero.footnote','reason','legacy_value_invalid'));end if;
+ if r.announcement_segments is not null and not app.storefront_content_text_array_v1(r.announcement_segments,1,6,40,240) then warnings:=warnings||jsonb_build_array(jsonb_build_object('field','announcement_segments','reason','legacy_value_invalid'));end if;
+ if r.promo_kind is not null then
+  if r.promo_kicker is not null and r.promo_title is not null and r.promo_body is not null
+    and app.storefront_content_text_v1(r.promo_kicker,60,false) and app.storefront_content_text_v1(r.promo_title,120,false) and app.storefront_content_text_v1(r.promo_body,600,false) then
+   if r.promo_kind='category' and app.storefront_content_category_member_v1(p_catalog,r.promo_category_id)
+     and app.storefront_content_media_url_v1(p_org,p_restaurant,p_branch,r.promo_media_id) is not null then
+    promo:=jsonb_build_object('target',jsonb_build_object('kind','category','category_id',r.promo_category_id),'kicker',r.promo_kicker,'title',r.promo_title,'body',r.promo_body,'editorial_media_id',r.promo_media_id);
+   elsif r.promo_kind='item' and app.storefront_content_item_member_v1(p_catalog,r.promo_item_id,true) then
+    promo:=jsonb_build_object('target',jsonb_build_object('kind','item','item_id',r.promo_item_id),'kicker',r.promo_kicker,'title',r.promo_title,'body',r.promo_body);
+   end if;
+  end if;
+  if promo='null'::jsonb then warnings:=warnings||jsonb_build_array(jsonb_build_object('field','promo','reason','relation_unavailable'));end if;
+ end if;
+ if r.story_media_id is not null then
+  if app.storefront_content_media_url_v1(p_org,p_restaurant,p_branch,r.story_media_id) is not null
+    and r.story_kicker is not null and r.story_title is not null and r.story_body is not null
+    and app.storefront_content_text_v1(r.story_kicker,60,false) and app.storefront_content_text_v1(r.story_title,120,false) and app.storefront_content_text_v1(r.story_body,600,false)
+    and app.storefront_content_text_array_v1(r.story_facts,0,3,80,240) then
+   story:=jsonb_build_object('kicker',r.story_kicker,'title',r.story_title,'body',r.story_body,'editorial_media_id',r.story_media_id,'facts',r.story_facts);
+  else warnings:=warnings||jsonb_build_array(jsonb_build_object('field','story','reason','media_unavailable'));end if;
+ end if;
+ if exists(select 1 from app.storefront_category_presentation c where c.organization_id=p_org and c.restaurant_id=p_restaurant and c.storefront_branch_id=p_branch and c.deleted_at is null and not app.storefront_content_category_member_v1(p_catalog,c.category_id)) then warnings:=warnings||jsonb_build_array(jsonb_build_object('field','category_presentation','reason','relation_unavailable'));end if;
+ if exists(select 1 from app.storefront_item_presentation i where i.organization_id=p_org and i.restaurant_id=p_restaurant and i.storefront_branch_id=p_branch and i.deleted_at is null and not app.storefront_content_item_member_v1(p_catalog,i.item_id)) then warnings:=warnings||jsonb_build_array(jsonb_build_object('field','item_presentation','reason','relation_unavailable'));end if;
+ for cr in select c.* from app.storefront_category_presentation c join jsonb_array_elements(p_catalog->'categories') with ordinality x(v,n) on x.v->>'id'=c.category_id::text
+  where c.organization_id=p_org and c.restaurant_id=p_restaurant and c.storefront_branch_id=p_branch and c.deleted_at is null order by x.n loop
+  if not app.storefront_content_category_member_v1(p_catalog,cr.category_id) then continue;end if;
+  heading:=case when app.storefront_content_text_v1(cr.heading,80,false) then cr.heading end;blurb:=case when app.storefront_content_text_v1(cr.blurb,120,false) then cr.blurb end;
+  fit:=case when cr.image_fit in ('fill','whole-image') then cr.image_fit end;layout:=case when cr.card_layout in ('standard','cutout') then cr.card_layout end;
+  media_id:=case when app.storefront_content_media_url_v1(p_org,p_restaurant,p_branch,cr.editorial_media_id) is not null then cr.editorial_media_id end;
+  if cr.editorial_media_id is not null and media_id is null then warnings:=warnings||jsonb_build_array(jsonb_build_object('field','category_presentation','reason','media_unavailable'));end if;
+  if heading is not null or blurb is not null or media_id is not null or fit is not null or layout is not null then
+   cats:=cats||jsonb_build_array(jsonb_build_object('category_id',cr.category_id,'heading',heading,'blurb',blurb,'editorial_media_id',media_id,'image_fit',fit,'card_layout',layout));
+  end if;
+ end loop;
+ for ir in select i.* from app.storefront_item_presentation i join jsonb_array_elements(p_catalog->'items') with ordinality x(v,n) on x.v->>'id'=i.item_id::text
+  where i.organization_id=p_org and i.restaurant_id=p_restaurant and i.storefront_branch_id=p_branch and i.deleted_at is null order by x.n loop
+  if not app.storefront_content_item_member_v1(p_catalog,ir.item_id) then continue;end if;
+  fit:=case when ir.image_fit in ('fill','whole-image') then ir.image_fit end;layout:=case when ir.card_layout in ('standard','cutout') then ir.card_layout end;
+  if fit is not null or layout is not null then items:=items||jsonb_build_array(jsonb_build_object('item_id',ir.item_id,'image_fit',fit,'card_layout',layout));end if;
+ end loop;
+ -- Warnings never echo IDs, indexes, keys, source paths or caller values.
+ select coalesce(jsonb_agg(v order by v->>'field',v->>'reason'),'[]'::jsonb) into warnings from (select distinct v from jsonb_array_elements(warnings) x(v)) q;
+ v_doc:=jsonb_build_object('hero_headline',p_headline,'hero_subline',p_subline,'announcement_text',p_announcement,'hero',h,
+  'announcement_segments',case when app.storefront_content_text_array_v1(r.announcement_segments,1,6,40,240) then to_jsonb(r.announcement_segments) else 'null'::jsonb end,
+  'promo',promo,'story',story,'category_presentation',cats,'item_presentation',items);
+ if appearance is not null then v_doc:=v_doc||jsonb_build_object('appearance',appearance);end if;
+ return jsonb_build_object('document',v_doc,'warnings',warnings);
+end; $$;
+
 create table app.storefront_welcome_video_media (
  id uuid primary key default gen_random_uuid(),
  organization_id uuid not null references public.organizations(id) on delete restrict,
@@ -424,6 +512,10 @@ begin
  selected_branch:=(m->>'storefront_branch_id')::uuid;
  select c.appearance into a from app.storefront_content_profiles c where c.organization_id=p_organization_id and c.restaurant_id=p_restaurant_id
   and c.storefront_branch_id=selected_branch and c.deleted_at is null;
+ -- jsonb_set does not create missing intermediate objects. Legacy documents
+ -- may omit appearance entirely; materialize only the new reader's projection.
+ m:=jsonb_set(m,'{document,appearance}',jsonb_build_object('text_color',null,'button_text_color',null)||
+  case when jsonb_typeof(m#>'{document,appearance}')='object' then m#>'{document,appearance}' else '{}'::jsonb end);
  m:=jsonb_set(m,'{document,appearance,welcome_media_type}',coalesce(a->'welcome_media_type','null'::jsonb));
  v:=(a->>'welcome_video_media_id')::uuid;
  if v is not null and app.storefront_welcome_video_selected_v1(p_organization_id,p_restaurant_id,v) is null then
