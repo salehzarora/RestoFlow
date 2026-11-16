@@ -7,7 +7,7 @@ import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { MAX_REVEAL_WHEELS, nextRevealMove, observeResponse, responseAfterAction } from './control-progress.mjs';
 import { observePublisherNative, type PublisherNativeObservation } from './publisher-native-observation';
 import { isPasswordGrantRequest, authRequestEvidence, authResponseEvidence } from './auth-diagnostics.mjs';
-import { LOGICAL_ORIGIN, localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
+import { LOGICAL_ORIGIN, localMediaTarget, localWelcomeVideoTarget, logicalMediaUrl } from './live-transport.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot, completeResponsiveFixture, responsiveFixtureMismatch } from './banner-responsive';
 import { verifyResponsiveBannerSettings, adjustBannerHeightWithKeyboard, navigateAfterMediaSettles, observeLogicalMedia } from './responsive-banner-settings';
@@ -15,6 +15,7 @@ import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, evid
 import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
+import { welcomeVideoResponseEvidence, welcomeVideoCoverage } from './welcome-video-evidence.mjs';
 import { bannerPublicProjection, bannerHtmlProjection, safeRegenerationErrors } from './banner-clear-trace.mjs';
 
 // This suite drives the shipped Flutter app. It never installs a mocked
@@ -71,12 +72,14 @@ function localUrl(value: string): URL {
   if (!origins.has(u.origin) || u.username || u.password) throw new Error('Non-ephemeral endpoint rejected.');
   return u;
 }
-async function guardBrowser(context: BrowserContext) {
+async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer) {
   let violation = false;
   const fonts = new Set<string>();
   const mediaHashes = new Map<unknown, string>();
   const mediaChecks: Promise<boolean>[] = [];
   let mappedMedia = 0, verifiedMediaBytes = 0;
+  const videoChecks: Promise<Obj>[] = [];
+  let mappedVideo = 0;
   const directMediaChecks: Promise<boolean>[] = [];
   let directMedia = 0, verifiedDirectMediaBytes = 0;
   context.on('request', request => {
@@ -112,16 +115,29 @@ async function guardBrowser(context: BrowserContext) {
     if (u.origin === LOGICAL_ORIGIN) {
       try {
         const request = route.request();
-        const target = localMediaTarget(request.url(), request.method());
+        const isVideo = welcomeVideoSource !== undefined && request.resourceType() === 'media';
+        const target = isVideo ? localWelcomeVideoTarget(request.url(), request.method()) : localMediaTarget(request.url(), request.method());
         const headers = await request.allHeaders();
-        if (request.resourceType() !== 'image' || headers.authorization || headers.apikey || headers.cookie) throw new Error('Media credentials rejected');
+        if ((!isVideo && request.resourceType() !== 'image') || headers.authorization || headers.apikey || headers.cookie) throw new Error('Media credentials rejected');
+        if (isVideo && headers.range && !/^bytes=\d+-(?:\d+)?$/.test(headers.range)) throw new Error('Unsupported video range');
         // Genuine bytes from the running local Storage service. No browser
         // credential/header is forwarded, no redirect or external fallback.
-        const response = await fetch(target, { redirect: 'error', signal: AbortSignal.timeout(15_000) });
+        const response = await fetch(target, { redirect: 'error', signal: AbortSignal.timeout(15_000),
+          ...(isVideo && headers.range ? { headers: { range: headers.range } } : {}) });
         if (response.headers.get('content-encoding') && response.headers.get('content-encoding') !== 'identity') throw new Error('Unexpected media encoding');
         const body = Buffer.from(await response.arrayBuffer());
         mediaHashes.set(request, createHash('sha256').update(body).digest('hex'));
         mappedMedia++;
+        if (isVideo) {
+          mappedVideo++;
+          videoChecks.push((async () => {
+            const browserResponse = await request.response();
+            if (!browserResponse || browserResponse.url() !== request.url()) throw new Error('welcome_video_browser_response_missing');
+            // Original browser body, not the adapter's Storage fetch above.
+            return welcomeVideoResponseEvidence({ url: browserResponse.url(), status: browserResponse.status(),
+              contentRange: browserResponse.headers()['content-range'] ?? null, body: await browserResponse.body() }, welcomeVideoSource!);
+          })().catch(() => ({ failed: true, reason: 'ORIGINAL_BROWSER_VIDEO_BODY_UNAVAILABLE_OR_MISMATCH' })));
+        }
         const responseHeaders: Record<string, string> = {};
         response.headers.forEach((value, key) => { responseHeaders[key] = value; });
         await route.fulfill({ status: response.status, headers: responseHeaders, body });
@@ -151,6 +167,15 @@ async function guardBrowser(context: BrowserContext) {
       expect(verifiedMediaBytes).toBe(mappedMedia);
     },
     media: () => ({ mappedMedia, verifiedMediaBytes }),
+    checkWelcomeVideo: async () => {
+      if (!welcomeVideoSource) throw new Error('No independently pinned welcome video fixture');
+      const responses = await Promise.all(videoChecks);
+      expect(mappedVideo).toBeGreaterThan(0);
+      expect(responses.length).toBe(mappedVideo);
+      expect(responses.every(value => value.failed !== true), 'Every observed video response body is mandatory').toBe(true);
+      expect(welcomeVideoCoverage(responses, welcomeVideoSource.length), 'Actual browser bodies cover the full published MP4').toBe(true);
+      return { status: 'PASS', requests: mappedVideo, responses, totalBytes: welcomeVideoSource.length };
+    },
     checkDashboardMedia: async (recordEvidence: (value: Obj) => void) => {
       if (violation) throw new Error('Browser attempted a non-ephemeral request.');
       const checks = await Promise.all(directMediaChecks);
@@ -412,16 +437,22 @@ async function tapRevealedControl(page: Page, target: Locator, modal = false): P
   // The chooser/Storage/publisher/save assertions still prove the action.
   await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
 }
+function actualButton(page: Page, name: string): Locator {
+  const matching = page.getByRole('button', { name, exact: true });
+  // The welcome group adds a nearby save button; keep the original final CAS
+  // button explicit for the shared journey, rather than an ambiguous locator.
+  return name === L.save ? matching.last() : matching;
+}
 async function tapRevealedButton(page: Page, name: string, modal = false): Promise<void> {
-  await tapRevealedControl(page, page.getByRole('button', { name, exact: true }), modal);
+  await tapRevealedControl(page, actualButton(page, name), modal);
 }
 async function selectRevealedDropdown(page: Page, current: string | RegExp, option: string): Promise<void> {
   await tapRevealedControl(page, page.getByRole('button', { name: current, exact: false }));
   await tapText(page, option, 'last');
 }
 async function revealButton(page: Page, name: string): Promise<void> {
-  await reveal(page, page.getByRole('button', { name, exact: true }), name === L.save ? 'content-save' : name === L.saveProfile ? 'profile-save' : 'other', page.getByRole('button', { name, exact: true, includeHidden: true }));
-  await expect(page.getByRole('button', { name, exact: true }), 'Actual revealed control is enabled').toBeEnabled();
+  await reveal(page, actualButton(page, name), name === L.save ? 'content-save' : name === L.saveProfile ? 'profile-save' : 'other', name === L.save ? page.getByRole('button', { name, exact: true, includeHidden: true }).last() : page.getByRole('button', { name, exact: true, includeHidden: true }));
+  await expect(actualButton(page, name), 'Actual revealed control is enabled').toBeEnabled();
 }
 async function fill(page: Page, name: string, value: string, { blur = false }: { blur?: boolean } = {}): Promise<void> {
   await revealColorAdvanced(page, name);
@@ -1402,7 +1433,7 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
     await saveContent(page);
     expect(writes, 'Only the explicit normal content Save writes once').toBe(1);
     stage = 'reload-real-owner-read';
-    const observedRead = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v6')));
+    const observedRead = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v7')));
     const reloadResponse = await responseAfterAction(observedRead, () => openEditor(page, true));
     expect(reloadResponse.status()).toBe(200);
     const reloadWire = await reloadResponse.json();
@@ -1740,7 +1771,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
             expect(response.status).toBe(200); const result = await response.json(); expect(result.ok).toBe(true); expect(result.version).toBe(current.version + 1);
           },
           reload: async () => {
-            const observed = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v6')));
+            const observed = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v7')));
             const response = await responseAfterAction(observed, () => openEditor(page, true));
             expect(response.status()).toBe(200); const readback = await response.json(); expect(readback.ok).toBe(true);
             await openFoldedGroup(page, 'banner'); return readback;
@@ -2581,5 +2612,232 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
     } catch (error) { if (!primaryFailure && !guardError) throw error; }
     finally { mediaObservation.stop(); }
     if (!primaryFailure && guardError) throw guardError.error;
+  }
+});
+
+
+// BIZBOT-STOREFRONT-WELCOME-EDITOR-001: one real, independent lifecycle on
+// bootstrapped synthetic owner B. No repository replacement or direct SQL save.
+test('welcome image and MP4 → actual Edge → owner save/reload → public welcome', async ({ page, context }) => {
+  const seeded = fixture();
+  const f: Fixture = { ...seeded, ownerA: seeded.ownerB };
+  const videoPath = resolve('..', 'site/public/assets/video/kiosk-attract.mp4');
+  const sourceVideo = readFileSync(videoPath);
+  const videoHash = createHash('sha256').update(sourceVideo).digest('hex');
+  expect(sourceVideo.length).toBe(660459);
+  expect(videoHash).toBe('76a236ccc457b5cf97a517e617540600f5d6bada5d7e57fee995718782755a5d');
+  const network = await guardBrowser(context, sourceVideo);
+  const out = process.env.CINEMATIC_ARTIFACT_DIR!;
+  const receipt: Obj = { workId: 'BIZBOT-STOREFRONT-WELCOME-EDITOR-001', status: 'FAIL',
+    scope: 'existing synthetic owner B, actual Dashboard/Auth/Storage/Edge/PostgREST',
+    completedPhases: [], byteGuard: { status: 'NOT_RUN' },
+    originalPublisherBodies: { image: 'NOT_RUN', video: 'NOT_RUN' },
+    videoFixture: { bytes: sourceVideo.length, sha256: videoHash, width: 540, height: 864, durationMs: 12042 } };
+  let phase = 'owner-ui-login', token = '', primary: unknown = null;
+  const stage = (value: string) => { phase = value; receipt.phase = value; };
+  const done = () => receipt.completedPhases.push(phase);
+  const read = () => rpc(f, token, 'get_restaurant_storefront_content_v7');
+  const profile = () => rpc(f, token, 'get_restaurant_storefront_profile');
+  const publicRead = async () => {
+    const response = await fetch(API + '/rest/v1/rpc/storefront_menu_v12', { method: 'POST', redirect: 'error',
+      headers: { apikey: f.anonKey, Authorization: `Bearer ${f.anonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_slug: f.ownerA.slug }) });
+    expect(response.status).toBe(200);
+    const value = await response.json(); expect(value.ok).toBe(true); return value;
+  };
+  const reopen = async (reload: boolean) => {
+    if (reload) await page.reload({ waitUntil: 'domcontentloaded' });
+    await semantics(page);
+    const observed = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v7')
+      && r.request().postDataJSON()?.p_restaurant_id === f.ownerA.restaurantId));
+    const response = await responseAfterAction(observed, () => tapNav(page, L.nav));
+    expect(response.status()).toBe(200);
+    const actual = await response.json(); expect(actual.ok).toBe(true);
+    expect(actual.restaurant_id).toBe(f.ownerA.restaurantId);
+    return actual;
+  };
+  const protectedDocument = (document: Obj) => {
+    const { hero_headline, ...other } = document;
+    const { welcome_media_type, welcome_video_media_id, ...appearance } = other.appearance;
+    return { ...other, appearance };
+  };
+  const protectedProfile = (value: Obj) => Object.fromEntries([
+    'logo_media_id', 'primary_color', 'accent_color', 'visual_preset', 'scene_preset',
+    'locale_default', 'font_family', 'storefront_branch_id', 'is_published',
+  ].map(key => [key, value[key] ?? null]));
+  const choose = async (current: RegExp, option: string) => selectRevealedDropdown(page, current, option);
+  const publish = async (kind: 'image' | 'video') => {
+    const isVideo = kind === 'video';
+    const button = isVideo ? 'رفع ونشرMP4' : 'رفع صورة ترحيب';
+    const privatePrefix = isVideo ? '/storage/v1/object/storefront-welcome-video-originals/' : '/storage/v1/object/restaurant-logos/';
+    const uploaded = observeResponse(page.waitForResponse(r => new URL(r.url()).origin === API
+      && new URL(r.url()).pathname.startsWith(privatePrefix) && r.request().method() === 'POST'));
+    const published = observeResponse(page.waitForResponse(r => {
+      if (!requestIs(r, '/functions/v1/storefront-media-publish')) return false;
+      const body = r.request().postDataJSON();
+      return body?.organization_id === f.ownerA.orgId && body?.restaurant_id === f.ownerA.restaurantId
+        && (isVideo ? body.kind === 'welcome_video_v1' : body.slot === 'hero' && body.variant === 'w960') && r.status() !== 202;
+    }));
+    const assigned = !isVideo ? observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_profile')
+      && typeof r.request().postDataJSON()?.p_patch?.hero_media_id === 'string')) : null;
+    await revealButton(page, button);
+    if (!isVideo) await tapRevealedButton(page, button);
+    const chosen = observeResponse(page.waitForEvent('filechooser'));
+    const chooser = await responseAfterAction(chosen, () => tapRevealedButton(page, isVideo ? button : 'رفع ونشر وتطبيق', !isVideo));
+    await chooser.setFiles(isVideo ? videoPath : resolve('..', 'supabase/functions/storefront-media-publish/test/fixtures/gray_prog_1000x750.jpg'));
+    const storage = await uploaded;
+    if (!storage.ok) throw storage.error;
+    expect(storage.value.status()).toBe(200);
+    const observed = await published;
+    if (!observed.ok) throw observed.error;
+    const response = observed.value;
+    expect(response.status()).toBe(200);
+    const request = response.request().postDataJSON();
+    receipt.originalPublisherBodies[kind] = { status: 'BODY_READ_PENDING', originalResponse: true,
+      requestId: request.request_id, httpStatus: response.status(), url: API + '/functions/v1/storefront-media-publish' };
+    // Required original browser response, not a second API read or UI message.
+    const body = await response.json();
+    expect(body.ok).toBe(true); expect(body.status).toBe('published');
+    expect(request.organization_id).toBe(f.ownerA.orgId);
+    expect(request.restaurant_id).toBe(f.ownerA.restaurantId);
+    expect(request.request_id).toMatch(/^[0-9a-f-]{36}$/);
+    if (isVideo) {
+      expect([body.kind, body.request_id, body.organization_id, body.restaurant_id])
+        .toEqual(['welcome_video_v1', request.request_id, f.ownerA.orgId, f.ownerA.restaurantId]);
+      expect([body.media.width,body.media.height,body.media.duration_ms,body.media.bytes,body.media.content_hash])
+        .toEqual([540,864,12042,660459,videoHash]);
+      await textContains(page, 'نُشر الفيديو. اختره واحفظ المحتوى لاستخدامه.');
+    } else {
+      expect(body.media.source_key).toBe(request.source_key);
+      expect(body.media.variant).toBe('w960');
+      const write = await assigned!; if (!write.ok) throw write.error;
+      expect(write.value.status()).toBe(200); expect((await write.value.json()).ok).toBe(true);
+      await textContains(page, 'طُبّقت صورة الترحيب. حفظ النصوص يبقى منفصلًا.');
+    }
+    // The freshly uploaded original remains private and belongs to this owner.
+    const key = request.source_key as string;
+    expect(key.startsWith(f.ownerA.orgId + '/' + f.ownerA.restaurantId + '/')).toBe(true);
+    const bucket = isVideo ? 'storefront-welcome-video-originals' : 'restaurant-logos';
+    const path = '/storage/v1/object/authenticated/' + bucket + '/' + key.split('/').map(encodeURIComponent).join('/');
+    const own = await fetch(API + path, { headers: { apikey: f.anonKey, Authorization: `Bearer ${token}` }, redirect: 'error' });
+    expect(own.status).toBe(200);
+    const ownBytes = Buffer.from(await own.arrayBuffer());
+    const selectedBytes = isVideo ? sourceVideo : readFileSync(resolve('..', 'supabase/functions/storefront-media-publish/test/fixtures/gray_prog_1000x750.jpg'));
+    expect(ownBytes.equals(selectedBytes)).toBe(true);
+    const anonymous = await fetch(API + path, { headers: { apikey: f.anonKey }, redirect: 'error' });
+    expect([400,401,403,404]).toContain(anonymous.status); await anonymous.arrayBuffer();
+    receipt.originalPublisherBodies[kind] = { status: 'PASS', originalBodyRead: true,
+      requestId: request.request_id, publicObjectKey: body.media.object_key, mediaId: body.media.id,
+      width: body.media.width, height: body.media.height, bytes: body.media.bytes,
+      contentHash: body.media.content_hash, privateOriginalReadableByOwnerOnly: true };
+    return body.media;
+  };
+  try {
+    await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();
+    await fillField(page, L.email, f.ownerA.email); await enterLoginPassword(page, f.ownerA.password);
+    const signed = observeResponse(page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API)));
+    const auth = await responseAfterAction(signed, () => tapButton(page, L.login, { which: 'last' }));
+    expect(auth.status()).toBe(200); const session = await auth.json();
+    expect(session.user.email).toBe(f.ownerA.email); token = session.access_token; expect(typeof token).toBe('string'); done();
+    stage('owner-read-baseline');
+    await reopen(false);
+    const before = await read(), initialProfile = await profile(), originalMenu = await publicRead();
+    expect(Array.isArray(originalMenu.items) && originalMenu.items.length === 5).toBe(true);
+    expect(Array.isArray(originalMenu.categories) && originalMenu.categories.length > 0).toBe(true);
+    expect(before.document.appearance.welcome_media_type).toBeNull();
+    expect(before.document.appearance.welcome_video_media_id).toBeNull(); done();
+    stage('welcome-image-ui-upload-edge-assign');
+    const image = await publish('image');
+    const imageSelected = await profile(); expect(imageSelected.profile.hero_media_id).toBe(image.id);
+    expect(protectedProfile(imageSelected.profile)).toEqual(protectedProfile(initialProfile.profile)); done();
+    stage('image-mode-text-draft-save-reload');
+    const headline = 'ترحيب اختبار — صورة وفيديو';
+    await fill(page, 'عنوان الواجهة الرئيسي', headline, { blur: true });
+    await choose(/السلوك السابق/, 'صورة');
+    const imageDraft = await read();
+    expect(imageDraft.document.appearance.welcome_media_type).toBeNull();
+    expect(imageDraft.document.hero_headline).toBe(before.document.hero_headline);
+    expect(imageDraft.version).toBe(imageSelected.version);
+    await saveContent(page);
+    const imageReload = await reopen(true);
+    expect([imageReload.document.hero_headline,imageReload.document.appearance.welcome_media_type]).toEqual([headline,'image']);
+    expect((await profile()).profile.hero_media_id).toBe(image.id);
+    expect(protectedDocument(imageReload.document)).toEqual(protectedDocument(before.document));
+    receipt.imageSaveReadback = { status: 'PASS', realUiSave: true, authenticatedReload: true, imageSelection: image.id, mode: 'image' }; done();
+    stage('image-public-read-and-render');
+    const imageMenu = await publicRead(); expect(imageMenu.restaurant.welcome_media_type).toBe('image');
+    expect(imageMenu.restaurant.welcome_video).toBeNull();
+    const intro = await context.newPage(); await intro.setViewportSize({width:390,height:900});
+    // Fresh locale documents avoid asserting that the existing ISR TTL is a
+    // universal live-refresh guarantee. No override or alternate data source.
+    await intro.goto(`${STOREFRONT}/ar/s/${f.ownerA.slug}`, {waitUntil:'domcontentloaded'});
+    const photo = intro.locator('[data-sf-welcome-media="image"]>img');
+    await expect(photo).toHaveAttribute('src', LOGICAL_ORIGIN + '/storage/v1/object/public/storefront-media/' + image.object_key);
+    await photo.evaluate(async el => { if (!(el instanceof HTMLImageElement)) throw new Error('Expected real image'); await el.decode(); });
+    await screenshot(intro, resolve(out, 'welcome-image-phone-test-data.png'));
+    receipt.imageDisplay = {status:'PASS',publicUrl:await photo.getAttribute('src'),dimensions:await photo.evaluate(el=>({width:(el as HTMLImageElement).naturalWidth,height:(el as HTMLImageElement).naturalHeight}))}; done();
+    stage('welcome-video-ui-upload-original-edge-response');
+    const video = await publish('video');
+    const notSelected = await read(); expect(notSelected.document.appearance.welcome_media_type).toBe('image');
+    expect(notSelected.document.appearance.welcome_video_media_id).toBeNull();
+    expect(notSelected.version).toBe(imageReload.version); done();
+    stage('video-selection-draft-save-reload');
+    await choose(/^صورة$|وسائط الترحيب/, 'فيديو');
+    await choose(/بدون فيديو — استخدام الصورة البديلة/, `540×864 · 12.0 s · ${video.id.slice(0,8)}`);
+    const videoDraft = await read();
+    expect(videoDraft.document.appearance.welcome_media_type).toBe('image');
+    expect(videoDraft.document.appearance.welcome_video_media_id).toBeNull();
+    expect(videoDraft.version).toBe(notSelected.version);
+    await saveContent(page);
+    const reloaded = await reopen(true);
+    expect([reloaded.document.appearance.welcome_media_type,reloaded.document.appearance.welcome_video_media_id]).toEqual(['video',video.id]);
+    expect(protectedDocument(reloaded.document)).toEqual(protectedDocument(before.document));
+    expect((await profile()).profile.hero_media_id).toBe(image.id);
+    receipt.videoSaveReadback={status:'PASS',realUiSave:true,authenticatedReload:true,mode:'video',selection:video.id};
+    await screenshot(page,resolve(out,'welcome-dashboard-saved-test-data.png')); done();
+    stage('video-public-read-browser-decode-and-manual-play');
+    const videoMenu=await publicRead(); expect(videoMenu.restaurant.welcome_media_type).toBe('video');
+    expect(videoMenu.restaurant.welcome_video.url).toBe('/storage/v1/object/public/storefront-welcome-videos/'+video.object_key);
+    const videoPage=await context.newPage(); await videoPage.setViewportSize({width:1280,height:900});
+    await videoPage.goto(`${STOREFRONT}/en/s/${f.ownerA.slug}`,{waitUntil:'domcontentloaded'});
+    const player=videoPage.locator('[data-sf-welcome-media="video"]>video');
+    await expect(player).toHaveAttribute('src',LOGICAL_ORIGIN+videoMenu.restaurant.welcome_video.url);
+    await expect.poll(()=>player.evaluate(el=>({ready:(el as HTMLVideoElement).readyState>=2,width:(el as HTMLVideoElement).videoWidth,height:(el as HTMLVideoElement).videoHeight}))).toEqual({ready:true,width:540,height:864});
+    expect(await player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true);
+    const box=await player.boundingBox(); expect(box).not.toBeNull();
+    // An ordinary pointer activates Chromium's real controls; no video.play(),
+    // muted autoplay injection or synthetic event substitutes for playback.
+    await player.click({position:{x:22,y:box!.height-18}});
+    await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(false);
+    await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).currentTime)).toBeGreaterThan(0);
+    await screenshot(videoPage,resolve(out,'welcome-video-desktop-test-data.png'));
+    await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).ended),{message:'Actual short fixture playback completes before reading browser-body evidence'}).toBe(true);
+    receipt.videoDisplay={status:'PASS',publicUrl:await player.getAttribute('src'),width:540,height:864,manualPlayback:true,ended:true}; done();
+    stage('missing-video-selection-retains-image-fallback');
+    await choose(/540×864/, 'بدون فيديو — استخدام الصورة البديلة');
+    await saveContent(page); const cleared=await reopen(true);
+    expect([cleared.document.appearance.welcome_media_type,cleared.document.appearance.welcome_video_media_id]).toEqual(['video',null]);
+    expect((await profile()).profile.hero_media_id).toBe(image.id);
+    const fallback=await context.newPage();await fallback.setViewportSize({width:390,height:900});
+    await fallback.goto(`${STOREFRONT}/he/s/${f.ownerA.slug}`,{waitUntil:'domcontentloaded'});
+    await expect(fallback.locator('[data-sf-welcome-media="image"]>img')).toHaveAttribute('src',LOGICAL_ORIGIN+'/storage/v1/object/public/storefront-media/'+image.object_key);
+    await expect(fallback.locator('[data-sf-welcome-media]>video')).toHaveCount(0);
+    const fallbackMenu=await publicRead();expect(fallbackMenu.restaurant.welcome_video).toBeNull();
+    expect(protectedDocument(cleared.document)).toEqual(protectedDocument(before.document));
+    expect(protectedProfile((await profile()).profile)).toEqual(protectedProfile(initialProfile.profile));
+    expect(fallbackMenu.items).toEqual(originalMenu.items);expect(fallbackMenu.categories).toEqual(originalMenu.categories);
+    receipt.fallback={status:'PASS',reason:'explicitly cleared selected video',imageSelection:image.id,storageDeletion:false};done();
+    stage('original-browser-resource-byte-guards');
+    await network.check();
+    receipt.byteGuard=await network.checkWelcomeVideo();
+    await network.checkDashboardMedia(value=>{receipt.dashboardImageByteGuard={status:'PASS',...value};});
+    receipt.mappedMedia=network.media(); done();receipt.status='PASS'; stage('complete');
+  } catch(error) { primary=error;receipt.failedPhase=phase;receipt.failure={classification:error instanceof Error ? error.name : 'unclassified'};throw error; }
+  finally {
+    // Persist fixed safe scalars even when an earlier phase failed. Never dump
+    // sessions, private object paths, entire RPC replies or synthetic passwords.
+    receipt.phase=phase; receipt.actualServices=true; receipt.retries=0;
+    writeFileSync(resolve(out,'welcome-browser-result.json'),JSON.stringify(receipt,null,2));
+    if (!primary) expect(receipt.status).toBe('PASS');
   }
 });

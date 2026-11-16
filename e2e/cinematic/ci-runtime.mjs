@@ -219,7 +219,7 @@ async function main(action) {
       return outcome;
     };
     // The short warm-clear diagnosis is retained as a separate exact selection.
-    // Normal final acceptance runs the unchanged three complete journeys; its
+    // Normal final acceptance retains the three complete journeys plus welcome; its
     // independent banner case now captures the same clear read/render chain.
     const probe = runCases('probe');
     // Stop before the expensive height/readback comparisons if the one-POST

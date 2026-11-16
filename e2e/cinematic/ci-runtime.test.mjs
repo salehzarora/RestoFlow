@@ -22,6 +22,7 @@ test('the short publisher reproduction runs once and never excludes an original 
   assert.deepEqual(titles.filter(title => !new RegExp(full.at(-2)).test(title)), [
     'real owner Dashboard → Storage → publisher → save → live menu; replacement, clear and appearance',
     'independent banner → actual Edge → save/reload → replace/clear preserves other media',
+    'welcome image and MP4 → actual Edge → owner save/reload → public welcome',
   ]);
 });
 test('only the local gateway and anon role enter application builds', () => {
