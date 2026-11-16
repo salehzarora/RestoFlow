@@ -1,4 +1,5 @@
 import './support/ts-resolver.mjs';
+import { withWelcomeMedia } from './support/welcome-envelope.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { syntheticV4Envelope } from './support/content-envelope.mjs';
@@ -59,7 +60,7 @@ test('detail manifest rejects private/signed/unknown URLs, dimensions, duplicate
   }
 });
 
-test('only exact missing v11 then v10 falls back to strict v9 with one body, public authority and shared deadline', async () => {
+test('only exact missing v12 then v11 and v10 falls back to strict v9 with one body, public authority and shared deadline', async () => {
   const old = globalThis.fetch, calls = [];
   const responses = (...queue) => {
     calls.length = 0;
@@ -69,24 +70,30 @@ test('only exact missing v11 then v10 falls back to strict v9 with one body, pub
     };
   };
   try {
-    responses([200, menu()]);
+    responses([200, withWelcomeMedia(menu())]);
     assert.deepEqual((await fetchStorefrontMenu('sf-synth-a', config))[field], [row()]);
-    assert.equal(calls.length, 1); assert.equal(calls[0].url, origin + '/rest/v1/rpc/storefront_menu_v11');
+    assert.equal(calls.length, 1); assert.equal(calls[0].url, origin + '/rest/v1/rpc/storefront_menu_v12');
+    for (const unavailable of [missing(12), { code: '42883', message: 'function public.storefront_menu_v12(text) does not exist' }]) {
+      responses([404, unavailable], [200, menu()]);
+      assert.deepEqual(await fetchStorefrontMenu('sf-synth-a', config), decoders.decodeStorefrontMenuV11(menu()));
+      assert.deepEqual(calls.map(c => c.url), [12, 11].map(v => origin + '/rest/v1/rpc/storefront_menu_v' + v));
+      assert.ok(calls.every(c => c.init === calls[0].init), 'Exact missing v12 preserves the strict v11 request, credentials and deadline');
+    }
     for (const error of [missing(10), { code: '42883', message: 'function public.storefront_menu_v10(text) does not exist' }]) {
-      responses([404, missing(11)], [404, error], [200, syntheticV4Envelope()]);
+      responses([404, missing(12)], [404, missing(11)], [404, error], [200, syntheticV4Envelope()]);
       assert.deepEqual(await fetchStorefrontMenu('sf-synth-a', config), decoders.decodeStorefrontMenuV9(syntheticV4Envelope()));
-      assert.deepEqual(calls.map(c => c.url), [11, 10, 9].map(v => origin + '/rest/v1/rpc/storefront_menu_v' + v));
+      assert.deepEqual(calls.map(c => c.url), [12, 11, 10, 9].map(v => origin + '/rest/v1/rpc/storefront_menu_v' + v));
       assert.ok(calls.every(c => c.init === calls[0].init)); assert.equal(calls[0].init, calls[1].init);
       assert.equal(calls[0].init.body, JSON.stringify({ p_slug: 'sf-synth-a' }));
       assert.equal(calls[0].init.headers.apikey, config.anonKey);
       assert.equal(calls[0].init.signal, calls[1].init.signal);
       assert.equal(calls[0].init.signal.aborted, false);
     }
-    for (const [status, value] of [[404, missing(9)], [403, missing(10)], [500, missing(10)], [404, { ...missing(10), code: '42501' }], [404, '<html>missing</html>'], [200, menu([{ ...row(), width: 0 }])]]) {
+    for (const [status, value] of [[404, missing(9)], [403, missing(10)], [500, missing(10)], [404, { ...missing(10), code: '42501' }], [404, '<html>missing</html>'], [200, withWelcomeMedia(menu([{ ...row(), width: 0 }]))]]) {
       responses([status, value]); await assert.rejects(() => fetchStorefrontMenu('sf-synth-a', config)); assert.equal(calls.length, 1);
     }
-    responses([404, missing(11)], [404, missing(10)], [200, menu()]);
+    responses([404, missing(12)], [404, missing(11)], [404, missing(10)], [200, menu()]);
     await assert.rejects(() => fetchStorefrontMenu('sf-synth-a', config), EnvelopeError, 'v9 never silently accepts the v10-only field');
-    assert.equal(calls.length, 3);
+    assert.equal(calls.length, 4);
   } finally { globalThis.fetch = old; }
 });
