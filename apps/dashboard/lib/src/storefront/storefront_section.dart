@@ -21,6 +21,7 @@ import 'storefront_item_images.dart';
 import 'storefront_media_publisher.dart';
 import 'storefront_media_repository.dart';
 import 'storefront_media_slot.dart';
+import 'storefront_welcome_image_upload.dart';
 import 'storefront_models.dart';
 import 'storefront_profile_repository.dart';
 import 'storefront_sources.dart';
@@ -1870,13 +1871,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           sources: _sources,
           reloadSources: _reloadSources,
           publicUrlFor: widget.seams!.publicUrlFor,
-          welcomeImageEditor: _mediaSlot(
-            StorefrontSlot.hero,
-            l10n,
-            theme,
-            profile,
-            dirty,
-          ),
+          welcomeImageEditor: _welcomeImageEditor(l10n, theme, profile, dirty),
           bannerPreviewProfile: profile,
           bannerPreviewLogoUrl: widget.seams!.publicUrlFor == null
               ? null
@@ -2841,6 +2836,65 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           ),
         ),
     ];
+  }
+
+  Widget _welcomeImageEditor(
+    AppLocalizations l10n,
+    ThemeData theme,
+    StorefrontProfile profile,
+    bool dirty,
+  ) {
+    final seams = widget.seams!;
+    final publisher = seams.publisher, upload = seams.backgroundUpload;
+    final binding = _bindingGeneration;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (publisher != null && upload?.supported == true)
+          StorefrontWelcomeImageUpload(
+            key: ValueKey('welcome-image-upload|${seams.scopeIdentity}'),
+            upload: upload!,
+            publisher: publisher,
+            bindingIdentity:
+                '${seams.scopeIdentity}|${profile.storefrontBranchId}|$binding',
+            enabled:
+                !dirty &&
+                !_saving &&
+                !_contentBusy &&
+                !_contentDirty &&
+                !_mediaBusy &&
+                !_stale,
+            nonce: widget.nonce,
+            onAssign:
+                (
+                  slot,
+                  mediaId, {
+                  required bool reReadFirst,
+                  StorefrontSlotReplay? replay,
+                }) async {
+                  if (!_currentBinding(binding)) {
+                    return const StorefrontWriteResult(
+                      StorefrontWriteStatus.unavailable,
+                    );
+                  }
+                  return _assignSlot(
+                    slot,
+                    mediaId,
+                    reReadFirst: reReadFirst,
+                    replay: replay,
+                  );
+                },
+            onRefresh: ({bool reloadSources = false}) async {
+              if (_currentBinding(binding))
+                await _refreshAll(reloadSources: reloadSources);
+            },
+            onBusyChanged: (busy) {
+              if (_currentBinding(binding)) setState(() => _mediaBusy = busy);
+            },
+          ),
+        _mediaSlot(StorefrontSlot.hero, l10n, theme, profile, dirty),
+      ],
+    );
   }
 
   Widget _mediaSlot(

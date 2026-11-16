@@ -1983,13 +1983,6 @@ class _ContentState extends State<StorefrontContentSection> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(c('welcomePageHelp')),
-                _welcomeVideoEditor(),
-                if (widget.welcomeImageEditor != null) ...[
-                  const SizedBox(height: 12),
-                  widget.welcomeImageEditor!,
-                  Text(c('welcomeImageFallbackHelp')),
-                  const Divider(height: 32),
-                ],
                 Text(c('welcomeCopyHelp')),
                 TextField(
                   key: const Key('content-hero-headline'),
@@ -2018,6 +2011,14 @@ class _ContentState extends State<StorefrontContentSection> {
                     child: Text(c('save')),
                   ),
                 ),
+                const Divider(height: 32),
+                _welcomeVideoEditor(),
+                if (widget.welcomeImageEditor != null) ...[
+                  const SizedBox(height: 12),
+                  widget.welcomeImageEditor!,
+                  Text(c('welcomeImageFallbackHelp')),
+                  const Divider(height: 32),
+                ],
               ],
             ),
           ),
