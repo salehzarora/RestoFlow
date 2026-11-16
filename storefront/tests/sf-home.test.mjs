@@ -330,7 +330,12 @@ test('motion follows the approved hover treatment without legacy continuous effe
   }
   assert.doesNotMatch(css, /animation\s*:\s*(sfKen|sfFloat)/);
   assert.doesNotMatch(homeSource, /showMotif/);
-  assert.match(partsSource, /className=\{styles\.heroMotif\}/);
+  // These decorative nodes were permanently display:none in the approved cascade.
+  assert.doesNotMatch(partsSource, /styles\.(heroGhost|heroMotif)/);
+  assert.doesNotMatch(partsSource, /viewBox="0 0 320 22"/);
+  assert.match(partsSource, /className=\{part\.highlight \? styles\.heroWord : undefined\}/);
+  assert.match(partsSource, /className=\{styles\.heroVisual\}/);
+  assert.match(partsSource, /data-sf-product=\{product\?\.id\}/);
 });
 
 test('motion classes map calm to no extra class', () => {
