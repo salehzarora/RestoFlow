@@ -7,7 +7,9 @@ type Slot = 'hero' | 'background' | 'item' | 'product';
 type Terminal = 'pending' | 'finished' | 'failed';
 type StreamState = 'pending' | 'enabled' | 'finished-before-enable' | 'missing-resource' | 'command-failed';
 type Parse = 'unread' | 'object' | 'non-object' | 'invalid-json' | 'invalid-utf8';
-type Identity = { hash: string; bodyHash: string; slot: Slot; key: string };
+type WelcomeKind = 'welcome_video_v1';
+type Identity = { hash: string; bodyHash: string; key: string } &
+  ({ slot: Slot; kind?: never } | { kind: WelcomeKind; slot?: never });
 type Pw = { identity: Identity; sequence: number; requestMs: number; terminal: Terminal; terminalMs: number | null; http: number | null; failureCode: string | null };
 type Native = { ordinal: number; identity: Identity; sequence: number;
   frame: string; document: string; context: string | null; navigationEpoch: number; contextEpoch: number;
@@ -16,7 +18,8 @@ type Native = { ordinal: number; identity: Identity; sequence: number;
   stream: StreamState; ack: boolean; prefix: Buffer | null; chunks: Buffer[]; bytes: number;
   bufferedBytes: number; streamedBytes: number; observedDataLength: number; chunkCount: number;
   digest: string | null; canonicalDigest: string | null; parse: Parse; problems: string[]; pw: Pw | null };
-export type PublisherObservationOptions = { apiOrigin: string; deadlineAt: number; expectedSlot?: Slot; now?: () => number };
+export type PublisherObservationOptions = { apiOrigin: string; deadlineAt: number; now?: () => number } &
+  ({ expectedSlot?: Slot; expectedKind?: never } | { expectedKind: WelcomeKind; expectedSlot?: never });
 export type PublisherNativeObservation = { snapshot(): Record<string, unknown>;
   firstError(boundary: 'publisher-body' | 'upload-assertion' | 'probe-assertion'): void;
   cleanup(boundary: 'upload-finally' | 'probe-finally'): void;
@@ -28,13 +31,20 @@ const endpoint = '/functions/v1/storefront-media-publish';
 const sha = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const networkCode = (value: unknown) => typeof value === 'string' && /^net::ERR_[A-Z_0-9]{1,64}$/.test(value) ? value : 'unclassified';
 const blockedReasons = new Set(['other', 'csp', 'mixed-content', 'origin', 'inspector', 'subresource-filter', 'content-type', 'coep-frame-resource-needs-coep-header', 'coop-sandboxed-iframe-cannot-navigate-to-coop-page', 'corp-not-same-origin', 'corp-not-same-origin-after-defaulted-to-same-origin-by-coep', 'corp-not-same-site']);
-function identity(text: string | null | undefined, expected?: Slot): Identity | null {
-  // Read only the two permitted correlation fields; never retain/export the body.
+function identity(text: string | null | undefined, expected?: Slot, expectedKind?: WelcomeKind): Identity | null {
+  // Read only the request UUID and exact slot/kind discriminator. Never retain
+  // or export the request body or its private media/source fields.
   if (typeof text !== 'string' || Buffer.byteLength(text) > 4096) return null;
   try {
     const value = JSON.parse(text);
-    if (!value || !UUID.test(value.request_id) || !slots.has(value.slot) || (expected && value.slot !== expected)) return null;
-    const hash = sha(value.request_id), bodyHash = sha(text), slot = value.slot as Slot;
+    if (!value || !UUID.test(value.request_id)) return null;
+    const hash = sha(value.request_id), bodyHash = sha(text);
+    if (expectedKind !== undefined) {
+      if (value.kind !== expectedKind || Object.hasOwn(value, 'slot')) return null;
+      return { hash, bodyHash, kind: expectedKind, key: `${hash}:${bodyHash}:${expectedKind}` };
+    }
+    if (Object.hasOwn(value, 'kind') || !slots.has(value.slot) || (expected && value.slot !== expected)) return null;
+    const slot = value.slot as Slot;
     return { hash, bodyHash, slot, key: `${hash}:${bodyHash}:${slot}` };
   } catch { return null; }
 }
@@ -59,7 +69,8 @@ export function completeNativeBody(fact: { terminal: Terminal; stream: StreamSta
 export async function observePublisherNative(page: Page, options: PublisherObservationOptions): Promise<PublisherNativeObservation> {
   const now = options.now ?? Date.now, began = now();
   if (options.apiOrigin !== 'http://127.0.0.1:54321' || !Number.isFinite(options.deadlineAt) ||
-      options.deadlineAt <= began || options.deadlineAt - began > 120_000) throw new Error('Invalid bounded local publisher observation');
+      options.deadlineAt <= began || options.deadlineAt - began > 120_000 ||
+      (options.expectedKind !== undefined && (options.expectedKind !== 'welcome_video_v1' || options.expectedSlot !== undefined))) throw new Error('Invalid bounded local publisher observation');
   let session: CDPSession | null = null, stopped = false, stoppedAt: number | null = null, deadlineExceeded = false, unavailable = false;
   let navigationEpoch = 0, contextEpoch = 0, contextOrdinal = 0, requestOverflow = 0, invalidIdentity = 0;
   let first: { boundary: string; ms: number } | null = null, cleanup: { boundary: string; ms: number } | null = null;
@@ -114,7 +125,7 @@ export async function observePublisherNative(page: Page, options: PublisherObser
   };
   const onPwRequest = (request: Request) => {
     if (!active() || !matches(request.url(), request.method())) return;
-    const id = identity(request.postData(), options.expectedSlot); if (!id) { invalidIdentity++; return; }
+    const id = identity(request.postData(), options.expectedSlot, options.expectedKind); if (!id) { invalidIdentity++; return; }
     const values = pwKeys.get(id.key) ?? [];
     if ([...pwKeys.values()].reduce((n, xs) => n + xs.length, 0) >= REQUEST_CAP) { requestOverflow++; return; }
     const value: Pw = { identity: id, sequence: values.length + 1, requestMs: stamp(), terminal: 'pending', terminalMs: null, http: null, failureCode: null };
@@ -144,7 +155,7 @@ export async function observePublisherNative(page: Page, options: PublisherObser
     listen(session, 'Runtime.executionContextsCleared', () => { contexts.clear(); contextEpoch++; event('contexts-cleared'); });
     listen(session, 'Network.requestWillBeSent', e => {
       if (!active() || !matches(e.request?.url, e.request?.method)) return;
-      const id = identity(e.request?.postData, options.expectedSlot); if (!id) { invalidIdentity++; return; }
+      const id = identity(e.request?.postData, options.expectedSlot, options.expectedKind); if (!id) { invalidIdentity++; return; }
       if (records.length >= REQUEST_CAP) { requestOverflow++; return; }
       if (natives.has(e.requestId)) { issue(natives.get(e.requestId)!, 'request-id-reused-or-redirected'); return; }
       const group = nativeKeys.get(id.key) ?? [], frame = opaque(frames, e.frameId, 'f');
@@ -227,7 +238,8 @@ export async function observePublisherNative(page: Page, options: PublisherObser
         requests: records.map(r => {
           const problems = [...r.problems, ...(expired ? ['observation-deadline'] : [])];
           const fact = { terminal: r.terminal, stream: r.stream, problems, bytes: r.bytes, parse: r.parse, paired: r.pw !== null };
-          return { ordinal: r.ordinal, identityHash: r.identity.hash, postDataHash: r.identity.bodyHash, slot: r.identity.slot, identitySequence: r.sequence,
+          return { ordinal: r.ordinal, identityHash: r.identity.hash, postDataHash: r.identity.bodyHash,
+            ...(r.identity.kind === undefined ? { slot: r.identity.slot } : { kind: r.identity.kind }), identitySequence: r.sequence,
             page: 'p1', session: 's1', frame: r.frame, document: r.document, executionContext: r.context,
             navigationEpoch: r.navigationEpoch, contextEpoch: r.contextEpoch, requestMs: r.requestMs, responseMs: r.responseMs,
             terminalMs: r.terminalMs, terminal: r.terminal, http: r.http, stream: r.stream,

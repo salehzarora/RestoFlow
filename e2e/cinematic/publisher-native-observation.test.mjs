@@ -122,3 +122,69 @@ test('expired observation never enlarges the deadline or produces complete evide
 test('completed stopped evidence stays unchanged when a later full journey exceeds its upload deadline',async()=>{
  let clock=100;const h=await setup({now:()=>clock,deadlineAt:500});const r=begin(h);await complete(h,r,{ok:true});await h.o.assertComplete(r.response,{ok:true});clock=120;await h.o.stop();const saved=h.o.snapshot();clock=10000;assert.deepEqual(h.o.snapshot(),saved);assert.equal(saved.deadlineExceeded,false);assert.equal(saved.requests[0].nativeBodyComplete,true);
 });
+
+
+// BIZBOT-STOREFRONT-WELCOME-EDITOR-001: the same passive reducer for one exact
+// welcome-video kind. Existing image tests above remain unchanged.
+const videoRequest = (extra = {}) => JSON.stringify({kind:'welcome_video_v1',
+ request_id:'00000000-0000-4000-8000-000000000001',organization_id:'PRIVATE_ORGANIZATION_MARKER',
+ restaurant_id:'PRIVATE_RESTAURANT_MARKER',source_key:'PRIVATE_VIDEO_ORIGINAL_MARKER',...extra});
+const setupVideo = () => setup({expectedSlot:undefined,expectedKind:'welcome_video_v1'});
+
+test('exact welcome-video kind uses the same original-body correlation without inventing an image slot',async()=>{
+ const h=await setupVideo();try{
+  const r=begin(h,{text:videoRequest()}),body={ok:true,status:'published',kind:'welcome_video_v1'};
+  const bytes=await complete(h,r,body,{prefixSize:7,beforeAck:true});await h.o.assertComplete(r.response,body);
+  const x=h.o.snapshot().requests[0];assert.equal(x.kind,'welcome_video_v1');assert.equal('slot' in x,false);
+  assert.equal(x.bytes,bytes.length);assert.equal(x.digest,hash(bytes));assert.equal(x.nativeBodyComplete,true);
+  assert.equal(x.identityHash,hash('00000000-0000-4000-8000-000000000001'));assert.equal(x.postDataHash,hash(r.body));
+  assert.equal(x.playwright.terminal,'finished');assert.equal(x.frame,'f1');assert.equal(x.document,'d1');
+  const publicText=JSON.stringify(h.o.snapshot());
+  for(const secret of ['PRIVATE_VIDEO_ORIGINAL_MARKER','PRIVATE_ORGANIZATION_MARKER','PRIVATE_RESTAURANT_MARKER',r.body,JSON.stringify(body),'SECRET_AUTHORIZATION_MARKER'])assert.equal(publicText.includes(secret),false);
+ }finally{await h.o.stop();}
+});
+test('video mode rejects unknown kinds, image slots and noncanonical request identities',async()=>{
+ const h=await setupVideo();try{
+  const values=[videoRequest({kind:'welcome_video_v2'}),videoRequest({kind:null}),videoRequest({slot:'hero'}),
+   videoRequest({slot:null}),videoRequest({request_id:'not-a-uuid'}),videoRequest({request_id:'00000000-0000-4000-8000-00000000000A'}),
+   JSON.stringify({request_id:'00000000-0000-4000-8000-000000000001',slot:'hero'})];
+  for(let index=0;index<values.length;index++){
+   const r=begin(h,{number:index+1,text:values[index]});await assert.rejects(h.o.assertComplete(r.response,{ok:true}),/uncorrelated/);
+  }
+  assert.equal(h.o.snapshot().requests.length,0);assert.equal(h.o.snapshot().invalidIdentity,values.length*2);
+  assert.deepEqual(h.s.commands.map(value=>value.name),['Network.enable','Runtime.enable']);
+ }finally{await h.o.stop();}
+});
+test('an image observer never accepts a mixed kind/slot payload or a video-kind request',async()=>{
+ const h=await setup();try{
+  for(const [index,text]of[videoRequest(),videoRequest({slot:'hero'}),videoRequest({kind:'unrecognized',slot:'hero'})].entries()){
+   const r=begin(h,{number:index+1,text});await assert.rejects(h.o.assertComplete(r.response,{ok:true}),/uncorrelated/);
+  }
+  assert.equal(h.o.snapshot().requests.length,0);
+  const valid=begin(h,{number:4});await complete(h,valid,{ok:true});await h.o.assertComplete(valid.response,{ok:true});
+  const image=h.o.snapshot().requests[0];assert.equal(image.slot,'hero');assert.equal('kind' in image,false);
+  assert.equal(image.identityHash,hash('00000000-0000-4000-8000-000000000001'));assert.equal(image.postDataHash,hash(valid.body));
+ }finally{await h.o.stop();}
+});
+test('mutually exclusive slot/kind options and unknown option kinds fail before opening a native session',async()=>{
+ for(const extra of [{expectedSlot:'hero',expectedKind:'welcome_video_v1'},{expectedKind:'welcome_video_v2'},{expectedKind:null}]){
+  const page=new Page();await assert.rejects(observePublisherNative(page,{apiOrigin:API,deadlineAt:Date.now()+5000,...extra}),/Invalid bounded/);
+  assert.equal(page.opens,0);assert.equal(page.session.commands.length,0);
+ }
+});
+test('a welcome-video native abort remains failure despite HTTP200 and a captured complete JSON object',async()=>{
+ const h=await setupVideo();try{
+  const r=begin(h,{text:videoRequest()}),body={ok:true,status:'published',kind:'welcome_video_v1'};
+  await complete(h,r,body,{terminal:'failed'});h.o.firstError('publisher-body');h.o.cleanup('upload-finally');
+  const x=h.o.snapshot().requests[0];assert.equal(x.http,200);assert.equal(x.parse,'object');assert.equal(x.nativeBodyComplete,false);
+  assert.equal(x.failureCode,'net::ERR_ABORTED');await assert.rejects(h.o.assertComplete(r.response,body),/request failed; incomplete/);
+ }finally{await h.o.stop();}
+});
+test('a truncated welcome-video native JSON body cannot substitute for the original response object',async()=>{
+ const h=await setupVideo();try{
+  const r=begin(h,{text:videoRequest()});await complete(h,r,Buffer.from('{"ok":true,"status":'));
+  const x=h.o.snapshot().requests[0];assert.equal(x.terminal,'finished');assert.equal(x.parse,'invalid-json');assert.equal(x.nativeBodyComplete,false);
+  await assert.rejects(h.o.assertComplete(r.response,{ok:true,status:'published',kind:'welcome_video_v1'}),/mismatch or incomplete/);
+  assert.deepEqual(h.s.commands.map(value=>value.name),['Network.enable','Runtime.enable','Network.streamResourceContent']);
+ }finally{await h.o.stop();}
+});
