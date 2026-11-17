@@ -2672,11 +2672,13 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
 test('welcome image and MP4 → actual Edge → owner save/reload → public welcome', async ({ page, context }) => {
   const seeded = fixture();
   const f: Fixture = { ...seeded, ownerA: seeded.ownerB };
-  const imagePath = resolve('cinematic/fixtures/welcome-background-approved.png');
+  const imagePath = resolve('cinematic/fixtures/welcome-background-approved.webp');
   const sourceImage = readFileSync(imagePath);
   const imageHash = createHash('sha256').update(sourceImage).digest('hex');
-  expect(sourceImage.length).toBe(3008838);
-  expect(imageHash).toBe('43a6eaea5e37025c9fc2b108e519589234cf9dc05dd9603ba232b6261155a36b');
+  // Match the existing private-image upload cap before starting the UI journey.
+  expect(sourceImage.length).toBeLessThanOrEqual(2 * 1024 * 1024);
+  expect(sourceImage.length).toBe(106220);
+  expect(imageHash).toBe('ee92e4a4ae7bb1b3591bc568e4b0faf97322522d8a1a4cbf5754a523b3453224');
   const videoPath = resolve('..', 'site/public/assets/video/kiosk-attract.mp4');
   const sourceVideo = readFileSync(videoPath);
   const videoHash = createHash('sha256').update(sourceVideo).digest('hex');
@@ -2689,8 +2691,8 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     completedPhases: [], byteGuard: { status: 'NOT_RUN' },
     originalPublisherBodies: { image: 'NOT_RUN', video: 'NOT_RUN' },
     // The earlier gray fixture proved upload, but was not visible background evidence.
-    imageFixture: { bytes: sourceImage.length, sha256: imageHash, width: 1086, height: 1448,
-      provenance: 'previously owner-approved campaign artwork, clear visual fixture only; no live merchant selection' },
+    imageFixture: { bytes: sourceImage.length, sha256: imageHash, width: 960, height: 536,
+      provenance: 'existing owner-approved public campaign artwork, unchanged106220Bwebp; clear isolated test fixture only; no live merchant selection' },
     videoFixture: { bytes: sourceVideo.length, sha256: videoHash, width: 540, height: 864, durationMs: 12042 } };
   let phase = 'owner-ui-login', token = '', primary: unknown = null;
   const stage = (value: string) => { phase = value; receipt.phase = value; };
