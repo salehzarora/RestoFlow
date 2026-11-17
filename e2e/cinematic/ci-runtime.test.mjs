@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { localStatus, assertHeightVideoEvidence, HEIGHT_VIDEO_FILE, acceptanceRunArgs, PUBLISHER_PROBE_TITLE, CLEAR_TRACE_TITLE, WELCOME_GRANT_IDENTITIES, projectMigrationGrantReceipt, assertPublicEvidenceJson, evidenceSanitizeDiagnostic, caseCollectionSummary, caseResultEvidence, probeDiagnosticScalars, budgetChildProcessStates, waitUntil } from './ci-runtime.mjs';
+import { localStatus, assertHeightVideoEvidence, assertPublicEvidenceFilename, HEIGHT_VIDEO_FILE, acceptanceRunArgs, PUBLISHER_PROBE_TITLE, CLEAR_TRACE_TITLE, WELCOME_GRANT_IDENTITIES, projectMigrationGrantReceipt, assertPublicEvidenceJson, evidenceSanitizeDiagnostic, caseCollectionSummary, caseResultEvidence, probeDiagnosticScalars, budgetChildProcessStates, waitUntil } from './ci-runtime.mjs';
 import { readFileSync } from 'node:fs';
 import { liveBudgetTransportError, retainLiveBudgetFailure, observeLiveBudgetTransport } from './live-budget.mjs';
 import { EventEmitter } from 'node:events';
@@ -23,8 +23,10 @@ test('the short publisher reproduction runs once and never excludes an original 
   assert.deepEqual(titles.filter(title => pattern.test(title)), [PUBLISHER_PROBE_TITLE]);
   assert.deepEqual(titles.filter(title => new RegExp(trace.at(-2)).test(title)), [CLEAR_TRACE_TITLE]);
   assert.deepEqual(titles.filter(title => !new RegExp(full.at(-2)).test(title)), [
-    'real owner Dashboard → Storage → publisher → save → live menu; replacement, clear and appearance',
+    'real owner Dashboard → Storage → publisher → save → live menu; publication and appearance',
+    'real owner Dashboard continuation → scene/welcome → replacement/clear and retained originals',
     'independent banner → actual Edge → save/reload → replace/clear preserves other media',
+    'independent responsive banner settings → actual owner save/reload → device independence and restoration',
     'welcome image and MP4 → actual Edge → owner save/reload → public welcome',
   ]);
 });
@@ -47,6 +49,12 @@ test('only the exact bounded WebM evidence filename and header are admitted', ()
   assert.throws(() => assertHeightVideoEvidence(HEIGHT_VIDEO_FILE, Buffer.alloc(8 * 1024 * 1024 + 1)));
   const invalid = Buffer.from(header); invalid[0] = 0; assert.throws(() => assertHeightVideoEvidence(HEIGHT_VIDEO_FILE, invalid));
   const missingType = Buffer.from(header); missingType.fill(0, 16, 20); assert.throws(() => assertHeightVideoEvidence(HEIGHT_VIDEO_FILE, missingType));
+});
+test('actual public filename admission preserves existing receipts and denies the private background handoff', () => {
+  for (const name of ['dashboard-publication-result.json','background-quality-publication.json','responsive-banner-case-result.json',
+    'dashboard-result.json','source.json','existing-receipt.json','screenshot.png',HEIGHT_VIDEO_FILE]) assert.doesNotThrow(() => assertPublicEvidenceFilename(name));
+  for (const name of ['traditional-background-handoff.json','TRADITIONAL-BACKGROUND-HANDOFF.JSON',
+    '../traditional-background-handoff.json','nested/receipt.json','receipt.json.extra','trace.zip']) assert.throws(() => assertPublicEvidenceFilename(name));
 });
 
 
@@ -127,6 +135,11 @@ test('sanitize diagnostics print only fixed known filenames and reason enums, ne
   assert.deepEqual(unknown,{file:null,reason:'EVIDENCE_SANITIZE_FAILED'});
   const syntax=evidenceSanitizeDiagnostic('source.json',new SyntaxError('secret-value'));
   assert.deepEqual(syntax,{file:'source.json',reason:'JSON_INVALID'});
+  for (const name of ['dashboard-publication-result.json','background-quality-publication.json','responsive-banner-case-result.json']) {
+    assert.deepEqual(evidenceSanitizeDiagnostic(name,new SyntaxError('secret-value')),{file:name,reason:'JSON_INVALID'});
+    assert.equal(evidenceSanitizeDiagnostic(name+'.extra',new SyntaxError('secret-value')).file,null);
+  }
+  assert.equal(evidenceSanitizeDiagnostic('traditional-background-handoff.json',new SyntaxError('secret-value')).file,null);
   assert.ok(!JSON.stringify({unknown,syntax}).includes('secret-value'));
 });
 test('case collection and probe diagnostics retain only bounded fixed scalars even when no case was collected', () => {

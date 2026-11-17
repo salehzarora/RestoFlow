@@ -16,3 +16,6 @@ export function bannerAssertionFailure(error: unknown): Record<string, unknown>;
 export function mediaReadErrorDetail(error: unknown): string;
 export function bannerEvidencePhase(value: unknown): string;
 export function menuDocumentNavigation(startedAt: number, lastNavigationAt: number | null, hydrated: boolean, now: number): { navigate: boolean; timeout: number; remainingMs: number };
+export function responsiveSettingsHandoff(source: Record<string, any>, owner: Record<string, any>, phone: Record<string, any>, readback: Record<string, any>): Record<string, any>;
+export function assertResponsiveSettingsHandoff(handoff: unknown, source: Record<string, any>, owner: Record<string, any>, readback: Record<string, any>): void;
+export function acceptedResponsiveSettingsHandoff(candidate: Record<string, any> | null, proof: { primarySucceeded: boolean; byteGuardStatus: string; mappedMedia: number; verifiedMediaBytes: number }): Record<string, any> | null;

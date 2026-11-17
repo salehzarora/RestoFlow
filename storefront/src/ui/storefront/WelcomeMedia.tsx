@@ -37,7 +37,7 @@ export function WelcomeMedia({ video, image, playLabel, pauseLabel }: {
     <figure className={styles.backdrop} data-sf-welcome-media={activeVideo ? 'video' : 'image'} aria-hidden="true">
       {activeVideo ? <video ref={player} key={activeVideo.url} id="sf-welcome-background-video"
         src={activeVideo.url} poster={image ?? undefined} width={activeVideo.width} height={activeVideo.height}
-        muted loop playsInline preload="metadata" onPlay={() => setPaused(false)} onPause={() => setPaused(true)}
+        muted loop playsInline preload="none" onPlay={() => setPaused(false)} onPause={() => setPaused(true)}
         onError={() => setFailedVideo(activeVideo.url)} /> : image && image !== failedImage ? (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img src={image} alt="" decoding="async" fetchPriority="high" onError={() => setFailedImage(image)} />

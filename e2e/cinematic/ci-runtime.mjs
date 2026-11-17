@@ -46,6 +46,12 @@ export function assertHeightVideoEvidence(name, bytes) {
   assert.equal(bytes.subarray(0, 4).toString('hex'), '1a45dfa3', 'Expected EBML WebM header');
   assert.ok(bytes.subarray(0, 512).includes(Buffer.from('webm')), 'Expected WebM document type');
 }
+export function assertPublicEvidenceFilename(entry) {
+  // Retain the existing general evidence policy, with one explicit private
+  // partition artifact denied even if it is accidentally copied public.
+  assert.ok(typeof entry === 'string' && entry.toLowerCase() !== 'traditional-background-handoff.json'
+    && (entry === HEIGHT_VIDEO_FILE || /^(?:[a-z0-9_-]+\.json|[a-z0-9_-]+\.png)$/i.test(entry)), 'Unexpected evidence path');
+}
 
 function setup() {
   requireEphemeralCi(process.env); // Reject endpoint/context overrides before even `supabase start`.
@@ -166,7 +172,8 @@ export function projectMigrationGrantReceipt(entry, text, source, current) {
   } };
 }
 const diagnosticFiles = new Set(['source.json','migration-atomicity.json','migration-atomicity-public-projection.json',
-  'publisher-response-probe.json','publisher-response-probe-result.json','browser-result.json','welcome-browser-result.json']);
+  'publisher-response-probe.json','publisher-response-probe-result.json','browser-result.json','welcome-browser-result.json',
+  'dashboard-publication-result.json','background-quality-publication.json','responsive-banner-case-result.json']);
 export function evidenceSanitizeDiagnostic(entry, error) {
   const reasons = new Set(['ROLE_AUDIT_PROJECTION_INVALID','SOURCE_IDENTITY_MISMATCH']);
   const reason = reasons.has(error?.evidenceReason) ? error.evidenceReason : error instanceof SyntaxError ? 'JSON_INVALID' :
@@ -249,7 +256,7 @@ async function main(action) {
         const path = resolve(publicDir, entry);
         assert.ok(relative(publicDir, path) !== '..' && !relative(publicDir, path).startsWith(`..${sep}`));
         if (statSync(path).isDirectory()) continue;
-        assert.ok(entry === HEIGHT_VIDEO_FILE || /^(?:[a-z0-9_-]+\.json|[a-z0-9_-]+\.png)$/i.test(entry), 'Unexpected evidence path');
+        assertPublicEvidenceFilename(entry);
         if (entry.endsWith('.json')) {
           let text = readFileSync(path, 'utf8');
           if (entry === 'migration-atomicity.json') {

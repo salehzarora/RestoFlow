@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { bannerGeometry, bannerViewportScreenshot } from './banner-responsive';
-import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, legacyWelcomeFixtureDocument, legacyWelcomeFixtureRead, responsiveBannerReady, dashboardImageBytesMatch, classifyMediaReadError, mediaReadErrorDetail, bannerEvidencePhase, menuDocumentNavigation } from './responsive-banner-settings.mjs';
+import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, legacyWelcomeFixtureDocument, legacyWelcomeFixtureRead, responsiveBannerReady, dashboardImageBytesMatch, classifyMediaReadError, mediaReadErrorDetail, bannerEvidencePhase, menuDocumentNavigation, bannerAssertionFailure } from './responsive-banner-settings.mjs';
 import { LOGICAL_ORIGIN, localMediaTarget } from './live-transport.mjs';
 
 type Obj = Record<string, any>;
@@ -271,6 +271,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
         elapsedMs: Date.now() - startedAt, stage: /^[a-z0-9_-]{1,120}$/.test(receipt.stage ?? '') ? receipt.stage : null,
         comparisonPhase: receipt.comparisonPhase ?? null, uiWriteCount: writes, comparisonsCompleted: receipt.rows.length,
         lastComparison: receipt.lastComparison ?? null, failureType: receipt.failureType ?? null,
+        originalFailure: receipt.originalFailure ?? null,
         progressWriteFailed: receipt.progressWriteFailed === true,
       }, null, 2));
     } catch {
@@ -629,7 +630,12 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     receipt.status = 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS'; receipt.stage = null;
   } catch (error) {
     receipt.failureType = error instanceof Error && ['Error', 'AssertionError', 'TimeoutError', 'TypeError'].includes(error.name) ? error.name : 'unclassified';
+    receipt.originalFailure = { at: Date.now(), stage: receipt.stage, ...bannerAssertionFailure(error) };
     progress('failure');
+    // Persist the primary assertion before restoration can await a service or
+    // be interrupted by the finite case deadline. Never replace that error.
+    try { writeFileSync(resolve(d.artifactDir, 'responsive-banner-settings-result.json'), JSON.stringify(receipt, null, 2)); }
+    catch { receipt.progressWriteFailed = true; }
     receipt.error = error instanceof Error ? error.message.split('\n')[0] : 'acceptance failed'; throw error;
   } finally {
     page.off('request', count); receipt.uiWriteCount = writes;

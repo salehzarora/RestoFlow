@@ -11,8 +11,8 @@ import { LOGICAL_ORIGIN, localMediaTarget, localWelcomeVideoTarget, logicalMedia
 import { createHash, randomUUID } from 'node:crypto';
 import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot, completeResponsiveFixture, responsiveFixtureMismatch } from './banner-responsive';
 import { verifyResponsiveBannerSettings, adjustBannerHeightWithKeyboard, navigateAfterMediaSettles, observeLogicalMedia } from './responsive-banner-settings';
-import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, bannerEvidencePhase, mediaReadErrorDetail, menuDocumentNavigation } from './responsive-banner-settings.mjs';
-import { BackgroundQuality, backgroundFixture } from './background-quality';
+import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, bannerEvidencePhase, mediaReadErrorDetail, menuDocumentNavigation, responsiveSettingsHandoff, assertResponsiveSettingsHandoff, acceptedResponsiveSettingsHandoff } from './responsive-banner-settings.mjs';
+import { BackgroundQuality, backgroundFixture, validateBackgroundHandoff, type BackgroundHandoffBinding } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
 import { welcomeVideoResponseEvidence, welcomeVideoCoverage } from './welcome-video-evidence.mjs';
@@ -1898,7 +1898,145 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
   }
 }
 
-async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: string, diagnostics: () => UploadDiagnostics, recordPhase: (value: string) => void, caseTiming: () => Obj): Promise<void> {
+// The settings lifecycle is a separate finite UI case. Its dependencies and
+// assertions are the same ones formerly nested in the base banner journey.
+async function runResponsiveBannerSettingsCase(page: Page, menu: Page, f: Fixture, token: string,
+  diagnostics: () => UploadDiagnostics, recordPhase: (value: string) => void, invariant: () => Promise<void>,
+  recordRestoredDocument: (value: Obj) => void): Promise<void> {
+  const out = process.env.CINEMATIC_ARTIFACT_DIR!;
+  const publicMenu = async () => {
+    const response = await fetch(API + '/rest/v1/rpc/storefront_menu_v11', { method: 'POST', redirect: 'error',
+      headers: { apikey: f.anonKey, authorization: 'Bearer ' + f.anonKey, 'content-type': 'application/json' }, body: JSON.stringify({ p_slug: f.ownerA.slug }) });
+    expect(response.status).toBe(200); const value = await response.json(); expect(value.ok).toBe(true); return value;
+  };
+  await verifyResponsiveBannerSettings(page, menu, {
+    read: () => rpc(f, token, 'get_restaurant_storefront_content_v7'),
+    readPrevious: () => rpc(f, token, 'get_restaurant_storefront_content_v6'),
+    readLegacy: () => rpc(f, token, 'get_restaurant_storefront_content_v5'),
+    publicRead: async version => {
+      const response = await fetch(API + '/rest/v1/rpc/storefront_menu_v' + version, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000),
+        headers: { apikey: f.anonKey, authorization: 'Bearer ' + f.anonKey, 'content-type': 'application/json' }, body: JSON.stringify({ p_slug: f.ownerA.slug }) });
+      expect(response.status).toBe(200); const value = await response.json(); expect(value.ok).toBe(true); return value;
+    },
+    writeDocument: async document => {
+      const current = await rpc(f, token, 'get_restaurant_storefront_content_v6');
+      const response = await fetch(API + '/rest/v1/rpc/set_restaurant_storefront_content_v1', { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000),
+        headers: { apikey: f.anonKey, authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+        body: JSON.stringify({ p_organization_id: f.ownerA.orgId, p_restaurant_id: f.ownerA.restaurantId, p_client_request_id: randomUUID(),
+          p_expected_version: current.version, p_expected_storefront_branch_id: f.ownerA.branchId, p_document: document }) });
+      expect(response.status).toBe(200); const result = await response.json(); expect(result.ok).toBe(true); expect(result.version).toBe(current.version + 1);
+    },
+    reload: async () => {
+      const observed = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v7')));
+      const response = await responseAfterAction(observed, () => openEditor(page, true));
+      expect(response.status()).toBe(200); const readback = await response.json(); expect(readback.ok).toBe(true);
+      await openFoldedGroup(page, 'banner'); return readback;
+    },
+    save: () => saveContent(page),
+    upload: index => {
+      const file = `responsive-banner-${index}.png`;
+      return upload(page, file, diagnostics(), 200, 'desktop-banner', readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file)));
+    },
+    reveal: target => reveal(page, target, 'field'), tap: target => tapRevealedControl(page, target),
+    freshMenu: async width => {
+      const browser = page.context().browser(); expect(browser).not.toBeNull();
+      const context = await browser!.newContext({ viewport: { width, height: width > 650 ? 900 : 844 }, locale: 'ar', serviceWorkers: 'block' });
+      const network = await guardBrowser(context), surface = await context.newPage(), requestedMedia: string[] = [];
+      surface.on('request', request => { const url = new URL(request.url());
+        if (request.resourceType() === 'image' && url.origin === LOGICAL_ORIGIN) requestedMedia.push(url.pathname); });
+      return { page: surface, requestedMedia, check: network.check, close: () => context.close() };
+    },
+    captureHeightVideo: async (height, recordEvidence) => {
+      const videoEvidence: Obj = { status: 'NOT_RUN', failedSubstage: 'read_saved_height', captures: [],
+        errorType: null, controlRevealPurpose: null, controlRevealTail: [] };
+      recordEvidence(videoEvidence);
+      const before = await rpc(f, token, 'get_restaurant_storefront_content_v6');
+      expect(before.document.appearance.menu_banner_mobile_height_px).toBe(height);
+      const browser = page.context().browser(); expect(browser).not.toBeNull();
+      // Auxiliary recording only: this state belongs to the real synthetic
+      // owner UI test above, remains in memory, and is never an artifact.
+      videoEvidence.failedSubstage = 'create_recording_context';
+      const recording = await browser!.newContext({ storageState: await page.context().storageState(),
+        viewport: { width: 1440, height: 1000 }, locale: 'ar', serviceWorkers: 'block',
+        recordVideo: { dir: resolve(process.env.RUNNER_TEMP!, 'cinematic-private/height-video'), size: { width: 1080, height: 750 } } });
+      const videoNetwork = await guardBrowser(recording), videoPage = await recording.newPage();
+      const clip = videoPage.video(); expect(clip).not.toBeNull();
+      let contentWrites = 0, loginEntries = 0, accepted = false;
+      const started = Date.now();
+      videoPage.on('request', request => {
+        if (request.method() === 'POST' && new URL(request.url()).pathname === '/rest/v1/rpc/set_restaurant_storefront_content_v1') contentWrites++;
+        if (isPasswordGrantRequest(request.url(), request.method(), API)) loginEntries++;
+      });
+      try {
+        videoEvidence.failedSubstage = 'open_editor';
+        await videoPage.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(videoPage); await videoNetwork.fontsReady();
+        await openEditor(videoPage); await openFoldedGroup(videoPage, 'banner');
+        expect(await videoPage.locator('input[type="password"]').count()).toBe(0);
+        await expect.poll(() => readAccessibleText(videoPage)).toContain('CINEMATIC TEST A');
+        const frame = videoPage.frameLocator('iframe[title="Storefront banner preview"]').nth(0).locator('[data-sf-menu-top]');
+        videoEvidence.failedSubstage = 'verify_saved_preview';
+        const state = (await publicMenu()).service.state;
+        await expect.poll(() => bannerGeometry(frame).then(g => [g.state, g.height]).catch(() => null)).toEqual([state, height]);
+        const originalNode = await frame.locator('[data-sf-menu-banner] img').elementHandle(); expect(originalNode).not.toBeNull();
+        const revealRange = (target: Locator) => reveal(videoPage, target, 'field');
+        const iframe = videoPage.locator('iframe[title="Storefront banner preview"]').nth(0);
+        const capturePreview = async (label: 'high' | 'restored') => {
+          const originalViewport = videoPage.viewportSize(); expect(originalViewport).not.toBeNull();
+          const frameBox = await iframe.boundingBox(); expect(frameBox).not.toBeNull();
+          const captureViewport = { width: originalViewport!.width,
+            height: Math.max(originalViewport!.height, Math.ceil(frameBox!.height) + 192) };
+          expect(captureViewport.height, 'The controlled synthetic preview has a bounded capture height').toBeLessThanOrEqual(2400);
+          try {
+            await videoPage.setViewportSize(captureViewport);
+            await reveal(videoPage, iframe, 'content-status');
+            const logicalPreviewWidth = await frame.evaluate(el => el.ownerDocument.documentElement.clientWidth);
+            expect(logicalPreviewWidth, 'Capture resizing preserves the real 390px preview document').toBe(390);
+            await iframe.screenshot({ path: resolve(out, `responsive-height-video-${label}.png`) });
+            videoEvidence.captures.push({ label, viewport: captureViewport, frameHeight: frameBox!.height,
+              logicalPreviewWidth, zoom: 100 });
+          } finally { await videoPage.setViewportSize(originalViewport!); }
+        };
+        videoEvidence.failedSubstage = 'height_up_keys';
+        await adjustBannerHeightWithKeyboard(videoPage, revealRange, height, height + 20);
+        await expect.poll(() => bannerGeometry(frame).then(g => g.height)).toBe(height + 20);
+        videoEvidence.failedSubstage = 'capture_high_preview'; await capturePreview('high');
+        videoEvidence.failedSubstage = 'height_down_keys';
+        await adjustBannerHeightWithKeyboard(videoPage, revealRange, height + 20, height);
+        await expect.poll(() => bannerGeometry(frame).then(g => g.height)).toBe(height);
+        videoEvidence.failedSubstage = 'capture_restored_preview'; await capturePreview('restored');
+        videoEvidence.failedSubstage = 'verify_invariants';
+        expect(await originalNode!.evaluate(el => el.isConnected), 'Recording uses actual live preview updates, not source replacement').toBe(true);
+        expect(contentWrites).toBe(0); expect(loginEntries).toBe(0);
+        expect(await rpc(f, token, 'get_restaurant_storefront_content_v6')).toEqual(before);
+        videoEvidence.nativeMedia = await videoNetwork.checkDashboardMedia(value => { videoEvidence.nativeMedia = value; }); accepted = true;
+      } catch (error) {
+        videoEvidence.errorType = error instanceof ControlRevealError ? 'ControlRevealError'
+          : error instanceof Error && ['Error', 'TypeError', 'TimeoutError', 'AssertionError'].includes(error.name) ? error.name : 'unclassified';
+        if (error instanceof ControlRevealError) {
+          videoEvidence.controlRevealPurpose = error.purpose;
+          videoEvidence.controlRevealTail = error.samples.slice(-3).map(sample => ({ iteration: sample.iteration,
+            normalMatches: sample.normalMatches, hiddenMatches: sample.hiddenMatches,
+            geometry: sample.geometry == null ? null : Object.fromEntries(
+              ['x', 'y', 'width', 'height', 'viewportWidth', 'viewportHeight', 'centerHit', 'flutterSurfaceHit', 'disabled'].map(key => [key, sample.geometry![key as keyof typeof sample.geometry]])) }));
+        }
+        throw error;
+      } finally { await recording.close(); }
+      expect(accepted).toBe(true);
+      videoEvidence.failedSubstage = 'finalize_recording';
+      const file = 'responsive-banner-height-adjustment.webm';
+      await clip!.saveAs(resolve(out, file));
+      const bytes = readFileSync(resolve(out, file));
+      return { status: 'SYNTHETIC_HEIGHT_ADJUSTMENT_VIDEO_RECORDED', file, bytes: bytes.length,
+        sha256: createHash('sha256').update(bytes).digest('hex'), durationWindowMs: Date.now() - started,
+        includesLocalEditorBoot: true, values: [height, height + 20, height], contentWrites: 0, loginEntries: 0,
+        syntheticStateInMemoryOnly: true, noOwnerBrowserSession: true, captures: videoEvidence.captures, nativeMedia: videoEvidence.nativeMedia };
+    },
+    invariant, recordPhase, recordRestoredDocument,
+    url: STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', artifactDir: out,
+  });
+}
+
+async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: string, diagnostics: () => UploadDiagnostics, recordPhase: (value: string) => void, caseTiming: () => Obj): Promise<Obj> {
   const out = process.env.CINEMATIC_ARTIFACT_DIR!;
   let stage = 'baseline';
   const receipt: Obj = { status: 'FAIL', failedStage: stage, data: 'actual isolated Dashboard/Auth/Storage/Edge; no mocked publication', publications: [] };
@@ -2030,139 +2168,13 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
           } : null;
         }, { timeout: 100000, intervals: [250, 500, 1000] }).toEqual({ sameResource: true, position: '38% 9%' });
         receipt.responsiveReturn = { freshPublicRead: true, freshDocumentRead: true, samePublicPath: path, position: '38% 9%' };
-        stage = 'independent-responsive-settings-ui-save-readback'; recordPhase(stage);
-        await verifyResponsiveBannerSettings(page, menu, {
-          read: () => rpc(f, token, 'get_restaurant_storefront_content_v7'),
-          readPrevious: () => rpc(f, token, 'get_restaurant_storefront_content_v6'),
-          readLegacy: () => rpc(f, token, 'get_restaurant_storefront_content_v5'),
-          publicRead: async version => {
-            const response = await fetch(API + '/rest/v1/rpc/storefront_menu_v' + version, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000),
-              headers: { apikey: f.anonKey, authorization: 'Bearer ' + f.anonKey, 'content-type': 'application/json' }, body: JSON.stringify({ p_slug: f.ownerA.slug }) });
-            expect(response.status).toBe(200); const value = await response.json(); expect(value.ok).toBe(true); return value;
-          },
-          writeDocument: async document => {
-            const current = await rpc(f, token, 'get_restaurant_storefront_content_v6');
-            const response = await fetch(API + '/rest/v1/rpc/set_restaurant_storefront_content_v1', { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000),
-              headers: { apikey: f.anonKey, authorization: 'Bearer ' + token, 'content-type': 'application/json' },
-              body: JSON.stringify({ p_organization_id: f.ownerA.orgId, p_restaurant_id: f.ownerA.restaurantId, p_client_request_id: randomUUID(),
-                p_expected_version: current.version, p_expected_storefront_branch_id: f.ownerA.branchId, p_document: document }) });
-            expect(response.status).toBe(200); const result = await response.json(); expect(result.ok).toBe(true); expect(result.version).toBe(current.version + 1);
-          },
-          reload: async () => {
-            const observed = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v7')));
-            const response = await responseAfterAction(observed, () => openEditor(page, true));
-            expect(response.status()).toBe(200); const readback = await response.json(); expect(readback.ok).toBe(true);
-            await openFoldedGroup(page, 'banner'); return readback;
-          },
-          save: () => saveContent(page),
-          upload: index => {
-            const file = `responsive-banner-${index}.png`;
-            return upload(page, file, diagnostics(), 200, 'desktop-banner', readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file)));
-          },
-          reveal: target => reveal(page, target, 'field'), tap: target => tapRevealedControl(page, target),
-          freshMenu: async width => {
-            const browser = page.context().browser(); expect(browser).not.toBeNull();
-            const context = await browser!.newContext({ viewport: { width, height: width > 650 ? 900 : 844 }, locale: 'ar', serviceWorkers: 'block' });
-            const network = await guardBrowser(context), surface = await context.newPage(), requestedMedia: string[] = [];
-            surface.on('request', request => { const url = new URL(request.url());
-              if (request.resourceType() === 'image' && url.origin === LOGICAL_ORIGIN) requestedMedia.push(url.pathname); });
-            return { page: surface, requestedMedia, check: network.check, close: () => context.close() };
-          },
-          captureHeightVideo: async (height, recordEvidence) => {
-            const videoEvidence: Obj = { status: 'NOT_RUN', failedSubstage: 'read_saved_height', captures: [],
-              errorType: null, controlRevealPurpose: null, controlRevealTail: [] };
-            recordEvidence(videoEvidence);
-            const before = await rpc(f, token, 'get_restaurant_storefront_content_v6');
-            expect(before.document.appearance.menu_banner_mobile_height_px).toBe(height);
-            const browser = page.context().browser(); expect(browser).not.toBeNull();
-            // Auxiliary recording only: this state belongs to the real synthetic
-            // owner UI test above, remains in memory, and is never an artifact.
-            videoEvidence.failedSubstage = 'create_recording_context';
-            const recording = await browser!.newContext({ storageState: await page.context().storageState(),
-              viewport: { width: 1440, height: 1000 }, locale: 'ar', serviceWorkers: 'block',
-              recordVideo: { dir: resolve(process.env.RUNNER_TEMP!, 'cinematic-private/height-video'), size: { width: 1080, height: 750 } } });
-            const videoNetwork = await guardBrowser(recording), videoPage = await recording.newPage();
-            const clip = videoPage.video(); expect(clip).not.toBeNull();
-            let contentWrites = 0, loginEntries = 0, accepted = false;
-            const started = Date.now();
-            videoPage.on('request', request => {
-              if (request.method() === 'POST' && new URL(request.url()).pathname === '/rest/v1/rpc/set_restaurant_storefront_content_v1') contentWrites++;
-              if (isPasswordGrantRequest(request.url(), request.method(), API)) loginEntries++;
-            });
-            try {
-              videoEvidence.failedSubstage = 'open_editor';
-              await videoPage.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(videoPage); await videoNetwork.fontsReady();
-              await openEditor(videoPage); await openFoldedGroup(videoPage, 'banner');
-              expect(await videoPage.locator('input[type="password"]').count()).toBe(0);
-              await expect.poll(() => readAccessibleText(videoPage)).toContain('CINEMATIC TEST A');
-              const frame = videoPage.frameLocator('iframe[title="Storefront banner preview"]').nth(0).locator('[data-sf-menu-top]');
-              videoEvidence.failedSubstage = 'verify_saved_preview';
-              const state = (await publicMenu()).service.state;
-              await expect.poll(() => bannerGeometry(frame).then(g => [g.state, g.height]).catch(() => null)).toEqual([state, height]);
-              const originalNode = await frame.locator('[data-sf-menu-banner] img').elementHandle(); expect(originalNode).not.toBeNull();
-              const revealRange = (target: Locator) => reveal(videoPage, target, 'field');
-              const iframe = videoPage.locator('iframe[title="Storefront banner preview"]').nth(0);
-              const capturePreview = async (label: 'high' | 'restored') => {
-                const originalViewport = videoPage.viewportSize(); expect(originalViewport).not.toBeNull();
-                const frameBox = await iframe.boundingBox(); expect(frameBox).not.toBeNull();
-                const captureViewport = { width: originalViewport!.width,
-                  height: Math.max(originalViewport!.height, Math.ceil(frameBox!.height) + 192) };
-                expect(captureViewport.height, 'The controlled synthetic preview has a bounded capture height').toBeLessThanOrEqual(2400);
-                try {
-                  await videoPage.setViewportSize(captureViewport);
-                  await reveal(videoPage, iframe, 'content-status');
-                  const logicalPreviewWidth = await frame.evaluate(el => el.ownerDocument.documentElement.clientWidth);
-                  expect(logicalPreviewWidth, 'Capture resizing preserves the real 390px preview document').toBe(390);
-                  await iframe.screenshot({ path: resolve(out, `responsive-height-video-${label}.png`) });
-                  videoEvidence.captures.push({ label, viewport: captureViewport, frameHeight: frameBox!.height,
-                    logicalPreviewWidth, zoom: 100 });
-                } finally { await videoPage.setViewportSize(originalViewport!); }
-              };
-              videoEvidence.failedSubstage = 'height_up_keys';
-              await adjustBannerHeightWithKeyboard(videoPage, revealRange, height, height + 20);
-              await expect.poll(() => bannerGeometry(frame).then(g => g.height)).toBe(height + 20);
-              videoEvidence.failedSubstage = 'capture_high_preview'; await capturePreview('high');
-              videoEvidence.failedSubstage = 'height_down_keys';
-              await adjustBannerHeightWithKeyboard(videoPage, revealRange, height + 20, height);
-              await expect.poll(() => bannerGeometry(frame).then(g => g.height)).toBe(height);
-              videoEvidence.failedSubstage = 'capture_restored_preview'; await capturePreview('restored');
-              videoEvidence.failedSubstage = 'verify_invariants';
-              expect(await originalNode!.evaluate(el => el.isConnected), 'Recording uses actual live preview updates, not source replacement').toBe(true);
-              expect(contentWrites).toBe(0); expect(loginEntries).toBe(0);
-              expect(await rpc(f, token, 'get_restaurant_storefront_content_v6')).toEqual(before);
-              videoEvidence.nativeMedia = await videoNetwork.checkDashboardMedia(value => { videoEvidence.nativeMedia = value; }); accepted = true;
-            } catch (error) {
-              videoEvidence.errorType = error instanceof ControlRevealError ? 'ControlRevealError'
-                : error instanceof Error && ['Error', 'TypeError', 'TimeoutError', 'AssertionError'].includes(error.name) ? error.name : 'unclassified';
-              if (error instanceof ControlRevealError) {
-                videoEvidence.controlRevealPurpose = error.purpose;
-                videoEvidence.controlRevealTail = error.samples.slice(-3).map(sample => ({ iteration: sample.iteration,
-                  normalMatches: sample.normalMatches, hiddenMatches: sample.hiddenMatches,
-                  geometry: sample.geometry == null ? null : Object.fromEntries(
-                    ['x', 'y', 'width', 'height', 'viewportWidth', 'viewportHeight', 'centerHit', 'flutterSurfaceHit', 'disabled'].map(key => [key, sample.geometry![key as keyof typeof sample.geometry]])) }));
-              }
-              throw error;
-            } finally { await recording.close(); }
-            expect(accepted).toBe(true);
-            videoEvidence.failedSubstage = 'finalize_recording';
-            const file = 'responsive-banner-height-adjustment.webm';
-            await clip!.saveAs(resolve(out, file));
-            const bytes = readFileSync(resolve(out, file));
-            return { status: 'SYNTHETIC_HEIGHT_ADJUSTMENT_VIDEO_RECORDED', file, bytes: bytes.length,
-              sha256: createHash('sha256').update(bytes).digest('hex'), durationWindowMs: Date.now() - started,
-              includesLocalEditorBoot: true, values: [height, height + 20, height], contentWrites: 0, loginEntries: 0,
-              syntheticStateInMemoryOnly: true, noOwnerBrowserSession: true, captures: videoEvidence.captures, nativeMedia: videoEvidence.nativeMedia };
-          },
-          invariant: unchanged, recordPhase, recordRestoredDocument: value => { receipt.afterResponsiveRestoration = bannerDocumentEvidence(value); },
-          url: STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', artifactDir: out,
-        });
-        receipt.independentResponsiveSettingsAcceptance = 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS';
-        recordPhase('after-responsive-restoration');
+        // Independent device settings run in their own finite UI case below.
+
       }
       const image = menu.locator('[data-sf-menu-banner] img');
       await expect.poll(() => image.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
       await screenshot(menu, resolve(out, `banner-${index ? 'replacement' : 'first'}-test-data.png`));
-      receipt.publications.push({ publicPath: path, originalBytes: original.length, originalSha256: hash(original), publishedBytes: bytes.length, publishedSha256: hash(bytes), ...dimensions });
+      receipt.publications.push({ mediaId: publication.media.id, publicPath: path, originalBytes: original.length, originalSha256: hash(original), publishedBytes: bytes.length, publishedSha256: hash(bytes), ...dimensions });
     }
     stage = 'clear-banner-only'; recordPhase(stage);
     const clear: Obj = receipt.clearOnly = { substage: 'clear-interface',
@@ -2221,6 +2233,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
     try { writeFileSync(resolve(out, 'banner-upload-result.json'), JSON.stringify(receipt, null, 2)); }
     catch (error) { if (!originalFailure) throw error; }
   }
+  return receipt.publications[0];
 }
 
 async function traceRenderedBanner(menu: Page, url: string, previousPaths: string[], sample: Obj): Promise<boolean> {
@@ -2433,14 +2446,30 @@ test('single publisher response - native body diagnostic', async ({ page, contex
   }
 });
 
-test('real owner Dashboard → Storage → publisher → save → live menu; replacement, clear and appearance', async ({ page, context }) => {
-  // Leave both final clear checks their full render windows after the earlier
-  // saves, reloads and scene checks in this serial browser journey.
+function traditionalBackgroundBinding(f: Fixture, out: string): BackgroundHandoffBinding {
+  const source = JSON.parse(readFileSync(resolve(out, 'source.json'), 'utf8'));
+  const testedCheckout = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const testedTree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim();
+  expect(source.testedCheckout).toBe(testedCheckout); expect(source.testedTree).toBe(testedTree);
+  expect(source.prHead).toBe(process.env.CINEMATIC_PR_HEAD); expect(source.prBase).toBe(process.env.CINEMATIC_PR_BASE);
+  expect(source.runId).toBe(process.env.GITHUB_RUN_ID);
+  return { prHead: source.prHead, prBase: source.prBase, testedCheckout, testedTree, runId: source.runId,
+    runAttempt: process.env.GITHUB_RUN_ATTEMPT!, orgId: f.ownerA.orgId, restaurantId: f.ownerA.restaurantId,
+    branchId: f.ownerA.branchId, slug: f.ownerA.slug };
+}
+const authoritativeHash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const traditionalBackgroundHandoffPath = () => resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), 'traditional-background-handoff.json');
+
+test('real owner Dashboard → Storage → publisher → save → live menu; publication and appearance', async ({ page, context }) => {
+  // Keep the existing per-case budget; scene/welcome/replacement/clear remain
+  // real acceptance in the fresh-login continuation rather than extending it.
   test.setTimeout(20 * 60_000);
   const f = fixture();
   const network = await guardBrowser(context);
   const out = resolve(process.env.CINEMATIC_ARTIFACT_DIR ?? 'cinematic-artifacts');
   mkdirSync(out, { recursive: true });
+  // A failed/missing producer cannot leave a reusable handoff from another case.
+  writeFileSync(traditionalBackgroundHandoffPath(), JSON.stringify({ status: 'NOT_READY' }), { mode: 0o600 });
   const quality = new BackgroundQuality(out);
   quality.observe(page);
   const stages: string[] = [];
@@ -2712,6 +2741,95 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       stages.push(stage);
     }
 
+    // Natural partition: no scene views have run yet. Complete this case's
+    // actual native-byte proof before exporting bounded verified scalar facts.
+    stage = 'verified-publication-handoff';
+    const handoffRead = await rpc(f, token, 'get_restaurant_storefront_content_v7');
+    const handoffProfileRead = await rpc(f, token, 'get_restaurant_storefront_profile'), handoffProfile = handoffProfileRead.profile;
+    expect(handoffRead.restaurant_id).toBe(f.ownerA.restaurantId); expect(handoffRead.storefront_branch_id).toBe(f.ownerA.branchId);
+    expect(handoffRead.document.appearance.menu_background_media_id).toBe(first);
+    expect(handoffRead.document.appearance.menu_background_dim).toBe(80);
+    expect(handoffRead.document.appearance.site_theme ?? null).toBeNull(); expect(handoffRead.document.appearance.scene_preset ?? null).toBeNull();
+    expect(handoffProfile.primary_color).toBe('#211a16'); expect(handoffProfile.accent_color).toBe('#eab082');
+    await network.check();
+    const handoff = quality.handoff(traditionalBackgroundBinding(f, out), firstUrl, pair,
+      handoffRead.version, handoffProfileRead.version, authoritativeHash(handoffRead.document), authoritativeHash(handoffProfile), { status: 'PASS', ...network.media() });
+    writeFileSync(traditionalBackgroundHandoffPath(), JSON.stringify(handoff, null, 2), { mode: 0o600 });
+    quality.record('FIRST_CASE_NATIVE_BYTE_GUARD_PASS'); stages.push(stage);
+    writeFileSync(resolve(out, 'background-quality-publication.json'), readFileSync(resolve(out, 'background-quality.json')));
+    writeFileSync(resolve(out, 'dashboard-publication-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages,
+      login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), nativeByteGuard: 'PASS',
+      handoff: { sourceBound: true, transferredSceneViews: 0 }, uploads: uploadDiagnostics.map(d => d.snapshot()),
+      controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [],
+      menuRenders: menuRenderTraces.get(context) ?? [], siteThemeRenders: siteThemeRenderTraces.get(context) ?? [] }, null, 2));
+  } catch (error) {
+    const failure: Obj = { status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
+      assertion: bannerAssertionFailure(error), login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(),
+      uploads: uploadDiagnostics.map(d => d.snapshot()), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
+      controlReveal: error instanceof ControlRevealError ? error.samples : null, controlReveals: revealTraces.get(page) ?? [],
+      controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], siteThemeRenders: siteThemeRenderTraces.get(context) ?? [] };
+    // Persist the original failed stage before any possibly clipped cleanup await.
+    try { writeFileSync(traditionalBackgroundHandoffPath(), JSON.stringify({ status: 'PRODUCER_FAILED' }), { mode: 0o600 }); } catch { /* Keep original error. */ }
+    try { writeFileSync(resolve(out, 'dashboard-publication-result.json'), JSON.stringify(failure, null, 2)); } catch { /* Keep original error. */ }
+    const statuses = stages.includes('login') ? await editorStatus(page).catch(() => ['unreadable']) : [];
+    const capture = stages.includes('login') ? await failureScreenshot(page, resolve(out, 'dashboard-publication-failure-test-data.png')) : 'withheld';
+    try { writeFileSync(resolve(out, 'dashboard-publication-result.json'), JSON.stringify({ ...failure, editorStatuses: statuses, failureScreenshot: capture }, null, 2)); } catch { /* Keep original error. */ }
+    throw error;
+  }
+});
+
+test('real owner Dashboard continuation → scene/welcome → replacement/clear and retained originals', async ({ page, context }) => {
+  test.setTimeout(20 * 60_000);
+  const f = fixture(), network = await guardBrowser(context);
+  const out = resolve(process.env.CINEMATIC_ARTIFACT_DIR ?? 'cinematic-artifacts');
+  const quality = new BackgroundQuality(out); quality.observe(page);
+  const stages: string[] = []; let stage = 'fresh-ui-login';
+  let continuationProof: Obj | null = null;
+  const loginEvidence: Obj = { fieldsBeforeSubmit: null, request: null, response: null };
+  const uploadDiagnostics: UploadDiagnostics[] = [];
+  const nextUpload = () => { const diagnostics = new UploadDiagnostics(); uploadDiagnostics.push(diagnostics); return diagnostics; };
+  let draftWrites = 0;
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.origin === API && request.method() === 'POST' &&
+      ['/rest/v1/rpc/set_restaurant_storefront_profile', '/rest/v1/rpc/set_restaurant_storefront_content_v1'].includes(url.pathname)) draftWrites++;
+  });
+  try {
+    // Playwright gives this case a fresh context. Sign in through the shipped
+    // UI; no previous session, token, cookie, page or context is imported.
+    await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();
+    await fillField(page, L.email, f.ownerA.email); await enterLoginPassword(page, f.ownerA.password);
+    loginEvidence.fieldsBeforeSubmit = { emailMatchesFixture: await page.getByRole('textbox', { name: L.email }).inputValue() === f.ownerA.email,
+      passwordMatchesFixture: await page.locator('input[type="password"]').inputValue() === f.ownerA.password };
+    expect(loginEvidence.fieldsBeforeSubmit).toEqual({ emailMatchesFixture: true, passwordMatchesFixture: true });
+    const started = performance.now(), observed = observeResponse(page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API)));
+    const auth = await responseAfterAction(observed, () => tapButton(page, L.login, { which: 'last' }));
+    const session = await auth.json();
+    loginEvidence.request = authRequestEvidence(auth.url(), auth.request().postData(), f.ownerA);
+    loginEvidence.response = authResponseEvidence({ status: auth.status(), contentType: auth.headers()['content-type'], data: session }, performance.now() - started);
+    expect(auth.status()).toBe(200); expect(session.user.email).toBe(f.ownerA.email); expect(typeof session.access_token).toBe('string');
+    const token: string = session.access_token; stages.push('login');
+    await openEditor(page);
+    stage = 'same-run-source-and-server-precondition';
+    const binding = traditionalBackgroundBinding(f, out);
+    const handoff = validateBackgroundHandoff(JSON.parse(readFileSync(traditionalBackgroundHandoffPath(), 'utf8')), binding);
+    const current = await rpc(f, token, 'get_restaurant_storefront_content_v7');
+    const currentProfileRead = await rpc(f, token, 'get_restaurant_storefront_profile'), currentProfile = currentProfileRead.profile;
+    validateBackgroundHandoff(handoff, binding, { contentVersion: current.version, profileVersion: currentProfileRead.version });
+    expect(current.restaurant_id).toBe(f.ownerA.restaurantId); expect(current.storefront_branch_id).toBe(f.ownerA.branchId);
+    expect(authoritativeHash(current.document), 'Actual authenticated V7 document must still equal the verified producer state').toBe(handoff.contentSha256);
+    expect(authoritativeHash(currentProfile), 'Actual profile settings and version must still equal the verified producer state').toBe(handoff.profileSha256);
+    const first: string = handoff.firstMediaId, firstUrl: string = handoff.firstPublicUrl, pair = handoff.pair;
+    expect(current.document.appearance.menu_background_media_id).toBe(first); expect(current.document.appearance.menu_background_dim).toBe(80);
+    expect(current.document.appearance.site_theme ?? null).toBeNull(); expect(current.document.appearance.scene_preset ?? null).toBeNull();
+    expect(await backgroundUrl(f, token, first), 'Current authenticated media listing and public bytes retain the same first resource').toBe(firstUrl);
+    await invariants(f, token); await verifyReadCompatibility(f, token); stages.push(stage);
+    quality.resume(handoff, binding);
+    continuationProof = { status: 'CURRENT_SERVER_PRECONDITION_PASS', binding, firstMediaId: first,
+      firstPublicUrl: firstUrl, firstCaseByteGuard: handoff.byteGuard, importedSceneViews: 0,
+      contentVersion: current.version, profileVersion: currentProfileRead.version,
+      meaning: 'Earlier scalar publication evidence belongs to this same current run; all eight scene views and this case byte guard run independently here' };
+    const menu = await context.newPage();
     stage = 'scene-bright-brand-before';
     await openFoldedGroup(page, 'profile');
     await fill(page, L.primary, '#00FF00', { blur: true });
@@ -2857,17 +2975,27 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
     await quality.privateOriginal(f, token, first);
     quality.complete();
     await network.check();
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], siteThemeRenders: siteThemeRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
+    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'PASS', data: 'synthetic ephemeral services', stages, login: loginEvidence, continuationProof, fonts: network.fonts(), mediaTransport: network.media(), controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], siteThemeRenders: siteThemeRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()) }, null, 2));
   } catch (error) {
+    const failure: Obj = { status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
+      assertion: bannerAssertionFailure(error), login: loginEvidence, continuationProof, fonts: network.fonts(), mediaTransport: network.media(),
+      controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
+      controlReveal: error instanceof ControlRevealError ? error.samples : null, controlReveals: revealTraces.get(page) ?? [],
+      controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], siteThemeRenders: siteThemeRenderTraces.get(context) ?? [],
+      uploads: uploadDiagnostics.map(d => d.snapshot()) };
+    try { writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify(failure, null, 2)); } catch { /* Keep original error. */ }
     const statuses = stages.includes('login') ? await editorStatus(page).catch(() => ['unreadable']) : [];
     const failureCapture = stages.includes('login')
       ? await failureScreenshot(page, resolve(out, 'dashboard-failure-test-data.png')) : 'withheld';
-    writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic ephemeral services', failedStage: stage, completedStages: stages,
-      login: loginEvidence, fonts: network.fonts(), mediaTransport: network.media(), controlRevealPurpose: error instanceof ControlRevealError ? error.purpose : null,
-      controlReveal: error instanceof ControlRevealError ? error.samples : null,
-      controlReveals: revealTraces.get(page) ?? [], controlClicks: clickTraces.get(page) ?? [], menuRenders: menuRenderTraces.get(context) ?? [], siteThemeRenders: siteThemeRenderTraces.get(context) ?? [], uploads: uploadDiagnostics.map(d => d.snapshot()), editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2));
+    try { writeFileSync(resolve(out, 'dashboard-result.json'), JSON.stringify({ ...failure, editorStatuses: statuses, failureScreenshot: failureCapture }, null, 2)); } catch { /* Keep original error. */ }
     throw error;
   }
+});
+
+let responsiveSettingsCaseHandoff: Obj | null = null;
+const responsiveSettingsSource = () => ({
+  ...JSON.parse(readFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'source.json'), 'utf8')) as Obj,
+  runAttempt: process.env.GITHUB_RUN_ATTEMPT,
 });
 
 // Independent evidence in the same real-service stack. A failed legacy
@@ -2875,6 +3003,8 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
 // banner lifecycle. It signs in through the real UI again; no session injection.
 test('independent banner → actual Edge → save/reload → replace/clear preserves other media', async ({ page, context }, testInfo) => {
   const bodyStartedAt = Date.now();
+  responsiveSettingsCaseHandoff = null;
+  let candidateHandoff: Obj | null = null;
   // The added independent device heights/media include fourteen live readbacks.
   // Use the same finite case budget as the other full Dashboard journey.
   test.setTimeout(20 * 60_000);
@@ -2909,12 +3039,19 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
     signedIn = true;
     await openEditor(page);
     const menu = await context.newPage();
-    await verifyBannerJourney(page, menu, f, session.access_token, () => {
+    const phone = await verifyBannerJourney(page, menu, f, session.access_token, () => {
       const value = new UploadDiagnostics(); uploads.push(value); return value;
     }, recordPhase, caseTiming);
+    const cleared = await rpc(f, session.access_token, 'get_restaurant_storefront_content_v7');
+    candidateHandoff = responsiveSettingsHandoff(responsiveSettingsSource(), f.ownerA, phone, cleared);
   } catch (error) {
     primaryFailure = { error }; failedPhase = phase;
-    failure = bannerAssertionFailure(error); throw error;
+    failure = bannerAssertionFailure(error);
+    try { writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-browser-result.json'), JSON.stringify({
+      status: 'FAIL', phase, failedPhase, failure, byteGuard, realUiSignIn: signedIn, caseTiming: caseTiming(), phaseTiming, phaseTimingOverflow,
+      evidencePoint: 'original-error-before-final-byte-guard', uploads: uploads.map(item => item.snapshot()),
+    }, null, 2)); } catch { /* Evidence cannot replace the original error. */ }
+    throw error;
   } finally {
     // Independent read-only termination work. Preserve the exact primary error;
     // a guard failure is recorded separately and never starts another UI write.
@@ -2933,10 +3070,96 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
       }, null, 2));
     } catch (error) { if (!primaryFailure && !guardError) throw error; }
     finally { mediaObservation.stop(); }
+    // Publish only after the complete producer lifecycle, its native nonzero
+    // byte guard and result persistence succeed. A failed producer leaves null.
+    responsiveSettingsCaseHandoff = acceptedResponsiveSettingsHandoff(candidateHandoff,
+      { primarySucceeded: passed, byteGuardStatus: byteGuard.status, ...network.media() });
     if (!primaryFailure && guardError) throw guardError.error;
   }
 });
 
+
+// Split from the base banner journey, with a fresh context and normal UI Auth.
+// A missing, stale or foreign scalar handoff is an assertion failure, not a skip.
+test('independent responsive banner settings → actual owner save/reload → device independence and restoration', async ({ page, context }) => {
+  test.setTimeout(20 * 60_000);
+  const f = fixture(), network = await guardBrowser(context), out = process.env.CINEMATIC_ARTIFACT_DIR!;
+  const observation = observeLogicalMedia(context, { dashboard: DASHBOARD, storefront: STOREFRONT });
+  const uploads: UploadDiagnostics[] = [];
+  const receipt: Obj = { status: 'FAIL', stage: 'validate-handoff', actualServices: true, retries: 0,
+    authentication: 'fresh normal owner UI login', byteGuard: { status: 'NOT_RUN' }, cleanup: { status: 'NOT_RUN' } };
+  let primary: { error: unknown } | null = null, guardError: { error: unknown } | null = null;
+  const persist = () => writeFileSync(resolve(out, 'responsive-banner-case-result.json'), JSON.stringify({ ...receipt,
+    uploads: uploads.map(item => item.snapshot()), logicalMediaObservation: observation.snapshot() }, null, 2));
+  const stage = (value: string) => {
+    receipt.stage = value; observation.phase(value);
+    try { persist(); } catch { receipt.progressWriteFailed = true; }
+  };
+  try {
+    expect(responsiveSettingsCaseHandoff, 'The base lifecycle supplies a current-run UI-produced media handoff').not.toBeNull();
+    const handoff = responsiveSettingsCaseHandoff!;
+    stage('owner-ui-login');
+    await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();
+    await fillField(page, L.email, f.ownerA.email); await enterLoginPassword(page, f.ownerA.password);
+    const signed = observeResponse(page.waitForResponse(r => isPasswordGrantRequest(r.url(), r.request().method(), API)));
+    const auth = await responseAfterAction(signed, () => tapButton(page, L.login, { which: 'last' }));
+    expect(auth.status()).toBe(200); const session = await auth.json();
+    expect(session.user.email).toBe(f.ownerA.email); const token: string = session.access_token; expect(typeof token).toBe('string');
+    stage('fresh-authenticated-handoff-read');
+    const before = await rpc(f, token, 'get_restaurant_storefront_content_v7');
+    assertResponsiveSettingsHandoff(handoff, responsiveSettingsSource(), f.ownerA, before);
+    receipt.handoff = { sourceBound: true, runBound: true, tenantAndBranchBound: true,
+      currentServerDocumentBound: true, privateWorkerScalarsOnly: true, browserStateTransferred: false };
+    receipt.freshAuthenticatedPrecondition = true;
+    await invariants(f, token);
+    stage('select-owned-phone-through-existing-library');
+    await openEditor(page); await openFoldedGroup(page, 'banner');
+    const label = `${handoff.phone.width}×${handoff.phone.height} · ${handoff.phone.mediaId.slice(0, 8)}`;
+    await selectRevealedDropdown(page, 'دون صورة بانر', label);
+    expect(await rpc(f, token, 'get_restaurant_storefront_content_v7'), 'Library choice remains a draft').toEqual(before);
+    await saveContent(page); await openEditor(page, true); await openFoldedGroup(page, 'banner');
+    const selected = await rpc(f, token, 'get_restaurant_storefront_content_v7');
+    const expected = structuredClone(before.document); expected.appearance.menu_banner_media_id = handoff.phone.mediaId;
+    expect(selected.document, 'Case setup changes only the base banner selection through the real UI').toEqual(expected);
+    expect(selected.version).toBe(before.version + 1);
+    const publicReply = await fetch(API + '/rest/v1/rpc/storefront_menu_v11', { method: 'POST', redirect: 'error',
+      headers: { apikey: f.anonKey, authorization: 'Bearer ' + f.anonKey, 'content-type': 'application/json' }, body: JSON.stringify({ p_slug: f.ownerA.slug }) });
+    expect(publicReply.status).toBe(200); const currentMenu = await publicReply.json(); expect(currentMenu.ok).toBe(true);
+    expect(currentMenu.content_v1.appearance.menu_banner_url).toBe(handoff.phone.publicPath);
+    receipt.setup = { actualLibraryUiSelection: true, authenticatedReload: true, publicResourceMatches: true };
+    const menu = await context.newPage();
+    const invariant = async () => {
+      const current = await rpc(f, token, 'get_restaurant_storefront_content_v7');
+      expect(current.document.appearance.menu_background_media_id).toBe(selected.document.appearance.menu_background_media_id);
+      await invariants(f, token);
+    };
+    stage('responsive-settings-ui-lifecycle');
+    await runResponsiveBannerSettingsCase(page, menu, f, token, () => { const value = new UploadDiagnostics(); uploads.push(value); return value; },
+      stage, invariant, value => { receipt.afterResponsiveRestoration = bannerDocumentEvidence(value); });
+    receipt.settings = 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS';
+    stage('restore-only-case-setup-phone-selection');
+    await openEditor(page, true); await openFoldedGroup(page, 'banner');
+    await revealButton(page, L.bannerClear); await tapRevealedButton(page, L.bannerClear); await saveContent(page); await openEditor(page, true);
+    const restored = await rpc(f, token, 'get_restaurant_storefront_content_v7');
+    expect(restored.document, 'UI cleanup restores the exact pre-case content document').toEqual(before.document);
+    await invariants(f, token); receipt.cleanup = { status: 'PASS', realUiClearAndSave: true, authenticatedReadback: true };
+    receipt.lifecycle = 'PASS';
+  } catch (error) {
+    primary = { error }; receipt.failedStage = receipt.stage; receipt.failure = bannerAssertionFailure(error);
+    receipt.evidencePoint = 'original-error-before-final-byte-guard';
+    try { persist(); } catch { /* Preserve the exact primary error. */ }
+    throw error;
+  } finally {
+    receipt.byteGuard.status = 'RUNNING';
+    try { persist(); } catch { receipt.progressWriteFailed = true; }
+    try { await network.check(); receipt.byteGuard.status = 'PASS'; }
+    catch (error) { guardError = { error }; receipt.byteGuard.status = 'FAIL'; receipt.byteGuard.failure = bannerAssertionFailure(error); }
+    receipt.status = !primary && !guardError ? 'PASS' : 'FAIL';
+    try { persist(); } catch (error) { if (!primary && !guardError) throw error; }
+    finally { observation.stop(); }
+    if (!primary && guardError) throw guardError.error;
+  }
+});
 
 // BIZBOT-STOREFRONT-WELCOME-EDITOR-001: one real, independent lifecycle on
 // bootstrapped synthetic owner B. No repository replacement or direct SQL save.

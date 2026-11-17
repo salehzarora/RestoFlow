@@ -9,6 +9,39 @@ export function menuDocumentNavigation(startedAt, lastNavigationAt, hydrated, no
     timeout: Math.max(1, Math.min(30000, remainingMs)), remainingMs };
 }
 
+// Scalar-only handoff between two finite cases in the same synthetic run.
+// Authentication is performed again through the UI; no session or Page is
+// retained here. A fresh owner read must match before the next UI selection.
+export function responsiveSettingsHandoff(source, owner, phone, readback) {
+  const denied = () => { throw new Error('responsive_banner_handoff_invalid'); };
+  const commit = value => typeof value === 'string' && /^[0-9a-f]{40}$/.test(value);
+  const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+  if (!source || typeof source.runId !== 'string' || !/^\d{1,20}$/.test(source.runId)
+    || typeof source.runAttempt !== 'string' || !/^[1-9]\d{0,5}$/.test(source.runAttempt)
+    || !['prHead', 'prBase', 'testedCheckout', 'testedTree'].every(k => commit(source[k]))
+    || !owner || !['orgId', 'restaurantId', 'branchId'].every(k => uuid(owner[k])) || !/^cinematic-[a-z0-9-]+$/.test(owner.slug ?? '')
+    || !phone || !uuid(phone.mediaId) || !/^\/storage\/v1\/object\/public\/storefront-media\/[0-9a-f]{32}\/[0-9a-f]{64}\.webp$/.test(phone.publicPath ?? '')
+    || !['width', 'height'].every(k => Number.isInteger(phone[k]) && phone[k] > 0 && phone[k] <= 960)
+    || !readback || readback.ok !== true || readback.restaurant_id !== owner.restaurantId || readback.storefront_branch_id !== owner.branchId
+    || !Number.isInteger(readback.version) || readback.version < 0 || !readback.document?.appearance
+    || readback.document.appearance.menu_banner_media_id !== null || (readback.document.appearance.menu_banner_layout ?? null) !== null) denied();
+  const value = { source: { runId: source.runId, runAttempt: source.runAttempt, prHead: source.prHead, prBase: source.prBase,
+    testedCheckout: source.testedCheckout, testedTree: source.testedTree },
+    tenant: { orgId: owner.orgId, restaurantId: owner.restaurantId, branchId: owner.branchId, slug: owner.slug },
+    phone: { mediaId: phone.mediaId, publicPath: phone.publicPath, width: phone.width, height: phone.height },
+    baseline: { version: readback.version, documentSha256: createHash('sha256').update(JSON.stringify(readback.document)).digest('hex') } };
+  return { ...value, handoffSha256: createHash('sha256').update(JSON.stringify(value)).digest('hex') };
+}
+export function assertResponsiveSettingsHandoff(handoff, source, owner, readback) {
+  if (!handoff || JSON.stringify(handoff) !== JSON.stringify(responsiveSettingsHandoff(source, owner, handoff?.phone, readback)))
+    throw new Error('responsive_banner_handoff_mismatch');
+}
+export function acceptedResponsiveSettingsHandoff(candidate, proof) {
+  return candidate && typeof candidate === 'object' && /^[0-9a-f]{64}$/.test(candidate.handoffSha256 ?? '')
+    && proof?.primarySucceeded === true && proof.byteGuardStatus === 'PASS'
+    && Number.isInteger(proof.mappedMedia) && proof.mappedMedia > 0 && proof.verifiedMediaBytes === proof.mappedMedia ? candidate : null;
+}
+
 // Only the six optional fields changed by this synthetic settings acceptance.
 export const responsiveBannerKeys = Object.freeze(['menu_banner_layout', 'menu_banner_desktop_media_id',
   'menu_banner_mobile_height_px', 'menu_banner_desktop_height_px', 'menu_banner_desktop_focal_x', 'menu_banner_desktop_focal_y']);
