@@ -6,10 +6,28 @@ import ts from 'typescript';
 import assert from 'node:assert/strict';
 import { responsiveBannerKeys, responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, legacyWelcomeFixtureDocument, legacyWelcomeFixtureRead, responsiveBannerReady,
   dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, classifyMediaReadError,
-  evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, mediaReadErrorDetail, bannerEvidencePhase } from './responsive-banner-settings.mjs';
+  evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, mediaReadErrorDetail, bannerEvidencePhase, menuDocumentNavigation } from './responsive-banner-settings.mjs';
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { createHash } from 'node:crypto';
 import { LOCAL_API, LOGICAL_ORIGIN } from './live-transport.mjs';
+
+test('document navigation preserves hydration, five-second cadence and the existing deadline', () => {
+  const start = 1000;
+  assert.deepEqual(menuDocumentNavigation(start, null, false, start), { navigate: true, timeout: 30000, remainingMs: 100000 });
+  assert.equal(menuDocumentNavigation(start, start + 100, true, start + 5099).navigate, false);
+  assert.equal(menuDocumentNavigation(start, start + 100, false, start + 20000).navigate, false,
+    'An incomplete hydration frame must not be discarded, even after the cadence expires');
+  assert.equal(menuDocumentNavigation(start, start + 100, true, start + 5100).navigate, true);
+  let lastNavigationAt = null, visits = 0;
+  for (let now = start; now <= start + 100000; now += 250) {
+    const next = menuDocumentNavigation(start, lastNavigationAt, true, now);
+    if (next.navigate) { visits++; lastNavigationAt = now; }
+  }
+  assert.equal(visits, 20);
+  assert.deepEqual(menuDocumentNavigation(start, start + 95000, true, start + 100000), { navigate: false, timeout: 1, remainingMs: 0 });
+  assert.equal(menuDocumentNavigation(start, null, false, start + 100001).navigate, false);
+  assert.deepEqual(menuDocumentNavigation(start, start + 90000, true, start + 99990), { navigate: true, timeout: 10, remainingMs: 10 });
+});
 test('restoration materializes exactly six nullable settings without mutating any input or other viewport', () => {
   const input = { appearance: { menu_banner_layout: 'responsive', menu_banner_mobile_height_px: 540,
     menu_banner_media_id: 'phone', menu_background_media_id: 'background', independent: { retained: true } }, hero: { untouched: true } };

@@ -15,3 +15,4 @@ export function bannerComparisonEvidence(assertion: string, field: string, expec
 export function bannerAssertionFailure(error: unknown): Record<string, unknown>;
 export function mediaReadErrorDetail(error: unknown): string;
 export function bannerEvidencePhase(value: unknown): string;
+export function menuDocumentNavigation(startedAt: number, lastNavigationAt: number | null, hydrated: boolean, now: number): { navigate: boolean; timeout: number; remainingMs: number };

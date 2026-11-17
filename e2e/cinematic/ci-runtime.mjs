@@ -76,14 +76,20 @@ function checked(command, args, options = {}) {
   return result.stdout?.trim();
 }
 
-async function waitUntil(url, accepts, child) {
+export async function waitUntil(url, accepts, child, fetchRequest = fetch) {
   const endpoint = new URL(url);
   assert.equal(endpoint.hostname, '127.0.0.1');
+  // The following synchronous browser runs prevent idle-socket close events
+  // from being processed here. Do not leave this readiness-only connection in
+  // the pool used later by the unchanged live measurer. Other services retain
+  // their existing options; fetchRequest is the native fetch in every CI call.
+  const storefrontReadiness = endpoint.origin === 'http://127.0.0.1:3000' && endpoint.pathname === '/' && !endpoint.search;
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     if (child && child.exitCode !== null) throw new Error('Local application exited during startup');
     try {
-      const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(2000) });
+      const response = await fetchRequest(url, { redirect: 'error', signal: AbortSignal.timeout(2000),
+        ...(storefrontReadiness ? { headers: { connection: 'close' } } : {}) });
       if (accepts(response)) return;
     } catch { /* Bounded service-readiness polling, never retry an acceptance test. */ }
     await new Promise(r => setTimeout(r, 500));
@@ -167,6 +173,18 @@ export function evidenceSanitizeDiagnostic(entry, error) {
     error?.message === 'Credential-shaped data must not be published' ? 'CREDENTIAL_PATTERN_REJECTED' : 'EVIDENCE_SANITIZE_FAILED';
   return { file: diagnosticFiles.has(entry) ? entry : null, reason };
 }
+// Only actual Playwright report values, bounded by this lane's one-hour job.
+// Missing/invalid durations stay unknown; never infer them from another run.
+const reportedDurationMs = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 60 * 60_000 ? value : null;
+function reportedStartTime(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) && new Date(ms).toISOString() === value ? value : null;
+}
+export function caseResultEvidence(result, clean) {
+  return { status: result.status, error: clean(result.error?.message),
+    startTime: reportedStartTime(result.startTime), durationMs: reportedDurationMs(result.duration) };
+}
 export function caseCollectionSummary(mode, result, report, reportPresent) {
   const codes = new Set(['ENOENT','EACCES','EPERM','ETIMEDOUT','ENOBUFS','E2BIG']);
   const signals = new Set(['SIGTERM','SIGKILL','SIGABRT','SIGINT','SIGSEGV']);
@@ -174,7 +192,8 @@ export function caseCollectionSummary(mode, result, report, reportPresent) {
     signal: signals.has(result?.signal) ? result.signal : result?.signal ? 'OTHER' : null,
     spawnError: result?.error ? { name: ['Error','TypeError','RangeError'].includes(result.error.name) ? result.error.name : 'OTHER',
       code: codes.has(result.error.code) ? result.error.code : 'OTHER' } : null,
-    reportPresent: reportPresent === true, globalErrorCount: Array.isArray(report?.errors) ? report.errors.length : 0,
+    reportPresent: reportPresent === true, durationMs: reportedDurationMs(report?.stats?.duration),
+    globalErrorCount: Array.isArray(report?.errors) ? report.errors.length : 0,
     globalErrors: (Array.isArray(report?.errors) ? report.errors : []).slice(0, 3).map(error => ({
       messageSha256: sha256(String(error?.message ?? '')), classification: ['Error','TypeError','SyntaxError','ReferenceError'].includes(error?.name) ? error.name : 'unclassified',
       sourceFrame: String(error?.stack ?? '').match(/(?:^|[\s(/])(?:e2e\/)?(cinematic\/[a-z0-9_-]+(?:\.spec)?\.(?:ts|mjs):[0-9]+:[0-9]+)(?=[)\s]|$)/m)?.[1] ?? null,
@@ -339,7 +358,7 @@ async function main(action) {
       const collect = suites => { for (const suite of suites || []) {
         for (const spec of suite.specs || []) for (const item of spec.tests || []) {
           cases.push({ title: clean(spec.title), status: item.status,
-            results: (item.results || []).map(r => ({ status: r.status, error: clean(r.error?.message) })) });
+            results: (item.results || []).map(r => caseResultEvidence(r, clean)) });
         }
         collect(suite.suites);
       } };

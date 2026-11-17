@@ -11,7 +11,7 @@ import { LOGICAL_ORIGIN, localMediaTarget, localWelcomeVideoTarget, logicalMedia
 import { createHash, randomUUID } from 'node:crypto';
 import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot, completeResponsiveFixture, responsiveFixtureMismatch } from './banner-responsive';
 import { verifyResponsiveBannerSettings, adjustBannerHeightWithKeyboard, navigateAfterMediaSettles, observeLogicalMedia } from './responsive-banner-settings';
-import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, bannerEvidencePhase, mediaReadErrorDetail } from './responsive-banner-settings.mjs';
+import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, bannerEvidencePhase, mediaReadErrorDetail, menuDocumentNavigation } from './responsive-banner-settings.mjs';
 import { BackgroundQuality, backgroundFixture } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
@@ -92,11 +92,22 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
   const mediaFacts = new Map<NativeRequest, Obj>();
   const pages = new Map<Page, Obj>(), frames = new Map<NativeFrame, Obj>();
   const failedFacts: NativeRequest[] = [];
+  const navigationFacts: Obj[] = [];
+  let navigationOverflow = 0;
+  const urlParts = (value: string) => {
+    try {
+      const parsed = new URL(value), hash = (part: string) => createHash('sha256').update(part).digest('hex');
+      // Private comparison state only. Neither URLs nor these digests are
+      // copied into the receipt; only equality/change booleans leave it.
+      return { origin: hash(parsed.origin), path: hash(parsed.pathname), search: hash(parsed.search), hash: hash(parsed.hash) };
+    } catch { return null; }
+  };
   const frameState = (frame: NativeFrame) => {
     let state = frames.get(frame);
     if (!state && frames.size < 128) {
       state = { id: `f${frames.size + 1}`, navigationEpoch: 0,
-        navigationStartedMs: null, navigationCommittedMs: null, detachedMs: null };
+        navigationStartedMs: null, navigationCommittedMs: null, detachedMs: null,
+        lastUrlParts: urlParts(frame.url()), committedNavigationEpoch: null };
       frames.set(frame, state);
     }
     return state;
@@ -106,7 +117,22 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
     const state: Obj = { id: `p${pages.size + 1}`, closedMs: null };
     pages.set(target, state);
     target.on('close', () => { state.closedMs = now(); });
-    target.on('framenavigated', frame => { const value = frameState(frame); if (value) value.navigationCommittedMs = now(); });
+    target.on('framenavigated', frame => {
+      const value = frameState(frame); if (!value) return;
+      const before = value.lastUrlParts, after = urlParts(frame.url());
+      let storefront = false; try { storefront = new URL(frame.url()).origin === STOREFRONT; } catch { /* No URL retained. */ }
+      if (storefront) {
+        const event = { ms: now(), phase: evidencePhase, page: state.id, frame: value.id,
+          frameKind: frame === target.mainFrame() ? 'main' : 'child', navigationEpoch: value.navigationEpoch,
+          networkNavigationSincePriorCommit: value.committedNavigationEpoch === null ? null : value.committedNavigationEpoch !== value.navigationEpoch,
+          routeEqual: before && after ? before.origin === after.origin && before.path === after.path : null,
+          pathChanged: before && after ? before.path !== after.path : null,
+          hashChanged: before && after ? before.hash !== after.hash : null,
+          queryChanged: before && after ? before.search !== after.search : null };
+        if (navigationFacts.length < 64) navigationFacts.push(event); else navigationOverflow++;
+      }
+      value.navigationCommittedMs = now(); value.lastUrlParts = after; value.committedNavigationEpoch = value.navigationEpoch;
+    });
     target.on('framedetached', frame => { const value = frameState(frame); if (value) value.detachedMs = now(); });
   };
   const location = (request: NativeRequest) => {
@@ -279,6 +305,10 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
       expect(verifiedMediaBytes).toBe(mappedMedia);
     },
     media: () => ({ mappedMedia, verifiedMediaBytes }),
+    mediaNow: now,
+    mediaOrigin: () => began,
+    mediaPageIdentity: (target: Page) => ({ page: pages.get(target)?.id ?? 'unobserved',
+      frame: frames.get(target.mainFrame())?.id ?? 'unobserved' }),
     phase: (value: string) => { if (welcomeVideoSource && /^[a-z][a-z0-9-]{0,100}$/.test(value)) evidencePhase = value; },
     mediaSnapshot: () => ({ scope: 'Bounded annotations of existing original browser reads; no replacement bodies',
       snapshotMs: now(), phase: evidencePhase, firstGuardCheckMs, contextClosedMs,
@@ -288,6 +318,7 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
       bodyUnavailable: [...mediaFacts.values()].filter(value => value.bodyRead === 'UNAVAILABLE').length,
       hashMismatches: [...mediaFacts.values()].filter(value => value.bodyMatched === false).length,
       pendingBodies: [...mediaFacts.values()].filter(value => value.bodyRead === 'PENDING').length,
+      navigationOverflow, navigationFacts: structuredClone(navigationFacts),
       failedFacts: failedFacts.map(request => ({ ...structuredClone(mediaFacts.get(request)), atSnapshot: location(request) })) }),
     checkWelcomeVideo: async () => {
       if (!welcomeVideoSource) throw new Error('No independently pinned welcome video fixture');
@@ -1617,8 +1648,17 @@ async function verifyBannerFocalPersistence(page: Page, menu: Page, f: Fixture, 
     await expect.poll(async () => (await geometry(phone)).position).toBe('38% 9%');
     const afterPreview = await geometry(phone);
     await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width: 390, height: 844 });
+    const renderStarted = Date.now(); let lastNavigationAt: number | null = null, hydrated = false;
     await expect.poll(async () => {
-      await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+      const next = menuDocumentNavigation(renderStarted, lastNavigationAt, hydrated, Date.now());
+      if (next.navigate) {
+        await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded', timeout: next.timeout });
+        lastNavigationAt = Date.now();
+      }
+      hydrated = await menu.evaluate(() => {
+        const root = window.document.querySelector<HTMLElement>('[data-sf-root]');
+        return Boolean(root?.style.getPropertyValue('--bg') && root.style.getPropertyValue('--font'));
+      });
       const image = menu.locator('[data-sf-menu-banner] img');
       return await image.count() === 1 ? image.evaluate(el => getComputedStyle(el).objectPosition) : '';
     }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe('38% 9%');
@@ -1684,11 +1724,20 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
     await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width, height: width > 650 ? 900 : 844 });
     const expected = { state, images: enabled ? 1 : 0, light: theme === 'light', annotated: annotated && state === 'open' };
     const began = Date.now(); let lastSample: Obj | null = null, navigationStatus: number | null = null, cache: string | null = null;
+    let lastNavigationAt: number | null = null, hydrated = false;
     try {
     await expect.poll(async () => {
-      const response = await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
-      navigationStatus = response?.status() ?? null;
-      const header = response?.headers()['x-nextjs-cache']; cache = header && ['HIT','MISS','STALE','REVALIDATED','BYPASS'].includes(header) ? header : null;
+      const next = menuDocumentNavigation(began, lastNavigationAt, hydrated, Date.now());
+      if (next.navigate) {
+        const response = await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded', timeout: next.timeout });
+        lastNavigationAt = Date.now();
+        navigationStatus = response?.status() ?? null;
+        const header = response?.headers()['x-nextjs-cache']; cache = header && ['HIT','MISS','STALE','REVALIDATED','BYPASS'].includes(header) ? header : null;
+      }
+      hydrated = await menu.evaluate(() => {
+        const root = window.document.querySelector<HTMLElement>('[data-sf-root]');
+        return Boolean(root?.style.getPropertyValue('--bg') && root.style.getPropertyValue('--font'));
+      });
       lastSample = await menu.evaluate(marker => ({ state: document.querySelector('[data-sf-order-status] [data-state]')?.getAttribute('data-state'),
         images: document.querySelectorAll('[data-sf-menu-banner] img').length,
         light: getComputedStyle(document.querySelector('[data-sf-root]')!).getPropertyValue('--bg').trim().toLowerCase() === '#ffffff',
@@ -1849,7 +1898,7 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
   }
 }
 
-async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: string, diagnostics: () => UploadDiagnostics, recordPhase: (value: string) => void): Promise<void> {
+async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: string, diagnostics: () => UploadDiagnostics, recordPhase: (value: string) => void, caseTiming: () => Obj): Promise<void> {
   const out = process.env.CINEMATIC_ARTIFACT_DIR!;
   let stage = 'baseline';
   const receipt: Obj = { status: 'FAIL', failedStage: stage, data: 'actual isolated Dashboard/Auth/Storage/Edge; no mocked publication', publications: [] };
@@ -1940,8 +1989,17 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
       }, bytes.toString('base64'));
       expect(dimensions).toEqual({ width: publication.media.width, height: publication.media.height });
       expect(Math.max(dimensions.width, dimensions.height)).toBeLessThanOrEqual(960);
+      const renderStarted = Date.now(); let lastNavigationAt: number | null = null, hydrated = false;
       await expect.poll(async () => {
-        await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+        const next = menuDocumentNavigation(renderStarted, lastNavigationAt, hydrated, Date.now());
+        if (next.navigate) {
+          await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded', timeout: next.timeout });
+          lastNavigationAt = Date.now();
+        }
+        hydrated = await menu.evaluate(() => {
+          const root = window.document.querySelector<HTMLElement>('[data-sf-root]');
+          return Boolean(root?.style.getPropertyValue('--bg') && root.style.getPropertyValue('--font'));
+        });
         const image = menu.locator('[data-sf-menu-banner] img');
         return await image.count() === 1 && (await image.getAttribute('src'))?.endsWith(path);
       }, { timeout: 100000, intervals: [250, 500, 1000] }).toBe(true);
@@ -1954,8 +2012,17 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
         // synthetic server settings does not refresh this already loaded tab.
         stage = 'restored-banner-public-read-and-render'; recordPhase(stage);
         expect((await publicMenu()).content_v1.appearance.menu_banner_url).toBe(path);
+        const restoredStarted = Date.now(); let restoredNavigationAt: number | null = null, restoredHydrated = false;
         await expect.poll(async () => {
-          await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+          const next = menuDocumentNavigation(restoredStarted, restoredNavigationAt, restoredHydrated, Date.now());
+          if (next.navigate) {
+            await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded', timeout: next.timeout });
+            restoredNavigationAt = Date.now();
+          }
+          restoredHydrated = await menu.evaluate(() => {
+            const root = window.document.querySelector<HTMLElement>('[data-sf-root]');
+            return Boolean(root?.style.getPropertyValue('--bg') && root.style.getPropertyValue('--font'));
+          });
           const restored = menu.locator('[data-sf-menu-banner] img');
           return await restored.count() === 1 ? {
             sameResource: (await restored.getAttribute('src'))?.endsWith(path),
@@ -2136,8 +2203,11 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
     expect(publicAppearance.menu_banner_desktop_url ?? null, 'Restored legacy fixture has no independent desktop image').toBeNull();
     expect(publicAppearance.menu_banner_url).toBeNull();
     clearStep('clear-storefront');
-    await waitForClearedMenu(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu',
-      receipt.publications.map((entry: Obj) => entry.publicPath), clear);
+    clear.testBudgetBeforeWait = caseTiming();
+    try {
+      await waitForClearedMenu(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu',
+        receipt.publications.map((entry: Obj) => entry.publicPath), clear);
+    } finally { clear.testBudgetAfterWait = caseTiming(); }
     clear.substage = 'complete';
     receipt.status = 'BANNER_UPLOAD_E2E_PASS'; receipt.failedStage = null;
     receipt.backgroundAndWelcomePreserved = true;
@@ -2181,8 +2251,10 @@ async function waitForClearedMenu(menu: Page, url: string, previousPaths: string
   // The real short trace proved that an old HIT/STALE HTML document is normal
   // until this route regenerates. Join each complete document and avoid another
   // reload on every assertion poll. Keep the original 100s acceptance deadline.
-  const deadline = Date.now() + 100000;
+  const startedAt = Date.now(), deadline = startedAt + 100000;
+  receipt.waitTiming = { startedAt, configuredTimeoutMs: 100000 };
   let nextDocumentAt = 0, ready = false;
+  try {
   await expect.poll(async () => {
     if (Date.now() < nextDocumentAt) return ready;
     const sample: Obj = {}; receipt.samples.push(sample);
@@ -2193,6 +2265,11 @@ async function waitForClearedMenu(menu: Page, url: string, previousPaths: string
     nextDocumentAt = Math.min(deadline, Date.now() + 5000);
     return ready;
   }, { timeout: 100000, intervals: [250, 500, 1000], message: 'The warmed ordinary menu document and DOM both reflect the cleared selection' }).toBe(true);
+  } finally {
+    const endedAt = Date.now();
+    Object.assign(receipt.waitTiming, { endedAt, elapsedMs: Math.max(0, endedAt - startedAt), documentAttempts: receipt.samples.length,
+      completedDocumentSamples: receipt.samples.filter((sample: Obj) => Number.isFinite(sample.observedAt)).length });
+  }
 }
 function recordClearServerEvidence(receipt: Obj): void {
   try {
@@ -2796,10 +2873,19 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
 // Independent evidence in the same real-service stack. A failed legacy
 // background-companion assertion remains a failure, but cannot skip this
 // banner lifecycle. It signs in through the real UI again; no session injection.
-test('independent banner → actual Edge → save/reload → replace/clear preserves other media', async ({ page, context }) => {
+test('independent banner → actual Edge → save/reload → replace/clear preserves other media', async ({ page, context }, testInfo) => {
+  const bodyStartedAt = Date.now();
   // The added independent device heights/media include fourteen live readbacks.
   // Use the same finite case budget as the other full Dashboard journey.
   test.setTimeout(20 * 60_000);
+  // Public testInfo has no live case-start clock. These are honestly labeled
+  // body-entry upper bounds; the report's actual startTime/duration joins them.
+  const caseTiming = () => {
+    const observedAt = Date.now(), bodyElapsedMs = Math.max(0, observedAt - bodyStartedAt);
+    return { observedAt, bodyStartedAt, bodyElapsedMs, configuredTimeoutMs: testInfo.timeout,
+      remainingUpperBoundMs: Math.max(0, testInfo.timeout - bodyElapsedMs) };
+  };
+  const phaseTiming: Obj[] = []; let phaseTimingOverflow = 0;
   const f = fixture(), network = await guardBrowser(context), mediaObservation = observeLogicalMedia(context, { dashboard: DASHBOARD, storefront: STOREFRONT });
   const uploads: UploadDiagnostics[] = [];
   let signedIn = false, passed = false;
@@ -2807,7 +2893,10 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
   let primaryFailure: { error: unknown } | null = null, guardError: { error: unknown } | null = null;
   const byteGuard: Obj = { status: 'NOT_RUN', failure: null };
   let failedPhase: string | null = null;
-  const recordPhase = (value: string) => { phase = bannerEvidencePhase(value); mediaObservation.phase(phase); };
+  const recordPhase = (value: string) => {
+    phase = bannerEvidencePhase(value); mediaObservation.phase(phase);
+    if (phaseTiming.length < 64) phaseTiming.push({ phase, ...caseTiming() }); else phaseTimingOverflow++;
+  };
   try {
     await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();
     await fillField(page, L.email, f.ownerA.email); await enterLoginPassword(page, f.ownerA.password);
@@ -2822,7 +2911,7 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
     const menu = await context.newPage();
     await verifyBannerJourney(page, menu, f, session.access_token, () => {
       const value = new UploadDiagnostics(); uploads.push(value); return value;
-    }, recordPhase);
+    }, recordPhase, caseTiming);
   } catch (error) {
     primaryFailure = { error }; failedPhase = phase;
     failure = bannerAssertionFailure(error); throw error;
@@ -2839,6 +2928,8 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
       writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR!, 'banner-browser-result.json'), JSON.stringify({
         status: passed ? 'PASS' : 'FAIL', phase, failedPhase, failure, byteGuard, realUiSignIn: signedIn, uploads: uploads.map(item => item.snapshot()),
         fonts: network.fonts(), mediaTransport: network.media(), logicalMediaObservation: mediaObservation.snapshot(),
+        caseTiming: { ...caseTiming(), meaning: 'Body-entry remaining upper bound excludes fixture setup; join actual report startTime/duration for the case deadline' },
+        phaseTiming, phaseTimingOverflow,
       }, null, 2));
     } catch (error) { if (!primaryFailure && !guardError) throw error; }
     finally { mediaObservation.stop(); }
@@ -2878,6 +2969,101 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
   network.phase(phase);
   const stage = (value: string) => { phase = value; receipt.phase = value; network.phase(value); };
   const done = () => receipt.completedPhases.push(phase);
+  const videoMediaDiagnostics: Obj = { scope: 'Passive original video events and existing test actions; no player-method or network overrides',
+    clock: 'Date.now relative to the existing resource observer; document IDs use native performance.timeOrigin',
+    events: [], actions: [], eventOverflow: 0, actionOverflow: 0, invalidEvents: 0, drain: 'NOT_RUN' };
+  const videoDocuments = new Map<number, string>();
+  const videoDocument = (origin: number) => {
+    if (!videoDocuments.has(origin) && videoDocuments.size < 8) videoDocuments.set(origin, `d${videoDocuments.size + 1}`);
+    return videoDocuments.get(origin) ?? 'overflow';
+  };
+  let observedVideoPage: Page | null = null;
+  const videoAction = async <T>(name: string, operation: () => Promise<T>): Promise<T> => {
+    const action: Obj = { name, phase, beforeMs: network.mediaNow(), afterMs: null, status: 'PENDING',
+      ...(observedVideoPage ? network.mediaPageIdentity(observedVideoPage) : {}) };
+    if (videoMediaDiagnostics.actions.length < 48) videoMediaDiagnostics.actions.push(action); else videoMediaDiagnostics.actionOverflow++;
+    try { const value = await operation(); action.status = 'PASS'; return value; }
+    catch (error) { action.status = 'FAIL'; action.errorClass = error instanceof Error && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'unclassified'; throw error; }
+    finally { action.afterMs = network.mediaNow(); }
+  };
+  const installVideoEventFacts = async (target: Page) => {
+    const nativeEvents = new Set(['loadstart', 'progress', 'loadedmetadata', 'loadeddata', 'canplay', 'play', 'playing', 'pause',
+      'emptied', 'abort', 'error', 'suspend', 'node-added', 'node-removed', 'src-attribute', 'preload-attribute']);
+    await target.exposeBinding('__cinematicWelcomeMediaEvent', (source, value: Obj) => {
+      if (source.page !== target || source.frame !== target.mainFrame() || !value || !nativeEvents.has(value.event)
+        || !Number.isFinite(value.ms) || value.ms < 0 || value.ms > 7_200_000
+        || !Number.isFinite(value.timeOrigin) || !/^v[1-9][0-9]{0,3}$/.test(value.node)
+        || !Number.isInteger(value.readyState) || value.readyState < 0 || value.readyState > 4
+        || !Number.isInteger(value.networkState) || value.networkState < 0 || value.networkState > 3) {
+        videoMediaDiagnostics.invalidEvents++; return;
+      }
+      if (videoMediaDiagnostics.events.length >= 128) { videoMediaDiagnostics.eventOverflow++; return; }
+      videoMediaDiagnostics.events.push({ ms: value.ms, event: value.event, document: videoDocument(value.timeOrigin),
+        node: value.node, ...network.mediaPageIdentity(target),
+        trusted: typeof value.trusted === 'boolean' ? value.trusted : null,
+        currentTime: Number.isFinite(value.currentTime) ? Math.round(value.currentTime * 1e6) / 1e6 : null,
+        paused: value.paused === true, ended: value.ended === true, connected: value.connected === true,
+        readyState: value.readyState, networkState: value.networkState,
+        errorCode: Number.isInteger(value.errorCode) && value.errorCode >= 1 && value.errorCode <= 4 ? value.errorCode : null,
+        preload: ['none', 'metadata', 'auto', ''].includes(value.preload) ? value.preload : 'unrecognized',
+        previousPreload: ['none', 'metadata', 'auto', ''].includes(value.previousPreload) ? value.previousPreload : null,
+        srcHash: typeof value.srcHash === 'string' && /^[0-9a-f]{64}$/.test(value.srcHash) ? value.srcHash : null,
+        attributeSrcHash: typeof value.attributeSrcHash === 'string' && /^[0-9a-f]{64}$/.test(value.attributeSrcHash) ? value.attributeSrcHash : null,
+        previousAttributeSrcHash: typeof value.previousAttributeSrcHash === 'string' && /^[0-9a-f]{64}$/.test(value.previousAttributeSrcHash) ? value.previousAttributeSrcHash : null });
+    });
+    // Install passive capturing listeners before HTML parsing, otherwise the
+    // original metadata request can end before goto() returns. Nothing changes
+    // the player, the document, its policies, its requests or its responses.
+    await target.addInitScript(({ originMs, logicalOrigin }) => {
+      const pending = new Set<Promise<unknown>>(), nodes = new WeakMap<HTMLVideoElement, string>();
+      let nodeSequence = 0, sent = 0, dropped = 0;
+      const assetHash = (value: string) => {
+        try { const u = new URL(value, document.baseURI);
+          return u.origin === logicalOrigin && !u.username && !u.password && !u.search && !u.hash
+            ? /^\/storage\/v1\/object\/public\/storefront-welcome-videos\/[0-9a-f]{32}\/([0-9a-f]{64})\.mp4$/.exec(u.pathname)?.[1] ?? null : null;
+        } catch { return null; }
+      };
+      const record = (event: string, element: HTMLVideoElement, detail?: { trusted?: boolean; previousAttribute?: string | null }) => {
+        if (sent >= 128) { dropped++; return; }
+        sent++;
+        if (!nodes.has(element)) nodes.set(element, `v${++nodeSequence}`);
+        const global = globalThis as typeof globalThis & {
+          __cinematicWelcomeMediaEvent: (value: Record<string, unknown>) => Promise<unknown>;
+          __cinematicWelcomeMediaDrain?: () => Promise<unknown>;
+        };
+        const send = global.__cinematicWelcomeMediaEvent({ ms: Date.now() - originMs, timeOrigin: performance.timeOrigin,
+          event, node: nodes.get(element), trusted: detail?.trusted ?? null,
+          currentTime: element.currentTime, paused: element.paused, ended: element.ended,
+          connected: element.isConnected, readyState: element.readyState, networkState: element.networkState,
+          errorCode: element.error?.code ?? null, preload: element.preload,
+          srcHash: assetHash(element.currentSrc), attributeSrcHash: assetHash(element.getAttribute('src') ?? ''),
+          previousAttributeSrcHash: event === 'src-attribute' ? assetHash(detail?.previousAttribute ?? '') : null,
+          previousPreload: event === 'preload-attribute' && ['none', 'metadata', 'auto', ''].includes(detail?.previousAttribute ?? '') ? detail?.previousAttribute ?? '' : null });
+        pending.add(send); void send.then(() => pending.delete(send), () => pending.delete(send));
+      };
+      for (const type of ['loadstart', 'progress', 'loadedmetadata', 'loadeddata', 'canplay', 'play', 'playing', 'pause', 'emptied', 'abort', 'error', 'suspend']) {
+        document.addEventListener(type, event => {
+          if (event.target instanceof HTMLVideoElement && event.target.id === 'sf-welcome-background-video') record(type, event.target, { trusted: event.isTrusted });
+        }, true);
+      }
+      const visit = (node: Node, event: string) => {
+        if (!(node instanceof Element)) return;
+        if (node instanceof HTMLVideoElement && node.id === 'sf-welcome-background-video') record(event, node);
+        for (const element of Array.from(node.querySelectorAll<HTMLVideoElement>('video#sf-welcome-background-video'))) record(event, element);
+      };
+      new MutationObserver(records => {
+        for (const mutation of records) {
+          if (mutation.type === 'attributes' && mutation.target instanceof HTMLVideoElement
+            && mutation.target.id === 'sf-welcome-background-video') record(`${mutation.attributeName}-attribute`, mutation.target, { previousAttribute: mutation.oldValue });
+          for (const node of Array.from(mutation.addedNodes)) visit(node, 'node-added');
+          for (const node of Array.from(mutation.removedNodes)) visit(node, 'node-removed');
+        }
+      }).observe(document, { childList: true, subtree: true, attributes: true, attributeOldValue: true, attributeFilter: ['src', 'preload'] });
+      (globalThis as typeof globalThis & { __cinematicWelcomeMediaDrain: () => Promise<unknown> }).__cinematicWelcomeMediaDrain = async () => {
+        await Promise.allSettled([...pending]); return { sent, dropped, timeOrigin: performance.timeOrigin };
+      };
+    }, { originMs: network.mediaOrigin(), logicalOrigin: LOGICAL_ORIGIN });
+  };
   const read = () => rpc(f, token, 'get_restaurant_storefront_content_v7');
   const profile = () => rpc(f, token, 'get_restaurant_storefront_profile');
   const publicRead = async () => {
@@ -3113,33 +3299,39 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     const videoMenu=await publicRead(); expect(videoMenu.restaurant.welcome_media_type).toBe('video');
     expect(videoMenu.restaurant.welcome_video.url).toBe('/storage/v1/object/public/storefront-welcome-videos/'+video.object_key);
     const videoPage=await context.newPage(); await videoPage.setViewportSize({width:1280,height:900});
-    await videoPage.goto(`${STOREFRONT}/en/s/${f.ownerA.slug}`,{waitUntil:'domcontentloaded'});
+    observedVideoPage = videoPage;
+    await installVideoEventFacts(videoPage);
+    await videoAction('goto', () => videoPage.goto(`${STOREFRONT}/en/s/${f.ownerA.slug}`,{waitUntil:'domcontentloaded'}));
     const player=videoPage.locator('[data-sf-welcome-media="video"]>video');
-    await expect(player).toHaveAttribute('src',LOGICAL_ORIGIN+videoMenu.restaurant.welcome_video.url);
-    await expect.poll(()=>player.evaluate(el=>({ready:(el as HTMLVideoElement).readyState>=2,width:(el as HTMLVideoElement).videoWidth,height:(el as HTMLVideoElement).videoHeight}))).toEqual({ready:true,width:540,height:864});
+    await videoAction('source-assertion', () => expect(player).toHaveAttribute('src',LOGICAL_ORIGIN+videoMenu.restaurant.welcome_video.url));
+    await videoAction('ready', () => expect.poll(()=>player.evaluate(el=>({ready:(el as HTMLVideoElement).readyState>=2,width:(el as HTMLVideoElement).videoWidth,height:(el as HTMLVideoElement).videoHeight}))).toEqual({ready:true,width:540,height:864}));
     const playbackState = () => player.evaluate(el => {
       const value=el as HTMLVideoElement;
       return {paused:value.paused,currentTime:value.currentTime,muted:value.muted,loop:value.loop,
         controls:value.controls,errorCode:value.error?.code??null};
     });
     const control=videoPage.locator('[data-sf-welcome-playback]');
-    receipt.videoInteraction={method:'actual-background-autoplay-and-user-button',before:await playbackState()};
+    receipt.videoInteraction={method:'actual-background-autoplay-and-user-button',before:await videoAction('initial-playback-state', playbackState)};
     try {
-      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).currentTime)).toBeGreaterThan(.1);
-      const playing=await playbackState(); expect([playing.muted,playing.loop,playing.controls]).toEqual([true,true,false]);
-      receipt.videoBackground=await backgroundGeometry(videoPage);
-      await screenshot(videoPage,resolve(out,'welcome-video-desktop-test-data.png'));
-      await control.click(); await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true);
-      await control.press('Enter'); await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(false);
-      await videoPage.emulateMedia({reducedMotion:'reduce'});
-      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true);
-      await expect(player).toHaveAttribute('poster',LOGICAL_ORIGIN+'/storage/v1/object/public/storefront-media/'+image.object_key);
-      await control.press('Enter'); await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(false);
-      const resumed=await player.evaluate(el=>(el as HTMLVideoElement).currentTime);
-      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).currentTime)).toBeGreaterThan(resumed);
-      await control.click(); await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true);
+      await videoAction('initial-progress', () => expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).currentTime)).toBeGreaterThan(.1));
+      const playing=await videoAction('playing-state', playbackState); expect([playing.muted,playing.loop,playing.controls]).toEqual([true,true,false]);
+      receipt.videoBackground=await videoAction('geometry', () => backgroundGeometry(videoPage));
+      await videoAction('screenshot', () => screenshot(videoPage,resolve(out,'welcome-video-desktop-test-data.png')));
+      await videoAction('pause-click', () => control.click());
+      await videoAction('pause-click-state', () => expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true));
+      await videoAction('resume-enter', () => control.press('Enter'));
+      await videoAction('resume-enter-state', () => expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(false));
+      await videoAction('reduced-motion', () => videoPage.emulateMedia({reducedMotion:'reduce'}));
+      await videoAction('reduced-motion-state', () => expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true));
+      await videoAction('poster-assertion', () => expect(player).toHaveAttribute('poster',LOGICAL_ORIGIN+'/storage/v1/object/public/storefront-media/'+image.object_key));
+      await videoAction('manual-resume-enter', () => control.press('Enter'));
+      await videoAction('manual-resume-state', () => expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(false));
+      const resumed=await videoAction('manual-resume-time', () => player.evaluate(el=>(el as HTMLVideoElement).currentTime));
+      await videoAction('manual-resume-progress', () => expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).currentTime)).toBeGreaterThan(resumed));
+      await videoAction('final-pause-click', () => control.click());
+      await videoAction('final-pause-state', () => expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true));
     } finally {
-      try { receipt.videoInteraction.after=await playbackState(); }
+      try { receipt.videoInteraction.after=await videoAction('final-playback-state', playbackState); }
       catch { receipt.videoInteraction.after={status:'UNAVAILABLE'}; }
     }
     receipt.videoDisplay={status:'PASS',publicUrl:await player.getAttribute('src'),width:540,height:864,
@@ -3178,6 +3370,22 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     // sessions, private object paths, entire RPC replies or synthetic passwords.
     receipt.phase=phase; receipt.actualServices=true; receipt.retries=0;
     receipt.resourceByteDiagnostics = network.mediaSnapshot();
+    if (observedVideoPage && !observedVideoPage.isClosed()) {
+      videoMediaDiagnostics.drainBeforeMs = network.mediaNow();
+      try {
+        const drained = await observedVideoPage.evaluate(async () => {
+          const drain = (globalThis as typeof globalThis & { __cinematicWelcomeMediaDrain?: () => Promise<unknown> }).__cinematicWelcomeMediaDrain;
+          return drain ? await drain() : null;
+        }) as { sent: number; dropped: number; timeOrigin: number } | null;
+        const valid = drained && Number.isInteger(drained.sent) && drained.sent >= 0 && drained.sent <= 128
+          && Number.isInteger(drained.dropped) && drained.dropped >= 0 && Number.isFinite(drained.timeOrigin);
+        videoMediaDiagnostics.drain = valid ? 'COMPLETE' : 'UNAVAILABLE';
+        if (valid) videoMediaDiagnostics.lastDocument = { document: videoDocument(drained.timeOrigin),
+          sent: drained.sent, dropped: drained.dropped };
+      } catch (error) { videoMediaDiagnostics.drain = 'UNAVAILABLE'; videoMediaDiagnostics.drainError = mediaReadErrorDetail(error); }
+      finally { videoMediaDiagnostics.drainAfterMs = network.mediaNow(); }
+    } else if (observedVideoPage) videoMediaDiagnostics.drain = 'PAGE_CLOSED';
+    receipt.videoMediaDiagnostics = videoMediaDiagnostics;
     for (const key of ['resourceByteGuard','byteGuard','dashboardImageByteGuard']) {
       if (['RUNNING','ASSERTION_PENDING'].includes(receipt[key]?.status)) receipt[key].status='FAIL';
     }

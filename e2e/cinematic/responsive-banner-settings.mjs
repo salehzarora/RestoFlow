@@ -1,6 +1,14 @@
 import { createHash } from 'node:crypto';
 import { localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
 
+// Reuse the existing 100s ISR/hydration wait without discarding a document on
+// every assertion sample. This schedules navigation only, never acceptance.
+export function menuDocumentNavigation(startedAt, lastNavigationAt, hydrated, now) {
+  const remainingMs = Math.max(0, 100000 - Math.max(0, now - startedAt));
+  return { navigate: remainingMs > 0 && (lastNavigationAt === null || (hydrated && now - lastNavigationAt >= 5000)),
+    timeout: Math.max(1, Math.min(30000, remainingMs)), remainingMs };
+}
+
 // Only the six optional fields changed by this synthetic settings acceptance.
 export const responsiveBannerKeys = Object.freeze(['menu_banner_layout', 'menu_banner_desktop_media_id',
   'menu_banner_mobile_height_px', 'menu_banner_desktop_height_px', 'menu_banner_desktop_focal_x', 'menu_banner_desktop_focal_y']);

@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { localStatus, assertHeightVideoEvidence, HEIGHT_VIDEO_FILE, acceptanceRunArgs, PUBLISHER_PROBE_TITLE, CLEAR_TRACE_TITLE, WELCOME_GRANT_IDENTITIES, projectMigrationGrantReceipt, assertPublicEvidenceJson, evidenceSanitizeDiagnostic, caseCollectionSummary, probeDiagnosticScalars, budgetChildProcessStates } from './ci-runtime.mjs';
+import { localStatus, assertHeightVideoEvidence, HEIGHT_VIDEO_FILE, acceptanceRunArgs, PUBLISHER_PROBE_TITLE, CLEAR_TRACE_TITLE, WELCOME_GRANT_IDENTITIES, projectMigrationGrantReceipt, assertPublicEvidenceJson, evidenceSanitizeDiagnostic, caseCollectionSummary, caseResultEvidence, probeDiagnosticScalars, budgetChildProcessStates, waitUntil } from './ci-runtime.mjs';
 import { readFileSync } from 'node:fs';
 import { liveBudgetTransportError, retainLiveBudgetFailure, observeLiveBudgetTransport } from './live-budget.mjs';
 import { EventEmitter } from 'node:events';
+import { createServer } from 'node:http';
 const key = role => `test.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.test`;
 
 test('the short publisher reproduction runs once and never excludes an original case', () => {
@@ -142,6 +143,38 @@ test('case collection and probe diagnostics retain only bounded fixed scalars ev
   assert.ok(!JSON.stringify(untrusted).includes('secret-value'));
 });
 
+test('reported duration metadata preserves outcomes/errors and rejects missing, secret-shaped or out-of-range durations', () => {
+  const clean = value => String(value ?? '').replaceAll('secret-value', '[REDACTED]');
+  for (const duration of [0, 64_362, 1_200_048.5, 3_600_000]) {
+    assert.deepEqual(caseResultEvidence({ status: 'timedOut', error: { message: 'original error' }, duration, extra: 'secret-value' }, clean),
+      { status: 'timedOut', error: 'original error', startTime: null, durationMs: duration });
+    assert.equal(caseCollectionSummary('full', { status: 1 }, { stats: { duration } }, true).durationMs, duration);
+  }
+  for (const duration of [undefined, null, false, -1, NaN, Infinity, 3_600_001, 'secret-value', { valueOf() { throw new Error('secret-value'); } }]) {
+    const result = caseResultEvidence({ status: 'failed', error: { message: 'secret-value' }, duration }, clean);
+    assert.deepEqual(result, { status: 'failed', error: '[REDACTED]', startTime: null, durationMs: null });
+    assert.equal(caseCollectionSummary('full', { status: 1 }, { stats: { duration } }, true).durationMs, null);
+    assert.ok(!JSON.stringify(result).includes('secret-value'));
+  }
+  assert.equal(caseCollectionSummary('full', { status: 1 }, {}, true).durationMs, null);
+});
+
+test('case start times retain only exact valid canonical UTC timestamps from the actual report', () => {
+  const clean = value => String(value ?? '');
+  for (const startTime of ['2026-11-17T15:08:23.552Z', '2024-02-29T00:00:00.000Z', '1970-01-01T00:00:00.000Z']) {
+    assert.deepEqual(caseResultEvidence({ status: 'timedOut', error: { message: 'original error' }, startTime, duration: 1_200_048.5 }, clean),
+      { status: 'timedOut', error: 'original error', startTime, durationMs: 1_200_048.5 });
+  }
+  for (const startTime of [undefined, null, 0, new Date(0), 'secret-value', '2026-11-17', '2026-11-17T15:08:23Z',
+    '2026-11-17T15:08:23.552+00:00', '2026-11-17T15:08:23.552z', '2026-11-17T15:08:23.552Z secret-value',
+    ' 2026-11-17T15:08:23.552Z', '2026-02-30T00:00:00.000Z', '2026-13-01T00:00:00.000Z', '2026-11-17T24:00:00.000Z',
+    { toString() { throw new Error('secret-value'); } }]) {
+    const result = caseResultEvidence({ status: 'failed', error: { message: 'original error' }, startTime }, clean);
+    assert.deepEqual(result, { status: 'failed', error: 'original error', startTime: null, durationMs: null });
+    assert.ok(!JSON.stringify(result).includes('secret-value'));
+  }
+});
+
 
 test('live-budget transport evidence admits fixed cause/name enums without messages, URLs, headers or bodies', () => {
   const error = new TypeError('secret-value', {cause:Object.assign(new Error('secret-value'), {code:'ECONNRESET',url:'https://secret-value/',headers:{authorization:'secret-value'},body:'secret-value'})});
@@ -243,4 +276,40 @@ test('socket observations are bounded, cannot throw into a request, and do not r
   assert.equal(retained.status, 'FAIL'); assert.equal(retained.complete, false);
   assert.deepEqual(retained.socketObservation, snapshot); assert.equal(retained.transportError.causeCode, 'EPIPE');
   observation.stop(); assert.equal(bus.count(), 0);
+});
+
+test('actual Storefront readiness closes only its own connection before a single later fetch; other readiness stays unchanged', { timeout: 5000 }, async () => {
+  const seen = [], closed = new Map();
+  const server = createServer((request, response) => {
+    seen.push({ path: request.url, connection: request.headers.connection, socket: request.socket });
+    response.end(request.url === '/menu' ? 'actual measured response' : 'ready');
+  });
+  server.on('connection', socket => closed.set(socket, new Promise(resolve => socket.once('close', resolve))));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  // Keep the production selection rule and readiness function intact while
+  // using a fresh synthetic port, not a developer's possible port3000 server.
+  const localFetch = (logicalUrl, options) => fetch(origin + new URL(logicalUrl).pathname, options);
+  try {
+    await waitUntil('http://127.0.0.1:3000/', response => response.status === 200, undefined, localFetch);
+    assert.equal(seen.length, 1); assert.equal(seen[0].connection, 'close');
+    await closed.get(seen[0].socket);
+    const response = await fetch(origin + '/menu', { redirect: 'error' });
+    assert.equal(response.status, 200); assert.equal(await response.text(), 'actual measured response');
+    assert.equal(seen.length, 2); assert.notEqual(seen[0].socket, seen[1].socket);
+    assert.equal(seen[1].connection, 'keep-alive');
+    await waitUntil('http://127.0.0.1:57026/', response => response.status === 200, undefined, localFetch);
+    assert.equal(seen.length, 3); assert.equal(seen[2].connection, 'keep-alive');
+    await waitUntil('http://127.0.0.1:3000/other', response => response.status === 200, undefined, localFetch);
+    assert.equal(seen.length, 4); assert.equal(seen[3].connection, 'keep-alive');
+  } finally {
+    server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('readiness still fails on an exited application before sending any request', async () => {
+  let requests = 0;
+  await assert.rejects(waitUntil('http://127.0.0.1:3000/', () => true, { exitCode: 1 }, () => { requests++; }),
+    /Local application exited during startup/);
+  assert.equal(requests, 0);
 });

@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { bannerGeometry, bannerViewportScreenshot } from './banner-responsive';
-import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, legacyWelcomeFixtureDocument, legacyWelcomeFixtureRead, responsiveBannerReady, dashboardImageBytesMatch, classifyMediaReadError, mediaReadErrorDetail, bannerEvidencePhase } from './responsive-banner-settings.mjs';
+import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, legacyWelcomeFixtureDocument, legacyWelcomeFixtureRead, responsiveBannerReady, dashboardImageBytesMatch, classifyMediaReadError, mediaReadErrorDetail, bannerEvidencePhase, menuDocumentNavigation } from './responsive-banner-settings.mjs';
 import { LOGICAL_ORIGIN, localMediaTarget } from './live-transport.mjs';
 
 type Obj = Record<string, any>;
@@ -672,13 +672,22 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       receipt.restoration.publicLayoutNull = true;
       receipt.restoration.stage = 'storefront-restored-legacy-document';
       await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width: 390, height: 844 });
+      const restorationStarted = Date.now(); let restorationNavigationAt: number | null = null, restorationHydrated = false, restorationCache = 'unclassified';
       await expect.poll(async () => {
-        const response = await navigateAfterMediaSettles(menu, d.url, { waitUntil: 'domcontentloaded' });
+        const next = menuDocumentNavigation(restorationStarted, restorationNavigationAt, restorationHydrated, Date.now());
+        if (next.navigate) {
+          const response = await navigateAfterMediaSettles(menu, d.url, { waitUntil: 'domcontentloaded', timeout: next.timeout });
+          restorationNavigationAt = Date.now();
+          const cache = response?.headers()['x-nextjs-cache'];
+          restorationCache = ['HIT', 'STALE', 'MISS', 'REVALIDATED'].includes(cache ?? '') ? cache! : 'unclassified';
+        }
+        restorationHydrated = await menu.evaluate(() => {
+          const root = document.querySelector<HTMLElement>('[data-sf-root]');
+          return Boolean(root?.style.getPropertyValue('--bg') && root.style.getPropertyValue('--font'));
+        });
         const observation = { restoredLegacy: await menu.locator('[data-sf-banner-layout="responsive"]').count() === 0,
           imageCount: await menu.locator('[data-sf-menu-banner] img').count() };
-        const cache = response?.headers()['x-nextjs-cache'];
-        receipt.restoration.lastStorefront = { ...observation,
-          cache: ['HIT', 'STALE', 'MISS', 'REVALIDATED'].includes(cache ?? '') ? cache : 'unclassified' };
+        receipt.restoration.lastStorefront = { ...observation, cache: restorationCache };
         return observation;
       }, { timeout: 100000, intervals: [250, 500, 1000] }).toEqual({ restoredLegacy: true, imageCount: 1 });
       receipt.syntheticSettingsRestored = true;
