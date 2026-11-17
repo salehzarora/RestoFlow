@@ -1,0 +1,13 @@
+/* The opt-in welcome background is independent of menu/banner styling. */
+.page{display:flex;flex-direction:column;--welcome-direction:90deg}
+.page:dir(rtl){--welcome-direction:270deg}
+.backdrop{position:absolute;inset:0;z-index:-1;margin:0;overflow:hidden;pointer-events:none;background:var(--bg)}
+.backdrop>:is(video,img){width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+.backdrop::after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,var(--bg),transparent 35%),linear-gradient(var(--welcome-direction),color-mix(in srgb,var(--bg) 88%,transparent),color-mix(in srgb,var(--bg) 24%,transparent) 75%)}
+.page[data-sf-screen]>header{position:relative;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+.page[data-sf-screen][data-sf-welcome-custom] [data-sf-module="hero"]{display:flex;flex:1;align-items:center;min-height:0;padding-block:clamp(48px,10svh,120px)}
+.page[data-sf-screen][data-sf-welcome-custom] [data-sf-hero-copy]{min-height:0;max-width:42rem;justify-content:center}
+.page[data-sf-screen][data-sf-welcome-custom] [data-sf-hero-copy]>div{padding-block-start:0}
+.playback{position:fixed;inset-inline-end:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:40;display:grid;place-items:center;width:44px;height:44px;padding:10px;border:1px solid var(--hair);border-radius:50%;background:var(--sf);color:var(--tx);cursor:pointer}
+.playback>svg{width:22px;height:22px;fill:currentColor}
+.playback:focus-visible{outline:3px solid var(--ring);outline-offset:3px}

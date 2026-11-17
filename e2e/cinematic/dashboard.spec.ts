@@ -2721,6 +2721,29 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     await reveal(page, field, 'field', page.getByRole('button', { name: current, exact: false, includeHidden: true }));
     await selectRevealedDropdown(page, current, option);
   };
+  const backgroundGeometry = async (target: Page) => {
+    const geometry = await target.locator('[data-sf-welcome-media]').evaluate(el => {
+      const rect = (element: Element) => { const r = element.getBoundingClientRect(); return { x:r.x,y:r.y,width:r.width,height:r.height }; };
+      const main = document.querySelector('[data-sf-welcome-custom]')!, media = el.querySelector('img,video')!;
+      const css = getComputedStyle(el), image = getComputedStyle(media);
+      const cta = main.querySelector<HTMLAnchorElement>('[data-sf-module="hero"] a[href$="/menu"]')!;
+      const hit = cta.getBoundingClientRect();
+      return {viewport:{width:innerWidth,height:innerHeight},root:rect(main),background:rect(el),media:rect(media),
+        fit:image.objectFit,border:css.borderTopWidth,radius:css.borderTopLeftRadius,
+        position:css.position,heroImages:main.querySelectorAll('[data-sf-module="hero"] img,[data-sf-module="hero"] video').length,
+        ctaReachable:hit.y<innerHeight && hit.bottom>0 ? document.elementFromPoint(hit.x+hit.width/2,Math.min(innerHeight-1,hit.y+hit.height/2))?.closest('a')===cta : null};
+    });
+    expect(geometry.position).toBe('absolute');expect(geometry.fit).toBe('cover');
+    expect([geometry.border,geometry.radius]).toEqual(['0px','0px']);expect(geometry.heroImages).toBe(0);
+    for (const key of ['x','y','width','height'] as const) {
+      expect(geometry.background[key]).toBeCloseTo(geometry.root[key],0);
+      expect(geometry.media[key]).toBeCloseTo(geometry.background[key],0);
+    }
+    expect(geometry.background.width).toBeCloseTo(geometry.viewport.width,0);
+    expect(geometry.background.height).toBeGreaterThanOrEqual(geometry.viewport.height);
+    if (geometry.ctaReachable !== null) expect(geometry.ctaReachable).toBe(true);
+    return geometry;
+  };
   const publish = async (kind: 'image' | 'video') => {
     const isVideo = kind === 'video';
     const began = Date.now();
@@ -2868,15 +2891,21 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     const photo = intro.locator('[data-sf-welcome-media="image"]>img');
     await expect(photo).toHaveAttribute('src', LOGICAL_ORIGIN + '/storage/v1/object/public/storefront-media/' + image.object_key);
     await photo.evaluate(async el => { if (!(el instanceof HTMLImageElement)) throw new Error('Expected real image'); await el.decode(); });
+    receipt.imageBackgroundComparisons = [];
+    for (const width of [360,390,430,1280,1920]) {
+      await intro.setViewportSize({width,height:900});
+      receipt.imageBackgroundComparisons.push(await backgroundGeometry(intro));
+    }
+    await intro.setViewportSize({width:390,height:900});
     await screenshot(intro, resolve(out, 'welcome-image-phone-test-data.png'));
-    receipt.imageDisplay = {status:'PASS',publicUrl:await photo.getAttribute('src'),dimensions:await photo.evaluate(el=>({width:(el as HTMLImageElement).naturalWidth,height:(el as HTMLImageElement).naturalHeight}))}; done();
+    receipt.imageDisplay = {status:'PASS',background:true,publicUrl:await photo.getAttribute('src'),dimensions:await photo.evaluate(el=>({width:(el as HTMLImageElement).naturalWidth,height:(el as HTMLImageElement).naturalHeight}))}; done();
     stage('welcome-video-ui-upload-original-edge-response');
     const video = await publish('video');
     const notSelected = await read(); expect(notSelected.document.appearance.welcome_media_type).toBe('image');
     expect(notSelected.document.appearance.welcome_video_media_id).toBeNull();
     expect(notSelected.version).toBe(imageReload.version); done();
     stage('video-selection-draft-save-reload');
-    await choose(/^صورة$|وسائط الترحيب/, 'فيديو');
+    await choose(/^صورة$|نوع خلفية الترحيب/, 'فيديو');
     await choose(/بدون فيديو — استخدام الصورة البديلة/, `540×864 · 12.0 s · ${video.id.slice(0,8)}`);
     const videoDraft = await read();
     expect(videoDraft.document.appearance.welcome_media_type).toBe('image');
@@ -2889,7 +2918,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     expect((await profile()).profile.hero_media_id).toBe(image.id);
     receipt.videoSaveReadback={status:'PASS',realUiSave:true,authenticatedReload:true,mode:'video',selection:video.id};
     await screenshot(page,resolve(out,'welcome-dashboard-saved-test-data.png')); done();
-    stage('video-public-read-browser-decode-and-manual-play');
+    stage('video-public-read-full-background-and-playback-controls');
     const videoMenu=await publicRead(); expect(videoMenu.restaurant.welcome_media_type).toBe('video');
     expect(videoMenu.restaurant.welcome_video.url).toBe('/storage/v1/object/public/storefront-welcome-videos/'+video.object_key);
     const videoPage=await context.newPage(); await videoPage.setViewportSize({width:1280,height:900});
@@ -2897,32 +2926,33 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     const player=videoPage.locator('[data-sf-welcome-media="video"]>video');
     await expect(player).toHaveAttribute('src',LOGICAL_ORIGIN+videoMenu.restaurant.welcome_video.url);
     await expect.poll(()=>player.evaluate(el=>({ready:(el as HTMLVideoElement).readyState>=2,width:(el as HTMLVideoElement).videoWidth,height:(el as HTMLVideoElement).videoHeight}))).toEqual({ready:true,width:540,height:864});
-    expect(await player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true);
     const playbackState = () => player.evaluate(el => {
-      const video = el as HTMLVideoElement;
-      return { paused: video.paused, ended: video.ended, currentTime: video.currentTime,
-        readyState: video.readyState, networkState: video.networkState, errorCode: video.error?.code ?? null,
-        focused: document.activeElement === video, controls: video.controls };
+      const value=el as HTMLVideoElement;
+      return {paused:value.paused,currentTime:value.currentTime,muted:value.muted,loop:value.loop,
+        controls:value.controls,errorCode:value.error?.code??null};
     });
-    receipt.videoInteraction = { method: 'native-keyboard-space', tabs: 0, before: await playbackState() };
+    const control=videoPage.locator('[data-sf-welcome-playback]');
+    receipt.videoInteraction={method:'actual-background-autoplay-and-user-button',before:await playbackState()};
     try {
-      // Enter the actual native controls by ordinary Tab navigation. A fixed
-      // bottom-left pixel is not a semantic Play control across Chromium layouts.
-      // One real Space key; no video.play(), autoplay injection or click retry.
-      for (let i = 0; i < 16 && !(await playbackState()).focused; i++) {
-        await videoPage.keyboard.press('Tab'); receipt.videoInteraction.tabs++;
-      }
-      await expect(player, 'The actual video receives native keyboard focus before playback').toBeFocused();
-      await videoPage.keyboard.press('Space');
-      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(false);
-      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).currentTime)).toBeGreaterThan(0);
+      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).currentTime)).toBeGreaterThan(.1);
+      const playing=await playbackState(); expect([playing.muted,playing.loop,playing.controls]).toEqual([true,true,false]);
+      receipt.videoBackground=await backgroundGeometry(videoPage);
       await screenshot(videoPage,resolve(out,'welcome-video-desktop-test-data.png'));
-      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).ended),{message:'Actual short fixture playback completes before reading browser-body evidence'}).toBe(true);
+      await control.click(); await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true);
+      await control.press('Enter'); await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(false);
+      await videoPage.emulateMedia({reducedMotion:'reduce'});
+      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true);
+      await expect(player).toHaveAttribute('poster',LOGICAL_ORIGIN+'/storage/v1/object/public/storefront-media/'+image.object_key);
+      await control.press('Enter'); await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(false);
+      const resumed=await player.evaluate(el=>(el as HTMLVideoElement).currentTime);
+      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).currentTime)).toBeGreaterThan(resumed);
+      await control.click(); await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true);
     } finally {
-      try { receipt.videoInteraction.after = await playbackState(); }
-      catch { receipt.videoInteraction.after = { status: 'UNAVAILABLE' }; }
+      try { receipt.videoInteraction.after=await playbackState(); }
+      catch { receipt.videoInteraction.after={status:'UNAVAILABLE'}; }
     }
-    receipt.videoDisplay={status:'PASS',publicUrl:await player.getAttribute('src'),width:540,height:864,manualPlayback:true,ended:true}; done();
+    receipt.videoDisplay={status:'PASS',publicUrl:await player.getAttribute('src'),width:540,height:864,
+      fullPageBackground:true,muted:true,loop:true,actualAutoplay:true,userPlayPause:true,reducedMotionPaused:true};done();
     stage('missing-video-selection-retains-image-fallback');
     await choose(/540×864/, 'بدون فيديو — استخدام الصورة البديلة');
     await saveContent(page); const cleared=await reopen(true);
