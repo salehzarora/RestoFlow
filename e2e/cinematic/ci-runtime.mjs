@@ -194,6 +194,15 @@ export function probeDiagnosticScalars(value) {
     readErrorDetail: readErrors.has(value?.readErrorDetail) ? value.readErrorDetail : 'unclassified' };
 }
 
+export function budgetChildProcessStates(dashboard, storefront) {
+  const signals = new Set(['SIGTERM','SIGKILL','SIGABRT','SIGINT','SIGSEGV','SIGILL','SIGBUS','SIGHUP','SIGQUIT']);
+  return [['dashboard',dashboard],['storefront',storefront]].filter(([, child]) => child !== null && typeof child === 'object').map(([label, child]) => ({
+    label, exitCode: Number.isInteger(child.exitCode) ? child.exitCode : null,
+    signal: child.signalCode === null || child.signalCode === undefined ? null : signals.has(child.signalCode) ? child.signalCode : 'OTHER',
+    killed: child.killed === true,
+  }));
+}
+
 async function main(action) {
   const { root, privateDir, publicDir } = setup();
   if (action === 'prepare') {
@@ -367,7 +376,21 @@ async function main(action) {
     if (full.status === 'NOT_RUN') writeFileSync(resolve(publicDir, 'browser-result.json'), JSON.stringify(full, null, 2));
     // Run only after the independent UI lifecycle has finished. A size failure
     // cannot prevent Edge acceptance from executing or erase its own receipt.
-    const liveBudget = await measureLiveBudget(root, privateDir, publicDir, fixture.ownerA.slug);
+    let liveBudget;
+    try { liveBudget = await measureLiveBudget(root, privateDir, publicDir, fixture.ownerA.slug); }
+    catch (error) {
+      // Observe only these already launched children, before the existing
+      // finally sends SIGTERM. No health fetch, wait, retry or connection change.
+      try {
+        const childProcesses = budgetChildProcessStates(dashboard, storefront);
+        const receiptPath = resolve(publicDir, 'live-firstload-budget.json');
+        if (existsSync(receiptPath)) {
+          const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+          writeFileSync(receiptPath, JSON.stringify({ ...receipt, childProcesses }, null, 2));
+        } else writeFileSync(resolve(publicDir, 'live-budget-child-state.json'), JSON.stringify({ childProcesses }, null, 2));
+      } catch { /* Retain the same original measurement failure even if evidence I/O fails. */ }
+      throw error;
+    }
     assert.equal(probe.status, 'PASS', 'Single publisher response reproduction failed; no publication/test retry');
     assert.equal(full.status, 'PASS', 'Real Dashboard acceptance failed; no automatic retry');
     assert.equal(liveBudget.status, 'PASS', 'Actual live first-load budget failed; unchanged caps remain a release gate');

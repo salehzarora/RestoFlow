@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { localStatus, assertHeightVideoEvidence, HEIGHT_VIDEO_FILE, acceptanceRunArgs, PUBLISHER_PROBE_TITLE, CLEAR_TRACE_TITLE, WELCOME_GRANT_IDENTITIES, projectMigrationGrantReceipt, assertPublicEvidenceJson, evidenceSanitizeDiagnostic, caseCollectionSummary, probeDiagnosticScalars } from './ci-runtime.mjs';
+import { localStatus, assertHeightVideoEvidence, HEIGHT_VIDEO_FILE, acceptanceRunArgs, PUBLISHER_PROBE_TITLE, CLEAR_TRACE_TITLE, WELCOME_GRANT_IDENTITIES, projectMigrationGrantReceipt, assertPublicEvidenceJson, evidenceSanitizeDiagnostic, caseCollectionSummary, probeDiagnosticScalars, budgetChildProcessStates } from './ci-runtime.mjs';
 import { readFileSync } from 'node:fs';
+import { liveBudgetTransportError, retainLiveBudgetFailure } from './live-budget.mjs';
 const key = role => `test.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.test`;
 
 test('the short publisher reproduction runs once and never excludes an original case', () => {
@@ -138,4 +139,46 @@ test('case collection and probe diagnostics retain only bounded fixed scalars ev
   assert.deepEqual(probe,{status:'FAIL',phase:'ui-upload-original-publisher-response',uiPublicationCalls:1,contentSaveCalls:0,matcher:'toBe',sourceLine:888,readErrorDetail:'no-data'});
   const untrusted=probeDiagnosticScalars({status:'secret-value',phase:'secret-value',failure:{matcher:'secret-value',sourceLine:'secret-value'},uiPublicationCalls:'secret-value',readErrorDetail:'secret-value'});
   assert.ok(!JSON.stringify(untrusted).includes('secret-value'));
+});
+
+
+test('live-budget transport evidence admits fixed cause/name enums without messages, URLs, headers or bodies', () => {
+  const error = new TypeError('secret-value', {cause:Object.assign(new Error('secret-value'), {code:'ECONNRESET',url:'https://secret-value/',headers:{authorization:'secret-value'},body:'secret-value'})});
+  assert.deepEqual(liveBudgetTransportError(error),{name:'TypeError',causeName:'Error',causeCode:'ECONNRESET'});
+  assert.deepEqual(liveBudgetTransportError({name:'TypeError',cause:{name:'SocketError',code:'UND_ERR_SOCKET'}}),{name:'TypeError',causeName:'SocketError',causeCode:'UND_ERR_SOCKET'});
+  const unknown=liveBudgetTransportError({name:'secret-value',cause:{name:'secret-value',code:'secret-value',message:'secret-value'}});
+  assert.deepEqual(unknown,{name:'unclassified',causeName:'unclassified',causeCode:'unclassified'});
+  assert.ok(!JSON.stringify(unknown).includes('secret-value'));
+});
+test('a live fetch or body failure retains a partial FAIL receipt then rethrows exactly the same original error', () => {
+  for (const phase of ['fetch','body-read']) {
+    const original=new TypeError('secret-value',{cause:Object.assign(new Error('secret-value'),{code:'UND_ERR_SOCKET'})});
+    let retained=null,calls=0;
+    assert.throws(()=>retainLiveBudgetFailure(original,{phase,route:'/ar/s/maps-burger/menu',mapped:[{canonicalRoute:'/s/maps-burger/cart',actualRoute:'/s/cinematic-secret-value/cart',status:200}],status:phase==='body-read'?200:null},value=>{retained=value;calls++;}),error=>error===original);
+    assert.equal(calls,1);assert.equal(retained.status,'FAIL');assert.equal(retained.complete,false);assert.deepEqual(retained.rows,[]);
+    assert.deepEqual(retained.problems,['transport-error']);assert.equal(retained.phase,phase);assert.equal(retained.failedRoute,'/ar/s/maps-burger/menu');
+    assert.deepEqual(retained.mapped,[{canonicalRoute:'/s/maps-burger/cart',status:200}]);
+    assert.equal(retained.httpStatus,phase==='body-read'?200:null);assert.ok(!JSON.stringify(retained).includes('secret-value'));
+    assert.throws(()=>retainLiveBudgetFailure(original,{phase,route:'https://secret-value/',mapped:[],status:null},()=>{throw new Error('evidence-write-failed');}),error=>error===original);
+  }
+});
+test('non200 assertions remain failures and retain the actual bounded HTTP number without measuring incomplete output', () => {
+  const original=Object.assign(new Error('actual live route must render'),{name:'AssertionError'});let retained;
+  assert.throws(()=>retainLiveBudgetFailure(original,{phase:'http-status',route:'/he/s/maps-burger/review',mapped:[],status:503},value=>{retained=value;}),error=>error===original);
+  assert.equal(retained.status,'FAIL');assert.equal(retained.httpStatus,503);assert.equal(retained.complete,false);assert.deepEqual(retained.rows,[]);
+  assert.deepEqual(retained.problems,['http-status-error']);assert.equal(retained.transportError.name,'AssertionError');
+  let privateInput;
+  assert.throws(()=>retainLiveBudgetFailure(original,{phase:'secret-value',route:'https://secret-value/',mapped:[{canonicalRoute:'/s/secret-value/menu',status:'secret-value'}],status:'secret-value'},value=>{privateInput=value;}),error=>error===original);
+  assert.equal(privateInput.failedRoute,null);assert.equal(privateInput.httpStatus,null);assert.equal(privateInput.phase,'unclassified');assert.ok(!JSON.stringify(privateInput).includes('secret-value'));
+});
+test('budget child snapshots observe only the two existing processes without calling kill or changing their state', () => {
+  let calls=0;
+  const dashboard={exitCode:null,signalCode:null,killed:false,pid:1234,stdout:'secret-value',args:['secret-value'],kill:()=>{calls++;}};
+  const storefront={exitCode:1,signalCode:'SIGTERM',killed:true,env:{password:'secret-value'}};
+  const states=budgetChildProcessStates(dashboard,storefront);
+  assert.deepEqual(states,[{label:'dashboard',exitCode:null,signal:null,killed:false},{label:'storefront',exitCode:1,signal:'SIGTERM',killed:true}]);
+  assert.equal(calls,0);assert.equal(dashboard.killed,false);assert.equal(storefront.exitCode,1);assert.ok(!JSON.stringify(states).includes('secret-value'));
+  assert.deepEqual(budgetChildProcessStates(null,undefined),[]);
+  const untrusted=budgetChildProcessStates({exitCode:'secret-value',signalCode:'secret-value',killed:'secret-value'},null);
+  assert.deepEqual(untrusted,[{label:'dashboard',exitCode:null,signal:'OTHER',killed:false}]);
 });
