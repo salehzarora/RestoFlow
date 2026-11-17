@@ -1,8 +1,9 @@
-// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001E-W1-PROFILE-CANDIDATE-001: the unwired Z-Credit WebService PIN PAD source profile
+// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001E-W1-PROFILE-CANDIDATE-001: the Z-Credit WebService PIN PAD source profile
 // candidate (lib/provider/zcredit_profile.mjs; execution packet section 9). Every expectation is a literal taken from
 // the accepted W1 evidence matrix (row IDs in names and messages), never from the engine's own reader. Placeholders
-// only - no real host, credential, terminal, PIN-pad, key or card value: the provider is a fake transport, the suite's
-// network guard refuses any real connection, and the candidate stays unwired (index.ts keeps providerProfile: null).
+// only - no real host, credential, terminal, PIN-pad, key or card value: the provider is a fake transport and the
+// suite's network guard refuses any real connection. BIZBOT-PAYMENTS-ZCREDIT-PILOT-001H-PROFILE-WIRING-001 wires the
+// unchanged candidate at the entrypoint only (index.ts passes it); the dark-posture cases below use the real candidate.
 import "./no_network.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -563,6 +564,55 @@ test("handler: a release confirmed by HasError false and ReturnCode 0 carries no
   assert.deepEqual(finish.body.p_provider_fields, {});
 });
 
+// The dark posture of the wired entrypoint (BIZBOT-PAYMENTS-ZCREDIT-PILOT-001H-PROFILE-WIRING-001): the real, unchanged
+// candidate in the suite's scripted world. The three handler tests above are the positive control - the same world
+// does reach the candidate's commit, lookup and release routes - so these refusals are not explained by a null or
+// invalid profile. They prove the handler's own gates on synthetic data only, never a hosted database state.
+
+test("dark: with the real candidate and the master flag absent or not exactly true, start refuses before any RPC or request", async () => {
+  for (const flag of [undefined, "", "false", "TRUE", "True", "1", "yes", "true ", " true"]) {
+    const w = world({ profile: CANDIDATE, env: { ...CANDIDATE_ENV, POS_CARD_PAYMENTS_ENABLED: flag }, rpc: {} });
+    const out = await w.run(startTest());
+    await w.settle();
+    const label = `flag ${JSON.stringify(flag)}`;
+    assert.equal(out.status, 200, label);
+    assert.deepEqual(out.body, { ok: false, error: "card_payments_disabled" }, label);
+    assert.deepEqual(w.calls.rpc, [], `${label}: no context proof, no claim`);
+    assert.deepEqual(w.calls.provider, [], `${label}: no provider request`);
+    assert.deepEqual(w.calls.other, [], `${label}: no other request`);
+    assert.deepEqual(w.tasks, [], `${label}: no background work`);
+  }
+});
+
+test("dark: with the flag on, a claim refused as card_payments_disabled (the revision / binding gates) makes no provider request", async () => {
+  const refusal = { ok: false, error: "card_payments_disabled", server_ts: "2026-10-27T10:00:00+00:00" };
+  const w = world({ profile: CANDIDATE, env: CANDIDATE_ENV, rpc: { card_attempt_context: contextOk(), card_attempt_claim: refusal } });
+  const out = await w.run(startTest());
+  await w.settle();
+  assert.equal(out.status, 200);
+  assert.deepEqual(out.body, refusal);
+  assert.deepEqual(w.rpcNames(), ["card_attempt_context", "card_attempt_claim"]);
+  assert.deepEqual(w.calls.provider, [], "no provider request");
+  assert.deepEqual(w.calls.other, [], "no other request");
+  assert.deepEqual(w.tasks, [], "no background commit");
+});
+
+test("dark: status and release of an attempt the proof cannot see answer attempt_not_found, with no adapter read or request", async () => {
+  for (const flag of [undefined, "true"]) {
+    for (const [label, input] of [["status", statusInput()], ["release", releaseInput()]]) {
+      const w = world({ profile: CANDIDATE, env: { ...CANDIDATE_ENV, POS_CARD_PAYMENTS_ENABLED: flag },
+        rpc: { card_attempt_context: contextOk({ attempt: null }) } });
+      const out = await w.run(input);
+      await w.settle();
+      const name = `${label}, flag ${JSON.stringify(flag)}`;
+      assert.deepEqual(out.body, { ok: false, error: "attempt_not_found" }, name);
+      assert.deepEqual(w.rpcNames(), ["card_attempt_context"], `${name}: no adapter read`);
+      assert.deepEqual(w.calls.provider, [], `${name}: no provider request`);
+      assert.deepEqual(w.calls.other, [], `${name}: no other request`);
+    }
+  }
+});
+
 // ---------------------------------------------------------------------------------------------------------------------
 // 5. The two tests carried from the W1 decision (the W1-LOOKUP-SAFETY-001 packet section 8)
 
@@ -720,23 +770,29 @@ test("static: the module is plain data - no import, URL, host, value, long digit
   assert.deepEqual([...literals].filter((literal) => !expected.has(literal)), [], "an unexpected string literal");
 });
 
-test("static: unwired - index.ts keeps providerProfile null and imports only the handler; only this test imports the candidate", async () => {
+test("static: wired - index.ts imports exactly the handler and the candidate and passes it; only index.ts and this test import it", async () => {
   const index = await read(new URL("index.ts", FUNCTION_DIR));
-  assert.deepEqual([...index.matchAll(/^import .* from "([^"]+)";$/gm)].map((match) => match[1]), ["./handler.mjs"]);
-  assert.match(index, /^ {2}providerProfile: null,$/m);
-  assert.ok(!/zcredit_profile|ZCREDIT_PROFILE_CANDIDATE/.test(index), "index.ts names no candidate");
+  assert.deepEqual([...index.matchAll(/^import .* from "([^"]+)";$/gm)].map((match) => match[1]),
+    ["./handler.mjs", "./lib/provider/zcredit_profile.mjs"]);
+  assert.match(index, /^import \{ ZCREDIT_PROFILE_CANDIDATE \} from "\.\/lib\/provider\/zcredit_profile\.mjs";$/m,
+    "a direct named import of the reviewed module");
+  const indexCode = withoutComments(index);
+  assert.equal([...indexCode.matchAll(/\bproviderProfile\b/g)].length, 1, "one providerProfile member");
+  assert.match(index, /^ {2}providerProfile: ZCREDIT_PROFILE_CANDIDATE,$/m, "the entrypoint passes exactly the candidate");
+  assert.equal([...indexCode.matchAll(/\bZCREDIT_PROFILE_CANDIDATE\b/g)].length, 2, "named by the import and the one member only");
+  assert.ok(!/\bimport\s*\(/.test(indexCode), "no dynamic import");
   const names = await files(FUNCTION_DIR);
   const importers = [];
   for (const name of names.filter((file) => /\.(mjs|ts)$/.test(file))) {
     const text = await read(new URL(name, FUNCTION_DIR));
     if (/from\s+["'][^"']*zcredit_profile\.mjs["']|import\(\s*["'][^"']*zcredit_profile/.test(text)) importers.push(name);
-    if (!name.startsWith("test/") && name !== "lib/provider/zcredit_profile.mjs") {
+    if (!name.startsWith("test/") && !["index.ts", "lib/provider/zcredit_profile.mjs"].includes(name)) {
       assert.ok(!/zcredit_profile|ZCREDIT_PROFILE_CANDIDATE/.test(text), `${name} refers to the candidate`);
     }
   }
-  assert.deepEqual(importers, ["test/zcredit_profile.test.mjs"]);
+  assert.deepEqual(importers.sort(), ["index.ts", "test/zcredit_profile.test.mjs"]);
   // No runtime configuration can select a profile: the handler takes one only as a constructor option (null by default),
-  // and the configuration parser knows no profile.
+  // the entrypoint passes exactly the candidate, and the configuration parser knows no profile.
   const handler = await read(new URL("handler.mjs", FUNCTION_DIR));
   assert.match(handler, /providerProfile = null,/);
   assert.ok(!/profile/i.test(withoutComments(await read(new URL("lib/config.mjs", FUNCTION_DIR)))), "config.mjs reads no profile");

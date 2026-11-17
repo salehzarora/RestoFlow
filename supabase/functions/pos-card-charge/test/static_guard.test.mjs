@@ -1,8 +1,9 @@
 // Static guards of the function source and its configuration (execution packet section 11):
 // the environment allowlist, the service-role key confined to the ledger module, no logging, no
 // remote import, hard-coded URL or other network channel, the closed RPC set with no payment
-// writer, float-free money, the pinned timing constants, no vendor profile shipped (gate W1), the
-// config.toml block and the CI step, synthetic test hosts only, and no secret in any answer.
+// writer, float-free money, the pinned timing constants, the one reviewed vendor profile wired only at
+// the entrypoint (gate W1; PROFILE-WIRING-001), the config.toml block and the CI step, synthetic test
+// hosts only, and no secret in any answer.
 import "./no_network.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -41,7 +42,7 @@ test("the function's files are exactly the reviewed set", async () => {
     "lib/text_policy_tables.mjs", "lib/time.mjs"]);
 });
 
-test("Deno is used only by index.ts: one env accessor, Deno.serve and EdgeRuntime.waitUntil; no vendor profile ships", async () => {
+test("Deno is used only by index.ts: one env accessor, Deno.serve and EdgeRuntime.waitUntil; exactly the reviewed profile is wired", async () => {
   for (const { name, text } of await sources()) {
     const body = code(text);
     const uses = [...body.matchAll(/\bDeno\b(?!:)|\bEdgeRuntime\b/g)].length;
@@ -53,7 +54,11 @@ test("Deno is used only by index.ts: one env accessor, Deno.serve and EdgeRuntim
   assert.match(index, /getEnv: \(name: string\) => Deno\.env\.get\(name\),/);
   assert.equal([...index.matchAll(/Deno\.serve\(/g)].length, 1);
   assert.match(index, /waitUntil: \(task: Promise<unknown>\) => EdgeRuntime\.waitUntil\(task\),/);
-  assert.match(index, /providerProfile: null,/, "gate W1: no vendor wire profile is wired in");
+  assert.equal([...index.matchAll(/\bproviderProfile\b/g)].length, 1, "gate W1: one providerProfile member");
+  assert.match(index, /^ {2}providerProfile: ZCREDIT_PROFILE_CANDIDATE,$/m,
+    "gate W1: exactly the reviewed wire profile candidate is wired in (PROFILE-WIRING-001)");
+  assert.match(index, /^import \{ ZCREDIT_PROFILE_CANDIDATE \} from "\.\/lib\/provider\/zcredit_profile\.mjs";$/m,
+    "gate W1: the candidate comes from the reviewed module, by a direct named import");
   assert.ok(!/timing/.test(index), "production runs on the pinned constants");
 });
 

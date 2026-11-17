@@ -1,7 +1,8 @@
 // BIZBOT-PAYMENTS-ZCREDIT-PILOT-001F: source pins of the card flow — the Edge
-// still ships without a provider profile, the card UI holds no hard-coded
-// words, and the card files stay out of the order action row, printing and
-// receipt rendering (execution packet §2, §11, §12).
+// entrypoint passes exactly the reviewed provider profile (wired by
+// BIZBOT-PAYMENTS-ZCREDIT-PILOT-001H-PROFILE-WIRING-001), the card UI holds no
+// hard-coded words, and the card files stay out of the order action row,
+// printing and receipt rendering (execution packet §2, §11, §12).
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -42,10 +43,10 @@ List<String> _imports(String source) {
 }
 
 void main() {
-  test('the Edge still ships with no provider profile', () {
+  test('the Edge entrypoint passes exactly the reviewed provider profile', () {
     final index = _read('../../supabase/functions/pos-card-charge/index.ts');
     expect(RegExp(r'providerProfile\s*:').allMatches(index), hasLength(1));
-    expect(index, contains('providerProfile: null,'));
+    expect(index, contains('  providerProfile: ZCREDIT_PROFILE_CANDIDATE,'));
   });
 
   test('the card UI words all come from the localizations', () {
