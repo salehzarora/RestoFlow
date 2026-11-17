@@ -2898,14 +2898,30 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     await expect(player).toHaveAttribute('src',LOGICAL_ORIGIN+videoMenu.restaurant.welcome_video.url);
     await expect.poll(()=>player.evaluate(el=>({ready:(el as HTMLVideoElement).readyState>=2,width:(el as HTMLVideoElement).videoWidth,height:(el as HTMLVideoElement).videoHeight}))).toEqual({ready:true,width:540,height:864});
     expect(await player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(true);
-    const box=await player.boundingBox(); expect(box).not.toBeNull();
-    // An ordinary pointer activates Chromium's real controls; no video.play(),
-    // muted autoplay injection or synthetic event substitutes for playback.
-    await player.click({position:{x:22,y:box!.height-18}});
-    await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(false);
-    await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).currentTime)).toBeGreaterThan(0);
-    await screenshot(videoPage,resolve(out,'welcome-video-desktop-test-data.png'));
-    await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).ended),{message:'Actual short fixture playback completes before reading browser-body evidence'}).toBe(true);
+    const playbackState = () => player.evaluate(el => {
+      const video = el as HTMLVideoElement;
+      return { paused: video.paused, ended: video.ended, currentTime: video.currentTime,
+        readyState: video.readyState, networkState: video.networkState, errorCode: video.error?.code ?? null,
+        focused: document.activeElement === video, controls: video.controls };
+    });
+    receipt.videoInteraction = { method: 'native-keyboard-space', tabs: 0, before: await playbackState() };
+    try {
+      // Enter the actual native controls by ordinary Tab navigation. A fixed
+      // bottom-left pixel is not a semantic Play control across Chromium layouts.
+      // One real Space key; no video.play(), autoplay injection or click retry.
+      for (let i = 0; i < 16 && !(await playbackState()).focused; i++) {
+        await videoPage.keyboard.press('Tab'); receipt.videoInteraction.tabs++;
+      }
+      await expect(player, 'The actual video receives native keyboard focus before playback').toBeFocused();
+      await videoPage.keyboard.press('Space');
+      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).paused)).toBe(false);
+      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).currentTime)).toBeGreaterThan(0);
+      await screenshot(videoPage,resolve(out,'welcome-video-desktop-test-data.png'));
+      await expect.poll(()=>player.evaluate(el=>(el as HTMLVideoElement).ended),{message:'Actual short fixture playback completes before reading browser-body evidence'}).toBe(true);
+    } finally {
+      try { receipt.videoInteraction.after = await playbackState(); }
+      catch { receipt.videoInteraction.after = { status: 'UNAVAILABLE' }; }
+    }
     receipt.videoDisplay={status:'PASS',publicUrl:await player.getAttribute('src'),width:540,height:864,manualPlayback:true,ended:true}; done();
     stage('missing-video-selection-retains-image-fallback');
     await choose(/540×864/, 'بدون فيديو — استخدام الصورة البديلة');
