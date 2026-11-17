@@ -3,13 +3,27 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 String welcomeVideoCopy(BuildContext context, String key) {
   const copy = <String, List<String>>{
-    'title': ['Welcome-page video', 'فيديو صفحة الترحيب', 'סרטון עמוד הפתיחה'],
+    'title': [
+      'Welcome-page background',
+      'خلفية صفحة الترحيب',
+      'רקע עמוד הפתיחה',
+    ],
+    'backgroundHelp': [
+      'The image or video covers the page behind the store identity, welcome text, Explore the menu button and store status. Edges may crop to fill the screen without stretching.',
+      'تغطي الصورة أو الفيديو الصفحة خلف هوية المتجر ونصوص الترحيب وزر «استكشاف المنيو» وحالة المتجر. قد تُقصّ الأطراف لتملأ الشاشة دون تمديد.',
+      'התמונה או הסרטון מכסים את העמוד מאחורי זהות החנות, טקסט הפתיחה, כפתור הכניסה לתפריט ומצב החנות. השוליים עשויים להיחתך למילוי המסך בלי עיוות.',
+    ],
+    'playbackHelp': [
+      'The background video loops silently. Reduced motion pauses the video; a Play/Pause control remains available. If playback fails or no video is selected, the selected welcome image is used.',
+      'يتكرر فيديو الخلفية بلا صوت ويتوقف عند تفضيل تقليل الحركة، مع زر تشغيل/إيقاف مؤقت. عند تعذر التشغيل أو غياب اختيار الفيديو تُستخدم صورة الترحيب المحددة.',
+      'סרטון הרקע מתנגן בלולאה ללא קול ומושהה בהפחתת תנועה, עם כפתור ניגון/השהיה. בכשל בניגון או בלי בחירת סרטון מוצגת תמונת הפתיחה שנבחרה.',
+    ],
     'help': [
       'MP4/H.264, up to 20 MiB and 30 seconds, at most 1920×1080; optional AAC audio. Upload publishes a public asset only. Choose it and Save content to change the welcome page.',
       'MP4/H.264 حتى 20 ميبيبايت و30 ثانية، وبحد 1920×1080؛ صوت AAC اختياري. الرفع ينشر ملفًا عامًا فقط؛ اختره ثم اضغط حفظ المحتوى لتغيير صفحة الترحيب.',
       'MP4/H.264 עד20 MiB ו30 שניות, עד1920×1080; שמעAAC אופציונלי. העלאה מפרסמת קובץ ציבורי בלבד. יש לבחור ולשמור תוכן כדי לשנות את עמוד הפתיחה.',
     ],
-    'mode': ['Welcome media', 'وسائط الترحيب', 'מדיה בעמוד הפתיחה'],
+    'mode': ['Welcome background type', 'نوع خلفية الترحيب', 'סוג רקע הפתיחה'],
     'publicCopyHelp': [
       'The validated MP4 is published as-is, without transcoding, compression or embedded-metadata removal. Publish only a file intended for public viewing.',
       'يُنشر ملف MP4 المتحقق منه كما هو، دون تحويل أو ضغط أو حذف بياناته الوصفية المضمّنة. انشر ملفًا مناسبًا للعرض العام.',

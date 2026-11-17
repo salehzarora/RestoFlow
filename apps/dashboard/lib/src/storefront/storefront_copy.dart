@@ -248,9 +248,9 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
       'עמוד פתיחה · לפני התפריט',
     ],
     'welcomePageHelp': [
-      'Customize the page guests see before Explore the menu. Your logo, colors and font follow the current store appearance.',
-      'خصّص الصفحة التي يراها الزبون قبل «استكشاف المنيو». الشعار والألوان والخط تتبع مظهر المتجر الحالي.',
-      'ערכו את העמוד שהאורחים רואים לפני הכניסה לתפריט. הלוגו, הצבעים והגופן נשארים לפי מראה החנות.',
+      'Customize the text and full-page image or video background guests see before Explore the menu. The store identity, colors, font, button and status remain real page elements above the background.',
+      'خصّص النصوص وخلفية الصفحة الكاملة بصورة أو فيديو قبل «استكشاف المنيو». تبقى هوية المتجر وألوانه وخطه والزر وحالته عناصر فعلية فوق الخلفية.',
+      'ערכו את הטקסט ורקע העמוד המלא בתמונה או בסרטון לפני הכניסה לתפריט. זהות החנות, הצבעים, הגופן, הכפתור ומצב החנות נשארים רכיבי עמוד אמיתיים מעל הרקע.',
     ],
     'welcomeCopyHelp': [
       'Welcome text — use Save content below. Publishing or choosing an image is a separate action.',
@@ -263,9 +263,9 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
       'טקסטי הקמפיין מופיעים גם בפתיח התפריט כאשר הוא מוצג. בחירת מוצר מוביל שם אינה מחליפה את תמונת הפתיחה.',
     ],
     'welcomeImageFallbackHelp': [
-      'The welcome image is also the menu background fallback when no separate menu background is selected. Clearing the selection does not delete the image file.',
-      'تُستخدم صورة الترحيب أيضًا خلفيةً بديلة للمنيو إذا لم تختر له خلفية مستقلة. مسح الاختيار لا يحذف ملف الصورة.',
-      'תמונת הפתיחה משמשת גם כרקע חלופי לתפריט כשלא נבחר רקע נפרד. ניקוי הבחירה אינו מוחק את קובץ התמונה.',
+      'The selected welcome image is the video fallback. It also remains the menu background fallback when no separate menu background is selected. Clearing the selection does not delete the image file.',
+      'صورة الترحيب المحددة هي البديل عند تعذر عرض الفيديو. وتبقى خلفيةً بديلة للمنيو إذا لم تختر له خلفية مستقلة. مسح الاختيار لا يحذف ملف الصورة.',
+      'תמונת הפתיחה שנבחרה היא החלופה לסרטון. היא גם נשארת הרקע החלופי לתפריט כשלא נבחר רקע נפרד. ניקוי הבחירה אינו מוחק את קובץ התמונה.',
     ],
     'headline': ['Hero headline', 'عنوان الواجهة الرئيسي', 'כותרת ראשית'],
     'subline': ['Hero subline', 'النص الفرعي للواجهة', 'כותרת משנה'],

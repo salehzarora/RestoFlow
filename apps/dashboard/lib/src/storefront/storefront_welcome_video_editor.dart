@@ -212,6 +212,12 @@ class _EditorState extends State<StorefrontWelcomeVideoEditor> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(c('title'), style: Theme.of(context).textTheme.titleSmall),
+        Text(c('backgroundHelp'), key: const Key('welcome-background-help')),
+        Text(
+          c('playbackHelp'),
+          key: const Key('welcome-background-playback-help'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
         Text(c('help')),
         Text(c('publicCopyHelp'), style: Theme.of(context).textTheme.bodySmall),
         if (!widget.libraryAvailable) Text(c('readFailed')),

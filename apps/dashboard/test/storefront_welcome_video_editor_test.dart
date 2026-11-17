@@ -116,6 +116,7 @@ Future<GlobalKey<_HarnessState>> mount(
   String? mode,
   String? selected,
   bool available = true,
+  Locale locale = const Locale('ar'),
 }) async {
   tester.view.physicalSize = const Size(700, 1400);
   tester.view.devicePixelRatio = 1;
@@ -124,7 +125,7 @@ Future<GlobalKey<_HarnessState>> mount(
   final key = GlobalKey<_HarnessState>();
   await tester.pumpWidget(
     MaterialApp(
-      locale: const Locale('ar'),
+      locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
@@ -157,6 +158,48 @@ Future<void> press(WidgetTester tester, String key) async {
 }
 
 void main() {
+  for (final entry in const [
+    ('ar', 'خلفية صفحة الترحيب', 'بلا صوت', 'تقليل الحركة', 'حفظ المحتوى'),
+    (
+      'en',
+      'Welcome-page background',
+      'silently',
+      'Reduced motion',
+      'Save content',
+    ),
+    ('he', 'רקע עמוד הפתיחה', 'ללא קול', 'בהפחתת תנועה', 'לשמור תוכן'),
+  ]) {
+    testWidgets(
+      'background controls explain cover and fallback in ${entry.$1}',
+      (tester) async {
+        final invoker = VideoInvoker([]), storage = VideoStorage();
+        final key = await mount(
+          tester,
+          invoker,
+          storage,
+          locale: Locale(entry.$1),
+        );
+        tester.view.physicalSize = const Size(390, 900);
+        await tester.pumpAndSettle();
+        expect(find.text(entry.$2), findsOneWidget);
+        final background = tester.widget<Text>(
+          find.byKey(const Key('welcome-background-help')),
+        );
+        final playback = tester.widget<Text>(
+          find.byKey(const Key('welcome-background-playback-help')),
+        );
+        expect(background.data, isNotEmpty);
+        expect(playback.data, contains(entry.$3));
+        expect(playback.data, contains(entry.$4));
+        expect(find.textContaining(entry.$5), findsOneWidget);
+        expect(key.currentState!.drafts, isEmpty);
+        expect(invoker.bodies, isEmpty);
+        expect(storage.writes, isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'idle binding replacement never publishes a busy ownership change',
     (tester) async {
