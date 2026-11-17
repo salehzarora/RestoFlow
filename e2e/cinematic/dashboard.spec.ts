@@ -2672,6 +2672,11 @@ test('independent banner → actual Edge → save/reload → replace/clear prese
 test('welcome image and MP4 → actual Edge → owner save/reload → public welcome', async ({ page, context }) => {
   const seeded = fixture();
   const f: Fixture = { ...seeded, ownerA: seeded.ownerB };
+  const imagePath = resolve('cinematic/fixtures/welcome-background-approved.png');
+  const sourceImage = readFileSync(imagePath);
+  const imageHash = createHash('sha256').update(sourceImage).digest('hex');
+  expect(sourceImage.length).toBe(3008838);
+  expect(imageHash).toBe('43a6eaea5e37025c9fc2b108e519589234cf9dc05dd9603ba232b6261155a36b');
   const videoPath = resolve('..', 'site/public/assets/video/kiosk-attract.mp4');
   const sourceVideo = readFileSync(videoPath);
   const videoHash = createHash('sha256').update(sourceVideo).digest('hex');
@@ -2683,6 +2688,9 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     scope: 'existing synthetic owner B, actual Dashboard/Auth/Storage/Edge/PostgREST',
     completedPhases: [], byteGuard: { status: 'NOT_RUN' },
     originalPublisherBodies: { image: 'NOT_RUN', video: 'NOT_RUN' },
+    // The earlier gray fixture proved upload, but was not visible background evidence.
+    imageFixture: { bytes: sourceImage.length, sha256: imageHash, width: 1086, height: 1448,
+      provenance: 'previously owner-approved campaign artwork, clear visual fixture only; no live merchant selection' },
     videoFixture: { bytes: sourceVideo.length, sha256: videoHash, width: 540, height: 864, durationMs: 12042 } };
   let phase = 'owner-ui-login', token = '', primary: unknown = null;
   const stage = (value: string) => { phase = value; receipt.phase = value; };
@@ -2777,7 +2785,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     if (!isVideo) await tapRevealedButton(page, button);
     const chosen = observeResponse(page.waitForEvent('filechooser'));
     const chooser = await responseAfterAction(chosen, () => tapRevealedButton(page, isVideo ? button : 'رفع ونشر وتطبيق', !isVideo));
-    await chooser.setFiles(isVideo ? videoPath : resolve('..', 'supabase/functions/storefront-media-publish/test/fixtures/gray_prog_1000x750.jpg'));
+    await chooser.setFiles(isVideo ? videoPath : imagePath);
     const storage = await uploaded;
     if (!storage.ok) throw storage.error;
     expect(storage.value.status()).toBe(200);
@@ -2829,7 +2837,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     const own = await fetch(API + path, { headers: { apikey: f.anonKey, Authorization: `Bearer ${token}` }, redirect: 'error' });
     expect(own.status).toBe(200);
     const ownBytes = Buffer.from(await own.arrayBuffer());
-    const selectedBytes = isVideo ? sourceVideo : readFileSync(resolve('..', 'supabase/functions/storefront-media-publish/test/fixtures/gray_prog_1000x750.jpg'));
+    const selectedBytes = isVideo ? sourceVideo : sourceImage;
     expect(ownBytes.equals(selectedBytes)).toBe(true);
     const anonymous = await fetch(API + path, { headers: { apikey: f.anonKey }, redirect: 'error' });
     expect([400,401,403,404]).toContain(anonymous.status); await anonymous.arrayBuffer();
