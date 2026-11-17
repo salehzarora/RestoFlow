@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import assert from 'node:assert/strict';
-import { responsiveBannerKeys, responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady,
+import { responsiveBannerKeys, responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, legacyWelcomeFixtureDocument, legacyWelcomeFixtureRead, responsiveBannerReady,
   dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, classifyMediaReadError,
   evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, mediaReadErrorDetail, bannerEvidencePhase } from './responsive-banner-settings.mjs';
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
@@ -31,6 +31,20 @@ test('legacy management and public projections remove only the exact admitted ex
   const copy = structuredClone(menu);
   assert.deepEqual(legacyBannerMenu(menu), { server_ts: 'original', unrelated: true, content_v1: { appearance: { menu_banner_url: 'phone', unknown: true } } });
   assert.deepEqual(menu, copy);
+});
+
+test('V7 fixture projects only its exact two welcome keys to V6, retaining unknown-field and old-banner checks', () => {
+  const document = { hero_headline: 'unchanged', appearance: { text_color: null, button_text_color: null,
+    welcome_media_type: null, welcome_video_media_id: null, menu_banner_layout: 'responsive', unknown: true } };
+  const input = { ok: true, version: 4, storefront_branch_id: 'same', document }, before = structuredClone(input);
+  const projected = legacyWelcomeFixtureRead(input);
+  assert.deepEqual(projected, { ...input, document: { hero_headline: 'unchanged', appearance: {
+    text_color: null, button_text_color: null, menu_banner_layout: 'responsive', unknown: true } } });
+  assert.deepEqual(input, before);
+  assert.deepEqual(legacyBannerDocument(projected.document).appearance, { text_color: null, button_text_color: null, unknown: true });
+  assert.notDeepEqual(projected.document, { ...projected.document, appearance: { ...projected.document.appearance, unknown: false } });
+  for (const appearance of [null, [], {}, { welcome_media_type: null }, { welcome_video_media_id: null }])
+    assert.throws(() => legacyWelcomeFixtureDocument({ appearance }));
 });
 
 test('warm document readiness rejects a same-image stale height, wrong focus or legacy layout', () => {

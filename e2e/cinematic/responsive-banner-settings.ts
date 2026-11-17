@@ -3,12 +3,12 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { bannerGeometry, bannerViewportScreenshot } from './banner-responsive';
-import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady, dashboardImageBytesMatch, classifyMediaReadError, mediaReadErrorDetail, bannerEvidencePhase } from './responsive-banner-settings.mjs';
+import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, legacyWelcomeFixtureDocument, legacyWelcomeFixtureRead, responsiveBannerReady, dashboardImageBytesMatch, classifyMediaReadError, mediaReadErrorDetail, bannerEvidencePhase } from './responsive-banner-settings.mjs';
 import { LOGICAL_ORIGIN, localMediaTarget } from './live-transport.mjs';
 
 type Obj = Record<string, any>;
 type Dependencies = {
-  read: () => Promise<Obj>; readLegacy: () => Promise<Obj>;
+  read: () => Promise<Obj>; readPrevious: () => Promise<Obj>; readLegacy: () => Promise<Obj>;
   publicRead: (version: 10 | 11) => Promise<Obj>;
   writeDocument: (document: Obj) => Promise<void>;
   reload: () => Promise<Obj>; save: () => Promise<void>;
@@ -353,7 +353,8 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     progress('before-save');
     const before = writes; await d.save(); expect(writes).toBe(before + 1);
     const wire = await d.reload(), actual = await d.read();
-    expect(wire, 'Actual Dashboard reload response equals an independent authenticated v6 read').toEqual(actual);
+    expect(wire, 'Actual Dashboard reload response equals an independent authenticated v7 read').toEqual(actual);
+    expect(legacyWelcomeFixtureRead(actual), 'V6 remains the exact two-key legacy projection of the current V7 fixture').toEqual(await d.readPrevious());
     expect(actual.restaurant_id).toBe(baseline.restaurant_id);
     expect(actual.storefront_branch_id).toBe(baseline.storefront_branch_id);
     expect(actual.version).toBeGreaterThan(baseline.version);
@@ -612,7 +613,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     await saveReload({ menu_banner_desktop_media_id: publications[0].media.id }); await compare('desktop-selected');
     receipt.stage = 'legacy-v5-v10-reader-and-writer-compatibility';
     const active = await d.read(), legacy = await d.readLegacy();
-    expect(legacy.document).toEqual(legacyBannerDocument(active.document));
+    expect(legacy.document).toEqual(legacyBannerDocument(legacyWelcomeFixtureDocument(active.document)));
     await d.writeDocument(legacy.document);
     expect((await d.read()).document, 'An actual old writer omitting the new fields preserves every chosen responsive setting').toEqual(active.document);
     const [v11, v10] = await Promise.all([d.publicRead(11), d.publicRead(10)]);
@@ -637,7 +638,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     try {
       receipt.restoration.stage = 'write-original-owner-document';
       await d.writeDocument(original);
-      receipt.restoration.stage = 'v6-document-exact';
+      receipt.restoration.stage = 'v7-document-exact';
       const restored = (await d.read()).document;
       d.recordRestoredDocument?.(restored);
       // Only schema-key names and equality flags leave this synthetic cleanup;
@@ -648,12 +649,18 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
           .filter(key => !isDeepStrictEqual(expected[key], actual[key]) || Object.hasOwn(expected, key) !== Object.hasOwn(actual, key))
           .slice(0, 32).map(key => /^[a-z_]{1,64}$/.test(key) ? key : 'unclassified-key');
       };
-      receipt.restoration.v6 = { equal: isDeepStrictEqual(restored, original),
+      receipt.restoration.v7 = { equal: isDeepStrictEqual(restored, original),
         differingKeys: differingKeys(original, restored),
         differingAppearanceKeys: differingKeys(original.appearance, restored.appearance) };
       expect(restored).toEqual(original);
+      receipt.restoration.stage = 'v6-legacy-projection-exact';
+      const restoredV6 = (await d.readPrevious()).document, expectedV6 = legacyWelcomeFixtureDocument(original);
+      receipt.restoration.v6 = { equal: isDeepStrictEqual(restoredV6, expectedV6),
+        differingKeys: differingKeys(expectedV6, restoredV6),
+        differingAppearanceKeys: differingKeys(expectedV6.appearance, restoredV6.appearance) };
+      expect(restoredV6, 'Restored legacy V6 projection remains exact').toEqual(expectedV6);
       receipt.restoration.stage = 'v5-legacy-projection-exact';
-      const restoredLegacy = (await d.readLegacy()).document, expectedLegacy = legacyBannerDocument(original);
+      const restoredLegacy = (await d.readLegacy()).document, expectedLegacy = legacyBannerDocument(legacyWelcomeFixtureDocument(original));
       receipt.restoration.v5 = { equal: isDeepStrictEqual(restoredLegacy, expectedLegacy),
         differingKeys: differingKeys(expectedLegacy, restoredLegacy),
         differingAppearanceKeys: differingKeys(expectedLegacy.appearance, restoredLegacy.appearance) };

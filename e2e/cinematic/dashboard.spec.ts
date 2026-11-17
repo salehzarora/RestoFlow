@@ -1762,7 +1762,8 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
         receipt.responsiveReturn = { freshPublicRead: true, freshDocumentRead: true, samePublicPath: path, position: '38% 9%' };
         stage = 'independent-responsive-settings-ui-save-readback'; recordPhase(stage);
         await verifyResponsiveBannerSettings(page, menu, {
-          read: () => rpc(f, token, 'get_restaurant_storefront_content_v6'),
+          read: () => rpc(f, token, 'get_restaurant_storefront_content_v7'),
+          readPrevious: () => rpc(f, token, 'get_restaurant_storefront_content_v6'),
           readLegacy: () => rpc(f, token, 'get_restaurant_storefront_content_v5'),
           publicRead: async version => {
             const response = await fetch(API + '/rest/v1/rpc/storefront_menu_v' + version, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000),
@@ -2255,6 +2256,8 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
 
     stage = 'site-theme-baseline';
     const themeBaseline = await rpc(f, token, 'get_restaurant_storefront_content_v5');
+    const currentThemeBaseline = await rpc(f, token, 'get_restaurant_storefront_content_v7');
+    expect(currentThemeBaseline.version).toBe(themeBaseline.version);
     const profileBaseline = (await rpc(f, token, 'get_restaurant_storefront_profile')).profile;
     const retainedMenu = await menu.locator('[data-sf-root]').evaluate(root => {
       const style = getComputedStyle(root);
@@ -2284,7 +2287,7 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       expect(submitted.p_expected_version, 'The UI writer uses the current CAS version').toBe(themeVersion);
       expect(submitted.p_expected_storefront_branch_id, 'The UI writer retains the selected branch').toBe(f.ownerA.branchId);
       expect(submitted.p_document.appearance.site_theme).toBe(mode);
-      expect(withoutSiteTheme(submitted.p_document), 'Theme selection preserves every other draft field').toEqual(withoutSiteTheme(themeBaseline.document));
+      expect(withoutSiteTheme(submitted.p_document), 'Theme selection preserves every other current V7 draft field').toEqual(withoutSiteTheme(currentThemeBaseline.document));
       expect(draftWrites, 'One content Save issues exactly one write').toBe(writesBefore + 1);
       expect(profileWrites, 'Site appearance never saves the independent profile').toBe(profileWritesBefore);
       await openEditor(page, true, 'content');
@@ -2297,6 +2300,10 @@ test('real owner Dashboard → Storage → publisher → save → live menu; rep
       expect(readback.version).toBe(++themeVersion);
       expect(readback.document.appearance.site_theme).toBe(mode);
       expect(withoutSiteTheme(readback.document), 'Background, dimming, scene, font, custom colours and content are retained').toEqual(withoutSiteTheme(themeBaseline.document));
+      const currentReadback = await rpc(f, token, 'get_restaurant_storefront_content_v7');
+      expect(currentReadback.version).toBe(themeVersion);
+      expect(currentReadback.document.appearance.site_theme).toBe(mode);
+      expect(withoutSiteTheme(currentReadback.document), 'Current V7 preserves every other field alongside unchanged V5 compatibility').toEqual(withoutSiteTheme(currentThemeBaseline.document));
       const profileAfter = (await rpc(f, token, 'get_restaurant_storefront_profile')).profile;
       expect(profileAfter.version, 'Content and profile share the same CAS version').toBe(themeVersion);
       // The existing profile row trigger updates metadata on a content save.
@@ -2688,6 +2695,11 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
   const choose = async (current: RegExp, option: string) => selectRevealedDropdown(page, current, option);
   const publish = async (kind: 'image' | 'video') => {
     const isVideo = kind === 'video';
+    const began = Date.now();
+    const evidence: Obj = { status: 'RUNNING', originalResponseRequired: true,
+      assignment: { status: isVideo ? 'NOT_APPLICABLE' : 'PENDING', responseSeen: false, bodyRead: false } };
+    receipt.publisherObservations ??= {}; receipt.publisherObservations[kind] = evidence;
+    let native: PublisherNativeObservation | null = null;
     const button = isVideo ? 'رفع ونشرMP4' : 'رفع صورة ترحيب';
     const privatePrefix = isVideo ? '/storage/v1/object/storefront-welcome-video-originals/' : '/storage/v1/object/restaurant-logos/';
     const uploaded = observeResponse(page.waitForResponse(r => new URL(r.url()).origin === API
@@ -2700,7 +2712,17 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     }));
     const assigned = !isVideo ? observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_profile')
       && typeof r.request().postDataJSON()?.p_patch?.hero_media_id === 'string')) : null;
+    // Observe only the assignment response already awaited by the original
+    // successful path. A publisher error never starts a replacement RPC/read.
+    void assigned?.then(result => {
+      evidence.assignment.settledMs = Date.now() - began;
+      evidence.assignment.status = result.ok ? 'RESPONSE_OBSERVED' : 'WAIT_FAILED';
+      if (result.ok) { evidence.assignment.responseSeen = true; evidence.assignment.httpStatus = result.value.status(); }
+    });
+    try {
     await revealButton(page, button);
+    native = await observePublisherNative(page, { apiOrigin: API, deadlineAt: Date.now() + 120_000,
+      ...(isVideo ? { expectedKind: 'welcome_video_v1' as const } : { expectedSlot: 'hero' as const }) });
     if (!isVideo) await tapRevealedButton(page, button);
     const chosen = observeResponse(page.waitForEvent('filechooser'));
     const chooser = await responseAfterAction(chosen, () => tapRevealedButton(page, isVideo ? button : 'رفع ونشر وتطبيق', !isVideo));
@@ -2716,9 +2738,18 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     receipt.originalPublisherBodies[kind] = { status: 'BODY_READ_PENDING', originalResponse: true,
       requestId: request.request_id, httpStatus: response.status(), url: API + '/functions/v1/storefront-media-publish' };
     // Required original browser response, not a second API read or UI message.
-    const body = await response.json();
+    let body: Obj;
+    try { body = await response.json(); }
+    catch (error) {
+      native.firstError('publisher-body'); evidence.firstBodyErrorMs = Date.now() - began;
+      evidence.readErrorDetail = mediaReadErrorDetail(error);
+      receipt.originalPublisherBodies[kind].status = 'BODY_READ_FAILED';
+      throw error;
+    }
     receipt.originalPublisherBodies[kind].status = 'BODY_VALIDATION_PENDING';
     receipt.originalPublisherBodies[kind].originalBodyRead = true;
+    await native.assertComplete(response, body);
+    evidence.nativeAndOriginalBodyEqual = true;
     expect(body.ok).toBe(true); expect(body.status).toBe('published');
     expect(request.organization_id).toBe(f.ownerA.orgId);
     expect(request.restaurant_id).toBe(f.ownerA.restaurantId);
@@ -2733,7 +2764,10 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       expect(body.media.source_key).toBe(request.source_key);
       expect(body.media.variant).toBe('w960');
       const write = await assigned!; if (!write.ok) throw write.error;
-      expect(write.value.status()).toBe(200); expect((await write.value.json()).ok).toBe(true);
+      expect(write.value.status()).toBe(200);
+      const assignmentBody = await write.value.json(); evidence.assignment.bodyRead = true;
+      evidence.assignment.ok = assignmentBody.ok === true;
+      expect(assignmentBody.ok).toBe(true);
       await textContains(page, 'طُبّقت صورة الترحيب. حفظ النصوص يبقى منفصلًا.');
     }
     // The freshly uploaded original remains private and belongs to this owner.
@@ -2752,7 +2786,17 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       requestId: request.request_id, publicObjectKey: body.media.object_key, mediaId: body.media.id,
       width: body.media.width, height: body.media.height, bytes: body.media.bytes,
       contentHash: body.media.content_hash, privateOriginalReadableByOwnerOnly: true };
+    evidence.status = 'PASS';
     return body.media;
+    } catch (error) {
+      native?.firstError('probe-assertion'); evidence.status = 'FAIL';
+      evidence.failure = bannerAssertionFailure(error);
+      throw error; // Preserve the original failure; native bytes never replace it.
+    } finally {
+      native?.cleanup('probe-finally');
+      try { await native?.stop(); } catch { /* Observation cleanup cannot replace the original error. */ }
+      evidence.native = native?.snapshot() ?? null; evidence.endedMs = Date.now() - began;
+    }
   };
   try {
     await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' }); await semantics(page); await network.fontsReady();

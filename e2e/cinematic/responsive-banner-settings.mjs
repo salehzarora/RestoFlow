@@ -16,6 +16,19 @@ export function legacyBannerDocument(document) {
   for (const key of responsiveBannerKeys) delete copy.appearance?.[key];
   return copy;
 }
+// The current synthetic fixture already has an appearance object. V7 extends
+// its V6 projection with exactly these two keys; unknown fields stay visible.
+export function legacyWelcomeFixtureDocument(document) {
+  const copy = structuredClone(document), appearance = copy?.appearance;
+  if (!appearance || typeof appearance !== 'object' || Array.isArray(appearance)
+    || !['welcome_media_type', 'welcome_video_media_id'].every(key => Object.hasOwn(appearance, key)))
+    throw new Error('Expected the current V7 fixture appearance');
+  delete appearance.welcome_media_type; delete appearance.welcome_video_media_id;
+  return copy;
+}
+export function legacyWelcomeFixtureRead(envelope) {
+  return { ...structuredClone(envelope), document: legacyWelcomeFixtureDocument(envelope.document) };
+}
 export function legacyBannerMenu(envelope) {
   const copy = structuredClone(envelope);
   delete copy.menu_banner_desktop_images_v1;
