@@ -11,7 +11,7 @@ import { LOGICAL_ORIGIN, localMediaTarget, localWelcomeVideoTarget, logicalMedia
 import { createHash, randomUUID } from 'node:crypto';
 import { bannerGeometry, baselineBannerEvidence, replayBaselineBanner, bannerViewportScreenshot, completeResponsiveFixture, responsiveFixtureMismatch } from './banner-responsive';
 import { verifyResponsiveBannerSettings, adjustBannerHeightWithKeyboard, navigateAfterMediaSettles, observeLogicalMedia } from './responsive-banner-settings';
-import { dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, bannerEvidencePhase, mediaReadErrorDetail, menuDocumentNavigation, responsiveSettingsHandoff, assertResponsiveSettingsHandoff, acceptedResponsiveSettingsHandoff } from './responsive-banner-settings.mjs';
+import { dashboardImageHash, dashboardImageBytesMatch, dashboardCodecImageResponse, dashboardMediaReady, evidenceScalar, bannerDocumentEvidence, bannerDocumentDifferences, bannerComparisonEvidence, bannerAssertionFailure, bannerEvidencePhase, mediaReadErrorDetail, menuDocumentNavigation, responsiveBannerFixture, responsiveSettingsHandoff, assertResponsiveSettingsHandoff, acceptedResponsiveSettingsHandoff } from './responsive-banner-settings.mjs';
 import { BackgroundQuality, backgroundFixture, validateBackgroundHandoff, type BackgroundHandoffBinding } from './background-quality';
 import { companionStatus, classifyCompanion, type CompanionUi } from './companion-observer';
 import { fillField, tapButton, tapNav, tapText } from '../lib/dashboard';
@@ -82,6 +82,8 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
   let mappedVideo = 0;
   const directMediaChecks: Promise<boolean>[] = [];
   let directMedia = 0, verifiedDirectMediaBytes = 0;
+  const codecXhrChecks: Promise<boolean>[] = [];
+  let codecXhrMedia = 0, verifiedCodecXhrBytes = 0;
   // Bounded annotations of the existing welcome-media reads, never an
   // alternative body source or a replacement for the unchanged byte guards.
   type NativeRequest = import('@playwright/test').Request;
@@ -188,7 +190,18 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
         else factOverflow++;
       }
     }
-    if (u.origin !== API || !u.pathname.startsWith('/storage/v1/object/public/storefront-media/') || request.resourceType() !== 'image') return;
+    if (u.origin !== API || !u.pathname.startsWith('/storage/v1/object/public/storefront-media/')) return;
+    if (request.resourceType() === 'xhr') {
+      // Flutter Image.network's default codec owns this existing native XHR.
+      // Observe its actual response without initiating, mapping or rewriting it.
+      codecXhrMedia++;
+      codecXhrChecks.push(dashboardCodecImageResponse(request).then(equal => {
+        if (equal) verifiedCodecXhrBytes++;
+        return equal;
+      }));
+      return;
+    }
+    if (request.resourceType() !== 'image') return;
     directMedia++;
     // Passive native-response observation only: no fetch, fulfillment, header
     // forwarding or origin admission change. Failed requests remain failures.
@@ -332,10 +345,13 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
     checkDashboardMedia: async (recordEvidence: (value: Obj) => void) => {
       if (violation) throw new Error('Browser attempted a non-ephemeral request.');
       const checks = await Promise.all(directMediaChecks);
+      const codecChecks = await Promise.all(codecXhrChecks);
       const nativeMedia = { directMedia, verifiedDirectMediaBytes, checkedResponses: checks.length,
-        failedResponses: checks.filter(value => !value).length };
+        failedResponses: checks.filter(value => !value).length,
+        codecXhrMedia, verifiedCodecXhrBytes, checkedCodecResponses: codecChecks.length,
+        failedCodecResponses: codecChecks.filter(value => !value).length };
       recordEvidence(nativeMedia);
-      expect(dashboardMediaReady(directMedia, verifiedDirectMediaBytes, checks),
+      expect(dashboardMediaReady(directMedia + codecXhrMedia, verifiedDirectMediaBytes + verifiedCodecXhrBytes, [...checks, ...codecChecks]),
         'Native Dashboard public images have canonical credential-free requests and exact content-addressed Storage bytes').toBe(true);
       return nativeMedia;
     },
@@ -2450,9 +2466,13 @@ function traditionalBackgroundBinding(f: Fixture, out: string): BackgroundHandof
   const source = JSON.parse(readFileSync(resolve(out, 'source.json'), 'utf8'));
   const testedCheckout = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const testedTree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim();
+  const parents = execFileSync('git', ['show', '-s', '--format=%P', 'HEAD'], { encoding: 'utf8' }).trim().split(/\s+/);
   expect(source.testedCheckout).toBe(testedCheckout); expect(source.testedTree).toBe(testedTree);
-  expect(source.prHead).toBe(process.env.CINEMATIC_PR_HEAD); expect(source.prBase).toBe(process.env.CINEMATIC_PR_BASE);
+  expect(process.env.GITHUB_SHA, 'The acceptance process runs the actual event merge checkout').toBe(testedCheckout);
+  expect(parents, 'The checked-out synthetic merge has exactly the recorded base and PR head, in order').toEqual([source.prBase, source.prHead]);
+  expect(process.env.GITHUB_RUN_ID).toMatch(/^[1-9][0-9]*$/);
   expect(source.runId).toBe(process.env.GITHUB_RUN_ID);
+  expect(process.env.GITHUB_RUN_ATTEMPT).toMatch(/^[1-9][0-9]*$/);
   return { prHead: source.prHead, prBase: source.prBase, testedCheckout, testedTree, runId: source.runId,
     runAttempt: process.env.GITHUB_RUN_ATTEMPT!, orgId: f.ownerA.orgId, restaurantId: f.ownerA.restaurantId,
     branchId: f.ownerA.branchId, slug: f.ownerA.slug };
@@ -3138,14 +3158,22 @@ test('independent responsive banner settings → actual owner save/reload → de
       stage, invariant, value => { receipt.afterResponsiveRestoration = bannerDocumentEvidence(value); });
     receipt.settings = 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS';
     stage('restore-only-case-setup-phone-selection');
+    const cleanupBaseline = responsiveBannerFixture(before.document);
+    receipt.cleanup = { status: 'RUNNING', materializedNullKeys: cleanupBaseline.materializedNullKeys,
+      meaning: 'Exact pre-case document after the same six optional-null materializations already restored by the settings helper' };
+    try { persist(); } catch { receipt.progressWriteFailed = true; }
     await openEditor(page, true); await openFoldedGroup(page, 'banner');
     await revealButton(page, L.bannerClear); await tapRevealedButton(page, L.bannerClear); await saveContent(page); await openEditor(page, true);
     const restored = await rpc(f, token, 'get_restaurant_storefront_content_v7');
-    expect(restored.document, 'UI cleanup restores the exact pre-case content document').toEqual(before.document);
-    await invariants(f, token); receipt.cleanup = { status: 'PASS', realUiClearAndSave: true, authenticatedReadback: true };
+    Object.assign(receipt.cleanup, { realUiClearAndSave: true, authenticatedReadback: true,
+      comparison: bannerDocumentDifferences(cleanupBaseline.document, restored.document) });
+    try { persist(); } catch { receipt.progressWriteFailed = true; }
+    expect(restored.document, 'UI cleanup restores the exact pre-case document with only the six optional-null materializations').toEqual(cleanupBaseline.document);
+    await invariants(f, token); receipt.cleanup.status = 'PASS';
     receipt.lifecycle = 'PASS';
   } catch (error) {
     primary = { error }; receipt.failedStage = receipt.stage; receipt.failure = bannerAssertionFailure(error);
+    if (receipt.cleanup.status === 'RUNNING') receipt.cleanup.status = 'FAIL';
     receipt.evidencePoint = 'original-error-before-final-byte-guard';
     try { persist(); } catch { /* Preserve the exact primary error. */ }
     throw error;

@@ -5,8 +5,8 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import assert from 'node:assert/strict';
 import { responsiveBannerKeys, responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, legacyWelcomeFixtureDocument, legacyWelcomeFixtureRead, responsiveBannerReady,
-  dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, classifyMediaReadError,
-  evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, mediaReadErrorDetail, bannerEvidencePhase, menuDocumentNavigation, responsiveSettingsHandoff, assertResponsiveSettingsHandoff, acceptedResponsiveSettingsHandoff } from './responsive-banner-settings.mjs';
+  dashboardImageHash, dashboardImageBytesMatch, dashboardCodecImageHash, dashboardCodecImageResponse, dashboardMediaReady, classifyMediaReadError,
+  evidenceScalar, bannerDocumentEvidence, bannerDocumentDifferences, bannerComparisonEvidence, bannerAssertionFailure, mediaReadErrorDetail, bannerEvidencePhase, menuDocumentNavigation, responsiveSettingsHandoff, assertResponsiveSettingsHandoff, acceptedResponsiveSettingsHandoff } from './responsive-banner-settings.mjs';
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { createHash } from 'node:crypto';
 import { LOCAL_API, LOGICAL_ORIGIN } from './live-transport.mjs';
@@ -117,6 +117,76 @@ test('native Dashboard media proof cannot accept missing, failed or only partly 
   assert.equal(dashboardMediaReady(1, 1, [true]), true);
   for (const values of [[0, 0, []], [1, 0, [false]], [2, 1, [true, false]], [2, 2, [true]], [1, 1, [false]]])
     assert.equal(dashboardMediaReady(...values), false);
+});
+
+function codecImageUnit(overrides = {}) {
+  const bytes = Buffer.from('synthetic content-addressed native Flutter codec derivative');
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  const url = `${LOCAL_API}/storage/v1/object/public/storefront-media/${'a'.repeat(32)}/${hash}.webp`;
+  let bodyReads = 0;
+  const facts = { url, method: 'GET', resourceType: 'xhr', headers: { accept: '*/*' }, frameUrl: 'http://127.0.0.1:57026/#/settings', ...overrides };
+  const request = { url: () => facts.url, method: () => facts.method, resourceType: () => facts.resourceType,
+    allHeaders: async () => facts.headers, frame: () => ({ url: () => facts.frameUrl }),
+    redirectedFrom: () => overrides.redirectedFrom ?? null, redirectedTo: () => overrides.redirectedTo ?? null,
+    failure: () => overrides.failure ?? null, response: async () => overrides.missingResponse ? null : response };
+  const response = { request: () => overrides.foreignResponse ? {} : request, url: () => overrides.responseUrl ?? facts.url,
+    status: () => overrides.status ?? 200, headers: () => ({ 'content-type': overrides.contentType ?? 'image/webp' }),
+    body: async () => { bodyReads++; if (overrides.bodyError) throw overrides.bodyError;
+      assert.equal(bodyReads, 1, 'Only the original browser response is read, once');
+      return Object.hasOwn(overrides, 'bytes') ? overrides.bytes : bytes; } };
+  return { facts, request, hash, reads: () => bodyReads };
+}
+test('UNIT_ONLY: codec XHR admission is separate from image admission and requires the exact public Dashboard GET', () => {
+  const unit = codecImageUnit();
+  assert.equal(dashboardCodecImageHash(unit.facts), unit.hash);
+  assert.throws(() => dashboardImageHash(unit.facts), 'The existing image-only validator remains image-only');
+  for (const overrides of [{ resourceType: 'image' }, { resourceType: 'fetch' }, { method: 'POST' }, { method: 'HEAD' },
+    { frameUrl: 'http://127.0.0.1:3000/' }, { frameUrl: 'https://external.test/' }, { frameUrl: 'http://user:secret@127.0.0.1:57026/' },
+    { url: unit.facts.url + '?token=secret' }, { url: unit.facts.url + '#fragment' },
+    { url: unit.facts.url.replace('/public/', '/authenticated/') }, { url: unit.facts.url.replace('/public/', '/sign/') },
+    { url: unit.facts.url.replace(LOCAL_API, 'https://external.test') }, { url: unit.facts.url.replace(unit.hash, unit.hash.toUpperCase()) },
+    { headers: undefined }, { headers: [] }]) assert.throws(() => dashboardCodecImageHash({ ...unit.facts, ...overrides }));
+  for (const key of ['Authorization', 'apikey', 'Cookie']) for (const value of ['', 'secret'])
+    assert.throws(() => dashboardCodecImageHash({ ...unit.facts, headers: { [key]: value } }));
+});
+test('UNIT_ONLY: codec observation requires one complete original body and fails real aborts, redirects, wrong MIME and empty bytes', async () => {
+  const unit = codecImageUnit();
+  assert.equal(await dashboardCodecImageResponse(unit.request), true); assert.equal(unit.reads(), 1);
+  for (const overrides of [{ missingResponse: true }, { foreignResponse: true }, { redirectedFrom: {} }, { redirectedTo: {} },
+    { responseUrl: unit.facts.url + '?redirected=1' }, { status: 206 }, { status: 404 }, { contentType: 'image/jpeg' },
+    { contentType: '' }, { contentType: 'application/octet-stream' }, { bytes: new Uint8Array() }, { bytes: Buffer.from('wrong') },
+    { bodyError: new Error('net::ERR_ABORTED') }, { bodyError: new Error('Network.getResponseBody: No data found for resource') },
+    { failure: { errorText: 'net::ERR_ABORTED' } }]) {
+    const bad = codecImageUnit(overrides);
+    assert.equal(await dashboardCodecImageResponse(bad.request), false);
+    assert(bad.reads() <= 1, 'No retry or substitute body read on a failure');
+  }
+});
+test('UNIT_ONLY: actual passive guard keeps HTML counts visible and accepts codec bytes only with nonzero complete native evidence', async () => {
+  const text = readFileSync(new URL('./dashboard.spec.ts', import.meta.url), 'utf8');
+  const start = text.indexOf('async function guardBrowser('), end = text.indexOf('async function rpc(', start);
+  assert(start >= 0 && end > start);
+  const code = ts.transpileModule(text.slice(start, end), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const makeGuard = runInNewContext(code + '\nguardBrowser', { Date, Map, Set, URL, createHash,
+    API: LOCAL_API, DASHBOARD: 'http://127.0.0.1:57026', STOREFRONT: 'http://127.0.0.1:3000', LOGICAL_ORIGIN,
+    origins: new Set([LOCAL_API, 'http://127.0.0.1:57026', 'http://127.0.0.1:3000']),
+    dashboardImageHash, dashboardImageBytesMatch, dashboardCodecImageResponse, dashboardMediaReady,
+    expect: value => ({ toBe: expected => assert.equal(value, expected), toBeGreaterThan: expected => assert(value > expected) }) });
+  for (const mode of ['none', 'valid', 'aborted', 'mixed']) {
+    const context = new EventEmitter(); let routeRegistrations = 0;
+    context.route = async () => { routeRegistrations++; };
+    const guard = await makeGuard(context);
+    if (mode !== 'none') context.emit('request', codecImageUnit(mode === 'aborted' ? { bodyError: new Error('net::ERR_ABORTED') } : {}).request);
+    if (mode === 'mixed') context.emit('request', codecImageUnit({ bytes: new Uint8Array() }).request);
+    let facts;
+    if (mode === 'valid') await guard.checkDashboardMedia(value => { facts = value; });
+    else await assert.rejects(guard.checkDashboardMedia(value => { facts = value; }));
+    assert.equal(routeRegistrations, 1, 'Only the pre-existing network guard is registered');
+    assert.equal(facts.directMedia, 0); assert.equal(facts.verifiedDirectMediaBytes, 0);
+    assert.equal(facts.codecXhrMedia, mode === 'none' ? 0 : mode === 'mixed' ? 2 : 1);
+    assert.equal(facts.verifiedCodecXhrBytes, ['valid', 'mixed'].includes(mode) ? 1 : 0);
+    assert.equal(facts.failedCodecResponses, ['aborted', 'mixed'].includes(mode) ? 1 : 0);
+  }
 });
 
 test('passive public media diagnostics expose fixed classes, never raw exception values', () => {
@@ -305,6 +375,66 @@ test('UNIT_ONLY: actual producer keeps the scalar candidate private until its na
       gate.resolve(); await operation;
       assert.equal(getter().phone.mediaId, phone.mediaId); assert.equal(getter().source.runAttempt, '1');
     }
+  }
+});
+
+test('UNIT_ONLY: actual settings cleanup normalizes only six optional keys and still rejects unrelated losses or changes', async () => {
+  const source = readFileSync(new URL('./dashboard.spec.ts', import.meta.url), 'utf8');
+  const start = source.indexOf("    stage('restore-only-case-setup-phone-selection');");
+  const catchAt = source.indexOf('\n  } catch (error) {', start), finallyAt = source.indexOf('\n  } finally {', catchAt);
+  assert(start >= 0 && catchAt > start && finallyAt > catchAt);
+  const body = source.slice(start, catchAt), failure = source.slice(catchAt + '\n  } catch (error) {'.length, finallyAt);
+  const code = ts.transpileModule(`async function cleanup() { try { ${body} } catch (error) { ${failure} } }`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const before = { document: { hero_headline: 'private-content-not-exported', announcement_text: null,
+    category_presentation: [{ category_id: 'original-category', icon: 'existing-icon' }],
+    appearance: { menu_banner_media_id: null, menu_banner_enabled: true, menu_banner_focal_x: 38, menu_banner_focal_y: 9,
+      menu_background_media_id: 'protected-background', site_theme: 'dark' } } };
+  const baseline = structuredClone(before), correct = responsiveBannerFixture(before.document).document;
+  const variants = [
+    ['correct', () => {}],
+    ['phone-change', value => { value.appearance.menu_banner_media_id = 'wrong-phone'; }],
+    ['background-loss', value => { delete value.appearance.menu_background_media_id; }],
+    ['focus-change', value => { value.appearance.menu_banner_focal_y = 74; }],
+    ['height-change', value => { value.appearance.menu_banner_desktop_height_px = 420; }],
+    ['unrelated-list-loss', value => { value.category_presentation = []; }],
+    ['unknown-field', value => { value.appearance['private-unknown-key'] = 'private-unknown-value'; }],
+    ['normalized-key-loss', value => { delete value.appearance.menu_banner_desktop_focal_x; }],
+  ];
+  for (const [name, alter] of variants) {
+    const actual = structuredClone(correct); alter(actual);
+    const receipt = { stage: null, cleanup: { status: 'NOT_RUN' } }, writes = [], calls = [];
+    const run = runInNewContext(code + '\ncleanup', { Error, Object, receipt, before, responsiveBannerFixture, bannerDocumentDifferences, bannerAssertionFailure,
+      primary: null, page: {}, f: {}, token: 'unit-only', L: { bannerClear: 'clear' },
+      stage: value => { receipt.stage = value; }, persist: () => writes.push(structuredClone(receipt)),
+      openEditor: async () => { calls.push('open-editor'); }, openFoldedGroup: async () => { calls.push('banner-group'); },
+      revealButton: async () => { calls.push('reveal-clear'); }, tapRevealedButton: async () => { calls.push('click-clear'); },
+      saveContent: async () => { calls.push('ui-save'); }, rpc: async () => { calls.push('server-read'); return { document: actual }; },
+      invariants: async () => { calls.push('protected-invariants'); },
+      expect: value => ({ toEqual: expected => {
+        try { assert.deepEqual(value, expected); }
+        catch (error) { error.matcherResult = { name: 'toEqual', expected, actual: value }; throw error; }
+      } }),
+    });
+    if (name === 'correct') {
+      await run(); assert.equal(receipt.cleanup.status, 'PASS'); assert.equal(receipt.lifecycle, 'PASS');
+      assert.deepEqual(receipt.cleanup.materializedNullKeys, responsiveBannerKeys);
+      assert.deepEqual(receipt.cleanup.comparison.appearance.fields, []);
+      assert(calls.includes('protected-invariants'));
+    } else {
+      await assert.rejects(run(), { name: 'AssertionError' });
+      assert.equal(receipt.cleanup.status, 'FAIL'); assert.equal(receipt.failure.matcher, 'toEqual');
+      assert(!calls.includes('protected-invariants'), 'A failed equality cannot be promoted to cleanup success');
+      const preThrow = writes.find(value => value.cleanup.status === 'RUNNING' && value.cleanup.comparison);
+      assert(preThrow, 'Actual expected/received field facts are saved before the failing equality');
+      assert(preThrow.cleanup.comparison.document.fields.length > 0);
+      if (name === 'unknown-field') assert(preThrow.cleanup.comparison.appearance.fields.some(value => value.field === 'unrecognized-field'));
+    }
+    assert(calls.indexOf('click-clear') < calls.indexOf('ui-save') && calls.indexOf('ui-save') < calls.indexOf('server-read'));
+    assert(!JSON.stringify(writes).includes('private-content-not-exported'));
+    assert(!JSON.stringify(writes).includes('private-unknown-key'));
+    assert(!JSON.stringify(writes).includes('private-unknown-value'));
+    assert.deepEqual(before, baseline, 'Normalization never changes the actual pre-case snapshot');
   }
 });
 function bannerNavigationUnit(lateSelection = false) {

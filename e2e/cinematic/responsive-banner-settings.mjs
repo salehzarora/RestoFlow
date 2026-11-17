@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
 
 // Reuse the existing 100s ISR/hydration wait without discarding a document on
@@ -101,6 +102,29 @@ export function dashboardImageBytesMatch(hash, status, bytes) {
   return typeof hash === 'string' && /^[0-9a-f]{64}$/.test(hash) && status === 200
     && bytes instanceof Uint8Array && bytes.byteLength > 0 && createHash('sha256').update(bytes).digest('hex') === hash;
 }
+// Flutter's default web image codec reads Image.network through native XHR.
+// Observe that original response separately; HTML-image admission stays intact.
+export function dashboardCodecImageHash({ url, method, resourceType, headers, frameUrl }) {
+  if (resourceType !== 'xhr' || method !== 'GET' || !headers || typeof headers !== 'object' || Array.isArray(headers))
+    throw new Error('dashboard_codec_media_evidence_denied');
+  const frame = new URL(frameUrl), h = new Headers(headers);
+  if (frame.origin !== 'http://127.0.0.1:57026' || frame.username || frame.password
+    || ['authorization', 'apikey', 'cookie'].some(key => h.has(key))
+    || localMediaTarget(logicalMediaUrl(url), method) !== url) throw new Error('dashboard_codec_media_evidence_denied');
+  return new URL(url).pathname.split('/').at(-1).slice(0, -5);
+}
+export async function dashboardCodecImageResponse(request) {
+  try {
+    const hash = dashboardCodecImageHash({ url: request.url(), method: request.method(), resourceType: request.resourceType(),
+      headers: await request.allHeaders(), frameUrl: request.frame().url() });
+    if (request.redirectedFrom() !== null) return false;
+    const response = await request.response();
+    if (!response || response.request() !== request || response.url() !== request.url()
+      || response.status() !== 200 || response.headers()['content-type']?.trim().toLowerCase() !== 'image/webp') return false;
+    const bytes = await response.body(); // One mandatory original browser-body read; no alternate source.
+    return request.failure() === null && request.redirectedTo() === null && dashboardImageBytesMatch(hash, response.status(), bytes);
+  } catch { return false; }
+}
 export function dashboardMediaReady(requests, verified, checks) {
   return Number.isInteger(requests) && requests > 0 && verified === requests
     && Array.isArray(checks) && checks.length === requests && checks.every(value => value === true);
@@ -142,6 +166,22 @@ export function bannerDocumentEvidence(document) {
     evidenceScalar(appearance?.[key], !!appearance && Object.hasOwn(appearance, key))])),
     media: Object.fromEntries(['promo', 'story'].map(key => [key + '.editorial_media_id',
       evidenceScalar(document?.[key]?.editorial_media_id, !!document?.[key] && Object.hasOwn(document[key], 'editorial_media_id'))])) };
+}
+export function bannerDocumentDifferences(expected, actual) {
+  const documentKeys = ['hero_headline', 'hero_subline', 'announcement_text', 'hero', 'announcement_segments',
+    'promo', 'story', 'category_presentation', 'item_presentation', 'appearance'];
+  const changes = (before, after, allowed) => {
+    const left = before && typeof before === 'object' && !Array.isArray(before) ? before : {};
+    const right = after && typeof after === 'object' && !Array.isArray(after) ? after : {};
+    const keys = [...new Set([...Object.keys(left), ...Object.keys(right)])].filter(key =>
+      Object.hasOwn(left, key) !== Object.hasOwn(right, key) || !isDeepStrictEqual(left[key], right[key]));
+    return { fields: keys.slice(0, 32).map(key => ({ field: allowed.includes(key) ? key : 'unrecognized-field',
+      expected: evidenceScalar(left[key], Object.hasOwn(left, key)), actual: evidenceScalar(right[key], Object.hasOwn(right, key)) })),
+      overflow: Math.max(0, keys.length - 32) };
+  };
+  return { document: changes(expected, actual, documentKeys),
+    appearance: changes(expected?.appearance, actual?.appearance, [...appearanceEvidenceKeys, 'welcome_media_type', 'welcome_video_media_id']),
+    expected: bannerDocumentEvidence(expected), actual: bannerDocumentEvidence(actual) };
 }
 export function bannerComparisonEvidence(assertion, field, expected, actual) {
   return { assertion, field, expected: evidenceScalar(expected), actual: evidenceScalar(actual), equal: Object.is(expected, actual) };
