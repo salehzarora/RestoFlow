@@ -123,7 +123,7 @@ export function mediaReadErrorDetail(error) {
   if (/net::ERR_ABORTED|\babort(?:ed)?\b|cancel(?:led|ed)/i.test(message)) return 'aborted';
   return 'unclassified';
 }
-const evidencePhases = new Set(['baseline', 'upload-save-first-banner', 'replace-save-banner', 'verify-retained-private-source',
+const evidencePhases = new Set(['baseline', 'initialize-independent-content-baseline', 'upload-save-first-banner', 'replace-save-banner', 'verify-retained-private-source',
   'public-banner-read-and-render', 'banner-focal-persistence', 'banner-responsive', 'restored-banner-public-read-and-render',
   'independent-responsive-settings-ui-save-readback', 'after-responsive-restoration', 'clear-banner-only', 'clear-interface',
   'clear-save-result', 'clear-authenticated-readback', 'clear-preservation', 'clear-public-read', 'clear-storefront',

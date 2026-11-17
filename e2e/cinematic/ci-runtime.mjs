@@ -11,7 +11,7 @@ import { installDashboardFontMirror } from './font-mirror.mjs';
 import { requireEphemeralCi } from '../../supabase/tests/support/cinematic_001b_migration_contract.mjs';
 import { capturePublisherRuntime } from './publisher-diagnostics.mjs';
 import { LOGICAL_ORIGIN } from './live-transport.mjs';
-import { measureLiveBudget } from './live-budget.mjs';
+import { measureLiveBudget, observeLiveBudgetTransport } from './live-budget.mjs';
 
 const marker = 'BIZBOT-STOREFRONT-CINEMATIC-001B';
 const api = 'http://127.0.0.1:54321';
@@ -308,6 +308,7 @@ async function main(action) {
     const child = spawn(command, args, { cwd, env, stdio: ['ignore', fd, fd] });
     closeSync(fd); children.push(child); return child;
   };
+  const budgetTransport = observeLiveBudgetTransport();
   try {
     const dashboard = launch('python3', ['-m', 'http.server', '57026', '--bind', '127.0.0.1', '--directory', 'build/web'],
       resolve(root, 'apps/dashboard'), process.env, 'dashboard.log');
@@ -377,7 +378,7 @@ async function main(action) {
     // Run only after the independent UI lifecycle has finished. A size failure
     // cannot prevent Edge acceptance from executing or erase its own receipt.
     let liveBudget;
-    try { liveBudget = await measureLiveBudget(root, privateDir, publicDir, fixture.ownerA.slug); }
+    try { liveBudget = await measureLiveBudget(root, privateDir, publicDir, fixture.ownerA.slug, budgetTransport); }
     catch (error) {
       // Observe only these already launched children, before the existing
       // finally sends SIGTERM. No health fetch, wait, retry or connection change.
@@ -395,6 +396,7 @@ async function main(action) {
     assert.equal(full.status, 'PASS', 'Real Dashboard acceptance failed; no automatic retry');
     assert.equal(liveBudget.status, 'PASS', 'Actual live first-load budget failed; unchanged caps remain a release gate');
   } finally {
+    budgetTransport.stop();
     for (const child of children) child.kill('SIGTERM');
   }
 }

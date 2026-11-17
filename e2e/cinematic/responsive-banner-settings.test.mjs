@@ -143,8 +143,9 @@ test('failed assertion evidence preserves false versus true and only owned sourc
 
 test('media evidence uses fixed phases and error details without exporting arbitrary input', () => {
   assert.equal(bannerEvidencePhase('clear-storefront'), 'clear-storefront');
+  assert.equal(bannerEvidencePhase('initialize-independent-content-baseline'), 'initialize-independent-content-baseline');
   assert.equal(bannerEvidencePhase('responsive-desktop-cleared-390'), 'responsive-desktop-cleared-390');
-  for (const value of ['private-value', 'responsive-desktop-cleared-392', 'responsive-unknown-390', { secret: 'hidden' }])
+  for (const value of ['private-value', 'initialize-independent-content-baseline-unknown', 'responsive-desktop-cleared-392', 'responsive-unknown-390', { secret: 'hidden' }])
     assert.equal(bannerEvidencePhase(value), 'unclassified');
   assert.equal(mediaReadErrorDetail(new Error('No data found for resource with given identifier')), 'no-data');
   assert.equal(mediaReadErrorDetail(new Error('No resource with given identifier found')), 'no-resource');

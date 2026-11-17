@@ -82,8 +82,86 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
   let mappedVideo = 0;
   const directMediaChecks: Promise<boolean>[] = [];
   let directMedia = 0, verifiedDirectMediaBytes = 0;
+  // Bounded annotations of the existing welcome-media reads, never an
+  // alternative body source or a replacement for the unchanged byte guards.
+  type NativeRequest = import('@playwright/test').Request;
+  type NativeFrame = import('@playwright/test').Frame;
+  const began = Date.now(), now = () => Date.now() - began;
+  let evidencePhase = 'welcome-bootstrap', contextClosedMs: number | null = null;
+  let requestSequence = 0, factOverflow = 0, firstGuardCheckMs: number | null = null;
+  const mediaFacts = new Map<NativeRequest, Obj>();
+  const pages = new Map<Page, Obj>(), frames = new Map<NativeFrame, Obj>();
+  const failedFacts: NativeRequest[] = [];
+  const frameState = (frame: NativeFrame) => {
+    let state = frames.get(frame);
+    if (!state && frames.size < 128) {
+      state = { id: `f${frames.size + 1}`, navigationEpoch: 0,
+        navigationStartedMs: null, navigationCommittedMs: null, detachedMs: null };
+      frames.set(frame, state);
+    }
+    return state;
+  };
+  const watchPage = (target: Page) => {
+    if (pages.has(target) || pages.size >= 32) return;
+    const state: Obj = { id: `p${pages.size + 1}`, closedMs: null };
+    pages.set(target, state);
+    target.on('close', () => { state.closedMs = now(); });
+    target.on('framenavigated', frame => { const value = frameState(frame); if (value) value.navigationCommittedMs = now(); });
+    target.on('framedetached', frame => { const value = frameState(frame); if (value) value.detachedMs = now(); });
+  };
+  const location = (request: NativeRequest) => {
+    try {
+      const frame = request.frame(), target = frame.page(); watchPage(target);
+      const pageState = pages.get(target), state = frameState(frame);
+      let surface = 'other';
+      try { const origin = new URL(frame.url()).origin;
+        surface = origin === DASHBOARD ? 'dashboard' : origin === STOREFRONT ? 'storefront' : 'other'; } catch { /* No URL is retained. */ }
+      return { page: pageState?.id ?? 'overflow', frame: state?.id ?? 'overflow', surface,
+        frameKind: frame === target.mainFrame() ? 'main' : 'child',
+        navigationEpoch: state?.navigationEpoch ?? null, navigationStartedMs: state?.navigationStartedMs ?? null,
+        navigationCommittedMs: state?.navigationCommittedMs ?? null,
+        frameDetachedMs: state?.detachedMs ?? null, pageClosedMs: pageState?.closedMs ?? null };
+    } catch { return { page: 'detached', frame: 'detached', surface: 'detached' }; }
+  };
+  const failFact = (request: NativeRequest, reason: string) => {
+    const fact = mediaFacts.get(request); if (!fact) return;
+    fact.firstFailureMs ??= now(); fact.failureReasons ??= [];
+    if (!fact.failureReasons.includes(reason) && fact.failureReasons.length < 3) fact.failureReasons.push(reason);
+    if (!failedFacts.includes(request) && failedFacts.length < 8) failedFacts.push(request);
+  };
+  const shortRange = (value: string | undefined) => value === undefined ? null
+    : /^(?:bytes=\d+-(?:\d+)?|bytes \d+-\d+\/\d+)$/.test(value) && value.length <= 80 ? value : 'unrecognized';
+  if (welcomeVideoSource) {
+    context.pages().forEach(watchPage); context.on('page', watchPage);
+    context.on('close', () => { contextClosedMs = now(); });
+    context.on('requestfinished', request => {
+      const fact = mediaFacts.get(request); if (fact) { fact.terminal = 'finished'; fact.terminalMs = now(); fact.atTerminal = location(request); }
+    });
+    context.on('requestfailed', request => {
+      const fact = mediaFacts.get(request); if (!fact) return;
+      fact.terminal = 'failed'; fact.terminalMs = now(); fact.atTerminal = location(request);
+      const error = request.failure()?.errorText ?? '';
+      fact.failureCode = /^net::ERR_[A-Z_]{1,64}$/.test(error) ? error : 'unclassified';
+      failFact(request, 'requestfailed');
+    });
+  }
   context.on('request', request => {
     const u = new URL(request.url());
+    if (welcomeVideoSource) {
+      if (request.isNavigationRequest()) {
+        try { const state = frameState(request.frame());
+          if (state) { state.navigationEpoch++; state.navigationStartedMs = now(); } } catch { /* Detached diagnostic only. */ }
+      }
+      const asset = /^\/storage\/v1\/object\/public\/(storefront-media|storefront-welcome-videos)\/[0-9a-f]{32}\/([0-9a-f]{64})\.(webp|mp4)$/.exec(u.pathname);
+      if (u.origin === LOGICAL_ORIGIN && asset && ['image', 'media'].includes(request.resourceType())) {
+        if (mediaFacts.size < 512) mediaFacts.set(request, { id: `r${++requestSequence}`,
+          kind: asset[1] === 'storefront-welcome-videos' ? 'video' : 'image', assetHash: asset[2],
+          requestMs: now(), phaseAtRequest: evidencePhase, resourceType: request.resourceType(),
+          requestedRange: shortRange(request.headers()['range']), atRequest: location(request),
+          terminal: 'pending', bodyRead: 'NOT_STARTED' });
+        else factOverflow++;
+      }
+    }
     if (u.origin !== API || !u.pathname.startsWith('/storage/v1/object/public/storefront-media/') || request.resourceType() !== 'image') return;
     directMedia++;
     // Passive native-response observation only: no fetch, fulfillment, header
@@ -103,12 +181,27 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
       if (u.pathname.startsWith('/cinematic-fonts/roboto/')) fonts.add('Roboto');
       if (u.pathname.startsWith('/cinematic-fonts/notosansarabic/')) fonts.add('Noto Sans Arabic');
     }
-    const expectedHash = mediaHashes.get(response.request());
-    if (expectedHash) mediaChecks.push(response.body().then(bytes => {
-      const equal = createHash('sha256').update(bytes).digest('hex') === expectedHash;
+    const request = response.request(), expectedHash = mediaHashes.get(request);
+    const fact = mediaFacts.get(request);
+    if (expectedHash) {
+      if (fact) Object.assign(fact, { responseMs: now(), phaseAtResponse: evidencePhase,
+        httpStatus: response.status(), contentRange: shortRange(response.headers()['content-range']),
+        expectedHash, atResponse: location(request), bodyRead: 'PENDING', bodyReadStartedMs: now() });
+      mediaChecks.push(response.body().then(bytes => {
+      const actualHash = createHash('sha256').update(bytes).digest('hex');
+      const equal = actualHash === expectedHash;
+      if (fact) Object.assign(fact, { bodyRead: 'READ', bodyReadEndedMs: now(), actualHash,
+        bodyBytes: bytes.length, bodyMatched: equal, phaseAtBodyRead: evidencePhase, atBodyRead: location(request) });
       if (equal) verifiedMediaBytes++;
+      else failFact(request, 'hash-mismatch');
       return equal;
-    }).catch(() => false));
+    }).catch(error => {
+      if (fact) Object.assign(fact, { bodyRead: 'UNAVAILABLE', bodyReadEndedMs: now(),
+        bodyErrorDetail: mediaReadErrorDetail(error), phaseAtBodyRead: evidencePhase, atBodyRead: location(request) });
+      failFact(request, 'body-unavailable');
+      return false;
+    }));
+    }
   });
   await context.route('**/*', async route => {
     const u = new URL(route.request().url());
@@ -127,16 +220,34 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
         if (response.headers.get('content-encoding') && response.headers.get('content-encoding') !== 'identity') throw new Error('Unexpected media encoding');
         const body = Buffer.from(await response.arrayBuffer());
         mediaHashes.set(request, createHash('sha256').update(body).digest('hex'));
+        const fact = mediaFacts.get(request);
+        if (fact) Object.assign(fact, { mappedMs: now(), expectedHash: mediaHashes.get(request),
+          adapterBytes: body.length, adapterHttpStatus: response.status,
+          adapterContentRange: shortRange(response.headers.get('content-range') ?? undefined) });
         mappedMedia++;
         if (isVideo) {
           mappedVideo++;
+          if (fact) Object.assign(fact, { videoValidation: 'PENDING', videoBodyRead: 'NOT_STARTED' });
           videoChecks.push((async () => {
             const browserResponse = await request.response();
             if (!browserResponse || browserResponse.url() !== request.url()) throw new Error('welcome_video_browser_response_missing');
             // Original browser body, not the adapter's Storage fetch above.
+            if (fact) Object.assign(fact, { videoBodyRead: 'PENDING', videoBodyReadStartedMs: now() });
+            const videoBody = await browserResponse.body();
+            if (fact) Object.assign(fact, { videoBodyRead: 'READ', videoBodyReadEndedMs: now(),
+              videoBodyBytes: videoBody.length, videoActualHash: createHash('sha256').update(videoBody).digest('hex') });
             return welcomeVideoResponseEvidence({ url: browserResponse.url(), status: browserResponse.status(),
-              contentRange: browserResponse.headers()['content-range'] ?? null, body: await browserResponse.body() }, welcomeVideoSource!);
-          })().catch(() => ({ failed: true, reason: 'ORIGINAL_BROWSER_VIDEO_BODY_UNAVAILABLE_OR_MISMATCH' })));
+              contentRange: browserResponse.headers()['content-range'] ?? null, body: videoBody }, welcomeVideoSource!);
+          })().then(value => { if (fact) { fact.videoValidation = 'PASS'; fact.videoValidationEndedMs = now(); } return value; })
+            .catch(error => {
+              if (fact) {
+                if (fact.videoBodyRead === 'PENDING') { fact.videoBodyRead = 'UNAVAILABLE'; fact.videoBodyReadEndedMs = now(); }
+                fact.videoValidation = 'FAIL'; fact.videoValidationEndedMs = now(); fact.videoValidationDetail =
+                  error instanceof Error && /^welcome_video_[a-z_]{1,80}$/.test(error.message) ? error.message : mediaReadErrorDetail(error);
+              }
+              failFact(request, 'video-validation-failed');
+              return { failed: true, reason: 'ORIGINAL_BROWSER_VIDEO_BODY_UNAVAILABLE_OR_MISMATCH' };
+            }));
         }
         const responseHeaders: Record<string, string> = {};
         response.headers.forEach((value, key) => { responseHeaders[key] = value; });
@@ -161,12 +272,23 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
   });
   return {
     check: async () => {
+      firstGuardCheckMs ??= now();
       if (violation) throw new Error('Browser attempted a non-ephemeral request.');
       expect(mappedMedia, 'Live media uses actual local Storage responses').toBeGreaterThan(0);
       expect((await Promise.all(mediaChecks)).every(Boolean), 'Browser receives identical actual Storage bytes').toBe(true);
       expect(verifiedMediaBytes).toBe(mappedMedia);
     },
     media: () => ({ mappedMedia, verifiedMediaBytes }),
+    phase: (value: string) => { if (welcomeVideoSource && /^[a-z][a-z0-9-]{0,100}$/.test(value)) evidencePhase = value; },
+    mediaSnapshot: () => ({ scope: 'Bounded annotations of existing original browser reads; no replacement bodies',
+      snapshotMs: now(), phase: evidencePhase, firstGuardCheckMs, contextClosedMs,
+      mappedMedia, verifiedMediaBytes, checkedResponses: mediaChecks.length, factOverflow,
+      observedRequests: mediaFacts.size, terminalFailed: [...mediaFacts.values()].filter(value => value.terminal === 'failed').length,
+      bodyReads: [...mediaFacts.values()].filter(value => value.bodyRead === 'READ').length,
+      bodyUnavailable: [...mediaFacts.values()].filter(value => value.bodyRead === 'UNAVAILABLE').length,
+      hashMismatches: [...mediaFacts.values()].filter(value => value.bodyMatched === false).length,
+      pendingBodies: [...mediaFacts.values()].filter(value => value.bodyRead === 'PENDING').length,
+      failedFacts: failedFacts.map(request => ({ ...structuredClone(mediaFacts.get(request)), atSnapshot: location(request) })) }),
     checkWelcomeVideo: async () => {
       if (!welcomeVideoSource) throw new Error('No independently pinned welcome video fixture');
       const responses = await Promise.all(videoChecks);
@@ -685,7 +807,10 @@ class UploadDiagnostics {
   control: Awaited<ReturnType<typeof targetGeometry>> = null;
   private readonly events: { ms: number; boundary: string; event: string; status?: number }[] = [];
   private readonly transportFailures: { boundary: RouteClass; code: string }[] = [];
-  private readonly publisherResponses: { status: number; corsAllowsDashboard: boolean; jsonContentType: boolean }[] = [];
+  private readonly publisherResponses: Obj[] = [];
+  private readonly publisherIdentities = new WeakMap<import('@playwright/test').Request, Obj>();
+  private publisherSequence = 0;
+  private readonly publisherRequestEvents: Obj[] = [];
   private readonly publisherActivity = { requests: 0, finished: 0, failed: 0 };
   private readonly pageLifecycle = { mainFrameNavigations: 0, closes: 0, crashes: 0, corsPolicyMessages: 0 };
   private beforeUiStatuses: string[] = [];
@@ -713,15 +838,38 @@ class UploadDiagnostics {
   }
   publisherResponse(response: Response): void {
     const headers = response.headers();
-    if (this.publisherResponses.length < 8) this.publisherResponses.push({ status: response.status(),
+    if (this.publisherResponses.length < 8) this.publisherResponses.push({ ...this.publisherIdentity(response.request()),
+      ms: Date.now() - this.started, status: response.status(),
       corsAllowsDashboard: headers['access-control-allow-origin'] === '*' || headers['access-control-allow-origin'] === DASHBOARD,
       jsonContentType: (headers['content-type'] ?? '').split(';')[0].trim() === 'application/json' });
   }
-  publisherEvent(event: 'request' | 'request-finished' | 'request-failed'): void {
+  private publisherIdentity(request: import('@playwright/test').Request): Obj {
+    let value = this.publisherIdentities.get(request);
+    if (!value) {
+      let slot = 'unclassified', identityHash: string | null = null;
+      try {
+        const body = request.postDataJSON();
+        if (['hero', 'background', 'item', 'product'].includes(body?.slot)) slot = body.slot;
+        if (typeof body?.request_id === 'string' && /^[0-9a-f-]{36}$/.test(body.request_id)) {
+          identityHash = createHash('sha256').update(body.request_id).digest('hex');
+        }
+      } catch { /* Never retain a request body or private source identifiers. */ }
+      value = { request: ++this.publisherSequence <= 8 ? `r${this.publisherSequence}` : 'overflow', slot, identityHash };
+      this.publisherIdentities.set(request, value);
+    }
+    return value;
+  }
+  publisherBodyEvent(event: 'body-start' | 'body-read' | 'body-failed', response: Response): void {
+    if (this.publisherRequestEvents.length < 32) this.publisherRequestEvents.push({
+      ...this.publisherIdentity(response.request()), event, ms: Date.now() - this.started });
+  }
+  publisherEvent(event: 'request' | 'request-finished' | 'request-failed', request?: import('@playwright/test').Request): void {
     if (event === 'request') this.publisherActivity.requests++;
     else if (event === 'request-finished') this.publisherActivity.finished++;
     else this.publisherActivity.failed++;
     this.mark('publisher', event);
+    if (request && this.publisherRequestEvents.length < 32) this.publisherRequestEvents.push({
+      ...this.publisherIdentity(request), event, ms: Date.now() - this.started });
   }
   lifecycle(event: 'main-frame-navigation' | 'page-close' | 'page-crash' | 'cors-policy'): void {
     if (event === 'main-frame-navigation') this.pageLifecycle.mainFrameNavigations++;
@@ -807,7 +955,8 @@ class UploadDiagnostics {
   }
   snapshot(): Obj {
     return { events: this.events, transportFailures: this.transportFailures, publisherResponses: this.publisherResponses,
-      publisherActivity: this.publisherActivity, pageLifecycle: this.pageLifecycle, bodyFailureObservation: this.bodyFailureObservation,
+      publisherActivity: this.publisherActivity, publisherRequestEvents: this.publisherRequestEvents,
+      pageLifecycle: this.pageLifecycle, bodyFailureObservation: this.bodyFailureObservation,
       nativePublisher: this.publisherNative?.snapshot() ?? null,
       controlGeometry: this.control, firstObservedWaitFailure: this.firstObservedWaitFailure, firstFailure: this.first === null ? null : {
       ms: this.first.ms, boundary: this.first.boundary, errorType: this.first.errorType,
@@ -832,7 +981,7 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     : resolve(__dirname, '../../supabase/functions/storefront-media-publish/test/fixtures', filename);
   const onRequest = (request: import('@playwright/test').Request) => {
     const kind = routeClass(request.url());
-    if (request.method() === 'POST' && kind === 'publisher') diagnostics.publisherEvent('request');
+    if (request.method() === 'POST' && kind === 'publisher') diagnostics.publisherEvent('request', request);
     else if (request.method() === 'POST' && kind === 'private-upload') diagnostics.mark(kind, 'request');
   };
   const onResponse = (response: Response) => {
@@ -842,12 +991,12 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
   };
   const onFailed = (request: import('@playwright/test').Request) => {
     const kind = routeClass(request.url());
-    if (request.method() === 'POST' && kind === 'publisher') diagnostics.publisherEvent('request-failed');
+    if (request.method() === 'POST' && kind === 'publisher') diagnostics.publisherEvent('request-failed', request);
     else diagnostics.mark(kind, 'request-failed');
     diagnostics.transportFailure(kind, request.failure()?.errorText);
   };
   const onFinished = (request: import('@playwright/test').Request) => {
-    if (request.method() === 'POST' && routeClass(request.url()) === 'publisher') diagnostics.publisherEvent('request-finished');
+    if (request.method() === 'POST' && routeClass(request.url()) === 'publisher') diagnostics.publisherEvent('request-finished', request);
   };
   const onNavigation = (frame: import('@playwright/test').Frame) => { if (frame === page.mainFrame()) diagnostics.lifecycle('main-frame-navigation'); };
   const onClose = () => diagnostics.lifecycle('page-close');
@@ -872,7 +1021,7 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     await diagnostics.value('reveal', diagnostics.observe('reveal', reveal(page, target, 'upload', page.getByRole('button', { name: uploadName, exact: true, includeHidden: true }))));
     diagnostics.control = await targetGeometry(page, target);
     diagnostics.beforeUpload(await editorStatus(page).catch(() => ['unreadable']));
-    if (expectedStatus === 200 && purpose !== 'background') {
+    if (expectedStatus === 200) {
       native = await observePublisherNative(page, { apiOrigin: API, deadlineAt: Date.now() + 120_000, expectedSlot: 'hero' });
       diagnostics.publisherNative = native;
     }
@@ -893,12 +1042,15 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     expect(response.status(), 'Actual Edge publication response').toBe(expectedStatus);
     let body: Obj;
     diagnostics.mark('publisher-body', 'started');
+    diagnostics.publisherBodyEvent('body-start', response);
     try {
       body = await response.json() as Obj; // Original actual native Response.json is mandatory and unchanged.
-      await native?.assertComplete(response, body); // Banner-only additional strict evidence; never a replacement body.
+      diagnostics.publisherBodyEvent('body-read', response);
+      await native?.assertComplete(response, body); // Same strict observation for base and banner uploads; never a replacement body.
       diagnostics.mark('publisher-body', 'complete');
     }
     catch (error) {
+      diagnostics.publisherBodyEvent('body-failed', response);
       bodyReadFailed = true;
       native?.firstError('publisher-body');
       diagnostics.fail('publisher-body', error); // Preserve the first failure BEFORE observing app/lifecycle.
@@ -1707,7 +1859,8 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
       headers: { apikey: f.anonKey, authorization: 'Bearer ' + f.anonKey, 'content-type': 'application/json' }, body: JSON.stringify({ p_slug: f.ownerA.slug }) });
     expect(response.status).toBe(200); const value = await response.json(); expect(value.ok).toBe(true); return value;
   };
-  const baseline = await read();
+  let baseline = await read();
+  receipt.initialBaseline = bannerDocumentEvidence(baseline);
   receipt.baseline = bannerDocumentEvidence(baseline);
   let originalFailure = false;
   let lastRetainedOwnerDocument = baseline;
@@ -1723,6 +1876,32 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
     await invariants(f, token, (name, field, expected, actual) => { protectedComparisons[field] = bannerComparisonEvidence(name, field, expected, actual); });
   };
   try {
+    // A fresh legacy tenant can legitimately have no content-profile row. Do
+    // not depend on the preceding test having created one: materialize this
+    // synthetic owner's baseline through the same draft/save UI under test.
+    if (!Object.hasOwn(baseline, 'appearance')) {
+      stage = 'initialize-independent-content-baseline'; recordPhase(stage);
+      receipt.baselineInitialization = { status: 'RUNNING', initialAppearance: 'absent' };
+      await openEditor(page, true, 'content');
+      const theme = page.getByRole('button', { name: L.siteThemeLegacy, exact: false });
+      await reveal(page, theme, 'field', page.getByRole('button', { name: L.siteThemeLegacy, exact: false, includeHidden: true }));
+      await expect(theme).toHaveCount(1);
+      await selectRevealedDropdown(page, L.siteThemeLegacy, L.siteThemeDark);
+      await saveContent(page);
+      await openEditor(page, true);
+      const initialized = await read();
+      expect(initialized.appearance.site_theme).toBe('dark');
+      const beforeFields = structuredClone(baseline), afterFields = structuredClone(initialized);
+      delete beforeFields.appearance; delete afterFields.appearance;
+      expect(afterFields, 'Initializing the independent test baseline preserves every legacy content field').toEqual(beforeFields);
+      await invariants(f, token);
+      receipt.baselineInitialization = { status: 'PASS', method: 'real UI draft/save and authenticated server reload',
+        initialAppearance: 'absent', chosenSiteTheme: 'dark', legacyFieldsUnchanged: true };
+      baseline = initialized;
+      lastRetainedOwnerDocument = baseline;
+      receipt.baseline = bannerDocumentEvidence(baseline);
+    } else receipt.baselineInitialization = { status: 'NOT_NEEDED', initialAppearance: 'present' };
+    stage = 'baseline';
     for (const [index, geometry] of [[900, 450], [1000, 750]].entries()) {
       const file = `ux003-banner-${index}.png`;
       // Procedural test pixels through the existing fixture generator. Unique
@@ -1964,6 +2143,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
     receipt.backgroundAndWelcomePreserved = true;
   } catch (error) {
     originalFailure = true; receipt.failure = { stage, substage: receipt.clearOnly?.substage ?? null, ...bannerAssertionFailure(error) };
+    if (receipt.baselineInitialization?.status === 'RUNNING') receipt.baselineInitialization.status = 'FAIL';
     throw error;
   } finally {
     if (receipt.status !== 'BANNER_UPLOAD_E2E_PASS') receipt.failedStage = stage;
@@ -2695,7 +2875,8 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       provenance: 'existing owner-approved public campaign artwork, unchanged106220Bwebp; clear isolated test fixture only; no live merchant selection' },
     videoFixture: { bytes: sourceVideo.length, sha256: videoHash, width: 540, height: 864, durationMs: 12042 } };
   let phase = 'owner-ui-login', token = '', primary: unknown = null;
-  const stage = (value: string) => { phase = value; receipt.phase = value; };
+  network.phase(phase);
+  const stage = (value: string) => { phase = value; receipt.phase = value; network.phase(value); };
   const done = () => receipt.completedPhases.push(phase);
   const read = () => rpc(f, token, 'get_restaurant_storefront_content_v7');
   const profile = () => rpc(f, token, 'get_restaurant_storefront_profile');
@@ -2996,6 +3177,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     // Persist fixed safe scalars even when an earlier phase failed. Never dump
     // sessions, private object paths, entire RPC replies or synthetic passwords.
     receipt.phase=phase; receipt.actualServices=true; receipt.retries=0;
+    receipt.resourceByteDiagnostics = network.mediaSnapshot();
     for (const key of ['resourceByteGuard','byteGuard','dashboardImageByteGuard']) {
       if (['RUNNING','ASSERTION_PENDING'].includes(receipt[key]?.status)) receipt[key].status='FAIL';
     }

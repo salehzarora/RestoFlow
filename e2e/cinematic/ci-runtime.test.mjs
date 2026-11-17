@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { localStatus, assertHeightVideoEvidence, HEIGHT_VIDEO_FILE, acceptanceRunArgs, PUBLISHER_PROBE_TITLE, CLEAR_TRACE_TITLE, WELCOME_GRANT_IDENTITIES, projectMigrationGrantReceipt, assertPublicEvidenceJson, evidenceSanitizeDiagnostic, caseCollectionSummary, probeDiagnosticScalars, budgetChildProcessStates } from './ci-runtime.mjs';
 import { readFileSync } from 'node:fs';
-import { liveBudgetTransportError, retainLiveBudgetFailure } from './live-budget.mjs';
+import { liveBudgetTransportError, retainLiveBudgetFailure, observeLiveBudgetTransport } from './live-budget.mjs';
+import { EventEmitter } from 'node:events';
 const key = role => `test.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.test`;
 
 test('the short publisher reproduction runs once and never excludes an original case', () => {
@@ -181,4 +182,65 @@ test('budget child snapshots observe only the two existing processes without cal
   assert.deepEqual(budgetChildProcessStates(null,undefined),[]);
   const untrusted=budgetChildProcessStates({exitCode:'secret-value',signalCode:'secret-value',killed:'secret-value'},null);
   assert.deepEqual(untrusted,[{label:'dashboard',exitCode:null,signal:'OTHER',killed:false}]);
+});
+
+function diagnosticBus() {
+  const listeners = new Map();
+  const channel = name => ({
+    subscribe(fn) { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(fn); },
+    unsubscribe(fn) { listeners.get(name)?.delete(fn); },
+  });
+  return { channel, emit(name, value) { for (const fn of listeners.get(name) ?? []) fn(value); },
+    count() { return [...listeners.values()].reduce((sum, value) => sum + value.size, 0); } };
+}
+test('socket evidence observes only existing local readiness/first measurement events and exports no paths, headers or bodies', () => {
+  const bus = diagnosticBus(); let ms = 100, io = 0;
+  const observation = observeLiveBudgetTransport({ channel: bus.channel, now: () => ms++ });
+  const socket = Object.assign(new EventEmitter(), { remoteAddress: '127.0.0.1', remotePort: 3000,
+    destroyed: false, readableEnded: false, writableEnded: false,
+    write() { io++; }, end() { io++; }, destroy() { io++; }, connect() { io++; } });
+  const request = () => ({ origin: 'http://127.0.0.1:3000', get path() { throw new Error('secret-value'); },
+    get headers() { throw new Error('secret-value'); }, get body() { throw new Error('secret-value'); } });
+  const startup = request(), first = request();
+  bus.emit('undici:client:sendHeaders', { request: { origin: 'https://secret-value/' }, socket });
+  bus.emit('undici:client:connected', { socket: { remoteAddress: '127.0.0.1', remotePort: 54321 } });
+  assert.deepEqual(observation.snapshot().events, []);
+  bus.emit('undici:client:connected', { socket });
+  bus.emit('undici:client:sendHeaders', { request: startup, socket });
+  observation.beginMeasure();
+  // A delayed startup completion must not steal the first measurement identity.
+  bus.emit('undici:request:trailers', { request: startup });
+  bus.emit('undici:client:sendHeaders', { request: first, socket });
+  bus.emit('undici:request:error', { request: first, error: Object.assign(new Error('secret-value'), { code: 'EPIPE', body: 'secret-value' }) });
+  const beforeLaterRoute = observation.snapshot().events.length;
+  bus.emit('undici:client:sendHeaders', { request: request(), socket });
+  assert.equal(observation.snapshot().events.length, beforeLaterRoute);
+  socket.destroyed = true; socket.emit('close', true);
+  const result = observation.snapshot();
+  const sends = result.events.filter(value => value.event === 'send');
+  assert.equal(sends.length, 2); assert.equal(sends[1].request, 'r2');
+  assert.equal(sends[1].requestPhase, 'measure'); assert.equal(sends[1].reusedFromStartup, true);
+  assert.deepEqual(result.events.find(value => value.event === 'request-error').error,
+    { name: 'Error', causeName: 'Error', causeCode: 'EPIPE' });
+  assert.equal(result.events.at(-1).destroyed, true); assert.equal(result.events.at(-1).hadError, true);
+  assert.ok(!JSON.stringify(result).includes('secret-value')); assert.equal(io, 0);
+  observation.stop(); observation.stop(); assert.equal(bus.count(), 0); assert.equal(socket.listenerCount('close'), 0);
+});
+
+test('socket observations are bounded, cannot throw into a request, and do not replace the original budget failure', () => {
+  const bus = diagnosticBus(), observation = observeLiveBudgetTransport({ channel: bus.channel, now: () => 0 });
+  assert.doesNotThrow(() => bus.emit('undici:client:connected', { get socket() { throw new Error('secret-value'); } }));
+  for (let i = 0; i < 100; i++) bus.emit('undici:request:error', {
+    request: { origin: 'http://127.0.0.1:3000' }, error: { name: 'secret-value', code: 'secret-value' },
+  });
+  const snapshot = observation.snapshot();
+  assert.equal(snapshot.unavailable, 1); assert.ok(snapshot.overflow > 0); assert.ok(snapshot.events.length <= 64);
+  assert.ok(!JSON.stringify(snapshot).includes('secret-value'));
+  const original = new TypeError('original-failure', { cause: Object.assign(new Error(), { code: 'EPIPE' }) }); let retained;
+  assert.throws(() => retainLiveBudgetFailure(original,
+    { phase: 'fetch', route: '/s/maps-burger/menu', mapped: [], status: null, socketObservation: snapshot },
+    value => { retained = value; }), error => error === original);
+  assert.equal(retained.status, 'FAIL'); assert.equal(retained.complete, false);
+  assert.deepEqual(retained.socketObservation, snapshot); assert.equal(retained.transportError.causeCode, 'EPIPE');
+  observation.stop(); assert.equal(bus.count(), 0);
 });
