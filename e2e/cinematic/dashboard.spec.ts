@@ -1530,14 +1530,38 @@ async function verifyBannerResponsive(page: Page, menu: Page, f: Fixture, token:
   let expectedPath = '';
   const render = async (width: number, state: string, enabled = true, theme?: string, annotated = false) => {
     await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width, height: width > 650 ? 900 : 844 });
+    const expected = { state, images: enabled ? 1 : 0, light: theme === 'light', annotated: annotated && state === 'open' };
+    const began = Date.now(); let lastSample: Obj | null = null, navigationStatus: number | null = null, cache: string | null = null;
+    try {
     await expect.poll(async () => {
-      await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
-      return menu.evaluate(marker => ({ state: document.querySelector('[data-sf-order-status] [data-state]')?.getAttribute('data-state'),
+      const response = await navigateAfterMediaSettles(menu, STOREFRONT + '/ar/s/' + f.ownerA.slug + '/menu', { waitUntil: 'domcontentloaded' });
+      navigationStatus = response?.status() ?? null;
+      const header = response?.headers()['x-nextjs-cache']; cache = header && ['HIT','MISS','STALE','REVALIDATED','BYPASS'].includes(header) ? header : null;
+      lastSample = await menu.evaluate(marker => ({ state: document.querySelector('[data-sf-order-status] [data-state]')?.getAttribute('data-state'),
         images: document.querySelectorAll('[data-sf-menu-banner] img').length,
         light: getComputedStyle(document.querySelector('[data-sf-root]')!).getPropertyValue('--bg').trim().toLowerCase() === '#ffffff',
         annotated: document.querySelector('[data-sf-module="announce"]')?.textContent?.includes(marker) ?? false }), annotation);
-    }, { timeout: 100000, intervals: [250, 500, 1000] }).toEqual({ state, images: enabled ? 1 : 0,
-      light: theme === 'light', annotated: annotated && state === 'open' });
+      return lastSample;
+    }, { timeout: 100000, intervals: [250, 500, 1000] }).toEqual(expected);
+    } catch (error) {
+      receipt.renderFailure = { stage: receipt.stage, width, expected, actual: lastSample, navigationStatus, cache,
+        actualFields: Object.fromEntries(Object.keys(expected).map(key => [key, evidenceScalar(lastSample?.[key], !!lastSample && Object.hasOwn(lastSample, key))])),
+        elapsedMs: Date.now() - began, assertion: bannerAssertionFailure(error) };
+      try {
+        // One failure-only anonymous read in this disposable stack. Never dump
+        // an envelope, change the assertion, retry navigation or alter its TTL.
+        const response = await fetch(API + '/rest/v1/rpc/storefront_menu_v12', { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),
+          headers: { apikey: f.anonKey, authorization: 'Bearer ' + f.anonKey, 'content-type': 'application/json' }, body: JSON.stringify({ p_slug: f.ownerA.slug }) });
+        const value = await response.json();
+        const serviceState = value.service?.state;
+        receipt.renderFailure.independentPublic = { http: response.status, ...bannerPublicProjection(value),
+          state: ['open','closed','paused','unavailable'].includes(serviceState) ? serviceState : 'unclassified',
+          siteTheme: evidenceScalar(value.content_v1?.appearance?.site_theme, Object.hasOwn(value.content_v1?.appearance ?? {}, 'site_theme')),
+          annotated: typeof value.content_v1?.announcement_text === 'string' && value.content_v1.announcement_text.includes(annotation)
+            || Array.isArray(value.content_v1?.announcement_segments) && value.content_v1.announcement_segments.some((segment: unknown) => typeof segment === 'string' && segment.includes(annotation)) };
+      } catch (diagnosticError) { receipt.renderFailure.independentPublic = { status: 'UNAVAILABLE', error: mediaReadErrorDetail(diagnosticError) }; }
+      throw error;
+    }
     await expect(menu.locator('[data-sf-menu-banner] img')).toHaveCount(enabled ? 1 : 0);
     if (enabled) await expect.poll(() => bannerGeometry(menu.locator('[data-sf-menu-top]')).then(g => g.position)).toBe(`${target.x}% ${target.y}%`);
   };
@@ -2692,7 +2716,11 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     'logo_media_id', 'primary_color', 'accent_color', 'visual_preset', 'scene_preset',
     'locale_default', 'font_family', 'storefront_branch_id', 'is_published',
   ].map(key => [key, value[key] ?? null]));
-  const choose = async (current: RegExp, option: string) => selectRevealedDropdown(page, current, option);
+  const choose = async (current: RegExp, option: string) => {
+    const field = page.getByRole('button', { name: current, exact: false });
+    await reveal(page, field, 'field', page.getByRole('button', { name: current, exact: false, includeHidden: true }));
+    await selectRevealedDropdown(page, current, option);
+  };
   const publish = async (kind: 'image' | 'video') => {
     const isVideo = kind === 'video';
     const began = Date.now();
@@ -2902,7 +2930,12 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     await network.checkDashboardMedia(value=>{receipt.dashboardImageByteGuard={status:'ASSERTION_PENDING',...value};});
     receipt.dashboardImageByteGuard.status='PASS';
     receipt.mappedMedia=network.media(); done();receipt.status='PASS'; stage('complete');
-  } catch(error) { primary=error;receipt.failedPhase=phase;receipt.failure={classification:error instanceof Error ? error.name : 'unclassified'};throw error; }
+  } catch(error) {
+    primary=error;receipt.failedPhase=phase;
+    receipt.failure={classification:error instanceof Error ? error.name : 'unclassified',...bannerAssertionFailure(error)};
+    receipt.controlReveals=revealTraces.get(page)??[];receipt.controlClicks=clickTraces.get(page)??[];
+    throw error;
+  }
   finally {
     // Persist fixed safe scalars even when an earlier phase failed. Never dump
     // sessions, private object paths, entire RPC replies or synthetic passwords.
