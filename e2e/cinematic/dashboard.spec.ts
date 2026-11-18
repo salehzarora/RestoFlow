@@ -3344,10 +3344,39 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     'logo_media_id', 'primary_color', 'accent_color', 'visual_preset', 'scene_preset',
     'locale_default', 'font_family', 'storefront_branch_id', 'is_published',
   ].map(key => [key, value[key] ?? null]));
-  const choose = async (current: RegExp, option: string) => {
+  const choose = async (current: RegExp, option: string, label = 'نوع الخلفية') => {
     const field = page.getByRole('button', { name: current, exact: false });
     await reveal(page, field, 'field', page.getByRole('button', { name: current, exact: false, includeHidden: true }));
     await selectRevealedDropdown(page, current, option);
+    const transition: Obj = { phase, status: 'VERIFYING_CLOSED_STATE' };
+    (receipt.dropdownTransitions ??= []).push(transition);
+    const closed = page.getByRole('button', { name: `${label} ${option}`, exact: true });
+    try {
+      // Selecting the item can return before the popup route has disappeared.
+      // Wait for its closed selected form control before another wheel.
+      // Flutter exports expanded=false on that node/ancestor; popup items
+      // have distinct menu/menuitem roles.
+      await expect(page.getByRole('menu'), 'The dropdown route has closed before scrolling the form').toHaveCount(0);
+      await expect(page.getByRole('menuitem'), 'No closing dropdown item remains accessible').toHaveCount(0);
+      // Flutter merges the field label and selected value with a newline;
+      // Playwright normalizes that whitespace. Match neither the upload
+      // button nor another image/video field by a value substring.
+      await expect(closed).toHaveCount(1);
+      await expect(closed).toBeVisible();
+      await expect(closed).toBeEnabled();
+      await expect.poll(() => closed.evaluate(el => el.closest('[aria-expanded]')?.getAttribute('aria-expanded')), {
+        message: 'The actual chosen dropdown is closed and enabled before form scrolling resumes',
+      }).toBe('false');
+      Object.assign(transition, { status: 'PASS', closedMenus: 0, closedItems: 0, closedChosenControls: 1 });
+    } catch (error) {
+      transition.status = 'FAIL';
+      try {
+        transition.observed = { menus: await page.getByRole('menu').count(), menuitems: await page.getByRole('menuitem').count(),
+          chosen: await closed.evaluateAll(elements => ({ matches: elements.length,
+            expanded: elements.length === 1 ? elements[0].closest('[aria-expanded]')?.getAttribute('aria-expanded') ?? null : null })) };
+      } catch { transition.observed = { status: 'UNAVAILABLE' }; }
+      throw error;
+    }
   };
   const backgroundGeometry = async (target: Page) => {
     const geometry = await target.locator('[data-sf-welcome-media]').evaluate(el => {
@@ -3401,6 +3430,13 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     });
     try {
     await revealButton(page, button);
+    if (isVideo) {
+      evidence.chooser = { status: 'VERIFYING_SETTLED_CONTROL' };
+      // Use the existing bounded settling samples, but reject an unproven
+      // settled state instead of permitting the final possibly moving sample.
+      const settled = await settleScroll(page, await scrollScope(page, actualButton(page, button)), true);
+      evidence.chooser.settled = { required: true, visibleNodes: settled.visibleNodes };
+    }
     native = await observePublisherNative(page, { apiOrigin: API, deadlineAt: Date.now() + 120_000,
       ...(isVideo ? { expectedKind: 'welcome_video_v1' as const } : { expectedSlot: 'hero' as const }) });
     if (!isVideo) await tapRevealedButton(page, button);
@@ -3408,16 +3444,29 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       // The preceding real failure occurred before any video POST. Observe
       // this original tap only: no callback/input interception or replay, and
       // no labels, values, element IDs, credentials or surrounding DOM export.
-      evidence.chooser = { status: 'WAITING_FOR_ORIGINAL_EVENT' };
+      evidence.chooser.status = 'WAITING_FOR_ORIGINAL_EVENT';
       try { await actualButton(page, button).evaluate(target => {
         const started = performance.now(), events: Obj[] = [];
         let dropped = 0;
-        const state = () => ({ ms: Math.round(performance.now() - started),
+        const state = () => {
+          const r = target.getBoundingClientRect(), nativeScroll: Obj[] = [];
+          let scanned = 0;
+          for (let node = target.parentElement; node && scanned++ < 32 && nativeScroll.length < 6; node = node.parentElement) {
+            if (node.scrollHeight <= node.clientHeight && node.scrollTop === 0) continue;
+            const box = node.getBoundingClientRect();
+            nativeScroll.push({ tag: ['FLT-SEMANTICS', 'FLT-SEMANTICS-CONTAINER', 'FLUTTER-VIEW', 'BODY', 'HTML'].includes(node.tagName) ? node.tagName : 'other',
+              scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight,
+              x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) });
+          }
+          return { ms: Math.round(performance.now() - started),
           hasFocus: document.hasFocus(), visible: document.visibilityState === 'visible',
           userActivation: navigator.userActivation.isActive,
           hasBeenActive: navigator.userActivation.hasBeenActive,
           targetConnected: target.isConnected, disabled: target.isConnected ? target.getAttribute('aria-disabled') === 'true' : null,
-          progressbars: document.querySelectorAll('[role="progressbar"]').length });
+          targetRect: target.isConnected ? { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) } : null,
+          windowScroll: { x: scrollX, y: scrollY },
+          nativeScroll, nativeScrollCapReached: nativeScroll.length === 6,
+          progressbars: document.querySelectorAll('[role="progressbar"]').length }; };
         const before = state();
         const record = (event: Event) => {
           if (events.length >= 16) { dropped++; return; }
@@ -3448,6 +3497,12 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
           });
         } catch { evidence.chooser.observation = { status: 'UNAVAILABLE' }; }
       };
+      try {
+        // A viewport capture only: the shared full-page helper normalizes
+        // scroll position and cannot establish the original tap's pixels.
+        await page.screenshot({ path: resolve(out, 'welcome-dashboard-before-video-tap-test-data.png'), fullPage: false, caret: 'initial' });
+        evidence.chooser.preTapScreenshot = 'welcome-dashboard-before-video-tap-test-data.png';
+      } catch { evidence.chooser.preTapScreenshot = 'UNAVAILABLE'; }
     }
     const chosen = observeResponse(page.waitForEvent('filechooser'));
     const chooser = await responseAfterAction(chosen, async () => {
@@ -3462,6 +3517,8 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
           progressbars: document.querySelectorAll('[role="progressbar"]').length,
           hasFocus: document.hasFocus(), visible: document.visibilityState === 'visible',
           userActivation: navigator.userActivation.isActive,
+          windowScroll: { x: scrollX, y: scrollY },
+          targetRect: matches.length === 1 ? (() => { const r = matches[0].getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) }; })() : null,
         })); } catch { evidence.chooser.afterTap = { status: 'UNAVAILABLE' }; }
       }
     });
@@ -3535,10 +3592,12 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     } catch (error) {
       native?.firstError('probe-assertion'); evidence.status = 'FAIL';
       evidence.failure = bannerAssertionFailure(error);
-      if (isVideo && evidence.chooser?.status === 'WAITING_FOR_ORIGINAL_EVENT') {
-        evidence.chooser.status = 'ORIGINAL_EVENT_NOT_OBSERVED';
+      if (isVideo && evidence.chooser && evidence.chooser.status !== 'ORIGINAL_EVENT_OBSERVED') {
+        evidence.chooser.status = evidence.chooser.status === 'VERIFYING_SETTLED_CONTROL'
+          ? 'CONTROL_PRECONDITION_FAILED' : 'ORIGINAL_EVENT_NOT_OBSERVED';
+        await stopChooserObservation?.(); stopChooserObservation = null;
         try {
-          await screenshot(page, resolve(out, 'welcome-dashboard-filechooser-failure-test-data.png'));
+          await page.screenshot({ path: resolve(out, 'welcome-dashboard-filechooser-failure-test-data.png'), fullPage: false, caret: 'initial' });
           evidence.chooser.failureScreenshot = 'welcome-dashboard-filechooser-failure-test-data.png';
         } catch { evidence.chooser.failureScreenshot = 'UNAVAILABLE'; }
       }
@@ -3667,7 +3726,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     receipt.videoDisplay={status:'PASS',publicUrl:await player.getAttribute('src'),width:540,height:864,
       fullPageBackground:true,muted:true,loop:true,actualAutoplay:true,userPlayPause:true,reducedMotionPaused:true};done();
     stage('missing-video-selection-retains-image-fallback');
-    await choose(/540×864/, 'دون فيديو — إظهار الصورة');
+    await choose(/540×864/, 'دون فيديو — إظهار الصورة', 'اختيار فيديو');
     await saveContent(page, undefined, 'حفظ صفحة الترحيب'); const cleared=await reopen(true);
     expect([cleared.document.appearance.welcome_media_type,cleared.document.appearance.welcome_video_media_id]).toEqual(['video',null]);
     expect((await profile()).profile.hero_media_id).toBe(image.id);
@@ -3693,6 +3752,13 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     primary=error;receipt.failedPhase=phase;
     receipt.failure={classification:error instanceof Error ? error.name : 'unclassified',...bannerAssertionFailure(error)};
     receipt.controlReveals=revealTraces.get(page)??[];receipt.controlClicks=clickTraces.get(page)??[];
+    if (phase === 'welcome-video-ui-upload-original-edge-response'
+      && receipt.publisherObservations?.video?.chooser?.failureScreenshot !== 'welcome-dashboard-filechooser-failure-test-data.png') {
+      try {
+        await page.screenshot({ path: resolve(out, 'welcome-dashboard-filechooser-failure-test-data.png'), fullPage: false, caret: 'initial' });
+        receipt.failedPhaseViewport = 'welcome-dashboard-filechooser-failure-test-data.png';
+      } catch { receipt.failedPhaseViewport = 'UNAVAILABLE'; }
+    }
     throw error;
   }
   finally {
