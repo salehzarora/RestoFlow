@@ -3659,8 +3659,22 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     await fill(page, 'عنوان الواجهة الرئيسي', headline, { blur: true });
     await choose(/الخلفية الافتراضية/, 'صورة');
     await revealButton(page, imagePicker);
+    // The newly direct picker was tapped immediately after a reveal wheel
+    // step in the failed run. Use the same bounded pre-tap stability check
+    // as the video picker before sending the original physical action.
+    const picker = actualButton(page, imagePicker);
+    const settled = await settleScroll(page, await scrollScope(page, picker), true);
+    receipt.imageChooser = { status: 'WAITING_FOR_ORIGINAL_EVENT',
+      settled: { required: true, visibleNodes: settled.visibleNodes },
+      geometry: await targetGeometry(page, picker) };
+    try {
+      const name = 'welcome-dashboard-before-image-tap-test-data.png';
+      await page.screenshot({ path: resolve(out, name), fullPage: false, caret: 'initial' });
+      receipt.imageChooser.preTapScreenshot = name;
+    } catch { receipt.imageChooser.preTapScreenshot = 'UNAVAILABLE'; }
     const chosen = observeResponse(page.waitForEvent('filechooser'));
     const chooser = await responseAfterAction(chosen, () => tapRevealedButton(page, imagePicker));
+    receipt.imageChooser.status = 'ORIGINAL_EVENT_OBSERVED';
     await chooser.setFiles(imagePath);
     await textContains(page, 'معاينة الصورة قبل الحفظ');
     const imageDraft = await read();
@@ -3795,6 +3809,14 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     primary=error;receipt.failedPhase=phase;
     receipt.failure={classification:error instanceof Error ? error.name : 'unclassified',...bannerAssertionFailure(error)};
     receipt.controlReveals=revealTraces.get(page)??[];receipt.controlClicks=clickTraces.get(page)??[];
+    if (phase === 'image-mode-text-draft-preview' && receipt.imageChooser?.status === 'WAITING_FOR_ORIGINAL_EVENT') {
+      receipt.imageChooser.status = 'ORIGINAL_EVENT_NOT_OBSERVED';
+      try {
+        const name = 'welcome-dashboard-image-filechooser-failure-test-data.png';
+        await page.screenshot({ path: resolve(out, name), fullPage: false, caret: 'initial' });
+        receipt.imageChooser.failureScreenshot = name;
+      } catch { receipt.imageChooser.failureScreenshot = 'UNAVAILABLE'; }
+    }
     if (phase === 'welcome-video-ui-upload-original-edge-response'
       && receipt.publisherObservations?.video?.chooser?.failureScreenshot !== 'welcome-dashboard-filechooser-failure-test-data.png') {
       try {
