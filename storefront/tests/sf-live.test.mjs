@@ -4,6 +4,7 @@
 // network is never touched: the client is exercised through an injected
 // `fetch` and every envelope is synthetic (tests/support/envelope.mjs).
 import './support/ts-resolver.mjs';
+import { withWelcomeMedia } from './support/welcome-envelope.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { NOT_FOUND_ENVELOPE, PAYLOAD_LIMIT_ENVELOPE, SYNTH_IDS, SYNTH_MEDIA_PATH, syntheticEnvelope } from './support/envelope.mjs';
@@ -412,7 +413,7 @@ test('the fixture source resolves the canonical tenant, keeps its groups / zones
 
 test('the client builds exactly the PostgREST RPC request with the anon key on the server side only', () => {
   const { url, init } = storefrontMenuRequest(CONFIG, 'sf-synth-a');
-  assert.equal(url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v11`);
+  assert.equal(url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v12`);
   assert.equal(init.method, 'POST');
   assert.equal(init.headers.apikey, CONFIG.anonKey);
   assert.equal(init.headers.Authorization, `Bearer ${CONFIG.anonKey}`);
@@ -424,7 +425,7 @@ test('the client builds exactly the PostgREST RPC request with the anon key on t
 test('rollout and ordinary menu reads preserve the established ISR fetch contract', () => {
   for (const slug of ['mapsburger', 'maps-burger', 'sf-synth-a']) {
     const { url, init } = storefrontMenuRequest(CONFIG, slug);
-    assert.equal(url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v11`);
+    assert.equal(url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v12`);
     assert.equal(init.method, 'POST');
     assert.equal(init.body, JSON.stringify({ p_slug: slug }));
     assert.equal(init.headers.apikey, CONFIG.anonKey);
@@ -460,7 +461,7 @@ test('the live source: not_found -> null, another failure -> throw, transport er
     try { return await fn(); } finally { globalThis.fetch = real; }
   };
   const respond = (status, body) => async () => ({ ok: status >= 200 && status < 300, status, json: async () => body });
-  const menu = () => ({ ...syntheticEnvelope(), home_content: { hero_headline: null, hero_subline: null, announcement_text: null }, featured_item_ids: [], content_v1: defaultContentV1() });
+  const menu = () => withWelcomeMedia({ ...syntheticEnvelope(), home_content: { hero_headline: null, hero_subline: null, announcement_text: null }, featured_item_ids: [], content_v1: defaultContentV1() });
   const source = liveStorefrontSource(CONFIG);
   assert.equal(await withFetch(respond(200, NOT_FOUND_ENVELOPE), () => source.getStorefront('sf-synth-a')), null);
   const resolved = await withFetch(respond(200, menu()), () => source.getStorefront('sf-synth-a'));

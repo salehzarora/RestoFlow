@@ -6,7 +6,7 @@ import { once } from 'node:events';
 import { mkdtempSync, writeFileSync, unlinkSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMenuTransport, LOGICAL_ORIGIN, LOCAL_API, localMediaTarget, localProductMediaTarget, logicalMediaUrl } from './live-transport.mjs';
+import { createMenuTransport, LOGICAL_ORIGIN, LOCAL_API, localMediaTarget, localProductMediaTarget, logicalMediaUrl, localWelcomeVideoTarget, createFixtureMenuTransport } from './live-transport.mjs';
 
 const anonKey = `test.${Buffer.from(JSON.stringify({ role: 'anon' })).toString('base64url')}.test`;
 const slug = 'cinematic-transport-test';
@@ -167,4 +167,40 @@ test('installed socket/DNS boundary forwards unchanged loopback HTTP bytes and r
       assert.equal(received, 2);
     } finally { unlinkSync(program); rmdirSync(temp); }
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+});
+
+// BIZBOT-STOREFRONT-WELCOME-EDITOR-001: exact new reader/media contracts.
+test('welcome v12 preserves the original response without accepting successors', async () => {
+  const response = new Response('actual-local-response', { status: 200 });
+  let target;
+  const transport = createMenuTransport(async (value) => { target=value; return response; }, { anonKey, slug });
+  assert.equal(await transport(`${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v12`, init), response);
+  assert.equal(target, `${LOCAL_API}/rest/v1/rpc/storefront_menu_v12`);
+  for (const name of ['storefront_menu_v13','storefront_menu_v120','storefront_menu_v12_extra'])
+    await assert.rejects(transport(`${LOGICAL_ORIGIN}/rest/v1/rpc/${name}`, init), /cinematic_transport_denied/);
+});
+test('welcome MP4 mapping is separate from images and rejects private or arbitrary paths', () => {
+  const video = `/storage/v1/object/public/storefront-welcome-videos/${'a'.repeat(32)}/${'b'.repeat(64)}.mp4`;
+  assert.equal(localWelcomeVideoTarget(LOGICAL_ORIGIN + video), LOCAL_API + video);
+  assert.throws(() => localMediaTarget(LOGICAL_ORIGIN + video));
+  assert.throws(() => localWelcomeVideoTarget(LOGICAL_ORIGIN + derivative));
+  for (const value of [video + '?download=1',video + '#x','/x/..' + video,video.replace('/public/','/authenticated/'),video.replace('storefront-welcome-videos','storefront-welcome-video-originals'),video.replace('.mp4','.webm')])
+    assert.throws(() => localWelcomeVideoTarget(LOGICAL_ORIGIN + value));
+  for (const method of ['HEAD','POST','PUT','DELETE']) assert.throws(() => localWelcomeVideoTarget(LOGICAL_ORIGIN + video,method));
+  for (const origin of [LOCAL_API,'https://other.supabase.co',LOGICAL_ORIGIN+'.evil.test']) assert.throws(() => localWelcomeVideoTarget(origin+video));
+});
+
+test('only the two explicit fixture slugs can use either exact reader without extra authorization', async () => {
+ const sent=[];const response=new Response('actual');
+ const transport=createFixtureMenuTransport(async (target,request)=>{sent.push([target,request.body]);return response;},{anonKey,ownerASlug:slug,ownerBSlug:'cinematic-owner-b'});
+ const v12=`${LOGICAL_ORIGIN}/rest/v1/rpc/storefront_menu_v12`;
+ for(const selected of [slug,'cinematic-owner-b'])assert.equal(await transport(v12,{...init,body:JSON.stringify({p_slug:selected})}),response);
+ assert.equal(sent.length,2);
+ for(const changed of [
+  {...init,body:JSON.stringify({p_slug:'cinematic-third'})},
+  {...init,body:JSON.stringify({p_slug:'cinematic-owner-b',extra:true})},
+  {...init,body:JSON.stringify({p_slug:'cinematic-owner-b'}),headers:{...headers,cookie:'secret'}},
+  {...init,body:JSON.stringify({p_slug:'cinematic-owner-b'}),headers:{...headers,authorization:'Bearer other'}},
+ ])await assert.rejects(transport(v12,changed),/cinematic_transport_denied/);
+ assert.equal(sent.length,2);assert.throws(()=>createFixtureMenuTransport(fetch,{anonKey,ownerASlug:slug,ownerBSlug:slug}));
 });

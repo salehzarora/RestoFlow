@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { requireEphemeralCi } from '../../supabase/tests/support/cinematic_001b_migration_contract.mjs';
-import { createMenuTransport, LOGICAL_ORIGIN, LOCAL_API } from './live-transport.mjs';
+import { createFixtureMenuTransport, LOGICAL_ORIGIN, LOCAL_API } from './live-transport.mjs';
 import { installLoopbackNetworkBoundary, networkCanaries, installChildProcessBoundary } from './loopback-network.mjs';
 import { bannerPublicProjection } from './banner-clear-trace.mjs';
 
@@ -29,7 +29,8 @@ assert.ok([preload, `${preload} --enable-source-maps`].includes(process.env.NODE
 installLoopbackNetworkBoundary();
 const deniedNetworkCanaries = networkCanaries();
 installChildProcessBoundary(resolve(root, 'storefront'), preload, process.argv.includes('build') ? 'build' : 'runtime');
-const menuTransport = createMenuTransport(globalThis.fetch, { anonKey: status.ANON_KEY, slug: fixture.ownerA.slug });
+const menuTransport = createFixtureMenuTransport(globalThis.fetch, { anonKey: status.ANON_KEY,
+  ownerASlug: fixture.ownerA.slug, ownerBSlug: fixture.ownerB.slug });
 let menuReadSequence = 0;
 globalThis.fetch = async (...args) => {
   const sequence = ++menuReadSequence, startedAt = Date.now();
@@ -51,4 +52,4 @@ globalThis.fetch = async (...args) => {
 };
 // Fixed scalar receipt, emitted by the real bounded child before Next starts.
 writeFileSync(resolve(process.env.CINEMATIC_ARTIFACT_DIR, 'storefront-transport-boundary.json'),
-  JSON.stringify({ status: 'PASS', deniedNetworkCanaries, onlyMenuV11Read: true, onlyLoopbackDestination: true, responseRewriting: false }));
+  JSON.stringify({ status: 'PASS', deniedNetworkCanaries, onlyMenuV11V12Read: true, onlyTwoSyntheticSlugs: true, onlyLoopbackDestination: true, responseRewriting: false }));

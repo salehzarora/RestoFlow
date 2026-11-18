@@ -2,6 +2,7 @@
  * IntroGate, route/session decisions and every existing navigation URL stay
  * outside this server component. This is not an Intro reference-parity claim. */
 import { type Locale } from '@/i18n/locales';
+import { welcomeBackgroundMessages } from '@/i18n/welcomeBackground';
 import { fill, storefrontMessages } from '@/i18n/storefront';
 import { formatMoney } from '@/money/format';
 import { searchPath, storefrontPath } from '@/routes/routes';
@@ -12,6 +13,8 @@ import { SceneBackdrop } from './home/SceneBackdrop';
 import { hoursLabel } from './home/hoursCopy';
 import { DeliveryIcon, SearchIcon, StoreIcon } from './icons';
 import styles from './home/home.module.css';
+import { WelcomeMedia } from './WelcomeMedia';
+import welcomeStyles from './welcome.module.css';
 
 const MOTION_CLASS = {
   calm: '', full: styles.motionFull,
@@ -22,12 +25,14 @@ export function Intro({ tenant, locale, campaign, motion = 'full' }: {
   tenant: Tenant; locale: Locale; campaign?: CampaignModule; motion?: MotionMode;
 }) {
   const m = storefrontMessages(locale);
+  const backgroundCopy = welcomeBackgroundMessages(locale);
   const { service } = tenant;
   const menuHref = `${storefrontPath(locale, tenant.slug)}/menu`;
   const stateLabel = service.state === 'open' ? m.openNow : service.state === 'closed' ? m.closed : m.paused;
   const stateTone = service.state === 'open' ? styles.stateOpen : service.state === 'closed' ? styles.stateClosed : styles.statePaused;
-  return <main className={`${styles.page} ${MOTION_CLASS[motion]}`} data-sf-screen="intro">
-    {tenant.siteTheme === 'light' ? null : <SceneBackdrop image={tenant.heroImage} />}
+  const customMedia = tenant.welcomeMediaType === 'image' || tenant.welcomeMediaType === 'video';
+  return <main className={`${styles.page} ${customMedia ? welcomeStyles.page : ''} ${MOTION_CLASS[motion]}`} data-sf-screen="intro" data-sf-welcome-custom={customMedia ? '' : undefined}>
+    {customMedia ? <WelcomeMedia key={`${tenant.slug}|${tenant.welcomeMediaType}|${tenant.welcomeVideo?.url ?? tenant.heroImage}`} video={tenant.welcomeMediaType === 'video' ? tenant.welcomeVideo : null} image={tenant.heroImage} playLabel={backgroundCopy.play} pauseLabel={backgroundCopy.pause} /> : tenant.siteTheme === 'light' ? null : <SceneBackdrop image={tenant.heroImage} />}
     <header className={styles.header}>
       <div className={`${styles.inner} ${styles.headerInner}`}>
         <BrandLockup tenant={tenant} />
@@ -37,7 +42,8 @@ export function Intro({ tenant, locale, campaign, motion = 'full' }: {
         </div>
       </div>
     </header>
-    <CampaignHero tenant={tenant} m={m} eyebrow={m.welcome} title={campaign?.title ?? tenant.displayName} subline={campaign?.subline ?? tenant.tagline} content={campaign?.hero ? { ...campaign.hero, mode: 'editorial' } : undefined} ctaHref={menuHref} ctaLabel={m.explore} />
+    <CampaignHero tenant={tenant} m={m} eyebrow={m.welcome} title={campaign?.title ?? tenant.displayName} subline={campaign?.subline ?? tenant.tagline} content={campaign?.hero ? { ...campaign.hero, mode: 'editorial' } : undefined} ctaHref={menuHref} ctaLabel={m.explore}
+      media={customMedia ? false : undefined} />
     <div className={styles.serviceWrap} data-sf-intro-service="">
       <div className={styles.service}>
         <div className={`${styles.serviceCell} ${stateTone}`}><span className={styles.stateDot} aria-hidden="true" /><span>{stateLabel}</span></div>

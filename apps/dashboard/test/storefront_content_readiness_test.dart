@@ -32,7 +32,7 @@ class _ReadinessTransport implements SyncRpcTransport {
         'media': <Object?>[],
       };
     }
-    if (function != 'get_restaurant_storefront_content_v6') {
+    if (function != 'get_restaurant_storefront_content_v7') {
       throw StateError('Unexpected RPC: $function');
     }
     if (missing) {
@@ -43,14 +43,18 @@ class _ReadinessTransport implements SyncRpcTransport {
       );
     }
     final document = StorefrontContentDocument.defaults();
-    if (dim != null) {
-      document['appearance'] = {
-        'text_color': null,
-        'button_text_color': null,
+    // v7 materializes nullable welcome keys in its response, without rewriting
+    // a stored legacy document merely because it was read.
+    document['appearance'] = {
+      'text_color': null,
+      'button_text_color': null,
+      'welcome_media_type': null,
+      'welcome_video_media_id': null,
+      if (dim != null) ...{
         'menu_background_media_id': null,
         'menu_background_dim': dim,
-      };
-    }
+      },
+    };
     return {
       'ok': true,
       'entity': storefrontContentEntity,
@@ -88,7 +92,7 @@ void main() {
     final result = await _repository(transport).readContent();
     expect(result.status, StorefrontContentReadStatus.unavailable);
     expect(result.snapshot, isNull);
-    expect(transport.calls, ['get_restaurant_storefront_content_v6']);
+    expect(transport.calls, ['get_restaurant_storefront_content_v7']);
   });
 
   for (final failure in const [
@@ -108,17 +112,26 @@ void main() {
         );
         expect(await repo.listContentMedia(), isNull);
         expect(transport.calls, [
-          'get_restaurant_storefront_content_v6',
+          'get_restaurant_storefront_content_v7',
           'list_storefront_content_media_v2',
         ]);
       },
     );
   }
 
-  test('ready backend accepts an untouched legacy document', () async {
+  test('v7 exposes legacy absence as nullable welcome values', () async {
     final result = await _repository(_ReadinessTransport()).readContent();
     expect(result.isOk, isTrue);
-    expect(result.snapshot!.document.json.containsKey('appearance'), isFalse);
+    expect(result.snapshot!.document.json['appearance'], {
+      'text_color': null,
+      'button_text_color': null,
+      'welcome_media_type': null,
+      'welcome_video_media_id': null,
+    });
+    expect(
+      StorefrontContentDocument.defaults().containsKey('appearance'),
+      isFalse,
+    );
   });
 
   for (final dim in [0, 15, 80]) {
@@ -168,7 +181,7 @@ void main() {
     );
     expect(find.byType(TextButton), findsOneWidget);
     expect(catalog.calls, 0);
-    expect(transport.calls, contains('get_restaurant_storefront_content_v6'));
+    expect(transport.calls, contains('get_restaurant_storefront_content_v7'));
     expect(
       transport.calls,
       isNot(contains('get_restaurant_storefront_content_v1')),

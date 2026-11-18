@@ -30,33 +30,33 @@ export function Price({ minor, from }: { minor: number; from?: string }) {
 }
 
 /** Editorial and canonical product media are explicit modes, never guessed. */
-export function CampaignHero({ tenant, m, title, subline, eyebrow, ctaHref, ctaLabel, suggestion, content, item }: {
+export function CampaignHero({ tenant, m, title, subline, eyebrow, ctaHref, ctaLabel, suggestion, content, item, media }: {
   tenant: Tenant; m: StorefrontMessages; title: string; subline: string;
   /** Intro is a derived composition; Home keeps its existing in-page action. */
   eyebrow?: string; ctaHref?: string; ctaLabel?: string; suggestion?: ReactNode;
   content?: CampaignModule['hero']; item?: MenuItem;
+  /** Welcome supplies its own media; menu callers retain their existing visual. */
+  media?: ReactNode;
 }) {
   const parts = headlineParts(title, content?.format);
   const eyebrowText = content?.eyebrow ?? eyebrow ?? tenant.city;
   const product = content?.mode === 'item' ? item : undefined;
   const photo = product === undefined ? tenant.heroImage : product.image;
   return <section className={`${styles.inner} ${styles.hero}`} data-sf-module="hero" data-sf-hero-mode={product ? 'item' : 'editorial'} aria-labelledby="sf-hero-title">
-    <div className={styles.heroCopy}>
+    <div className={styles.heroCopy} data-sf-hero-copy="">
       {eyebrowText ? <p className={styles.eyebrow}><span className={styles.littlePin} aria-hidden="true"><PinIcon /></span><TenantText>{eyebrowText}</TenantText></p> : null}
-      <h1 className={styles.heroTitle} id="sf-hero-title" aria-label={title}><span dir="auto">{parts.map((part, index) => <Fragment key={index}>{part.breakBefore ? <br aria-hidden="true" /> : null}<span className={part.highlight ? styles.heroWord : undefined}>{part.text}{part.highlight ? <svg viewBox="0 0 320 22" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M3 12C95-3 188 0 312 7M70 20c95-10 155-9 218-7" /></svg> : null}</span></Fragment>)}</span></h1>
+      <h1 className={styles.heroTitle} id="sf-hero-title" aria-label={title}><span dir="auto">{parts.map((part, index) => <Fragment key={index}>{part.breakBefore ? <br aria-hidden="true" /> : null}<span className={part.highlight ? styles.heroWord : undefined}>{part.text}</span></Fragment>)}</span></h1>
       {subline === '' ? null : <p className={styles.heroSub}><span dir="auto">{subline}</span></p>}
       <div className={styles.heroActions}>{product === undefined ? <a className={styles.promoCta} href={ctaHref ?? '#sf-menu'}>{ctaLabel ?? m.discoverMenu}<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6" /></svg></a> : <button className={styles.promoCta} type="button" data-sf-item={product.id} disabled={product.soldOut}>{product.soldOut ? m.soldOut : m.orderNow}<ChevronIcon /></button>}{suggestion}</div>
       {content?.footnote ? <p className={styles.heroSub}><TenantText>{content.footnote}</TenantText></p> : null}
     </div>
-    <div className={styles.heroVisual}>
-      <div className={styles.heroGhost} aria-hidden="true"><TenantText>{tenant.displayName}</TenantText></div>
-      <svg className={styles.heroMotif} viewBox="0 0 560 460" fill="none" aria-hidden="true"><path d="M465 40c110 80 45 165-9 167S380 110 471 111c106 0 65 216-15 251S254 428 164 426" /><circle cx="466" cy="40" r="5"/><path d="m167 413-14 16 24 1"/></svg>
+    {media ?? <div className={styles.heroVisual}>
       <div className={`${styles.heroMedia} ${product === undefined ? '' : productFrameClass(product, contentStyles.wholeFrame)}`} data-sf-product={product?.id}>{photo === null ? null : (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img className={`${styles.heroImg} ${product === undefined ? '' : productImageClass(product, contentStyles.wholeImage)}`} src={photo} alt="" width={720} height={960} decoding="async" fetchPriority="high" />
       )}{content?.stamp ? <span className={styles.badge}><TenantText>{content.stamp}</TenantText></span> : null}</div>
       {product === undefined ? null : <div className={`${styles.cardMain} ${contentStyles.heroProduct}`}><p className={styles.cardName}><TenantText>{product.name}</TenantText></p><Price minor={product.priceMinor} from={product.hasOptions ? m.from : undefined} /></div>}
-    </div>
+    </div>}
   </section>;
 }
 export function BrandLockup({ tenant, small = false }: { tenant: Tenant; small?: boolean }) {

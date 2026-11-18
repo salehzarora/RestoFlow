@@ -1,5 +1,47 @@
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { localMediaTarget, logicalMediaUrl } from './live-transport.mjs';
+
+// Reuse the existing 100s ISR/hydration wait without discarding a document on
+// every assertion sample. This schedules navigation only, never acceptance.
+export function menuDocumentNavigation(startedAt, lastNavigationAt, hydrated, now) {
+  const remainingMs = Math.max(0, 100000 - Math.max(0, now - startedAt));
+  return { navigate: remainingMs > 0 && (lastNavigationAt === null || (hydrated && now - lastNavigationAt >= 5000)),
+    timeout: Math.max(1, Math.min(30000, remainingMs)), remainingMs };
+}
+
+// Scalar-only handoff between two finite cases in the same synthetic run.
+// Authentication is performed again through the UI; no session or Page is
+// retained here. A fresh owner read must match before the next UI selection.
+export function responsiveSettingsHandoff(source, owner, phone, readback) {
+  const denied = () => { throw new Error('responsive_banner_handoff_invalid'); };
+  const commit = value => typeof value === 'string' && /^[0-9a-f]{40}$/.test(value);
+  const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+  if (!source || typeof source.runId !== 'string' || !/^\d{1,20}$/.test(source.runId)
+    || typeof source.runAttempt !== 'string' || !/^[1-9]\d{0,5}$/.test(source.runAttempt)
+    || !['prHead', 'prBase', 'testedCheckout', 'testedTree'].every(k => commit(source[k]))
+    || !owner || !['orgId', 'restaurantId', 'branchId'].every(k => uuid(owner[k])) || !/^cinematic-[a-z0-9-]+$/.test(owner.slug ?? '')
+    || !phone || !uuid(phone.mediaId) || !/^\/storage\/v1\/object\/public\/storefront-media\/[0-9a-f]{32}\/[0-9a-f]{64}\.webp$/.test(phone.publicPath ?? '')
+    || !['width', 'height'].every(k => Number.isInteger(phone[k]) && phone[k] > 0 && phone[k] <= 960)
+    || !readback || readback.ok !== true || readback.restaurant_id !== owner.restaurantId || readback.storefront_branch_id !== owner.branchId
+    || !Number.isInteger(readback.version) || readback.version < 0 || !readback.document?.appearance
+    || readback.document.appearance.menu_banner_media_id !== null || (readback.document.appearance.menu_banner_layout ?? null) !== null) denied();
+  const value = { source: { runId: source.runId, runAttempt: source.runAttempt, prHead: source.prHead, prBase: source.prBase,
+    testedCheckout: source.testedCheckout, testedTree: source.testedTree },
+    tenant: { orgId: owner.orgId, restaurantId: owner.restaurantId, branchId: owner.branchId, slug: owner.slug },
+    phone: { mediaId: phone.mediaId, publicPath: phone.publicPath, width: phone.width, height: phone.height },
+    baseline: { version: readback.version, documentSha256: createHash('sha256').update(JSON.stringify(readback.document)).digest('hex') } };
+  return { ...value, handoffSha256: createHash('sha256').update(JSON.stringify(value)).digest('hex') };
+}
+export function assertResponsiveSettingsHandoff(handoff, source, owner, readback) {
+  if (!handoff || JSON.stringify(handoff) !== JSON.stringify(responsiveSettingsHandoff(source, owner, handoff?.phone, readback)))
+    throw new Error('responsive_banner_handoff_mismatch');
+}
+export function acceptedResponsiveSettingsHandoff(candidate, proof) {
+  return candidate && typeof candidate === 'object' && /^[0-9a-f]{64}$/.test(candidate.handoffSha256 ?? '')
+    && proof?.primarySucceeded === true && proof.byteGuardStatus === 'PASS'
+    && Number.isInteger(proof.mappedMedia) && proof.mappedMedia > 0 && proof.verifiedMediaBytes === proof.mappedMedia ? candidate : null;
+}
 
 // Only the six optional fields changed by this synthetic settings acceptance.
 export const responsiveBannerKeys = Object.freeze(['menu_banner_layout', 'menu_banner_desktop_media_id',
@@ -15,6 +57,19 @@ export function legacyBannerDocument(document) {
   const copy = structuredClone(document);
   for (const key of responsiveBannerKeys) delete copy.appearance?.[key];
   return copy;
+}
+// The current synthetic fixture already has an appearance object. V7 extends
+// its V6 projection with exactly these two keys; unknown fields stay visible.
+export function legacyWelcomeFixtureDocument(document) {
+  const copy = structuredClone(document), appearance = copy?.appearance;
+  if (!appearance || typeof appearance !== 'object' || Array.isArray(appearance)
+    || !['welcome_media_type', 'welcome_video_media_id'].every(key => Object.hasOwn(appearance, key)))
+    throw new Error('Expected the current V7 fixture appearance');
+  delete appearance.welcome_media_type; delete appearance.welcome_video_media_id;
+  return copy;
+}
+export function legacyWelcomeFixtureRead(envelope) {
+  return { ...structuredClone(envelope), document: legacyWelcomeFixtureDocument(envelope.document) };
 }
 export function legacyBannerMenu(envelope) {
   const copy = structuredClone(envelope);
@@ -46,6 +101,29 @@ export function dashboardImageHash({ url, method, resourceType, headers }) {
 export function dashboardImageBytesMatch(hash, status, bytes) {
   return typeof hash === 'string' && /^[0-9a-f]{64}$/.test(hash) && status === 200
     && bytes instanceof Uint8Array && bytes.byteLength > 0 && createHash('sha256').update(bytes).digest('hex') === hash;
+}
+// Flutter's default web image codec reads Image.network through native XHR.
+// Observe that original response separately; HTML-image admission stays intact.
+export function dashboardCodecImageHash({ url, method, resourceType, headers, frameUrl }) {
+  if (resourceType !== 'xhr' || method !== 'GET' || !headers || typeof headers !== 'object' || Array.isArray(headers))
+    throw new Error('dashboard_codec_media_evidence_denied');
+  const frame = new URL(frameUrl), h = new Headers(headers);
+  if (frame.origin !== 'http://127.0.0.1:57026' || frame.username || frame.password
+    || ['authorization', 'apikey', 'cookie'].some(key => h.has(key))
+    || localMediaTarget(logicalMediaUrl(url), method) !== url) throw new Error('dashboard_codec_media_evidence_denied');
+  return new URL(url).pathname.split('/').at(-1).slice(0, -5);
+}
+export async function dashboardCodecImageResponse(request) {
+  try {
+    const hash = dashboardCodecImageHash({ url: request.url(), method: request.method(), resourceType: request.resourceType(),
+      headers: await request.allHeaders(), frameUrl: request.frame().url() });
+    if (request.redirectedFrom() !== null) return false;
+    const response = await request.response();
+    if (!response || response.request() !== request || response.url() !== request.url()
+      || response.status() !== 200 || response.headers()['content-type']?.trim().toLowerCase() !== 'image/webp') return false;
+    const bytes = await response.body(); // One mandatory original browser-body read; no alternate source.
+    return request.failure() === null && request.redirectedTo() === null && dashboardImageBytesMatch(hash, response.status(), bytes);
+  } catch { return false; }
 }
 export function dashboardMediaReady(requests, verified, checks) {
   return Number.isInteger(requests) && requests > 0 && verified === requests
@@ -89,6 +167,22 @@ export function bannerDocumentEvidence(document) {
     media: Object.fromEntries(['promo', 'story'].map(key => [key + '.editorial_media_id',
       evidenceScalar(document?.[key]?.editorial_media_id, !!document?.[key] && Object.hasOwn(document[key], 'editorial_media_id'))])) };
 }
+export function bannerDocumentDifferences(expected, actual) {
+  const documentKeys = ['hero_headline', 'hero_subline', 'announcement_text', 'hero', 'announcement_segments',
+    'promo', 'story', 'category_presentation', 'item_presentation', 'appearance'];
+  const changes = (before, after, allowed) => {
+    const left = before && typeof before === 'object' && !Array.isArray(before) ? before : {};
+    const right = after && typeof after === 'object' && !Array.isArray(after) ? after : {};
+    const keys = [...new Set([...Object.keys(left), ...Object.keys(right)])].filter(key =>
+      Object.hasOwn(left, key) !== Object.hasOwn(right, key) || !isDeepStrictEqual(left[key], right[key]));
+    return { fields: keys.slice(0, 32).map(key => ({ field: allowed.includes(key) ? key : 'unrecognized-field',
+      expected: evidenceScalar(left[key], Object.hasOwn(left, key)), actual: evidenceScalar(right[key], Object.hasOwn(right, key)) })),
+      overflow: Math.max(0, keys.length - 32) };
+  };
+  return { document: changes(expected, actual, documentKeys),
+    appearance: changes(expected?.appearance, actual?.appearance, [...appearanceEvidenceKeys, 'welcome_media_type', 'welcome_video_media_id']),
+    expected: bannerDocumentEvidence(expected), actual: bannerDocumentEvidence(actual) };
+}
 export function bannerComparisonEvidence(assertion, field, expected, actual) {
   return { assertion, field, expected: evidenceScalar(expected), actual: evidenceScalar(actual), equal: Object.is(expected, actual) };
 }
@@ -110,7 +204,7 @@ export function mediaReadErrorDetail(error) {
   if (/net::ERR_ABORTED|\babort(?:ed)?\b|cancel(?:led|ed)/i.test(message)) return 'aborted';
   return 'unclassified';
 }
-const evidencePhases = new Set(['baseline', 'upload-save-first-banner', 'replace-save-banner', 'verify-retained-private-source',
+const evidencePhases = new Set(['baseline', 'initialize-independent-content-baseline', 'upload-save-first-banner', 'replace-save-banner', 'verify-retained-private-source',
   'public-banner-read-and-render', 'banner-focal-persistence', 'banner-responsive', 'restored-banner-public-read-and-render',
   'independent-responsive-settings-ui-save-readback', 'after-responsive-restoration', 'clear-banner-only', 'clear-interface',
   'clear-save-result', 'clear-authenticated-readback', 'clear-preservation', 'clear-public-read', 'clear-storefront',

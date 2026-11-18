@@ -71,6 +71,7 @@ function clearWaitUnit(clearsAt) {
     traceRenderedBanner: async (_page, _url, _paths, sample) => {
       calls.push(now); const ready = now >= clearsAt; now += 50;
       sample.html = { bannerElements: ready ? 0 : 1 }; sample.dom = { topCount: 1, bannerCount: ready ? 0 : 1 };
+      sample.observedAt = now;
       return ready;
     }, bannerComparisonEvidence: (_name, _field, expected, actual) => ({ expected, actual }),
   });
@@ -83,10 +84,16 @@ test('UNIT_ONLY: actual clear waiter observes regenerated ordinary document with
   assert(u.calls.length > 1 && u.calls.length < 20);
   assert(u.calls.slice(1).every((at, i) => at - u.calls[i] >= 5000));
   assert(u.now() < 100000); assert(u.receipt.samples.slice(0, -1).every(s => s.predicate.actual === false));
+  assert.equal(u.receipt.waitTiming.configuredTimeoutMs, 100000);
+  assert.equal(u.receipt.waitTiming.elapsedMs, u.now());
+  assert.equal(u.receipt.waitTiming.completedDocumentSamples, u.calls.length);
 });
 test('UNIT_ONLY: an unchanged old document still fails at the existing acceptance deadline', async () => {
   const u = clearWaitUnit(Infinity);
   await assert.rejects(u.run(), /original bounded poll failed/);
   assert.equal(u.options().timeout, 100000); assert(u.calls.every(at => at < 100000));
   assert(u.receipt.samples.every(s => s.predicate.actual === false));
+  assert.equal(u.receipt.waitTiming.configuredTimeoutMs, 100000);
+  assert.equal(u.receipt.waitTiming.elapsedMs, u.now());
+  assert.equal(u.receipt.waitTiming.completedDocumentSamples, u.calls.length);
 });

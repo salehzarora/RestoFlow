@@ -48,7 +48,7 @@ select plan(62);
 -- literal, so any further anon-callable or DEFINER public function fails here
 -- until it is enumerated in its own migration + suite (D-037 point 2).
 create temp table sec001_allowlist (identity text primary key);
-insert into sec001_allowlist values ('storefront_menu(text)'), ('storefront_menu_v2(text)'), ('storefront_menu_v3(text)'), ('storefront_menu_v4(text)'), ('storefront_menu_v5(text)'), ('storefront_menu_v6(text)'), ('storefront_menu_v7(text)'), ('storefront_menu_v8(text)'), ('storefront_menu_v9(text)'), ('storefront_menu_v10(text)'), ('storefront_menu_v11(text)'),
+insert into sec001_allowlist values ('storefront_menu(text)'), ('storefront_menu_v2(text)'), ('storefront_menu_v3(text)'), ('storefront_menu_v4(text)'), ('storefront_menu_v5(text)'), ('storefront_menu_v6(text)'), ('storefront_menu_v7(text)'), ('storefront_menu_v8(text)'), ('storefront_menu_v9(text)'), ('storefront_menu_v10(text)'), ('storefront_menu_v11(text)'), ('storefront_menu_v12(text)'),
   ('storefront_seo_page_v1(text)'), ('storefront_seo_discovery_v1(text,integer,integer)');
 
 -- ----------------------------------------------------------------------------
@@ -171,7 +171,7 @@ select is(
     -- UX-002 v8, UX003 v9/v10 and responsive v11 explicitly grant anon AND authenticated.
     -- Older readers remain anon-only; keep the denied set exact by identity.
     select identity from sec001_allowlist
-      where identity not in ('storefront_menu_v8(text)', 'storefront_menu_v9(text)', 'storefront_menu_v10(text)', 'storefront_menu_v11(text)')
+      where identity not in ('storefront_menu_v8(text)', 'storefront_menu_v9(text)', 'storefront_menu_v10(text)', 'storefront_menu_v11(text)', 'storefront_menu_v12(text)')
     union all select 'submit_web_order_request(text,uuid,text,jsonb)'
     union all select 'submit_web_order_live_request(text,uuid,text,jsonb)'
     union all select 'submit_web_order_platform_request(text,uuid,text,jsonb)'

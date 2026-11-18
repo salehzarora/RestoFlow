@@ -25,7 +25,9 @@ export const artifacts = Object.freeze({
   model: Object.freeze({
     file: 'u2net-v0.0.0.onnx', bytes: 175997641,
     sha256: '8d10d2f3bb75ae3b6d527c77944fc5e7dcd94b29809d47a739a7a728a912b491',
-    url: 'https://api.github.com/repos/danielgatis/rembg/releases/assets/85857932',
+    // Official browser_download_url of the same upstream release asset85857932.
+    // Avoid the anonymous REST API quota; the full bytes/hash still decide trust.
+    url: 'https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx',
   }),
   kotlin: Object.freeze({
     file: 'kotlin-compiler-embeddable-2.2.20.jar', bytes: 56907103,
@@ -79,10 +81,17 @@ export function officialUrl(value) {
 }
 
 async function responseFor(spec, fetchImpl, signal) {
-  let url = officialUrl(spec.url);
+  const model = spec.url === artifacts.model.url;
+  // Only this literal, pinned model URL is an extra initial source. Do not add
+  // github.com to the global host set or permit it as a redirect destination.
+  let url = model ? new URL(artifacts.model.url) : officialUrl(spec.url);
+  // Obtain a fresh signed redirect instead of reusing a cached Location.
+  if (model) url.searchParams.set('download_nonce', randomUUID());
   for (let redirects = 0; redirects <= 3; redirects += 1) {
+    const headers = { Accept: 'application/octet-stream', 'User-Agent': 'BIZBOT-pinned-CI-downloads' };
+    if (model && redirects === 0) headers['Cache-Control'] = 'no-cache';
     const response = await fetchImpl(url, { redirect: 'manual', signal,
-      headers: { Accept: 'application/octet-stream', 'User-Agent': 'BIZBOT-pinned-CI-downloads' } });
+      headers });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location');
       await response.body?.cancel();
@@ -91,8 +100,17 @@ async function responseFor(spec, fetchImpl, signal) {
       continue;
     }
     if (!response.ok || !response.body) {
+      // Bounded public scalars only: never signed URLs, Location, bodies or
+      // credentials. A 403 remains a failure, without an automatic retry.
+      const numericHeader = name => {
+        const value = response.headers.get(name);
+        return /^\d{1,12}$/.test(value ?? '') ? Number(value) : null;
+      };
+      const detail = model ? ` ${JSON.stringify({ host: url.hostname, hop: redirects,
+        rateRemaining: numericHeader('x-ratelimit-remaining'),
+        rateReset: numericHeader('x-ratelimit-reset'), retryAfter: numericHeader('retry-after') })}` : '';
       await response.body?.cancel();
-      throw new PinnedDownloadError(`Pinned dependency download failed with HTTP ${response.status}`);
+      throw new PinnedDownloadError(`Pinned dependency download failed with HTTP ${response.status}${detail}`);
     }
     return response;
   }

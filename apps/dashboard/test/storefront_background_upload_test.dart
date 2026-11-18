@@ -10,6 +10,7 @@ import 'package:restoflow_dashboard/src/storefront/storefront_background_publish
 import 'package:restoflow_dashboard/src/storefront/storefront_content_models.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_content_repository.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_content_section.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_welcome_video_editor.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_media_publisher.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_models.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
@@ -321,6 +322,30 @@ Finder get _background => find.byWidgetPredicate(
 );
 
 void main() {
+  testWidgets(
+    'replacing a video-busy binding unlocks the new parent and rejects its old callback',
+    (tester) async {
+      final old = _Rig();
+      final replace = await _mount(tester, old);
+      final previous = tester.widget<StorefrontWelcomeVideoEditor>(
+        find.byKey(const Key('content-welcome-video')),
+      );
+      previous.onBusyChanged(true);
+      await tester.pumpAndSettle();
+      expect(old.busyEvents.last, isTrue);
+      final next = _Rig();
+      replace(next);
+      await tester.pumpAndSettle();
+      expect(next.busyEvents.last, isFalse);
+      final events = [...next.busyEvents];
+      previous.onBusyChanged(true);
+      await tester.pumpAndSettle();
+      expect(next.busyEvents, events);
+      expect(next.repo.writes, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'abandoned explicit old-background preparation releases parent busy',
     (tester) async {

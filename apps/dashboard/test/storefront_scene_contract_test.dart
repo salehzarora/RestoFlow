@@ -62,7 +62,7 @@ void main() {
       }
       expect(
         SupabaseStorefrontContentRepository.readFunction,
-        'get_restaurant_storefront_content_v6',
+        'get_restaurant_storefront_content_v7',
       );
       expect(
         SupabaseStorefrontContentRepository.writeFunction,

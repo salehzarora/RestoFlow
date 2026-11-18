@@ -28,14 +28,17 @@ const TYPES = {
   '.webmanifest': 'application/manifest+json',
 };
 
-// Vercel `source` patterns are path regexes; only the two committed shapes are
-// emulated, deliberately and explicitly.
-function headersFor(pathname) {
+// Only the committed route shapes are emulated. New welcome media must never
+// make the test server silently omit CSP or allow media on order/payment pages.
+export function headersFor(pathname) {
   const applied = {};
   for (const rule of CONFIG.headers ?? []) {
     let match = false;
     if (rule.source === '/(.*)') match = true;
     else if (rule.source === '/_next/static/(.*)') match = pathname.startsWith('/_next/static/');
+    else if (rule.source === '/((?!(?:(?:ar|he|en)/)?s/[^/]+/?$).*)') match = !/^\/(?:(?:ar|he|en)\/)?s\/[^/]+\/?$/.test(pathname);
+    else if (rule.source === '/s/:slug') match = /^\/s\/[^/]+\/?$/.test(pathname);
+    else if (rule.source === '/:locale(ar|he|en)/s/:slug') match = /^\/(?:ar|he|en)\/s\/[^/]+\/?$/.test(pathname);
     if (match) for (const h of rule.headers) applied[h.key] = h.value;
   }
   return applied;

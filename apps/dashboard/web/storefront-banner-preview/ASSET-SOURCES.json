@@ -6,8 +6,8 @@
     {
       "asset": "home.css",
       "source": "storefront/src/ui/storefront/home/home.module.css",
-      "bytes": 42117,
-      "sha256": "f0a919eea13de9058df79dc1f9901674e24de3121cce4a2a0b388c39fb10e89d",
+      "bytes": 41892,
+      "sha256": "9a132d4f2cbb86ab4ae9e939d27eab46ccccb5bd9474cf6dbeeda4bf867de585",
       "copiedUnchanged": true
     },
     {

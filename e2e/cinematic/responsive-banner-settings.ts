@@ -3,12 +3,12 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { bannerGeometry, bannerViewportScreenshot } from './banner-responsive';
-import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady, dashboardImageBytesMatch, classifyMediaReadError, mediaReadErrorDetail, bannerEvidencePhase } from './responsive-banner-settings.mjs';
+import { responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, legacyWelcomeFixtureDocument, legacyWelcomeFixtureRead, responsiveBannerReady, dashboardImageBytesMatch, classifyMediaReadError, mediaReadErrorDetail, bannerEvidencePhase, menuDocumentNavigation, bannerAssertionFailure } from './responsive-banner-settings.mjs';
 import { LOGICAL_ORIGIN, localMediaTarget } from './live-transport.mjs';
 
 type Obj = Record<string, any>;
 type Dependencies = {
-  read: () => Promise<Obj>; readLegacy: () => Promise<Obj>;
+  read: () => Promise<Obj>; readPrevious: () => Promise<Obj>; readLegacy: () => Promise<Obj>;
   publicRead: (version: 10 | 11) => Promise<Obj>;
   writeDocument: (document: Obj) => Promise<void>;
   reload: () => Promise<Obj>; save: () => Promise<void>;
@@ -271,6 +271,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
         elapsedMs: Date.now() - startedAt, stage: /^[a-z0-9_-]{1,120}$/.test(receipt.stage ?? '') ? receipt.stage : null,
         comparisonPhase: receipt.comparisonPhase ?? null, uiWriteCount: writes, comparisonsCompleted: receipt.rows.length,
         lastComparison: receipt.lastComparison ?? null, failureType: receipt.failureType ?? null,
+        originalFailure: receipt.originalFailure ?? null,
         progressWriteFailed: receipt.progressWriteFailed === true,
       }, null, 2));
     } catch {
@@ -353,7 +354,8 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     progress('before-save');
     const before = writes; await d.save(); expect(writes).toBe(before + 1);
     const wire = await d.reload(), actual = await d.read();
-    expect(wire, 'Actual Dashboard reload response equals an independent authenticated v6 read').toEqual(actual);
+    expect(wire, 'Actual Dashboard reload response equals an independent authenticated v7 read').toEqual(actual);
+    expect(legacyWelcomeFixtureRead(actual), 'V6 remains the exact two-key legacy projection of the current V7 fixture').toEqual(await d.readPrevious());
     expect(actual.restaurant_id).toBe(baseline.restaurant_id);
     expect(actual.storefront_branch_id).toBe(baseline.storefront_branch_id);
     expect(actual.version).toBeGreaterThan(baseline.version);
@@ -612,7 +614,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     await saveReload({ menu_banner_desktop_media_id: publications[0].media.id }); await compare('desktop-selected');
     receipt.stage = 'legacy-v5-v10-reader-and-writer-compatibility';
     const active = await d.read(), legacy = await d.readLegacy();
-    expect(legacy.document).toEqual(legacyBannerDocument(active.document));
+    expect(legacy.document).toEqual(legacyBannerDocument(legacyWelcomeFixtureDocument(active.document)));
     await d.writeDocument(legacy.document);
     expect((await d.read()).document, 'An actual old writer omitting the new fields preserves every chosen responsive setting').toEqual(active.document);
     const [v11, v10] = await Promise.all([d.publicRead(11), d.publicRead(10)]);
@@ -628,7 +630,12 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     receipt.status = 'RESPONSIVE_BANNER_SETTINGS_SAVE_READBACK_PASS'; receipt.stage = null;
   } catch (error) {
     receipt.failureType = error instanceof Error && ['Error', 'AssertionError', 'TimeoutError', 'TypeError'].includes(error.name) ? error.name : 'unclassified';
+    receipt.originalFailure = { at: Date.now(), stage: receipt.stage, ...bannerAssertionFailure(error) };
     progress('failure');
+    // Persist the primary assertion before restoration can await a service or
+    // be interrupted by the finite case deadline. Never replace that error.
+    try { writeFileSync(resolve(d.artifactDir, 'responsive-banner-settings-result.json'), JSON.stringify(receipt, null, 2)); }
+    catch { receipt.progressWriteFailed = true; }
     receipt.error = error instanceof Error ? error.message.split('\n')[0] : 'acceptance failed'; throw error;
   } finally {
     page.off('request', count); receipt.uiWriteCount = writes;
@@ -637,7 +644,7 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
     try {
       receipt.restoration.stage = 'write-original-owner-document';
       await d.writeDocument(original);
-      receipt.restoration.stage = 'v6-document-exact';
+      receipt.restoration.stage = 'v7-document-exact';
       const restored = (await d.read()).document;
       d.recordRestoredDocument?.(restored);
       // Only schema-key names and equality flags leave this synthetic cleanup;
@@ -648,12 +655,18 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
           .filter(key => !isDeepStrictEqual(expected[key], actual[key]) || Object.hasOwn(expected, key) !== Object.hasOwn(actual, key))
           .slice(0, 32).map(key => /^[a-z_]{1,64}$/.test(key) ? key : 'unclassified-key');
       };
-      receipt.restoration.v6 = { equal: isDeepStrictEqual(restored, original),
+      receipt.restoration.v7 = { equal: isDeepStrictEqual(restored, original),
         differingKeys: differingKeys(original, restored),
         differingAppearanceKeys: differingKeys(original.appearance, restored.appearance) };
       expect(restored).toEqual(original);
+      receipt.restoration.stage = 'v6-legacy-projection-exact';
+      const restoredV6 = (await d.readPrevious()).document, expectedV6 = legacyWelcomeFixtureDocument(original);
+      receipt.restoration.v6 = { equal: isDeepStrictEqual(restoredV6, expectedV6),
+        differingKeys: differingKeys(expectedV6, restoredV6),
+        differingAppearanceKeys: differingKeys(expectedV6.appearance, restoredV6.appearance) };
+      expect(restoredV6, 'Restored legacy V6 projection remains exact').toEqual(expectedV6);
       receipt.restoration.stage = 'v5-legacy-projection-exact';
-      const restoredLegacy = (await d.readLegacy()).document, expectedLegacy = legacyBannerDocument(original);
+      const restoredLegacy = (await d.readLegacy()).document, expectedLegacy = legacyBannerDocument(legacyWelcomeFixtureDocument(original));
       receipt.restoration.v5 = { equal: isDeepStrictEqual(restoredLegacy, expectedLegacy),
         differingKeys: differingKeys(expectedLegacy, restoredLegacy),
         differingAppearanceKeys: differingKeys(expectedLegacy.appearance, restoredLegacy.appearance) };
@@ -665,13 +678,22 @@ export async function verifyResponsiveBannerSettings(page: Page, menu: Page, d: 
       receipt.restoration.publicLayoutNull = true;
       receipt.restoration.stage = 'storefront-restored-legacy-document';
       await menu.waitForLoadState('networkidle', { timeout: 30000 }); await menu.setViewportSize({ width: 390, height: 844 });
+      const restorationStarted = Date.now(); let restorationNavigationAt: number | null = null, restorationHydrated = false, restorationCache = 'unclassified';
       await expect.poll(async () => {
-        const response = await navigateAfterMediaSettles(menu, d.url, { waitUntil: 'domcontentloaded' });
+        const next = menuDocumentNavigation(restorationStarted, restorationNavigationAt, restorationHydrated, Date.now());
+        if (next.navigate) {
+          const response = await navigateAfterMediaSettles(menu, d.url, { waitUntil: 'domcontentloaded', timeout: next.timeout });
+          restorationNavigationAt = Date.now();
+          const cache = response?.headers()['x-nextjs-cache'];
+          restorationCache = ['HIT', 'STALE', 'MISS', 'REVALIDATED'].includes(cache ?? '') ? cache! : 'unclassified';
+        }
+        restorationHydrated = await menu.evaluate(() => {
+          const root = document.querySelector<HTMLElement>('[data-sf-root]');
+          return Boolean(root?.style.getPropertyValue('--bg') && root.style.getPropertyValue('--font'));
+        });
         const observation = { restoredLegacy: await menu.locator('[data-sf-banner-layout="responsive"]').count() === 0,
           imageCount: await menu.locator('[data-sf-menu-banner] img').count() };
-        const cache = response?.headers()['x-nextjs-cache'];
-        receipt.restoration.lastStorefront = { ...observation,
-          cache: ['HIT', 'STALE', 'MISS', 'REVALIDATED'].includes(cache ?? '') ? cache : 'unclassified' };
+        receipt.restoration.lastStorefront = { ...observation, cache: restorationCache };
         return observation;
       }, { timeout: 100000, intervals: [250, 500, 1000] }).toEqual({ restoredLegacy: true, imageCount: 1 });
       receipt.syntheticSettingsRestored = true;

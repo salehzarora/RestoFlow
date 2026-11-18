@@ -36,7 +36,12 @@ test('every response carries the restrictive header set', () => {
 });
 
 test('the CSP is restrictive where it can be, with only the recorded exceptions', () => {
-  const csp = headersFor('/(.*)')['Content-Security-Policy'];
+  // Match the actual root route: welcome-only rules intentionally carry a
+  // separate media-src, while root and every non-welcome route retain this policy.
+  const policies = config.headers.filter(rule => new RegExp(`^${rule.source}$`).test('/'))
+    .flatMap(rule => rule.headers).filter(header => header.key === 'Content-Security-Policy');
+  assert.equal(policies.length, 1, 'the root has exactly one effective CSP');
+  const csp = policies[0].value;
   const directives = Object.fromEntries(
     csp.split(';').map((d) => d.trim()).filter(Boolean).map((d) => {
       const [name, ...values] = d.split(/\s+/);

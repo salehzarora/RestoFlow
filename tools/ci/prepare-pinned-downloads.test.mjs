@@ -21,6 +21,7 @@ async function temporary(t) {
 test('fixed model, CLI and Kotlin identities retain the approved bytes and versions', () => {
   assert.equal(artifacts.model.sha256, MODEL.sha256);
   assert.equal(artifacts.model.bytes, MODEL.bytes);
+  assert.equal(artifacts.model.url, 'https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx');
   assert.equal(artifacts.cli.sha256, 'ea233b337be698cee5bbca0795ee3e63b9dd154948c515c03cb72f191b3d103c');
   assert.equal(artifacts.cli.bytes, 73202139);
   assert.equal(artifacts.cli.url, 'https://api.github.com/repos/salehzarora/RestoFlow/releases/assets/723666587');
@@ -121,6 +122,92 @@ test('official asset redirects still require the exact full bytes', async t => {
   });
   assert.deepEqual(visited, ['api.github.com', 'release-assets.githubusercontent.com']);
   assert.equal(await verifyFile(cached, fixture), true);
+});
+
+test('only the exact model asset obtains a fresh uncached public download; signed URLs are untouched', async t => {
+  const nonces = new Set();
+  for (let run = 0; run < 2; run += 1) {
+    const root = await temporary(t);
+    let requests = 0;
+    const signed = 'https://release-assets.githubusercontent.com/exact-model?signature=private-fixture';
+    const cached = await ensureArtifact({ ...fixture, url: artifacts.model.url }, root, async (url, options) => {
+      requests++;
+      assert.equal(options.redirect, 'manual');
+      assert.equal(Object.hasOwn(options.headers, 'Authorization'), false);
+      if (requests === 1) {
+        assert.equal(url.origin + url.pathname, artifacts.model.url);
+        assert.deepEqual([...url.searchParams.keys()], ['download_nonce']);
+        const nonce = url.searchParams.get('download_nonce');
+        assert.match(nonce, /^[a-f0-9-]{36}$/);
+        assert.equal(nonces.has(nonce), false); nonces.add(nonce);
+        assert.equal(options.headers['Cache-Control'], 'no-cache');
+        return new Response(null, { status: 302, headers: { location: signed } });
+      }
+      assert.equal(url.href, signed);
+      assert.equal(Object.hasOwn(options.headers, 'Cache-Control'), false);
+      return new Response(payload);
+    });
+    assert.equal(requests, 2);
+    assert.equal(await verifyFile(cached, fixture), true);
+  }
+  for (const url of [fixture.url, artifacts.cli.url, artifacts.kotlin.url]) {
+    const root = await temporary(t);
+    await ensureArtifact({ ...fixture, url }, root, async (actual, options) => {
+      assert.equal(actual.href, url);
+      assert.equal(Object.hasOwn(options.headers, 'Cache-Control'), false);
+      return new Response(payload);
+    });
+  }
+});
+
+test('model 403 stays a failure and emits only fixed host/hop and bounded numeric rate metadata', async t => {
+  for (const redirected of [false, true]) {
+    const root = await temporary(t);
+    const prior = Buffer.from('prior incomplete cache');
+    await writeFile(join(root, fixture.file), prior);
+    let requests = 0;
+    await assert.rejects(ensureArtifact({ ...fixture, url: artifacts.model.url }, root, async () => {
+      requests++;
+      if (redirected && requests === 1) return new Response(null, { status: 302,
+        headers: { location: 'https://release-assets.githubusercontent.com/model?signature=private-fixture' } });
+      return new Response('private-fixture response must not escape', { status: 403, headers: {
+        'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1794873389', 'retry-after': 'private-fixture',
+        location: 'https://release-assets.githubusercontent.com/?signature=private-fixture',
+      } });
+    }), error => {
+      assert.match(error.message, /^Pinned dependency download failed with HTTP 403 /);
+      const metadata = JSON.parse(error.message.slice(error.message.indexOf('{')));
+      assert.deepEqual(metadata, { host: redirected ? 'release-assets.githubusercontent.com' : 'github.com',
+        hop: redirected ? 1 : 0, rateRemaining: 0, rateReset: 1794873389, retryAfter: null });
+      assert.equal(error.message.includes('private-fixture'), false);
+      return true;
+    });
+    assert.equal(requests, redirected ? 2 : 1);
+    assert.deepEqual(await readFile(join(root, fixture.file)), prior);
+    assert.deepEqual(await readdir(root), [fixture.file]);
+  }
+});
+
+test('the direct model exception admits no other GitHub path, variant or redirect', async t => {
+  assert.throws(() => officialUrl(artifacts.model.url), /Untrusted/);
+  for (const url of [artifacts.model.url + '?other=1', artifacts.model.url + '#other',
+    artifacts.model.url.replace('u2net.onnx', 'other.onnx'),
+    artifacts.model.url.replace('https://github.com', 'https://user:secret@github.com'),
+    'https://github.com/danielgatis/rembg/releases/download/v0.0.0/other.onnx',
+    artifacts.model.url.replace('https:', 'http:')]) {
+    const root = await temporary(t);
+    let requests = 0;
+    await assert.rejects(ensureArtifact({ ...fixture, url }, root, async () => { requests++; return new Response(payload); }), /Untrusted/);
+    assert.equal(requests, 0);
+    assert.deepEqual(await readdir(root), []);
+  }
+  const root = await temporary(t);
+  let requests = 0;
+  await assert.rejects(ensureArtifact({ ...fixture, url: artifacts.model.url }, root, async () => {
+    requests++;
+    return new Response(null, { status: 302, headers: { location: artifacts.model.url } });
+  }), /Untrusted/);
+  assert.equal(requests, 1);
 });
 
 test('unverified source bytes cannot replace an existing destination', async t => {

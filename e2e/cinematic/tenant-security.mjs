@@ -274,7 +274,7 @@ try {
   });
 
   await check('owner A can read every private RPC and use real Storage read/list/sign endpoints', async () => {
-    for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_content_v6', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
+    for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_content_v6', 'get_restaurant_storefront_content_v7', 'list_storefront_welcome_videos_v1', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
       const read = await rpc(fixture, a, name, scope(fixture.ownerA));
       assert.equal(read.status, 200);
       assert.equal(read.data?.ok, true);
@@ -351,7 +351,7 @@ try {
       }
     });
     await check(`${label}: A private content/profile/media/receipt reads denied`, async () => {
-      for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_content_v6', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
+      for (const name of ['get_restaurant_storefront_content_v1', 'get_restaurant_storefront_content_v2', 'get_restaurant_storefront_content_v3', 'get_restaurant_storefront_content_v4', 'get_restaurant_storefront_content_v5', 'get_restaurant_storefront_content_v6', 'get_restaurant_storefront_content_v7', 'list_storefront_welcome_videos_v1', 'get_restaurant_storefront_profile', 'list_storefront_content_media_v1', 'list_storefront_content_media_v2', 'list_storefront_media', 'get_restaurant_receipt_logo']) {
         assertRpcDenied(await rpc(fixture, token, name, scope(fixture.ownerA)), `${label} ${name}`);
       }
       assertDenied(await request(fixture, token, originalPath), `${label} private original`);
@@ -395,6 +395,50 @@ try {
       }), `${label} receipt write`);
     });
   }
+
+  // Exact welcome-video private API and original upload scope. These calls
+  // never create a fixture or compensate for a failed UI publication.
+  for (const [label, token] of [['anonymous', null], ['owner B', b], ['unaffiliated authenticated user', outsider]]) {
+    await check(`${label}: foreign welcome video management and source writes denied`, async () => {
+      const requestId = randomUUID();
+      const sourceKey = `${fixture.ownerA.orgId}/${fixture.ownerA.restaurantId}/${randomUUID()}.mp4`;
+      const common = { ...scope(fixture.ownerA), p_source_key: sourceKey, p_request_id: requestId };
+      for (const [name, args] of [
+        ['get_restaurant_storefront_content_v7', scope(fixture.ownerA)],
+        ['list_storefront_welcome_videos_v1', scope(fixture.ownerA)],
+        ['preflight_storefront_welcome_video_v1', common],
+        ['register_storefront_welcome_video_v1', { ...common, p_content_hash: 'a'.repeat(64), p_width: 540, p_height: 864, p_duration_ms: 12042, p_bytes: 660459 }],
+        ['publish_storefront_welcome_video_v1', { ...scope(fixture.ownerA), p_media_id: randomUUID(), p_request_id: requestId }],
+      ]) {
+        const result = await rpc(fixture, token, name, args);
+        if (token === null) {
+          assert.equal(result.status, 401, 'Anonymous welcome management is PostgreSQL insufficient privilege, not a missing route');
+          assert.equal(result.data?.code, '42501');
+        } else assertRpcDenied(result, `${label} ${name}`);
+      }
+      assertDenied(await request(fixture, token, '/storage/v1/object/storefront-welcome-video-originals/' + storagePath(sourceKey),
+        { method: 'POST', bytes: Buffer.from('not a video'), contentType: 'video/mp4' }), `${label} foreign video original upload`);
+      const edge = await request(fixture, token, '/functions/v1/storefront-media-publish', { method: 'POST', body: {
+        kind: 'welcome_video_v1', request_id: requestId, organization_id: fixture.ownerA.orgId,
+        restaurant_id: fixture.ownerA.restaurantId, source_key: sourceKey,
+      } });
+      assert.ok((token === null ? [401] : [403]).includes(edge.status), 'Actual Edge refuses unauthorized video publication');
+    });
+  }
+  await check('welcome v12 adds only its two public fields and retains the v11 legacy envelope', async () => {
+    for (const owner of [fixture.ownerA, fixture.ownerB]) {
+      const latest = await rpc(fixture, null, 'storefront_menu_v12', { p_slug: owner.slug });
+      const previous = await rpc(fixture, null, 'storefront_menu_v11', { p_slug: owner.slug });
+      assert.equal(latest.status, 200); assert.equal(latest.data?.ok, true);
+      assert.equal(previous.status, 200); assert.equal(previous.data?.ok, true);
+      const projection = structuredClone(latest.data);
+      delete projection.restaurant.welcome_media_type; delete projection.restaurant.welcome_video;
+      projection.server_ts = previous.data.server_ts;
+      assert.deepEqual(projection, previous.data);
+      assert.ok(!JSON.stringify(latest.data).includes('storefront-welcome-video-originals'));
+      assert.ok(!Object.hasOwn(latest.data.restaurant, 'welcome_video_media_id'));
+    }
+  });
 
   await check('authorized own scope cannot bind a foreign derivative or candidate', async () => {
     const source = await rpc(fixture, b, 'get_storefront_product_source_v1', {

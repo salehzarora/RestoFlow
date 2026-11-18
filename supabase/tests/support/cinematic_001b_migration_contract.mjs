@@ -173,6 +173,10 @@ export const detailOriginalSuccessor = Object.freeze({ label: 'product detail or
 export const responsiveBannerSuccessor = Object.freeze({ label: 'responsive banner',
   name: '20261113134741_bizbot_storefront_responsive_banner_001.sql',
   sha256: '734c339d116a3ae4d64544676bda78cc17d543f1f7d2ce95c23f884a8d2dd75d' });
+// WELCOME-EDITOR-001: one exact optional-media successor, local CI only.
+export const welcomeVideoSuccessor = Object.freeze({ label: 'welcome video',
+  name: '20261116160533_bizbot_storefront_welcome_video_001.sql',
+  sha256: 'c937eddae6c310d8a1c42a42c260d2e0c8765cc3a2647ba54d010b640366cfd9' });
 export const excludedSuccessors = Object.freeze([
   Object.freeze({ label: 'POS duty', name: '20261108085442_bizbot_pos_long_shift_alerts_001.sql',
     sha256: '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865' }),
@@ -182,6 +186,7 @@ export const excludedSuccessors = Object.freeze([
   menuBannerSuccessor,
   detailOriginalSuccessor,
   responsiveBannerSuccessor,
+  welcomeVideoSuccessor,
 ]);
 
 export const targetFunctions = [
@@ -322,4 +327,11 @@ export function responsiveBannerReleaseSources(sources) {
   const detail = detailOriginalReleaseSources(sources);
   const bytes = new Map(sources);
   return [...detail, [responsiveBannerSuccessor.name, bytes.get(responsiveBannerSuccessor.name)]];
+}
+
+// A separate current 192-file lifecycle. All historical plans stay exact.
+export function welcomeVideoReleaseSources(sources) {
+  const responsive = responsiveBannerReleaseSources(sources);
+  const bytes = new Map(sources);
+  return [...responsive, [welcomeVideoSuccessor.name, bytes.get(welcomeVideoSuccessor.name)]];
 }

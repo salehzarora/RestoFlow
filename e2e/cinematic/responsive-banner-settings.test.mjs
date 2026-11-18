@@ -4,12 +4,30 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import assert from 'node:assert/strict';
-import { responsiveBannerKeys, responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, responsiveBannerReady,
-  dashboardImageHash, dashboardImageBytesMatch, dashboardMediaReady, classifyMediaReadError,
-  evidenceScalar, bannerDocumentEvidence, bannerComparisonEvidence, bannerAssertionFailure, mediaReadErrorDetail, bannerEvidencePhase } from './responsive-banner-settings.mjs';
+import { responsiveBannerKeys, responsiveBannerFixture, legacyBannerDocument, legacyBannerMenu, legacyWelcomeFixtureDocument, legacyWelcomeFixtureRead, responsiveBannerReady,
+  dashboardImageHash, dashboardImageBytesMatch, dashboardCodecImageHash, dashboardCodecImageResponse, dashboardMediaReady, classifyMediaReadError,
+  evidenceScalar, bannerDocumentEvidence, bannerDocumentDifferences, bannerComparisonEvidence, bannerAssertionFailure, mediaReadErrorDetail, bannerEvidencePhase, menuDocumentNavigation, responsiveSettingsHandoff, assertResponsiveSettingsHandoff, acceptedResponsiveSettingsHandoff } from './responsive-banner-settings.mjs';
 import { controlGeometry, visibleGeometry } from './control-geometry.mjs';
 import { createHash } from 'node:crypto';
 import { LOCAL_API, LOGICAL_ORIGIN } from './live-transport.mjs';
+
+test('document navigation preserves hydration, five-second cadence and the existing deadline', () => {
+  const start = 1000;
+  assert.deepEqual(menuDocumentNavigation(start, null, false, start), { navigate: true, timeout: 30000, remainingMs: 100000 });
+  assert.equal(menuDocumentNavigation(start, start + 100, true, start + 5099).navigate, false);
+  assert.equal(menuDocumentNavigation(start, start + 100, false, start + 20000).navigate, false,
+    'An incomplete hydration frame must not be discarded, even after the cadence expires');
+  assert.equal(menuDocumentNavigation(start, start + 100, true, start + 5100).navigate, true);
+  let lastNavigationAt = null, visits = 0;
+  for (let now = start; now <= start + 100000; now += 250) {
+    const next = menuDocumentNavigation(start, lastNavigationAt, true, now);
+    if (next.navigate) { visits++; lastNavigationAt = now; }
+  }
+  assert.equal(visits, 20);
+  assert.deepEqual(menuDocumentNavigation(start, start + 95000, true, start + 100000), { navigate: false, timeout: 1, remainingMs: 0 });
+  assert.equal(menuDocumentNavigation(start, null, false, start + 100001).navigate, false);
+  assert.deepEqual(menuDocumentNavigation(start, start + 90000, true, start + 99990), { navigate: true, timeout: 10, remainingMs: 10 });
+});
 test('restoration materializes exactly six nullable settings without mutating any input or other viewport', () => {
   const input = { appearance: { menu_banner_layout: 'responsive', menu_banner_mobile_height_px: 540,
     menu_banner_media_id: 'phone', menu_background_media_id: 'background', independent: { retained: true } }, hero: { untouched: true } };
@@ -31,6 +49,20 @@ test('legacy management and public projections remove only the exact admitted ex
   const copy = structuredClone(menu);
   assert.deepEqual(legacyBannerMenu(menu), { server_ts: 'original', unrelated: true, content_v1: { appearance: { menu_banner_url: 'phone', unknown: true } } });
   assert.deepEqual(menu, copy);
+});
+
+test('V7 fixture projects only its exact two welcome keys to V6, retaining unknown-field and old-banner checks', () => {
+  const document = { hero_headline: 'unchanged', appearance: { text_color: null, button_text_color: null,
+    welcome_media_type: null, welcome_video_media_id: null, menu_banner_layout: 'responsive', unknown: true } };
+  const input = { ok: true, version: 4, storefront_branch_id: 'same', document }, before = structuredClone(input);
+  const projected = legacyWelcomeFixtureRead(input);
+  assert.deepEqual(projected, { ...input, document: { hero_headline: 'unchanged', appearance: {
+    text_color: null, button_text_color: null, menu_banner_layout: 'responsive', unknown: true } } });
+  assert.deepEqual(input, before);
+  assert.deepEqual(legacyBannerDocument(projected.document).appearance, { text_color: null, button_text_color: null, unknown: true });
+  assert.notDeepEqual(projected.document, { ...projected.document, appearance: { ...projected.document.appearance, unknown: false } });
+  for (const appearance of [null, [], {}, { welcome_media_type: null }, { welcome_video_media_id: null }])
+    assert.throws(() => legacyWelcomeFixtureDocument({ appearance }));
 });
 
 test('warm document readiness rejects a same-image stale height, wrong focus or legacy layout', () => {
@@ -87,6 +119,76 @@ test('native Dashboard media proof cannot accept missing, failed or only partly 
     assert.equal(dashboardMediaReady(...values), false);
 });
 
+function codecImageUnit(overrides = {}) {
+  const bytes = Buffer.from('synthetic content-addressed native Flutter codec derivative');
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  const url = `${LOCAL_API}/storage/v1/object/public/storefront-media/${'a'.repeat(32)}/${hash}.webp`;
+  let bodyReads = 0;
+  const facts = { url, method: 'GET', resourceType: 'xhr', headers: { accept: '*/*' }, frameUrl: 'http://127.0.0.1:57026/#/settings', ...overrides };
+  const request = { url: () => facts.url, method: () => facts.method, resourceType: () => facts.resourceType,
+    allHeaders: async () => facts.headers, frame: () => ({ url: () => facts.frameUrl }),
+    redirectedFrom: () => overrides.redirectedFrom ?? null, redirectedTo: () => overrides.redirectedTo ?? null,
+    failure: () => overrides.failure ?? null, response: async () => overrides.missingResponse ? null : response };
+  const response = { request: () => overrides.foreignResponse ? {} : request, url: () => overrides.responseUrl ?? facts.url,
+    status: () => overrides.status ?? 200, headers: () => ({ 'content-type': overrides.contentType ?? 'image/webp' }),
+    body: async () => { bodyReads++; if (overrides.bodyError) throw overrides.bodyError;
+      assert.equal(bodyReads, 1, 'Only the original browser response is read, once');
+      return Object.hasOwn(overrides, 'bytes') ? overrides.bytes : bytes; } };
+  return { facts, request, hash, reads: () => bodyReads };
+}
+test('UNIT_ONLY: codec XHR admission is separate from image admission and requires the exact public Dashboard GET', () => {
+  const unit = codecImageUnit();
+  assert.equal(dashboardCodecImageHash(unit.facts), unit.hash);
+  assert.throws(() => dashboardImageHash(unit.facts), 'The existing image-only validator remains image-only');
+  for (const overrides of [{ resourceType: 'image' }, { resourceType: 'fetch' }, { method: 'POST' }, { method: 'HEAD' },
+    { frameUrl: 'http://127.0.0.1:3000/' }, { frameUrl: 'https://external.test/' }, { frameUrl: 'http://user:secret@127.0.0.1:57026/' },
+    { url: unit.facts.url + '?token=secret' }, { url: unit.facts.url + '#fragment' },
+    { url: unit.facts.url.replace('/public/', '/authenticated/') }, { url: unit.facts.url.replace('/public/', '/sign/') },
+    { url: unit.facts.url.replace(LOCAL_API, 'https://external.test') }, { url: unit.facts.url.replace(unit.hash, unit.hash.toUpperCase()) },
+    { headers: undefined }, { headers: [] }]) assert.throws(() => dashboardCodecImageHash({ ...unit.facts, ...overrides }));
+  for (const key of ['Authorization', 'apikey', 'Cookie']) for (const value of ['', 'secret'])
+    assert.throws(() => dashboardCodecImageHash({ ...unit.facts, headers: { [key]: value } }));
+});
+test('UNIT_ONLY: codec observation requires one complete original body and fails real aborts, redirects, wrong MIME and empty bytes', async () => {
+  const unit = codecImageUnit();
+  assert.equal(await dashboardCodecImageResponse(unit.request), true); assert.equal(unit.reads(), 1);
+  for (const overrides of [{ missingResponse: true }, { foreignResponse: true }, { redirectedFrom: {} }, { redirectedTo: {} },
+    { responseUrl: unit.facts.url + '?redirected=1' }, { status: 206 }, { status: 404 }, { contentType: 'image/jpeg' },
+    { contentType: '' }, { contentType: 'application/octet-stream' }, { bytes: new Uint8Array() }, { bytes: Buffer.from('wrong') },
+    { bodyError: new Error('net::ERR_ABORTED') }, { bodyError: new Error('Network.getResponseBody: No data found for resource') },
+    { failure: { errorText: 'net::ERR_ABORTED' } }]) {
+    const bad = codecImageUnit(overrides);
+    assert.equal(await dashboardCodecImageResponse(bad.request), false);
+    assert(bad.reads() <= 1, 'No retry or substitute body read on a failure');
+  }
+});
+test('UNIT_ONLY: actual passive guard keeps HTML counts visible and accepts codec bytes only with nonzero complete native evidence', async () => {
+  const text = readFileSync(new URL('./dashboard.spec.ts', import.meta.url), 'utf8');
+  const start = text.indexOf('async function guardBrowser('), end = text.indexOf('async function rpc(', start);
+  assert(start >= 0 && end > start);
+  const code = ts.transpileModule(text.slice(start, end), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const makeGuard = runInNewContext(code + '\nguardBrowser', { Date, Map, Set, URL, createHash,
+    API: LOCAL_API, DASHBOARD: 'http://127.0.0.1:57026', STOREFRONT: 'http://127.0.0.1:3000', LOGICAL_ORIGIN,
+    origins: new Set([LOCAL_API, 'http://127.0.0.1:57026', 'http://127.0.0.1:3000']),
+    dashboardImageHash, dashboardImageBytesMatch, dashboardCodecImageResponse, dashboardMediaReady,
+    expect: value => ({ toBe: expected => assert.equal(value, expected), toBeGreaterThan: expected => assert(value > expected) }) });
+  for (const mode of ['none', 'valid', 'aborted', 'mixed']) {
+    const context = new EventEmitter(); let routeRegistrations = 0;
+    context.route = async () => { routeRegistrations++; };
+    const guard = await makeGuard(context);
+    if (mode !== 'none') context.emit('request', codecImageUnit(mode === 'aborted' ? { bodyError: new Error('net::ERR_ABORTED') } : {}).request);
+    if (mode === 'mixed') context.emit('request', codecImageUnit({ bytes: new Uint8Array() }).request);
+    let facts;
+    if (mode === 'valid') await guard.checkDashboardMedia(value => { facts = value; });
+    else await assert.rejects(guard.checkDashboardMedia(value => { facts = value; }));
+    assert.equal(routeRegistrations, 1, 'Only the pre-existing network guard is registered');
+    assert.equal(facts.directMedia, 0); assert.equal(facts.verifiedDirectMediaBytes, 0);
+    assert.equal(facts.codecXhrMedia, mode === 'none' ? 0 : mode === 'mixed' ? 2 : 1);
+    assert.equal(facts.verifiedCodecXhrBytes, ['valid', 'mixed'].includes(mode) ? 1 : 0);
+    assert.equal(facts.failedCodecResponses, ['aborted', 'mixed'].includes(mode) ? 1 : 0);
+  }
+});
+
 test('passive public media diagnostics expose fixed classes, never raw exception values', () => {
   assert.equal(classifyMediaReadError(new Error('Protocol error (Network.getResponseBody): No data found for resource with given identifier')), 'body-unavailable');
   assert.equal(classifyMediaReadError(new Error('Target page, context or browser has been closed')), 'context-closed');
@@ -129,8 +231,9 @@ test('failed assertion evidence preserves false versus true and only owned sourc
 
 test('media evidence uses fixed phases and error details without exporting arbitrary input', () => {
   assert.equal(bannerEvidencePhase('clear-storefront'), 'clear-storefront');
+  assert.equal(bannerEvidencePhase('initialize-independent-content-baseline'), 'initialize-independent-content-baseline');
   assert.equal(bannerEvidencePhase('responsive-desktop-cleared-390'), 'responsive-desktop-cleared-390');
-  for (const value of ['private-value', 'responsive-desktop-cleared-392', 'responsive-unknown-390', { secret: 'hidden' }])
+  for (const value of ['private-value', 'initialize-independent-content-baseline-unknown', 'responsive-desktop-cleared-392', 'responsive-unknown-390', { secret: 'hidden' }])
     assert.equal(bannerEvidencePhase(value), 'unclassified');
   assert.equal(mediaReadErrorDetail(new Error('No data found for resource with given identifier')), 'no-data');
   assert.equal(mediaReadErrorDetail(new Error('No resource with given identifier found')), 'no-resource');
@@ -155,6 +258,185 @@ function bannerDeferred() {
   return { promise, resolve, reject };
 }
 const bannerUnitTick = () => new Promise(resolve => setImmediate(resolve));
+
+test('UNIT_ONLY: settings handoff admits only the current source, synthetic owner and fresh cleared document; no Auth state', () => {
+  const source = { runId: '44168481188', runAttempt: '1', prHead: 'a'.repeat(40), prBase: 'b'.repeat(40), testedCheckout: 'c'.repeat(40), testedTree: 'd'.repeat(40) };
+  const owner = { orgId: '11111111-1111-1111-1111-111111111111', restaurantId: '22222222-2222-2222-2222-222222222222',
+    branchId: '33333333-3333-3333-3333-333333333333', slug: 'cinematic-settings', password: 'never-copy-secret' };
+  const phone = { mediaId: '44444444-4444-4444-4444-444444444444', publicPath: `/storage/v1/object/public/storefront-media/${'2'.repeat(32)}/${'5'.repeat(64)}.webp`, width: 900, height: 450 };
+  const readback = { ok: true, restaurant_id: owner.restaurantId, storefront_branch_id: owner.branchId, version: 7,
+    document: { hero_headline: 'not-exported-content', appearance: { menu_banner_media_id: null, menu_banner_layout: null } } };
+  const originals = structuredClone({ source, owner, phone, readback });
+  const handoff = responsiveSettingsHandoff(source, owner, phone, readback);
+  assert.doesNotThrow(() => assertResponsiveSettingsHandoff(handoff, source, owner, readback));
+  assert(!JSON.stringify(handoff).includes('never-copy-secret'));
+  assert(!JSON.stringify(handoff).includes('not-exported-content'));
+  assert.deepEqual({ source, owner, phone, readback }, originals);
+  for (const missing of [undefined, null, {}, { source }]) assert.throws(() => assertResponsiveSettingsHandoff(missing, source, owner, readback));
+  for (const key of ['runId', 'runAttempt', 'prHead', 'prBase', 'testedCheckout', 'testedTree']) {
+    const changed = { ...source, [key]: key === 'runId' ? '44168481189' : key === 'runAttempt' ? '2' : 'e'.repeat(40) };
+    assert.throws(() => assertResponsiveSettingsHandoff(handoff, changed, owner, readback));
+  }
+  for (const key of ['orgId', 'restaurantId', 'branchId', 'slug']) {
+    const changed = { ...owner, [key]: key === 'slug' ? 'cinematic-other' : '66666666-6666-6666-6666-666666666666' };
+    assert.throws(() => assertResponsiveSettingsHandoff(handoff, source, changed, readback));
+  }
+  assert.throws(() => assertResponsiveSettingsHandoff(handoff, source, owner, { ...readback, version: 8 }));
+  const stale = structuredClone(readback); stale.document.hero_headline = 'changed';
+  assert.throws(() => assertResponsiveSettingsHandoff(handoff, source, owner, stale));
+  const selected = structuredClone(readback); selected.document.appearance.menu_banner_media_id = phone.mediaId;
+  assert.throws(() => responsiveSettingsHandoff(source, owner, phone, selected));
+  const tampered = structuredClone(handoff); tampered.phone.mediaId = '77777777-7777-7777-7777-777777777777';
+  assert.throws(() => assertResponsiveSettingsHandoff(tampered, source, owner, readback));
+  assert.throws(() => responsiveSettingsHandoff(source, owner, { ...phone, publicPath: '/storage/v1/object/authenticated/private' }, readback));
+  assert.throws(() => responsiveSettingsHandoff(source, owner, { ...phone, width: 1920 }, readback));
+  for (const runAttempt of [undefined, null, '', '0', 1, '-1', '1.5'])
+    assert.throws(() => responsiveSettingsHandoff({ ...source, runAttempt }, owner, phone, readback));
+  const proof = { primarySucceeded: true, byteGuardStatus: 'PASS', mappedMedia: 4, verifiedMediaBytes: 4 };
+  assert.equal(acceptedResponsiveSettingsHandoff(handoff, proof), handoff);
+  for (const changed of [{ primarySucceeded: false }, { byteGuardStatus: 'NOT_RUN' }, { byteGuardStatus: 'RUNNING' },
+    { byteGuardStatus: 'FAIL' }, { mappedMedia: 0, verifiedMediaBytes: 0 }, { verifiedMediaBytes: 3 }, { mappedMedia: NaN }])
+    assert.equal(acceptedResponsiveSettingsHandoff(handoff, { ...proof, ...changed }), null,
+      'A failed/incomplete/zero-resource producer cannot publish the private handoff');
+  assert.equal(acceptedResponsiveSettingsHandoff(null, proof), null);
+});
+
+test('UNIT_ONLY: original settings assertion is persisted before blocked restoration and remains the thrown error', async () => {
+  const source = readFileSync(new URL('./responsive-banner-settings.ts', import.meta.url), 'utf8');
+  const start = source.indexOf('export async function verifyResponsiveBannerSettings(');
+  assert(start >= 0);
+  const code = ts.transpileModule(source.slice(start).replace('export async function', 'async function'),
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const original = new Error('original bounded assertion');
+  original.matcherResult = { name: 'toBe', expected: true, actual: false };
+  original.stack = 'Error: original bounded assertion\n at verifyResponsiveBannerSettings (responsive-banner-settings.ts:600:10)';
+  const writes = new Map(), cleanupEntered = bannerDeferred(), cleanup = bannerDeferred();
+  const run = runInNewContext(code + '\nverifyResponsiveBannerSettings', { Error, Date, Math, JSON,
+    responsiveBannerFixture, bannerAssertionFailure, copy: { layout: 'existing-layout' },
+    resolve: (directory, file) => `${directory}/${file}`,
+    writeFileSync: (file, body) => writes.set(file, JSON.parse(body)),
+    enableResponsiveLayoutWithKeyboard: async () => { throw original; },
+  });
+  const page = { on() {}, off() {}, locator: () => ({}), getByRole: () => ({}) };
+  const operation = run(page, {}, { read: async () => ({ document: { appearance: { menu_banner_media_id: null } } }),
+    artifactDir: '/unit', writeDocument: () => { cleanupEntered.resolve(); return cleanup.promise; } });
+  await cleanupEntered.promise;
+  const pending = writes.get('/unit/responsive-banner-settings-result.json');
+  assert.equal(pending.status, 'FAIL'); assert.equal(pending.originalFailure.matcher, 'toBe');
+  assert.deepEqual(pending.originalFailure.expected, { present: true, type: 'boolean', value: true });
+  assert.deepEqual(pending.originalFailure.actual, { present: true, type: 'boolean', value: false });
+  assert.equal(pending.originalFailure.sourceLine, 600);
+  assert.equal(writes.get('/unit/responsive-banner-settings-progress.json').originalFailure.sourceLine, 600);
+  cleanup.reject(new Error('later cleanup failure'));
+  await assert.rejects(operation, error => error === original, 'Cleanup failure cannot replace the original assertion');
+});
+
+test('UNIT_ONLY: actual producer keeps the scalar candidate private until its native byte guard completes', async () => {
+  const sourceText = readFileSync(new URL('./dashboard.spec.ts', import.meta.url), 'utf8');
+  const start = sourceText.indexOf("test('independent banner → actual Edge → save/reload → replace/clear preserves other media'");
+  const end = sourceText.indexOf('// Split from the base banner journey', start);
+  assert(start >= 0 && end > start);
+  const code = ts.transpileModule(sourceText.slice(start, end),
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  for (const failGuard of [false, true]) {
+    const gate = bannerDeferred(), entered = bannerDeferred(), original = new Error('real guard failure remains primary');
+    const source = { runId: '44168481188', runAttempt: '1', prHead: 'a'.repeat(40), prBase: 'b'.repeat(40), testedCheckout: 'c'.repeat(40), testedTree: 'd'.repeat(40) };
+    const owner = { orgId: '11111111-1111-1111-1111-111111111111', restaurantId: '22222222-2222-2222-2222-222222222222',
+      branchId: '33333333-3333-3333-3333-333333333333', slug: 'cinematic-settings', email: 'owner@unit.invalid', password: 'unit-only' };
+    const phone = { mediaId: '44444444-4444-4444-4444-444444444444', publicPath: `/storage/v1/object/public/storefront-media/${'2'.repeat(32)}/${'5'.repeat(64)}.webp`, width: 900, height: 450 };
+    const readback = { ok: true, restaurant_id: owner.restaurantId, storefront_branch_id: owner.branchId, version: 7,
+      document: { appearance: { menu_banner_media_id: null, menu_banner_layout: null } } };
+    let callback; const register = (_title, value) => { callback = value; }; register.setTimeout = () => {};
+    const auth = { status: () => 200, json: async () => ({ user: { email: owner.email }, access_token: 'unit-only-session' }) };
+    const network = { fontsReady: async () => {}, fonts: () => [], media: () => ({ mappedMedia: 4, verifiedMediaBytes: 4 }),
+      check: () => { entered.resolve(); return gate.promise; } };
+    const page = { goto: async () => {}, getByRole: () => ({ inputValue: async () => owner.email }),
+      locator: () => ({ inputValue: async () => owner.password }), waitForResponse: async () => auth };
+    const getter = runInNewContext('let responsiveSettingsCaseHandoff = null;\n' + code + '\n() => responsiveSettingsCaseHandoff', {
+      test: register, Date, Error, process: { env: { CINEMATIC_ARTIFACT_DIR: '/unit' } },
+      fixture: () => ({ ownerA: owner }), guardBrowser: async () => network,
+      observeLogicalMedia: () => ({ phase() {}, snapshot: () => ({}), stop() {} }),
+      semantics: async () => {}, fillField: async () => {}, enterLoginPassword: async () => {}, tapButton: async () => {}, openEditor: async () => {},
+      observeResponse: value => value, responseAfterAction: async (value, action) => { await action(); return value; },
+      isPasswordGrantRequest: () => true, verifyBannerJourney: async () => phone, rpc: async () => readback,
+      responsiveSettingsSource: () => source, responsiveSettingsHandoff, acceptedResponsiveSettingsHandoff,
+      bannerEvidencePhase, bannerAssertionFailure, failureScreenshot: async () => 'not-captured',
+      writeFileSync() {}, resolve: (directory, file) => `${directory}/${file}`,
+      expect: value => ({ toBe: expected => assert.equal(value, expected) }),
+      L: { email: 'email', login: 'login' }, DASHBOARD: 'http://127.0.0.1:57026', API: 'http://127.0.0.1:54321', STOREFRONT: 'http://127.0.0.1:3000',
+    });
+    const operation = callback({ page, context: { newPage: async () => ({}) } }, { timeout: 1200000 });
+    await entered.promise;
+    assert.equal(getter(), null, 'The actual producer has finished its UI/readback but must not publish before native byte evidence');
+    if (failGuard) {
+      gate.reject(original); await assert.rejects(operation, error => error === original);
+      assert.equal(getter(), null, 'A real guard rejection leaves no private handoff for another case');
+    } else {
+      gate.resolve(); await operation;
+      assert.equal(getter().phone.mediaId, phone.mediaId); assert.equal(getter().source.runAttempt, '1');
+    }
+  }
+});
+
+test('UNIT_ONLY: actual settings cleanup normalizes only six optional keys and still rejects unrelated losses or changes', async () => {
+  const source = readFileSync(new URL('./dashboard.spec.ts', import.meta.url), 'utf8');
+  const start = source.indexOf("    stage('restore-only-case-setup-phone-selection');");
+  const catchAt = source.indexOf('\n  } catch (error) {', start), finallyAt = source.indexOf('\n  } finally {', catchAt);
+  assert(start >= 0 && catchAt > start && finallyAt > catchAt);
+  const body = source.slice(start, catchAt), failure = source.slice(catchAt + '\n  } catch (error) {'.length, finallyAt);
+  const code = ts.transpileModule(`async function cleanup() { try { ${body} } catch (error) { ${failure} } }`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const before = { document: { hero_headline: 'private-content-not-exported', announcement_text: null,
+    category_presentation: [{ category_id: 'original-category', icon: 'existing-icon' }],
+    appearance: { menu_banner_media_id: null, menu_banner_enabled: true, menu_banner_focal_x: 38, menu_banner_focal_y: 9,
+      menu_background_media_id: 'protected-background', site_theme: 'dark' } } };
+  const baseline = structuredClone(before), correct = responsiveBannerFixture(before.document).document;
+  const variants = [
+    ['correct', () => {}],
+    ['phone-change', value => { value.appearance.menu_banner_media_id = 'wrong-phone'; }],
+    ['background-loss', value => { delete value.appearance.menu_background_media_id; }],
+    ['focus-change', value => { value.appearance.menu_banner_focal_y = 74; }],
+    ['height-change', value => { value.appearance.menu_banner_desktop_height_px = 420; }],
+    ['unrelated-list-loss', value => { value.category_presentation = []; }],
+    ['unknown-field', value => { value.appearance['private-unknown-key'] = 'private-unknown-value'; }],
+    ['normalized-key-loss', value => { delete value.appearance.menu_banner_desktop_focal_x; }],
+  ];
+  for (const [name, alter] of variants) {
+    const actual = structuredClone(correct); alter(actual);
+    const receipt = { stage: null, cleanup: { status: 'NOT_RUN' } }, writes = [], calls = [];
+    const run = runInNewContext(code + '\ncleanup', { Error, Object, receipt, before, responsiveBannerFixture, bannerDocumentDifferences, bannerAssertionFailure,
+      primary: null, page: {}, f: {}, token: 'unit-only', L: { bannerClear: 'clear' },
+      stage: value => { receipt.stage = value; }, persist: () => writes.push(structuredClone(receipt)),
+      openEditor: async () => { calls.push('open-editor'); }, openFoldedGroup: async () => { calls.push('banner-group'); },
+      revealButton: async () => { calls.push('reveal-clear'); }, tapRevealedButton: async () => { calls.push('click-clear'); },
+      saveContent: async () => { calls.push('ui-save'); }, rpc: async () => { calls.push('server-read'); return { document: actual }; },
+      invariants: async () => { calls.push('protected-invariants'); },
+      expect: value => ({ toEqual: expected => {
+        try { assert.deepEqual(value, expected); }
+        catch (error) { error.matcherResult = { name: 'toEqual', expected, actual: value }; throw error; }
+      } }),
+    });
+    if (name === 'correct') {
+      await run(); assert.equal(receipt.cleanup.status, 'PASS'); assert.equal(receipt.lifecycle, 'PASS');
+      assert.deepEqual(receipt.cleanup.materializedNullKeys, responsiveBannerKeys);
+      assert.deepEqual(receipt.cleanup.comparison.appearance.fields, []);
+      assert(calls.includes('protected-invariants'));
+    } else {
+      await assert.rejects(run(), { name: 'AssertionError' });
+      assert.equal(receipt.cleanup.status, 'FAIL'); assert.equal(receipt.failure.matcher, 'toEqual');
+      assert(!calls.includes('protected-invariants'), 'A failed equality cannot be promoted to cleanup success');
+      const preThrow = writes.find(value => value.cleanup.status === 'RUNNING' && value.cleanup.comparison);
+      assert(preThrow, 'Actual expected/received field facts are saved before the failing equality');
+      assert(preThrow.cleanup.comparison.document.fields.length > 0);
+      if (name === 'unknown-field') assert(preThrow.cleanup.comparison.appearance.fields.some(value => value.field === 'unrecognized-field'));
+    }
+    assert(calls.indexOf('click-clear') < calls.indexOf('ui-save') && calls.indexOf('ui-save') < calls.indexOf('server-read'));
+    assert(!JSON.stringify(writes).includes('private-content-not-exported'));
+    assert(!JSON.stringify(writes).includes('private-unknown-key'));
+    assert(!JSON.stringify(writes).includes('private-unknown-value'));
+    assert.deepEqual(before, baseline, 'Normalization never changes the actual pre-case snapshot');
+  }
+});
 function bannerNavigationUnit(lateSelection = false) {
   const frameReady = bannerDeferred(), decoded = bannerDeferred(), body = bannerDeferred();
   const bytes = Buffer.from('Synthetic already-issued public image observation'), hash = createHash('sha256').update(bytes).digest('hex');

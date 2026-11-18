@@ -2,6 +2,8 @@
 // unchanged. No response, payload, credential or application state is invented.
 export const LOGICAL_ORIGIN = 'https://oqmevrndtivqxgyvcmwy.supabase.co';
 export const LOCAL_API = 'http://127.0.0.1:54321';
+const welcomeVideoPath = /^\/storage\/v1\/object\/public\/storefront-welcome-videos\/[0-9a-f]{32}\/[0-9a-f]{64}\.mp4$/;
+const menuReadPaths = new Set(['/rest/v1/rpc/storefront_menu_v11', '/rest/v1/rpc/storefront_menu_v12']);
 const mediaPath = /^\/storage\/v1\/object\/public\/storefront-media\/[0-9a-f]{32}\/[0-9a-f]{64}\.webp$/;
 const deny = () => { throw new Error('cinematic_transport_denied'); };
 
@@ -13,6 +15,11 @@ function exactUrl(value, origin) {
 export function localMediaTarget(value, method = 'GET') {
   const u = exactUrl(value, LOGICAL_ORIGIN);
   if (method !== 'GET' || !mediaPath.test(u.pathname)) deny();
+  return LOCAL_API + u.pathname;
+}
+export function localWelcomeVideoTarget(value, method = 'GET') {
+  const u = exactUrl(value, LOGICAL_ORIGIN);
+  if (method !== 'GET' || !welcomeVideoPath.test(u.pathname)) deny();
   return LOCAL_API + u.pathname;
 }
 export function localProductMediaTarget(value, method = 'GET') {
@@ -31,14 +38,15 @@ export function createMenuTransport(nativeFetch, { anonKey, slug }, evidence = {
   const claims = (() => { try { return JSON.parse(Buffer.from(anonKey.split('.')[1], 'base64url').toString()); } catch { return null; } })();
   if (anonKey.split('.').length !== 3 || claims?.role !== 'anon') deny();
   return async (input, init) => {
-    let text, headers, signal;
+    let text, headers, signal, pathname;
     try {
       const u = exactUrl(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, LOGICAL_ORIGIN);
       const method = init?.method ?? input?.method ?? 'GET';
+      pathname = u.pathname;
       headers = new Headers(init?.headers ?? input?.headers);
       text = typeof init?.body === 'string' ? init.body : input instanceof Request ? await input.clone().text() : '';
       signal = init?.signal ?? input?.signal;
-      if (u.pathname !== '/rest/v1/rpc/storefront_menu_v11' || method !== 'POST' ||
+      if (!menuReadPaths.has(u.pathname) || method !== 'POST' ||
           JSON.stringify([...headers.keys()].sort()) !== JSON.stringify(['accept', 'apikey', 'authorization', 'content-type']) ||
           headers.get('accept') !== 'application/json' || headers.get('content-type') !== 'application/json' ||
           headers.get('apikey') !== anonKey || headers.get('authorization') !== `Bearer ${anonKey}` ||
@@ -48,8 +56,18 @@ export function createMenuTransport(nativeFetch, { anonKey, slug }, evidence = {
     // Pass the untouched request body and local anon headers to real PostgREST.
     // Return its Response directly: status, headers and body are not rewritten.
     // No fallback can pass the logical hosted URL to native fetch.
-    return nativeFetch(`${LOCAL_API}/rest/v1/rpc/storefront_menu_v11`, {
+    return nativeFetch(`${LOCAL_API}${pathname}`, {
       method: 'POST', headers, body: text, signal, redirect: 'error',
     });
   };
+}
+
+// Two existing bootstrap fixtures, each still delegated to its own exact-slug
+// transport. Unknown bodies cannot select a looser network path.
+export function createFixtureMenuTransport(nativeFetch, { anonKey, ownerASlug, ownerBSlug }) {
+  if (ownerASlug === ownerBSlug) deny();
+  const a = createMenuTransport(nativeFetch, { anonKey, slug: ownerASlug });
+  const b = createMenuTransport(nativeFetch, { anonKey, slug: ownerBSlug });
+  const bodyB = JSON.stringify({ p_slug: ownerBSlug });
+  return (input, init) => (typeof init?.body === 'string' && init.body === bodyB ? b : a)(input, init);
 }

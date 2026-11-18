@@ -8,11 +8,21 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { brotliCompressSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BUDGETS, MEDIA_EXTENSIONS, MEDIA_PATH_PREFIX, REQUIRED_HTML, REQUIRED_STATIC, EXPECTED_DOCUMENT } from './budgets.mjs';
+import { BUDGETS, MEDIA_EXTENSIONS, MEDIA_PATH_PREFIX, MEDIA_ORIGIN, REQUIRED_HTML, REQUIRED_STATIC, EXPECTED_DOCUMENT } from './budgets.mjs';
 import { measure, checkBudgets, cssAcceptance } from './measure-firstload.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'out');
+
+/** A loading exception for one element/attribute on welcome documents only.
+ * A script/link with the same URL, or any menu/order document, still fails. */
+export function allowedWelcomeVideoResource(tag, attribute, uri, documentPath) {
+  if (tag !== 'video' || !/^(?:(?:ar|en|he)\/)?s\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.html$/.test(documentPath)) return false;
+  if (!uri.startsWith(`${MEDIA_ORIGIN}/storage/v1/object/public/`)) return false;
+  const resource = uri.slice(MEDIA_ORIGIN.length);
+  if (attribute === 'poster') return /^\/storage\/v1\/object\/public\/storefront-media\/[0-9a-f]{32}\/[0-9a-f]{64}\.webp$/.test(resource);
+  return attribute === 'src' && /^\/storage\/v1\/object\/public\/storefront-welcome-videos\/[0-9a-f]{32}\/[0-9a-f]{64}\.mp4$/.test(resource);
+}
 
 /** A canonical link describes a document; it does not load a resource. Exempt
  * only the exact menu canonical for this snapshot document. Other attributes
@@ -97,9 +107,8 @@ export function auditOutput(outDir = OUT) {
   // inside error-message text, which is not a network request. Those are
   // recorded below as evidence instead of failed as violations.
   //
-  // STOREFRONT-READ-001: EXACTLY ONE exception - an <img src> under the public
-  // storefront-media path of the Supabase origin (a published derivative, the
-  // CSP's img-src). Any other element, attribute or origin is still a violation.
+  // Existing public-image exception plus the explicit welcome-video projection.
+  // Private originals, other origins, tags and menu/order video remain denied.
   const offOrigin = (uri) => /^(?:https?:)?\/\//i.test(uri) && !/^https?:\/\/(?:localhost|127\.0\.0\.1)/i.test(uri);
   const allowedImage = (uri) => uri.startsWith(MEDIA_PATH_PREFIX);
   for (const f of files) {
@@ -110,10 +119,12 @@ export function auditOutput(outDir = OUT) {
       const imgSrcs = new Set();
       for (const m of text.matchAll(/<img\b[^>]*\ssrc\s*=\s*"([^"]+)"/gi)) imgSrcs.add(m[1]);
       const resourceHtml = withoutMenuCanonicalHref(text, rel(f.path));
-      for (const m of resourceHtml.matchAll(/(?:src|href|action)\s*=\s*"([^"]+)"/gi)) {
-        if (!offOrigin(m[1])) continue;
-        if (imgSrcs.has(m[1]) && allowedImage(m[1])) continue;
-        problems.push(`${rel(f.path)} loads off-origin resource: ${m[1]}`);
+      for (const m of resourceHtml.matchAll(/(src|href|action|poster)\s*=\s*"([^"]+)"/gi)) {
+        if (!offOrigin(m[2])) continue;
+        if (imgSrcs.has(m[2]) && allowedImage(m[2])) continue;
+        const tag = /<([a-z][a-z0-9-]*)\b[^<>]*$/i.exec(resourceHtml.slice(0, m.index))?.[1]?.toLowerCase();
+        if (allowedWelcomeVideoResource(tag, m[1].toLowerCase(), m[2], rel(f.path))) continue;
+        problems.push(`${rel(f.path)} loads off-origin resource: ${m[2]}`);
       }
     } else {
       for (const m of text.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi)) {

@@ -21,6 +21,7 @@ import 'storefront_item_images.dart';
 import 'storefront_media_publisher.dart';
 import 'storefront_media_repository.dart';
 import 'storefront_media_slot.dart';
+import 'storefront_welcome_image_upload.dart';
 import 'storefront_models.dart';
 import 'storefront_profile_repository.dart';
 import 'storefront_sources.dart';
@@ -1870,6 +1871,7 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           sources: _sources,
           reloadSources: _reloadSources,
           publicUrlFor: widget.seams!.publicUrlFor,
+          welcomeImageEditor: _welcomeImageEditor(l10n, theme, profile, dirty),
           bannerPreviewProfile: profile,
           bannerPreviewLogoUrl: widget.seams!.publicUrlFor == null
               ? null
@@ -2836,6 +2838,114 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     ];
   }
 
+  Widget _welcomeImageEditor(
+    AppLocalizations l10n,
+    ThemeData theme,
+    StorefrontProfile profile,
+    bool dirty,
+  ) {
+    final seams = widget.seams!;
+    final publisher = seams.publisher, upload = seams.backgroundUpload;
+    final binding = _bindingGeneration;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (publisher != null && upload?.supported == true)
+          StorefrontWelcomeImageUpload(
+            key: ValueKey('welcome-image-upload|${seams.scopeIdentity}'),
+            upload: upload!,
+            publisher: publisher,
+            bindingIdentity:
+                '${seams.scopeIdentity}|${profile.storefrontBranchId}|$binding',
+            enabled:
+                !dirty &&
+                !_saving &&
+                !_contentBusy &&
+                !_contentDirty &&
+                !_mediaBusy &&
+                !_stale,
+            nonce: widget.nonce,
+            onAssign:
+                (
+                  slot,
+                  mediaId, {
+                  required bool reReadFirst,
+                  StorefrontSlotReplay? replay,
+                }) async {
+                  if (!_currentBinding(binding)) {
+                    return const StorefrontWriteResult(
+                      StorefrontWriteStatus.unavailable,
+                    );
+                  }
+                  return _assignSlot(
+                    slot,
+                    mediaId,
+                    reReadFirst: reReadFirst,
+                    replay: replay,
+                  );
+                },
+            onRefresh: ({bool reloadSources = false}) async {
+              if (_currentBinding(binding))
+                await _refreshAll(reloadSources: reloadSources);
+            },
+            onBusyChanged: (busy) {
+              if (_currentBinding(binding)) setState(() => _mediaBusy = busy);
+            },
+          ),
+        _mediaSlot(StorefrontSlot.hero, l10n, theme, profile, dirty),
+      ],
+    );
+  }
+
+  Widget _mediaSlot(
+    StorefrontSlot slot,
+    AppLocalizations l10n,
+    ThemeData theme,
+    StorefrontProfile profile,
+    bool dirty,
+  ) {
+    final seams = widget.seams!;
+    final publisher = seams.publisher;
+    if (publisher == null) {
+      return Text(
+        widget.isDemo
+            ? l10n.storefrontDemoNote
+            : l10n.storefrontMediaUnavailable,
+        key: ValueKey('storefront-slot-${slot.wire}-unavailable'),
+        style: theme.textTheme.bodySmall,
+      );
+    }
+    return StorefrontMediaSlot(
+      key: ValueKey('storefront-slot-widget-${slot.wire}'),
+      slot: slot,
+      profile: profile,
+      media: _media,
+      sources: _sources,
+      publisher: publisher,
+      mediaRepository: seams.mediaRepository,
+      publicUrlFor: seams.publicUrlFor,
+      enabled:
+          !dirty &&
+          !_saving &&
+          !_contentBusy &&
+          !_contentDirty &&
+          !_mediaBusy &&
+          !_stale,
+      nonce: widget.nonce,
+      refusedReceiptLogo: _refusedReceiptLogo,
+      onReceiptLogoRefused: (refused) {
+        if (mounted) setState(() => _refusedReceiptLogo = refused);
+      },
+      onAssign: _assignSlot,
+      reloadSources: _reloadSources,
+      onRefresh: ({bool reloadSources = false}) =>
+          _refreshAll(reloadSources: reloadSources),
+      onBusyChanged: (busy) {
+        if (mounted) setState(() => _mediaBusy = busy);
+      },
+    );
+  }
+
   List<Widget> _mediaArea(
     AppLocalizations l10n,
     ThemeData theme,
@@ -2881,38 +2991,12 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               !_mediaBusy &&
               !_stale,
         ),
-        for (final slot in StorefrontSlot.values) ...[
-          StorefrontMediaSlot(
-            key: ValueKey('storefront-slot-widget-${slot.wire}'),
-            slot: slot,
-            profile: profile,
-            media: _media,
-            sources: _sources,
-            publisher: publisher,
-            mediaRepository: seams.mediaRepository,
-            publicUrlFor: seams.publicUrlFor,
-            enabled:
-                !dirty &&
-                !_saving &&
-                !_contentBusy &&
-                !_contentDirty &&
-                !_mediaBusy &&
-                !_stale,
-            nonce: widget.nonce,
-            refusedReceiptLogo: _refusedReceiptLogo,
-            onReceiptLogoRefused: (refused) {
-              if (mounted) setState(() => _refusedReceiptLogo = refused);
-            },
-            onAssign: _assignSlot,
-            reloadSources: _reloadSources,
-            onRefresh: ({bool reloadSources = false}) =>
-                _refreshAll(reloadSources: reloadSources),
-            onBusyChanged: (busy) {
-              if (mounted) setState(() => _mediaBusy = busy);
-            },
-          ),
-          const SizedBox(height: RestoflowSpacing.sm),
-        ],
+        for (final slot in StorefrontSlot.values)
+          if (slot != StorefrontSlot.hero ||
+              seams.contentRepository == null) ...[
+            _mediaSlot(slot, l10n, theme, profile, dirty),
+            const SizedBox(height: RestoflowSpacing.sm),
+          ],
       ],
     ];
   }

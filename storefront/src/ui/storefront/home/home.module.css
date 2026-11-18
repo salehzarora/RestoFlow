@@ -35,10 +35,9 @@
 .hero{display:grid;align-items:center}
 .heroCopy{min-width:0}
 .eyebrow{composes:flexRow;gap:11px;margin:0}
-.littlePin{composes:gridCenter;border-radius:50%}
+.littlePin{composes:gridCenter}
 .heroTitle{overflow-wrap:anywhere}
 .heroTitle>span{unicode-bidi:plaintext;white-space:pre-wrap}.heroTitle>span>span{unicode-bidi:normal}
-.heroWord{position:relative;max-width:100%}
 
 .heroSub{margin:0;overflow-wrap:anywhere}
 .heroActions{composes:flexRow;flex-wrap:wrap}
@@ -53,7 +52,7 @@
 
 .imageCover{width:100%;height:100%;object-fit:cover}
 .promoImg{composes:imageCover}
-.heroImg{composes:imageCover;transform-origin:50% 123%}
+.heroImg{composes:imageCover}
 .announce{composes:flexRow;position:relative;width:min(1240px,calc(100% - 80px));margin:12px auto 0;min-height:49px;justify-content:center;gap:24px;background:linear-gradient(var(--scrim,rgba(6,8,7,.66)),var(--scrim,rgba(6,8,7,.66))),var(--scrim,rgba(6,8,7,.66));color:var(--promoWarm,#f3e6d2);border:1px solid color-mix(in srgb,var(--acc) 30%,var(--hair));border-radius:var(--r-control);padding:10px 60px;font:500 12px/1.8 var(--font)}
 .announce>span[dir]{min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;text-align:center}.announce>span[aria-hidden]{flex:none;font-size:22px}
 .announceClose{composes:gridCenter;width:28px;height:28px;position:absolute;inset-inline-end:18px;inset-block-start:calc(50% - 14px);background:none;border:0;color:inherit;cursor:pointer}
@@ -154,12 +153,8 @@
 .menuBanner{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;mask-image:linear-gradient(#000 60%,transparent)}.menuBanner img{display:block;width:100%;height:100%;object-fit:cover}
 @media(min-width:651px){.dock{display:none}.page:has(.dock){padding-block-end:0}}
 @media(max-width:900px){.headerInner{gap:16px}.headerNav{gap:18px;font-size:11px}.announce{min-height:43px;gap:27px}.headerPhone{display:none}.gridWrap{grid-template-columns:repeat(3,minmax(0,1fr))}.cardMain{gap:6px}}
-@media(max-width:650px){.headerNav{display:none}.hero .eyebrow{grid-column:1/-1;grid-row:1;margin-block-end:9px}
-.heroTitle{grid-column:1;grid-row:2}
-.heroSub{grid-column:1/-1}
-.heroActions{grid-column:1/-1}
+@media(max-width:650px){.headerNav{display:none}
 .heroActions .promoCta{justify-content:space-between;gap:14px}
-.heroVisual{grid-column:2;grid-row:2;margin:0;max-width:none}
 .announce{width:calc(100% - 36px);min-height:44px;gap:12px;padding:8px 44px}.announceClose{inset-inline-end:10px}.announce>span[aria-hidden]{font-size:18px}.serviceWrap{gap:8px}.service{gap:12px}.menuHeading{flex-direction:column}
 .searchBox{width:100%;margin:0;box-sizing:border-box}
 .sectionHead{gap:8px}
@@ -168,7 +163,6 @@
 .promo{grid-template-columns:1fr}.promoMediaWrap{height:210px}.storyMedia{grid-row:2}.footerInner{flex-wrap:wrap}
 .cartDialog{inset-block-start:auto;inset-block-end:0;margin:0;width:100%;max-width:none;border-radius:16px 16px 0 0}
 }
-@media(max-width:365px){.heroActions .promoCta{min-width:145px}}
 /* Shared flat cart content. Search retains its named 360px wrapper; Home
    opens the same live content in a native dialog. Amount authority is unchanged. */
 .shell{display:flex;min-width:0;container-type:inline-size;container-name:storefront}
@@ -243,17 +237,16 @@
 .headerActions{gap:12px}
 .headerActions>.promoCta{padding:8px;min-width:44px;min-height:44px;background:transparent;color:var(--tx);box-shadow:none}
 .hero{position:relative;min-height:520px;padding-block:60px;grid-template-columns:1fr 1fr;gap:48px}
-.heroCopy{align-self:center;display:flex;flex-direction:column;align-items:flex-start;padding:0}
+.heroCopy{display:flex;flex-direction:column;align-items:flex-start}
 .heroTitle{font-size:clamp(56px,7vw,96px);line-height:1.28;letter-spacing:normal;font-weight:900;margin:22px 0;max-width:10ch;text-wrap:balance}
-.heroWord{display:inline;color:var(--accLargeText)}.heroWord>svg{display:none}
+.heroWord{color:var(--accLargeText)}
 .eyebrow{font-size:12px;letter-spacing:normal;font-weight:500;color:var(--acct)}
-.littlePin{border:0;color:var(--acc);width:auto;height:auto}.littlePin svg{width:16px;height:16px}
+.littlePin{color:var(--acc)}.littlePin svg{width:16px;height:16px}
 .heroSub{font-size:19px;line-height:1.8;color:var(--tx2);max-width:36ch}
 .heroActions{margin-block-start:30px;gap:14px 25px}
 .promoCta{min-height:54px;min-width:174px;padding:14px 24px;border-radius:16px;font-size:15px;gap:28px;box-shadow:0 6px 22px color-mix(in srgb,var(--acc) 9%,transparent)}
-.heroVisual{height:470px}.heroMedia{inset:0;width:100%;height:100%;border-radius:0;background:transparent;box-shadow:none;transform:none;overflow:visible}
-.heroImg{object-fit:contain;object-position:center;transform:none;mask-image:radial-gradient(ellipse 68% 66% at 50% 50%,#000 52%,transparent 100%)}
-.heroGhost,.heroMotif{display:none}.heroMedia:not([data-sf-product])::after{display:none}
+.heroVisual{height:470px}.heroMedia{inset:0;width:100%;height:100%}
+.heroImg{object-fit:contain;mask-image:radial-gradient(ellipse 68% 66% at 50% 50%,#000 52%,transparent 100%)}
 .hero[data-sf-hero-mode="editorial"]{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .hero[data-sf-hero-mode="editorial"] .heroVisual{display:none}
 .page[data-sf-screen="intro"] .hero{min-height:calc(100svh - 220px)}
@@ -332,7 +325,7 @@
  .contactLine{font-size:14px;margin-block-start:9px}.footerBand{padding-block:18px 20px}.footerInner{gap:8px}.footerCredit{margin-block-start:26px}
  .footerPhoto{opacity:.22}.footerPhoto img{width:80%;filter:blur(2px)}
 }
-@media(max-width:365px){.heroTitle{font-size:43px}.brandName{max-width:132px}.headerActions{gap:0}.servicePair{gap:8px}.servicePanel{padding:16px}}
+@media(max-width:365px){.heroTitle{font-size:43px}.brandName{max-width:132px}.servicePair{gap:8px}.servicePanel{padding:16px}}
 
 /* The selected tab already names an uncustomized category. Keep its heading
    accessible, and reveal it when programmatic category navigation focuses it. */
