@@ -1,5 +1,5 @@
 // Passive observation of this test page's existing publisher POST.
-// The short probe and the first failing base-banner upload explicitly opt into
+// The short probe and targeted current-failure banner uploads explicitly opt into
 // bounded client-call observations using the same existing session. Never
 // replace Response.json, a native body, or an acceptance outcome.
 import { createHash } from 'node:crypto';

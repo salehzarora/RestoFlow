@@ -1951,7 +1951,9 @@ async function runResponsiveBannerSettingsCase(page: Page, menu: Page, f: Fixtur
     save: () => saveContent(page),
     upload: index => {
       const file = `responsive-banner-${index}.png`;
-      return upload(page, file, diagnostics(), 200, 'desktop-banner', readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file)));
+      // Trace the actual responsive desktop operation that failed in44237959633,
+      // preserving its owner, page, preceding saves, original body and errors.
+      return upload(page, file, diagnostics(), 200, 'desktop-banner', readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file)), true);
     },
     reveal: target => reveal(page, target, 'field'), tap: target => tapRevealedControl(page, target),
     freshMenu: async width => {
