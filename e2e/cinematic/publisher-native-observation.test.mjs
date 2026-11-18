@@ -4,13 +4,14 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { createHash } from 'node:crypto';
+import { createHash, webcrypto } from 'node:crypto';
+import { runInNewContext } from 'node:vm';
 import { setImmediate as tick } from 'node:timers/promises';
 const require = createRequire(new URL('../package.json', import.meta.url));
 const ts = require('typescript');
 const source = readFileSync(new URL('./publisher-native-observation.ts', import.meta.url), 'utf8');
 const js = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
-const { observePublisherNative, completeNativeBody } = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
+const { observePublisherNative, completeNativeBody, installPublisherClientLifecycle, projectPublisherClientLifecycle } = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
 const API = 'http://127.0.0.1:54321', PATH = '/functions/v1/storefront-media-publish';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const b64 = value => Buffer.from(value).toString('base64');
@@ -187,4 +188,139 @@ test('a truncated welcome-video native JSON body cannot substitute for the origi
   await assert.rejects(h.o.assertComplete(r.response,{ok:true,status:'published',kind:'welcome_video_v1'}),/mismatch or incomplete/);
   assert.deepEqual(h.s.commands.map(value=>value.name),['Network.enable','Runtime.enable','Network.streamResourceContent']);
  }finally{await h.o.stop();}
+});
+
+// Execute the exact serialized probe installer without a browser or network.
+function clientRealm() {
+ const calls=[],digests=[],timers=new Map();let next=Promise.resolve(null),throwFetch=null,timerSequence=0;
+ class Reader {
+  readCalls=[];cancelCalls=[];readResults=[];cancelPromise=Promise.resolve(undefined);
+  read(...args){this.readCalls.push({receiver:this,args});if(this.readThrow)throw this.readThrow;return this.readResults.shift()??Promise.resolve({done:true,value:undefined});}
+  cancel(...args){this.cancelCalls.push({receiver:this,args});if(this.cancelThrow)throw this.cancelThrow;this.onCancel?.();return this.cancelPromise;}
+ }
+ class Stream { constructor(reader){this.reader=reader;this.calls=[];}getReader(...args){this.calls.push({receiver:this,args});return this.reader;} }
+ class NativeResponse { constructor(body){this.originalBody=body;this.bodyGets=0;}get body(){this.bodyGets++;if(this.bodyThrow)throw this.bodyThrow;return this.originalBody;}json(){throw new Error('Observer must not call original json');} }
+ const originalFetch=function(...args){calls.push({receiver:this,args});if(throwFetch)throw throwFetch;return next;};
+ const realm={location:{origin:'http://127.0.0.1:57026'},fetch:originalFetch,Response:NativeResponse,ReadableStream:Stream,
+  ReadableStreamDefaultReader:Reader,AbortSignal,Promise,Uint8Array,TextEncoder,TextDecoder,Date,Error,
+  crypto:{subtle:{digest(...args){const p=webcrypto.subtle.digest(...args);digests.push(p);return p;}}},
+  setTimeout(fn){const key=++timerSequence;timers.set(key,fn);return key;},clearTimeout(key){timers.delete(key);}};
+ realm.window=realm;realm.top=realm;
+ const install=runInNewContext('('+installPublisherClientLifecycle.toString()+')',realm);
+ const body=JSON.stringify({request_id:'00000000-0000-4000-8000-000000000001',slot:'hero',source_key:'PRIVATE_SOURCE_NEVER_EXPORT'});
+ return {realm,install,calls,timers,originalFetch,Reader,Stream,NativeResponse,body,
+  init:signal=>({method:'POST',body:new TextEncoder().encode(body),signal}),
+  setNext:p=>{next=p;throwFetch=null;},setThrow:e=>{throwFetch=e;},
+  start:()=>install({began:Date.now(),deadlineAt:Date.now()+5000}),
+  control:()=>realm.__cinematicPublisherLifecycleProbe,
+  flush:async()=>{await Promise.all(digests);await tick();}};
+}
+test('probe decorators retain original native Promise/Response/body/reader/result identities, this, arguments and one actual read',async()=>{
+ const h=clientRealm(),fetchGate=deferred(),readGate=deferred(),controller=new AbortController(),reader=new h.Reader(),stream=new h.Stream(reader),response=new h.NativeResponse(stream);
+ const receiver={opaque:true},readArg={opaqueReadArgument:true},getArg={opaqueReaderArgument:true};reader.readResults.push(readGate.promise);h.setNext(fetchGate.promise);
+ const fetchDescriptor=Object.getOwnPropertyDescriptor(h.realm,'fetch');assert.equal(h.start().status,'INSTALLED');
+ const init=h.init(controller.signal),fetched=h.realm.fetch.call(receiver,API+PATH,init);
+ assert.equal(fetched,fetchGate.promise);assert.equal(h.calls.length,1);assert.equal(h.calls[0].receiver,receiver);assert.equal(h.calls[0].args[1],init);
+ fetchGate.resolve(response);assert.equal(await fetched,response);assert.equal(response.bodyGets,0,'No observer body access');assert.equal(response.json,h.NativeResponse.prototype.json);
+ assert.equal(response.body,stream);assert.equal(response.bodyGets,1);assert.equal(stream.getReader(getArg),reader);assert.equal(stream.calls[0].args[0],getArg);
+ const read=reader.read(readArg);assert.equal(read,readGate.promise);assert.equal(reader.readCalls.length,1);assert.equal(reader.readCalls[0].receiver,reader);assert.equal(reader.readCalls[0].args[0],readArg);
+ const chunk=new Uint8Array([1,2,3]),result={done:false,value:chunk};readGate.resolve(result);assert.equal(await read,result);assert.equal(result.value,chunk);
+ const done={done:true,value:undefined};reader.readResults.push(Promise.resolve(done));assert.equal(await reader.read(),done);await h.flush();
+ const foreignReader=new h.Reader(),foreignStream=new h.Stream(foreignReader),foreignResponse=new h.NativeResponse(foreignStream),foreignPromise=Promise.resolve(done),foreignArg={borrowed:true};
+ foreignReader.readResults.push(foreignPromise);assert.equal(reader.read.call(foreignReader,foreignArg),foreignPromise);assert.equal(foreignReader.readCalls[0].receiver,foreignReader);assert.equal(foreignReader.readCalls[0].args[0],foreignArg);
+ assert.equal(stream.getReader.call(foreignStream,foreignArg),foreignReader);assert.equal(foreignStream.calls[0].args[0],foreignArg);assert.equal(Object.hasOwn(foreignReader,'read'),false);
+ assert.equal(Object.getOwnPropertyDescriptor(response,'body').get.call(foreignResponse),foreignStream);assert.equal(Object.hasOwn(foreignResponse,'body'),false);
+ const raw=h.control().stop(),proof=projectPublisherClientLifecycle(raw);assert.equal(proof.status,'OBSERVED');assert.equal(proof.records[0].identityHash,hash('00000000-0000-4000-8000-000000000001'));assert.equal(proof.records[0].postDataHash,hash(h.body));
+ assert.deepEqual(Array.from(proof.records[0].events.filter(e=>e.event==='read-fulfilled'),e=>[e.done,e.bytes]),[[false,3],[true,0]]);
+ assert.deepEqual(Object.getOwnPropertyDescriptor(h.realm,'fetch'),fetchDescriptor);assert.equal(h.control(),undefined);assert.equal(h.timers.size,0);
+ for(const [object,key]of[[response,'body'],[stream,'getReader'],[reader,'read'],[reader,'cancel']])assert.equal(Object.hasOwn(object,key),false,'Original property absence is restored');
+ assert.equal(reader.readCalls.length,2,'Only the two application reads occurred');
+ for(const secret of ['PRIVATE_SOURCE_NEVER_EXPORT',h.body,'authorization','access_token'])assert.equal(JSON.stringify(proof).includes(secret),false);
+});
+test('probe observations distinguish original signal abort, reader cancel and rejected native promises without replacing errors',async()=>{
+ const h=clientRealm(),controller=new AbortController(),reader=new h.Reader(),stream=new h.Stream(reader),response=new h.NativeResponse(stream),failure=new Error('PRIVATE_ERROR_VALUE');
+ h.setNext(Promise.resolve(response));h.start();await h.realm.fetch(API+PATH,h.init(controller.signal));response.body.getReader();
+ const readGate=deferred();reader.readResults.push(readGate.promise);const read=reader.read();readGate.reject(failure);await assert.rejects(read,error=>error===failure);
+ reader.onCancel=()=>controller.abort('PRIVATE_ABORT_REASON');const cancelGate=deferred();reader.cancelPromise=cancelGate.promise;
+ const reason={privateReason:'DO_NOT_EXPORT'},cancel=reader.cancel(reason);assert.equal(cancel,cancelGate.promise);assert.equal(reader.cancelCalls[0].args[0],reason);
+ cancelGate.reject(failure);await assert.rejects(cancel,error=>error===failure);
+ reader.readThrow=failure;assert.throws(()=>reader.read(),error=>error===failure);reader.cancelThrow=failure;assert.throws(()=>reader.cancel(),error=>error===failure);
+ response.bodyThrow=failure;assert.throws(()=>response.body,error=>error===failure);
+ await h.flush();const proof=projectPublisherClientLifecycle(h.control().stop()),events=proof.records[0].events;
+ assert(events.some(e=>e.event==='read-rejected'));assert(events.some(e=>e.event==='read-throw'));assert(events.some(e=>e.event==='cancel-rejected'));assert(events.some(e=>e.event==='cancel-throw'));
+ assert(events.findIndex(e=>e.event==='cancel-call')<events.findIndex(e=>e.event==='signal-abort'),'Cancel invocation is recorded before the native synchronous abort callback');
+ assert.equal(events.filter(e=>e.event==='signal-abort').length,1);
+ assert.equal(events.find(e=>e.event==='signal-abort').signalAborted,true);
+ for(const secret of ['PRIVATE_ERROR_VALUE','PRIVATE_ABORT_REASON','DO_NOT_EXPORT',h.body])assert.equal(JSON.stringify(proof).includes(secret),false);
+ assert.equal(h.realm.fetch,h.originalFetch);assert.equal(Object.hasOwn(response,'body'),false);assert.equal(Object.hasOwn(reader,'read'),false);
+ const x=clientRealm(),fetchError=new TypeError('PRIVATE_FETCH_ERROR');x.start();x.setThrow(fetchError);assert.throws(()=>x.realm.fetch(API+PATH,x.init(new AbortController().signal)),error=>error===fetchError);x.control().stop();
+ const y=clientRealm(),fetchGate=deferred();y.setNext(fetchGate.promise);y.start();const original=y.realm.fetch(API+PATH,y.init(new AbortController().signal));assert.equal(original,fetchGate.promise);fetchGate.reject(fetchError);await assert.rejects(original,error=>error===fetchError);await y.flush();assert(y.control().stop().records[0].events.some(e=>e.event==='fetch-rejected'));
+});
+test('signal call sites expose only exact owned compiled-script coordinates and never its URL, argument or stack',async()=>{
+ const h=clientRealm(),controller=new AbortController();h.realm.controller=controller;h.setNext(Promise.resolve(null));h.start();
+ await h.realm.fetch(API+PATH,h.init(controller.signal));runInNewContext("controller.abort('PRIVATE_REASON')",h.realm,{filename:'http://127.0.0.1:57026/main.dart.js'});await h.flush();
+ const proof=projectPublisherClientLifecycle(h.control().stop()),event=proof.records[0].events.find(e=>e.event==='signal-abort');
+ assert.equal(event.signalAborted,true);assert(event.sites.some(s=>s.kind==='dashboard-main'&&s.line===1&&Number.isInteger(s.column)));
+ for(const forbidden of ['http://','main.dart.js','PRIVATE_REASON','stack'])assert.equal(JSON.stringify(proof).includes(forbidden),false);
+});
+test('probe stack projection bounds actual listener inspection to8192characters,32lines andfour owned coordinates',async()=>{
+ const owned=n=>` at http://127.0.0.1:57026/main.dart.js:${n}:2`;
+ for(const [stack,expected]of[['x'.repeat(8192)+'\n'+owned(99),[]],
+  [Array(32).fill('PRIVATE_UNOWNED_LINE').join('\n')+'\n'+owned(99),[]],
+  [Array.from({length:8},(_,i)=>owned(i+1)).join('\n'),[1,2,3,4]]]){
+  const h=clientRealm(),controller=new AbortController();h.realm.Error=class{constructor(){this.stack=stack;}};
+  h.setNext(Promise.resolve(null));h.start();await h.realm.fetch(API+PATH,h.init(controller.signal));controller.abort();await h.flush();
+  const proof=projectPublisherClientLifecycle(h.control().stop()),event=proof.records[0].events.find(e=>e.event==='signal-abort');
+  assert.deepEqual(Array.from(event.sites.filter(s=>s.kind==='dashboard-main'),s=>s.line),expected);
+  assert.equal(JSON.stringify(proof).includes('PRIVATE_UNOWNED_LINE'),false);
+ }
+});
+test('unrelated calls and unsupported getters are not inspected, consumed, replayed or decorated',async()=>{
+ const h=clientRealm(),sentinel={},headers={};let bodyGets=0,headerGets=0;h.setNext(sentinel);h.start();
+ Object.defineProperty(headers,'Authorization',{get(){headerGets++;throw new Error('DO_NOT_READ');}});
+ const init={method:'POST',headers};Object.defineProperty(init,'body',{get(){bodyGets++;throw new Error('DO_NOT_READ');}});
+ assert.equal(h.realm.fetch(API+'/auth/v1/token',init),sentinel);assert.equal(h.realm.fetch(API+'/storage/v1/object/private',init),sentinel);
+ assert.equal(bodyGets,0);assert.equal(headerGets,0);assert.equal(h.control().snapshot().records.length,0);
+ assert.equal(h.realm.fetch(API+PATH,init),sentinel);assert.equal(bodyGets,0);assert.equal(headerGets,0);assert.equal(h.calls.length,3);
+ const facts=h.control().stop();assert.equal(facts.status,'UNAVAILABLE');assert.equal(h.realm.fetch,h.originalFetch);
+ const wrong=clientRealm();wrong.realm.location.origin='https://external.test';assert.equal(wrong.start().status,'UNAVAILABLE');assert.equal(wrong.realm.fetch,wrong.originalFetch);assert.equal(wrong.control(),undefined);
+ const child=clientRealm();child.realm.top={};assert.equal(child.start().status,'UNAVAILABLE');assert.equal(child.realm.fetch,child.originalFetch);
+});
+test('oversized string and binary inputs or body accessors return the original native value without extra encode or inspection',()=>{
+ const h=clientRealm(),sentinel={},encodedLengths=[];let bodyReads=0;
+ h.realm.TextEncoder=class extends TextEncoder{encode(value){encodedLengths.push(value.length);return super.encode(value);}};
+ h.setNext(sentinel);h.start();
+ assert.equal(h.realm.fetch(API+PATH,{method:'POST',body:'x'.repeat(4097)}),sentinel);
+ assert.equal(h.realm.fetch(API+PATH,{method:'POST',body:new Uint8Array(4097)}),sentinel);
+ const accessor={method:'POST'};Object.defineProperty(accessor,'body',{get(){bodyReads++;throw new Error('DO_NOT_INSPECT');}});
+ assert.equal(h.realm.fetch(API+PATH,accessor),sentinel);assert.equal(bodyReads,0);assert.deepEqual(encodedLengths,[]);
+ assert.equal(h.realm.fetch(API+PATH,{method:'POST',body:'ش'.repeat(4096)}),sentinel);
+ assert.deepEqual(encodedLengths,[4096],'The post-encoding byte cap still rejects a within-character-limit multibyte input');
+ const proof=projectPublisherClientLifecycle(h.control().stop());assert.equal(proof.records.length,0);assert.equal(proof.status,'UNAVAILABLE');assert.equal(h.calls.length,4);assert.equal(h.realm.fetch,h.originalFetch);
+});
+test('probe limits, automatic expiry and public projection preserve bounded scalar diagnostics and exact cleanup',async()=>{
+ const h=clientRealm(),reader=new h.Reader(),stream=new h.Stream(reader),response=new h.NativeResponse(stream),controller=new AbortController();h.setNext(Promise.resolve(response));h.start();
+ for(let i=0;i<9;i++)await h.realm.fetch(API+PATH,h.init(controller.signal));
+ response.body.getReader();const reads=[];for(let i=0;i<150;i++){reader.readResults.push(Promise.resolve({done:false,value:new Uint8Array(1)}));reads.push(reader.read());}await Promise.all(reads);await h.flush();
+ const control=h.control();for(const expire of [...h.timers.values()])expire();const raw=control.snapshot(),proof=projectPublisherClientLifecycle(raw);
+ assert.equal(proof.records.length,8);assert(proof.overflow>0);assert(proof.records.reduce((n,r)=>n+r.events.length,0)<=128);assert.equal(proof.status,'PARTIAL');
+ assert.equal(proof.stopped,true);assert.equal(h.control(),undefined);assert.equal(h.realm.fetch,h.originalFetch);assert.equal(Object.hasOwn(reader,'read'),false);assert.equal(h.timers.size,0);
+ const changed=structuredClone(proof);changed.authorization='PRIVATE_TOKEN';changed.records[0].body='PRIVATE_JSON';changed.records[0].events.push({event:'read-rejected',ms:1,errorClass:'PRIVATE_ERROR',sites:[{kind:'PRIVATE_URL',line:1,column:1}],rawStack:'PRIVATE_STACK'});
+ const safe=JSON.stringify(projectPublisherClientLifecycle(changed));for(const secret of ['PRIVATE_TOKEN','PRIVATE_JSON','PRIVATE_ERROR','PRIVATE_URL','PRIVATE_STACK'])assert.equal(safe.includes(secret),false);
+ assert.deepEqual(projectPublisherClientLifecycle({status:'OBSERVED',records:Array(9).fill({})}),{status:'UNAVAILABLE'});
+});
+test('only explicit probe opt-in evaluates the one existing CDP main context and restores it before detach',async()=>{
+ const h=clientRealm(),page=new Page(),baseSend=page.session.send.bind(page.session);
+ page.session.send=function(name,args){
+  if(name==='Runtime.enable'){this.commands.push({name,args});this.emit('Runtime.executionContextCreated',{context:{id:7,auxData:{isDefault:true,frameId:'MAIN'}}});this.emit('Runtime.executionContextCreated',{context:{id:9,auxData:{isDefault:true,frameId:'CHILD'}}});return Promise.resolve({});}
+  if(name==='Page.getFrameTree'){this.commands.push({name,args});return Promise.resolve({frameTree:{frame:{id:'MAIN'}}});}
+  if(name==='Runtime.evaluate'){this.commands.push({name,args});assert.equal(args.contextId,7);return Promise.resolve({result:{value:runInNewContext(args.expression,h.realm)}});}
+  return baseSend(name,args);
+ };
+ const observer=await observePublisherNative(page,{apiOrigin:API,expectedSlot:'hero',deadlineAt:Date.now()+5000,clientLifecycleProbe:true});
+ assert.equal(page.opens,1);assert.equal(observer.snapshot().clientLifecycle.status,'INSTALLED');assert.notEqual(h.realm.fetch,h.originalFetch);
+ await observer.stop();assert.equal(h.realm.fetch,h.originalFetch);assert.equal(h.control(),undefined);assert.equal(page.session.detached,1);
+ assert.equal(page.session.commands.filter(c=>c.name==='Runtime.evaluate').length,2);assert.equal(observer.snapshot().clientLifecycle.stopped,true);
+ const ordinary=await setup();assert.equal(ordinary.s.commands.some(c=>c.name==='Runtime.evaluate'||c.name==='Page.getFrameTree'),false);assert.equal('clientLifecycle'in ordinary.o.snapshot(),false);await ordinary.o.stop();
+ const spec=readFileSync(new URL('./dashboard.spec.ts',import.meta.url),'utf8');assert.equal((spec.match(/upload\(page, 'publisher-native-probe\.png', diagnostics, 200, 'banner', bytes, true\)/g)??[]).length,1);
 });

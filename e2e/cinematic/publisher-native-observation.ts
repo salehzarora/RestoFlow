@@ -1,5 +1,6 @@
 // Passive observation of this test page's existing publisher POST.
-// No application or transport hook; no Response.json replacement; no acceptance override.
+// The short probe alone may opt into bounded client-call observations. Never
+// replace Response.json, a native body, or an acceptance outcome.
 import { createHash } from 'node:crypto';
 import type { Page, Request, Response, CDPSession } from '@playwright/test';
 
@@ -18,7 +19,7 @@ type Native = { ordinal: number; identity: Identity; sequence: number;
   stream: StreamState; ack: boolean; prefix: Buffer | null; chunks: Buffer[]; bytes: number;
   bufferedBytes: number; streamedBytes: number; observedDataLength: number; chunkCount: number;
   digest: string | null; canonicalDigest: string | null; parse: Parse; problems: string[]; pw: Pw | null };
-export type PublisherObservationOptions = { apiOrigin: string; deadlineAt: number; now?: () => number } &
+export type PublisherObservationOptions = { apiOrigin: string; deadlineAt: number; now?: () => number; clientLifecycleProbe?: boolean } &
   ({ expectedSlot?: Slot; expectedKind?: never } | { expectedKind: WelcomeKind; expectedSlot?: never });
 export type PublisherNativeObservation = { snapshot(): Record<string, unknown>;
   firstError(boundary: 'publisher-body' | 'upload-assertion' | 'probe-assertion'): void;
@@ -66,11 +67,195 @@ export function completeNativeBody(fact: { terminal: Terminal; stream: StreamSta
   return fact.terminal === 'finished' && fact.stream === 'enabled' && fact.problems.length === 0 &&
     fact.bytes > 0 && fact.bytes <= BYTE_CAP && fact.parse === 'object' && fact.paired;
 }
+// Self-contained, test-only installation in the exact Dashboard main realm.
+// Function identities temporarily differ. Native this/arguments, returned
+// Promises/Responses/streams/readers/results and errors never get substituted.
+export function installPublisherClientLifecycle(config: { began: number; deadlineAt: number }) {
+  const root = globalThis as any, key = '__cinematicPublisherLifecycleProbe';
+  if (root.location?.origin !== 'http://127.0.0.1:57026' || root.window !== root.top || Object.hasOwn(root, key)
+    || !root.crypto?.subtle || !Number.isFinite(config.began) || !Number.isFinite(config.deadlineAt)
+    || config.deadlineAt <= Date.now() || config.deadlineAt <= config.began || config.deadlineAt - config.began > 120_000) return { status: 'UNAVAILABLE' };
+  const fetchDescriptor = Object.getOwnPropertyDescriptor(root, 'fetch');
+  const bodyGetter = Object.getOwnPropertyDescriptor(root.Response?.prototype ?? {}, 'body')?.get;
+  if (!fetchDescriptor?.configurable || typeof fetchDescriptor.value !== 'function' || !bodyGetter) return { status: 'UNAVAILABLE' };
+  const originalFetch = fetchDescriptor.value, nativeThen = Promise.prototype.then;
+  const records: any[] = [], restores: (() => void)[] = [], removals: (() => void)[] = [];
+  const streams = new WeakSet<object>(), readers = new WeakSet<object>();
+  let stopped = false, overflow = 0, unsupported = 0, restorationSkipped = 0, eventCount = 0, readerCount = 0, pendingHashes = 0;
+  let control: any;
+  const stamp = () => Math.max(0, Math.min(120_000, Date.now() - config.began));
+  const errorClass = (value: any) => ['Error', 'TypeError', 'AbortError', 'DOMException'].includes(value?.name) ? value.name : 'unclassified';
+  const sites = () => {
+    // Examine transiently; export only owned compiled-script coordinates.
+    const text = (new Error().stack ?? '').slice(0, 8192), result: any[] = [];
+    for (const line of text.split('\n', 32)) {
+      const m = /http:\/\/127\.0\.0\.1:57026\/main\.dart\.js:(\d{1,8}):(\d{1,8})(?:\)|$)/.exec(line);
+      if (m) { result.push({ kind: 'dashboard-main', line: Number(m[1]), column: Number(m[2]) }); if (result.length === 4) break; }
+    }
+    return result.length ? result : [{ kind: 'unclassified' }];
+  };
+  const event = (r: any, name: string, extra: any = {}) => {
+    if (stopped) return;
+    if (eventCount++ >= 128) { overflow++; return; }
+    r.events.push({ event: name, ms: stamp(), ...extra });
+  };
+  const decorate = (target: any, name: string, descriptor: PropertyDescriptor) => {
+    const previous = Object.getOwnPropertyDescriptor(target, name);
+    if (previous && !previous.configurable || !previous && !Object.isExtensible(target)) { unsupported++; return false; }
+    Object.defineProperty(target, name, { configurable: true, enumerable: previous?.enumerable ?? false, ...descriptor });
+    restores.push(() => {
+      const current = Object.getOwnPropertyDescriptor(target, name);
+      if (current?.value !== descriptor.value || current?.get !== descriptor.get) { restorationSkipped++; return; }
+      if (previous) Object.defineProperty(target, name, previous); else delete target[name];
+    });
+    return true;
+  };
+  const observePromise = (promise: any, success: (value: any) => void, failure: (error: any) => void) => {
+    Reflect.apply(nativeThen, promise, [
+      (value: any) => { try { success(value); } catch { unsupported++; } },
+      (error: any) => { try { failure(error); } catch { unsupported++; } },
+    ]);
+  };
+  const trackReader = (reader: any, r: any) => {
+    if (readers.has(reader)) return;
+    if (!(reader instanceof root.ReadableStreamDefaultReader) || Object.getPrototypeOf(reader) !== root.ReadableStreamDefaultReader.prototype
+      || readerCount >= 8) { unsupported++; return; }
+    readers.add(reader); const label = `reader${++readerCount}`;
+    event(r, 'get-reader', { reader: label });
+    for (const method of ['read', 'cancel']) {
+      if (Object.hasOwn(reader, method)) { unsupported++; continue; }
+      const native = root.ReadableStreamDefaultReader.prototype[method];
+      decorate(reader, method, { writable: true, value: function(this: any, ...args: any[]) {
+        if (this !== reader || stopped) return Reflect.apply(native, this, args);
+        try { event(r, `${method}-call`, { reader: label, sites: sites() }); } catch { unsupported++; }
+        let promise: any;
+        try { promise = Reflect.apply(native, this, args); }
+        catch (error) { try { event(r, `${method}-throw`, { reader: label, errorClass: errorClass(error) }); } catch {} throw error; }
+        try { observePromise(promise, value => {
+          if (method === 'cancel') { event(r, 'cancel-fulfilled', { reader: label }); return; }
+          const done = Object.getOwnPropertyDescriptor(value, 'done'), chunk = Object.getOwnPropertyDescriptor(value, 'value');
+          if (!done || !Object.hasOwn(done, 'value') || typeof done.value !== 'boolean'
+            || chunk && !Object.hasOwn(chunk, 'value')) { unsupported++; return; }
+          const bytes = chunk?.value;
+          event(r, 'read-fulfilled', { reader: label, done: done.value,
+            bytes: bytes instanceof Uint8Array ? bytes.byteLength : done.value && bytes === undefined ? 0 : null });
+        }, error => event(r, `${method}-rejected`, { reader: label, errorClass: errorClass(error) })); } catch { unsupported++; }
+        return promise;
+      } });
+    }
+  };
+  const trackResponse = (response: any, r: any) => {
+    event(r, 'fetch-fulfilled');
+    if (!(response instanceof root.Response) || Object.getPrototypeOf(response) !== root.Response.prototype
+      || Object.hasOwn(response, 'body')) { unsupported++; return; }
+    decorate(response, 'body', { get: function(this: any) {
+      const stream = Reflect.apply(bodyGetter, this, []);
+      if (this === response && stream && !stopped) {
+        try {
+          event(r, 'body-get');
+          if (!streams.has(stream)) {
+            streams.add(stream);
+            if (Object.getPrototypeOf(stream) !== root.ReadableStream.prototype || Object.hasOwn(stream, 'getReader')) { unsupported++; return stream; }
+            const native = root.ReadableStream.prototype.getReader;
+            decorate(stream, 'getReader', { writable: true, value: function(this: any, ...args: any[]) {
+              const reader = Reflect.apply(native, this, args);
+              if (this === stream && !stopped) { try { trackReader(reader, r); } catch { unsupported++; } }
+              return reader;
+            } });
+          }
+        } catch { unsupported++; }
+      }
+      return stream;
+    } });
+  };
+  const fetchWrapper = function(this: any, ...args: any[]) {
+    const enteredMs = stamp();
+    const promise = Reflect.apply(originalFetch, this, args);
+    try {
+      // The pinned Dart client supplies a string URL and plain RequestInit.
+      // Unsupported accessors/Request streams are never read or cloned.
+      if (args[0] !== 'http://127.0.0.1:54321/functions/v1/storefront-media-publish' || !args[1] || stopped) return promise;
+      const method = Object.getOwnPropertyDescriptor(args[1], 'method'), body = Object.getOwnPropertyDescriptor(args[1], 'body');
+      if (method?.value !== 'POST' || !body || !Object.hasOwn(body, 'value')) { unsupported++; return promise; }
+      const value = body.value;
+      if (typeof value === 'string' && value.length > 4096) { unsupported++; return promise; }
+      const data = typeof value === 'string' ? new TextEncoder().encode(value) : value instanceof Uint8Array ? value : null;
+      if (!data || data.byteLength > 4096) { unsupported++; return promise; }
+      const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data));
+      if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(parsed?.request_id) || parsed.slot !== 'hero' || Object.hasOwn(parsed, 'kind')) return promise;
+      if (records.length >= 8) { overflow++; return promise; }
+      const r: any = { ordinal: records.length + 1, identityHash: null, postDataHash: null, signalObserved: false, events: [] }; records.push(r);
+      event(r, 'fetch-call', { ms: enteredMs });
+      const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map(v => v.toString(16).padStart(2, '0')).join('');
+      pendingHashes++;
+      observePromise(Promise.all([root.crypto.subtle.digest('SHA-256', new TextEncoder().encode(parsed.request_id)), root.crypto.subtle.digest('SHA-256', data)]),
+        values => { pendingHashes--; r.identityHash = hex(values[0]); r.postDataHash = hex(values[1]); }, () => { pendingHashes--; unsupported++; });
+      const signalDescriptor = Object.getOwnPropertyDescriptor(args[1], 'signal'), signal = signalDescriptor?.value;
+      if (signal instanceof root.AbortSignal) {
+        r.signalObserved = true;
+        if (signal.aborted) event(r, 'signal-already-aborted');
+        const aborted = (e: Event) => { try { event(r, 'signal-abort', { signalAborted: signal.aborted === true, trusted: e.isTrusted === true, sites: sites() }); } catch { unsupported++; } };
+        signal.addEventListener('abort', aborted, { once: true }); removals.push(() => signal.removeEventListener('abort', aborted));
+      } else unsupported++;
+      observePromise(promise, response => trackResponse(response, r), error => event(r, 'fetch-rejected', { errorClass: errorClass(error) }));
+    } catch { unsupported++; }
+    return promise;
+  };
+  const snapshot = () => ({ status: !records.length ? 'UNAVAILABLE' : unsupported || overflow || restorationSkipped || pendingHashes ? 'PARTIAL' : 'OBSERVED', observerEffect: 'Temporary function identities and extra passive Promise reactions; no native object/result substitution',
+    stopped, overflow, unsupported, restorationSkipped, pendingHashes, records });
+  const restore = () => {
+    if (!stopped) {
+      stopped = true; clearTimeout(timer);
+      for (const remove of removals.splice(0)) { try { remove(); } catch { restorationSkipped++; } }
+      for (const restore of restores.splice(0).reverse()) { try { restore(); } catch { restorationSkipped++; } }
+      if (root[key] === control) delete root[key];
+    }
+    return snapshot();
+  };
+  const timer = setTimeout(restore, Math.max(0, config.deadlineAt - Date.now()));
+  control = { snapshot, stop: restore };
+  try {
+    Object.defineProperty(root, key, { configurable: true, value: control });
+    Object.defineProperty(root, 'fetch', { ...fetchDescriptor, value: fetchWrapper });
+    restores.push(() => { if (root.fetch === fetchWrapper) Object.defineProperty(root, 'fetch', fetchDescriptor); else restorationSkipped++; });
+  } catch { restore(); return { status: 'UNAVAILABLE' }; }
+  return { status: 'INSTALLED' };
+}
+export function projectPublisherClientLifecycle(value: any): Record<string, any> {
+  if (!value || !['OBSERVED', 'PARTIAL', 'UNAVAILABLE'].includes(value.status) || !Array.isArray(value.records) || value.records.length > REQUEST_CAP)
+    return { status: 'UNAVAILABLE' };
+  const count = (v: unknown) => Number.isSafeInteger(v) && (v as number) >= 0 && (v as number) <= 1_000_000 ? v : null;
+  const names = new Set(['fetch-call', 'fetch-fulfilled', 'fetch-rejected', 'body-get', 'get-reader', 'read-call', 'read-throw',
+    'read-fulfilled', 'read-rejected', 'cancel-call', 'cancel-throw', 'cancel-fulfilled', 'cancel-rejected', 'signal-abort', 'signal-already-aborted']);
+  let eventCount = 0;
+  const records = value.records.map((r: any, index: number) => ({ ordinal: index + 1,
+    identityHash: typeof r?.identityHash === 'string' && /^[a-f0-9]{64}$/.test(r.identityHash) ? r.identityHash : null,
+    postDataHash: typeof r?.postDataHash === 'string' && /^[a-f0-9]{64}$/.test(r.postDataHash) ? r.postDataHash : null,
+    signalObserved: r?.signalObserved === true,
+    events: (Array.isArray(r?.events) ? r.events : []).flatMap((e: any) => {
+      if (eventCount >= 128 || !names.has(e?.event) || !Number.isFinite(e.ms) || e.ms < 0 || e.ms > 120_000) return [];
+      eventCount++;
+      return [{ event: e.event, ms: e.ms, ...(/^reader[1-8]$/.test(e.reader ?? '') ? { reader: e.reader } : {}),
+        ...(typeof e.done === 'boolean' ? { done: e.done } : {}),
+        ...(typeof e.signalAborted === 'boolean' ? { signalAborted: e.signalAborted } : {}),
+        ...(typeof e.trusted === 'boolean' ? { trusted: e.trusted } : {}),
+        ...(Object.hasOwn(e, 'bytes') ? { bytes: Number.isSafeInteger(e.bytes) && e.bytes >= 0 && e.bytes <= BYTE_CAP ? e.bytes : null } : {}),
+        ...(Object.hasOwn(e, 'errorClass') ? { errorClass: ['Error', 'TypeError', 'AbortError', 'DOMException'].includes(e.errorClass) ? e.errorClass : 'unclassified' } : {}),
+        ...(Array.isArray(e.sites) ? { sites: e.sites.slice(0, 4).map((s: any) => s?.kind === 'dashboard-main'
+          && Number.isSafeInteger(s.line) && s.line > 0 && s.line <= 99_999_999 && Number.isSafeInteger(s.column) && s.column > 0 && s.column <= 99_999_999
+          ? { kind: 'dashboard-main', line: s.line, column: s.column } : { kind: 'unclassified' }) } : {}) }];
+    }) }));
+  return { status: value.status, observerEffect: 'Temporary function identities and passive Promise reactions; original native objects/results retained',
+    stopped: value.stopped === true, overflow: count(value.overflow), unsupported: count(value.unsupported),
+    restorationSkipped: count(value.restorationSkipped), pendingHashes: count(value.pendingHashes), records };
+}
 export async function observePublisherNative(page: Page, options: PublisherObservationOptions): Promise<PublisherNativeObservation> {
   const now = options.now ?? Date.now, began = now();
   if (options.apiOrigin !== 'http://127.0.0.1:54321' || !Number.isFinite(options.deadlineAt) ||
       options.deadlineAt <= began || options.deadlineAt - began > 120_000 ||
-      (options.expectedKind !== undefined && (options.expectedKind !== 'welcome_video_v1' || options.expectedSlot !== undefined))) throw new Error('Invalid bounded local publisher observation');
+      (options.expectedKind !== undefined && (options.expectedKind !== 'welcome_video_v1' || options.expectedSlot !== undefined))
+      || options.clientLifecycleProbe !== undefined && typeof options.clientLifecycleProbe !== 'boolean'
+      || options.clientLifecycleProbe === true && options.expectedSlot !== 'hero') throw new Error('Invalid bounded local publisher observation');
   let session: CDPSession | null = null, stopped = false, stoppedAt: number | null = null, deadlineExceeded = false, unavailable = false;
   let navigationEpoch = 0, contextEpoch = 0, contextOrdinal = 0, requestOverflow = 0, invalidIdentity = 0;
   let first: { boundary: string; ms: number } | null = null, cleanup: { boundary: string; ms: number } | null = null;
@@ -78,6 +263,7 @@ export async function observePublisherNative(page: Page, options: PublisherObser
   const natives = new Map<string, Native>(), nativeKeys = new Map<string, Native[]>(), pwKeys = new Map<string, Pw[]>();
   const requests = new WeakMap<Request, Pw>(), frames = new Map<string, string>(), documents = new Map<string, string>();
   const contexts = new Map<number, { label: string; frame: string }>();
+  let clientContext: number | null = null, clientFacts: Record<string, any> = { status: 'UNAVAILABLE' };
   const listeners: { emitter: { off(event: string, listener: (...args: any[]) => void): unknown }; name: string; fn: (...args: any[]) => void }[] = [];
   const changes = new Set<() => void>();
   const notify = () => { for (const resolve of [...changes]) resolve(); };
@@ -200,7 +386,19 @@ export async function observePublisherNative(page: Page, options: PublisherObser
         finalise(r); });
     }
     await bound(session.send('Network.enable'));
-    await bound(session.send('Runtime.enable')); // Context lifecycle only; no Runtime.evaluate or session access.
+    await bound(session.send('Runtime.enable')); // Lifecycle by default; only the opt-in short probe evaluates its bounded observer, never sessions.
+    if (options.clientLifecycleProbe === true) {
+      try {
+        const tree = await bound(session.send('Page.getFrameTree'));
+        const frame = frames.get(tree.frameTree?.frame?.id);
+        clientContext = [...contexts].find(([, value]) => value.frame === frame)?.[0] ?? null;
+        if (clientContext !== null) {
+          const result = await bound(session.send('Runtime.evaluate', { contextId: clientContext, returnByValue: true,
+            expression: `(${installPublisherClientLifecycle.toString()})(${JSON.stringify({ began, deadlineAt: options.deadlineAt })})` }));
+          clientFacts = { status: result.result?.value?.status === 'INSTALLED' ? 'INSTALLED' : 'UNAVAILABLE' };
+        }
+      } catch { clientFacts = { status: 'UNAVAILABLE' }; }
+    }
   } catch { unavailable = true; event('observer-unavailable'); }
   return {
     async assertComplete(response, parsedBody) {
@@ -235,6 +433,9 @@ export async function observePublisherNative(page: Page, options: PublisherObser
         caps: { requestBytes: BYTE_CAP, requests: REQUEST_CAP, chunksPerRequest: CHUNK_CAP },
         page: 'p1', browserContext: 'bc1', session: 's1', stoppedAtMs: stoppedAt === null ? null : Math.max(0, stoppedAt - began), unavailable, deadlineExceeded: expired, requestOverflow, invalidIdentity,
         firstError: first, cleanup, events: events.slice(),
+        ...(options.clientLifecycleProbe === true ? { clientLifecycle: { ...clientFacts,
+          records: clientFacts.records?.map((r: any) => ({ ...r, nativeOrdinals: records.filter(n =>
+            n.identity.hash === r.identityHash && n.identity.bodyHash === r.postDataHash).map(n => n.ordinal) })) } } : {}),
         requests: records.map(r => {
           const problems = [...r.problems, ...(expired ? ['observation-deadline'] : [])];
           const fact = { terminal: r.terminal, stream: r.stream, problems, bytes: r.bytes, parse: r.parse, paired: r.pw !== null };
@@ -252,6 +453,14 @@ export async function observePublisherNative(page: Page, options: PublisherObser
     },
     async stop() {
       if (stopped) return; stoppedAt = now(); stopped = true; notify();
+      if (options.clientLifecycleProbe === true && session && clientContext !== null) {
+        try {
+          const operation = session.send('Runtime.evaluate', { contextId: clientContext, returnByValue: true,
+            expression: 'globalThis.__cinematicPublisherLifecycleProbe?.stop()' });
+          const result = await bound(operation);
+          clientFacts = projectPublisherClientLifecycle(result.result?.value);
+        } catch { clientFacts = { status: 'UNAVAILABLE', restoration: 'UNKNOWN_OR_CONTEXT_DESTROYED' }; }
+      }
       for (const { emitter, name, fn } of listeners) emitter.off(name, fn); listeners.length = 0;
       for (const r of records) { if (!r.ack) issue(r, 'observer-stopped-before-ack'); wipe(r); }
       natives.clear(); nativeKeys.clear(); pwKeys.clear(); contexts.clear(); frames.clear(); documents.clear();

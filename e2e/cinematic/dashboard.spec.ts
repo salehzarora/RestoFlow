@@ -1022,7 +1022,7 @@ function routeClass(url: string): RouteClass {
   if (u.pathname.startsWith('/storage/v1/object/public/')) return 'public-media';
   return 'other-local';
 }
-async function upload(page: Page, filename: string, diagnostics: UploadDiagnostics, expectedStatus = 200, purpose: 'background' | 'banner' | 'desktop-banner' = 'background', synthetic?: Buffer): Promise<Obj> {
+async function upload(page: Page, filename: string, diagnostics: UploadDiagnostics, expectedStatus = 200, purpose: 'background' | 'banner' | 'desktop-banner' = 'background', synthetic?: Buffer, clientLifecycleProbe = false): Promise<Obj> {
   const uploadName = purpose === 'desktop-banner' ? 'رفع صورة للكمبيوتر' : purpose === 'banner' ? L.bannerUpload : L.upload;
   const fixturePath = filename === 'background-2816.jpg' ? backgroundFixture
     : resolve(__dirname, '../../supabase/functions/storefront-media-publish/test/fixtures', filename);
@@ -1069,7 +1069,7 @@ async function upload(page: Page, filename: string, diagnostics: UploadDiagnosti
     diagnostics.control = await targetGeometry(page, target);
     diagnostics.beforeUpload(await editorStatus(page).catch(() => ['unreadable']));
     if (expectedStatus === 200) {
-      native = await observePublisherNative(page, { apiOrigin: API, deadlineAt: Date.now() + 120_000, expectedSlot: 'hero' });
+      native = await observePublisherNative(page, { apiOrigin: API, deadlineAt: Date.now() + 120_000, expectedSlot: 'hero', clientLifecycleProbe });
       diagnostics.publisherNative = native;
     }
     const uploaded = diagnostics.observe('private-upload-response', page.waitForResponse(r => {
@@ -2432,7 +2432,7 @@ test('single publisher response - native body diagnostic', async ({ page, contex
     const bytes = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), 'ux003-banner-0.png'));
     receipt.uiPublicationCalls = 1;
     advance('ui-upload-original-publisher-response');
-    const published = await upload(page, 'publisher-native-probe.png', diagnostics, 200, 'banner', bytes);
+    const published = await upload(page, 'publisher-native-probe.png', diagnostics, 200, 'banner', bytes, true);
     expect(published.recipe).toBe('storefront-media-c4'); expect(published.media.variant).toBe('w960');
     const expectedPreview = `${API}/storage/v1/object/public/storefront-media/${published.media.object_key}`;
     advance('published-resource-preview');
