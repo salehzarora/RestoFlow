@@ -158,7 +158,7 @@ Future<void> mount(
   double textScale = 1,
   Uri Function(String)? publicUrlFor,
   bool openGroups = true,
-  Widget? welcomeImageEditor,
+  StorefrontWelcomeImageBuilder? welcomeImageEditor,
 }) async {
   await tester.binding.setSurfaceSize(Size(width, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -331,11 +331,13 @@ void main() {
         tester,
         repo,
         openGroups: false,
-        welcomeImageEditor: TextButton(
-          key: const Key('welcome-image-action'),
-          onPressed: () => imageActions++,
-          child: const Text('Existing image action'),
-        ),
+        welcomeImageEditor:
+            ({required enabled, required contentDirty, required prepareSave}) =>
+                TextButton(
+                  key: const Key('welcome-image-action'),
+                  onPressed: () => imageActions++,
+                  child: const Text('Existing image action'),
+                ),
       );
       final welcome = find.byKey(const Key('content-group-welcome'));
       expect(welcome, findsOneWidget);
@@ -391,6 +393,43 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('image selection stays enabled for unsaved welcome content', (
+    tester,
+  ) async {
+    final repo = ContentRepo();
+    bool? prepared;
+    await mount(
+      tester,
+      repo,
+      welcomeImageEditor:
+          ({required enabled, required contentDirty, required prepareSave}) =>
+              TextButton(
+                onPressed: enabled && contentDirty
+                    ? () async => prepared = await prepareSave()
+                    : null,
+                child: const Text('Confirm image and content'),
+              ),
+    );
+    final legacyMode = find.byKey(const ValueKey('welcome-video-mode-legacy'));
+    await tester.ensureVisible(legacyMode);
+    await tester.tap(legacyMode);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Image').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('welcome-video-upload')), findsNothing);
+    expect(repo.calls, isEmpty);
+    await edit(tester, 'content-hero-headline', 'Image welcome');
+    final confirm = find.text('Confirm image and content');
+    await tester.ensureVisible(confirm);
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+    expect(prepared, isTrue);
+    expect(repo.calls.single.expectedVersion, 3);
+    expect(repo.doc.json['hero_headline'], 'Image welcome');
+    expect((repo.doc.json['appearance'] as Map)['welcome_media_type'], 'image');
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'Arabic welcome controls fit a narrow dashboard and disabled edits never write',
     (tester) async {

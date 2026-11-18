@@ -3401,6 +3401,18 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     if (geometry.ctaReachable !== null) expect(geometry.ctaReachable).toBe(true);
     return geometry;
   };
+  const imagePicker = 'اختيار صورة من الجهاز';
+  const imageSave = 'حفظ الصورة والتعديلات';
+  const imageConfirm = 'تأكيد الحفظ';
+  const imageWrites: string[] = [];
+  const observeImageWrite = (request: import('@playwright/test').Request) => {
+    const { origin, pathname } = new URL(request.url());
+    if (origin !== API || request.method() !== 'POST') return;
+    if (pathname === '/rest/v1/rpc/set_restaurant_storefront_content_v1') imageWrites.push('content');
+    if (pathname.startsWith('/storage/v1/object/restaurant-logos/')) imageWrites.push('source');
+    if (pathname === '/functions/v1/storefront-media-publish') imageWrites.push('publisher');
+    if (pathname === '/rest/v1/rpc/set_restaurant_storefront_profile') imageWrites.push('profile');
+  };
   const publish = async (kind: 'image' | 'video') => {
     const isVideo = kind === 'video';
     const began = Date.now();
@@ -3409,7 +3421,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     receipt.publisherObservations ??= {}; receipt.publisherObservations[kind] = evidence;
     let native: PublisherNativeObservation | null = null;
     let stopChooserObservation: (() => Promise<void>) | null = null;
-    const button = isVideo ? 'اختيار فيديو من الجهاز' : 'اختيار صورة من الجهاز';
+    const button = 'اختيار فيديو من الجهاز';
     const privatePrefix = isVideo ? '/storage/v1/object/storefront-welcome-video-originals/' : '/storage/v1/object/restaurant-logos/';
     const uploaded = observeResponse(page.waitForResponse(r => new URL(r.url()).origin === API
       && new URL(r.url()).pathname.startsWith(privatePrefix) && r.request().method() === 'POST'));
@@ -3421,6 +3433,8 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     }));
     const assigned = !isVideo ? observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_profile')
       && typeof r.request().postDataJSON()?.p_patch?.hero_media_id === 'string')) : null;
+    const contentSaved = !isVideo ? observeResponse(page.waitForResponse(r =>
+      requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_content_v1'))) : null;
     // Observe only the assignment response already awaited by the original
     // successful path. A publisher error never starts a replacement RPC/read.
     void assigned?.then(result => {
@@ -3429,7 +3443,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       if (result.ok) { evidence.assignment.responseSeen = true; evidence.assignment.httpStatus = result.value.status(); }
     });
     try {
-    await revealButton(page, button);
+    await revealButton(page, isVideo ? button : imageSave);
     if (isVideo) {
       evidence.chooser = { status: 'VERIFYING_SETTLED_CONTROL' };
       // Use the existing bounded settling samples, but reject an unproven
@@ -3439,7 +3453,22 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     }
     native = await observePublisherNative(page, { apiOrigin: API, deadlineAt: Date.now() + 120_000,
       ...(isVideo ? { expectedKind: 'welcome_video_v1' as const } : { expectedSlot: 'hero' as const }) });
-    if (!isVideo) await tapRevealedButton(page, button);
+    let savedContentVersion: number | null = null;
+    if (!isVideo) {
+      await tapRevealedButton(page, imageSave);
+      const confirm = actualButton(page, imageConfirm);
+      await expect(confirm).toBeVisible();
+      await expect(confirm).toBeEnabled();
+      expect(imageWrites, 'Opening image confirmation does not write').toEqual([]);
+      await tapRevealedButton(page, imageConfirm, true);
+      const save = await contentSaved!;
+      if (!save.ok) throw save.error;
+      expect(save.value.status()).toBe(200);
+      const saveBody = await save.value.json();
+      expect(saveBody.ok, 'The owner explicitly saved the pending content').toBe(true);
+      expect(Number.isInteger(saveBody.version)).toBe(true);
+      savedContentVersion = saveBody.version;
+    }
     if (isVideo) {
       // The preceding real failure occurred before any video POST. Observe
       // this original tap only: no callback/input interception or replay, and
@@ -3504,10 +3533,10 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
         evidence.chooser.preTapScreenshot = 'welcome-dashboard-before-video-tap-test-data.png';
       } catch { evidence.chooser.preTapScreenshot = 'UNAVAILABLE'; }
     }
-    const chosen = observeResponse(page.waitForEvent('filechooser'));
-    const chooser = await responseAfterAction(chosen, async () => {
-      await tapRevealedButton(page, isVideo ? button : 'اختيار الصورة', !isVideo);
-      if (isVideo) {
+    if (isVideo) {
+      const chosen = observeResponse(page.waitForEvent('filechooser'));
+      const chooser = await responseAfterAction(chosen, async () => {
+        await tapRevealedButton(page, button);
         evidence.chooser.tapReturnedMs = Date.now() - began;
         // Sample the current locator, not a captured node that Flutter may
         // replace. Absence/ambiguity is unknown, never an enabled-state claim.
@@ -3520,14 +3549,12 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
           windowScroll: { x: scrollX, y: scrollY },
           targetRect: matches.length === 1 ? (() => { const r = matches[0].getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) }; })() : null,
         })); } catch { evidence.chooser.afterTap = { status: 'UNAVAILABLE' }; }
-      }
-    });
-    if (isVideo) {
+      });
       evidence.chooser.status = 'ORIGINAL_EVENT_OBSERVED';
       evidence.chooser.observedMs = Date.now() - began;
       await stopChooserObservation!(); stopChooserObservation = null;
+      await chooser.setFiles(videoPath);
     }
-    await chooser.setFiles(isVideo ? videoPath : imagePath);
     const storage = await uploaded;
     if (!storage.ok) throw storage.error;
     expect(storage.value.status()).toBe(200);
@@ -3566,10 +3593,13 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       expect(body.media.variant).toBe('w960');
       const write = await assigned!; if (!write.ok) throw write.error;
       expect(write.value.status()).toBe(200);
+      const assignmentRequest = write.value.request().postDataJSON();
+      expect(assignmentRequest.p_expected_version, 'Image assignment uses the saved content version').toBe(savedContentVersion);
+      expect(assignmentRequest.p_patch).toEqual({ hero_media_id: body.media.id });
       const assignmentBody = await write.value.json(); evidence.assignment.bodyRead = true;
       evidence.assignment.ok = assignmentBody.ok === true;
       expect(assignmentBody.ok).toBe(true);
-      await textContains(page, 'حُفظت صورة الترحيب. احفظ النصوص ونوع الخلفية من زر «حفظ صفحة الترحيب» بالأسفل.');
+      await textContains(page, 'حُفظت صورة الترحيب.');
     }
     // The freshly uploaded original remains private and belongs to this owner.
     const key = request.source_key as string;
@@ -3623,24 +3653,37 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     expect(Array.isArray(originalMenu.categories) && originalMenu.categories.length > 0).toBe(true);
     expect(before.document.appearance.welcome_media_type).toBeNull();
     expect(before.document.appearance.welcome_video_media_id).toBeNull(); done();
-    stage('welcome-image-ui-upload-edge-assign');
-    const image = await publish('image');
-    const imageSelected = await profile(); expect(imageSelected.profile.hero_media_id).toBe(image.id);
-    expect(protectedProfile(imageSelected.profile)).toEqual(protectedProfile(initialProfile.profile)); done();
-    stage('image-mode-text-draft-save-reload');
+    stage('image-mode-text-draft-preview');
+    page.on('request', observeImageWrite);
     const headline = 'ترحيب اختبار — صورة وفيديو';
     await fill(page, 'عنوان الواجهة الرئيسي', headline, { blur: true });
     await choose(/الخلفية الافتراضية/, 'صورة');
+    await revealButton(page, imagePicker);
+    const chosen = observeResponse(page.waitForEvent('filechooser'));
+    const chooser = await responseAfterAction(chosen, () => tapRevealedButton(page, imagePicker));
+    await chooser.setFiles(imagePath);
+    await textContains(page, 'معاينة الصورة قبل الحفظ');
     const imageDraft = await read();
     expect(imageDraft.document.appearance.welcome_media_type).toBeNull();
     expect(imageDraft.document.hero_headline).toBe(before.document.hero_headline);
-    expect(imageDraft.version).toBe(imageSelected.version);
-    await saveContent(page, undefined, 'حفظ صفحة الترحيب');
+    expect(imageDraft.version).toBe(before.version);
+    expect((await profile()).profile.hero_media_id).toBe(initialProfile.profile.hero_media_id);
+    expect(imageWrites, 'Choosing and previewing an image are local draft actions').toEqual([]);
+    receipt.imageDraftPreview = { status: 'PASS', directChooser: true, preview: true, writes: 0 }; done();
+    stage('welcome-image-ui-upload-edge-assign');
+    const image = await publish('image');
+    page.off('request', observeImageWrite);
+    expect(imageWrites, 'Explicit confirmation saves content, then uploads, publishes, and assigns the image')
+      .toEqual(['content', 'source', 'publisher', 'profile']);
+    const imageSelected = await profile(); expect(imageSelected.profile.hero_media_id).toBe(image.id);
+    expect(protectedProfile(imageSelected.profile)).toEqual(protectedProfile(initialProfile.profile)); done();
+    stage('image-mode-text-draft-save-reload');
     const imageReload = await reopen(true);
     expect([imageReload.document.hero_headline,imageReload.document.appearance.welcome_media_type]).toEqual([headline,'image']);
     expect((await profile()).profile.hero_media_id).toBe(image.id);
     expect(protectedDocument(imageReload.document)).toEqual(protectedDocument(before.document));
-    receipt.imageSaveReadback = { status: 'PASS', realUiSave: true, authenticatedReload: true, imageSelection: image.id, mode: 'image' }; done();
+    receipt.imageSaveReadback = { status: 'PASS', realUiSave: true, authenticatedReload: true,
+      imageSelection: image.id, mode: 'image', writeOrder: imageWrites }; done();
     stage('image-public-read-and-render');
     const imageMenu = await publicRead(); expect(imageMenu.restaurant.welcome_media_type).toBe('image');
     expect(imageMenu.restaurant.welcome_video).toBeNull();
@@ -3764,6 +3807,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
   finally {
     // Persist fixed safe scalars even when an earlier phase failed. Never dump
     // sessions, private object paths, entire RPC replies or synthetic passwords.
+    page.off('request', observeImageWrite);
     receipt.phase=phase; receipt.actualServices=true; receipt.retries=0;
     receipt.resourceByteDiagnostics = network.mediaSnapshot();
     if (observedVideoPage && !observedVideoPage.isClosed()) {

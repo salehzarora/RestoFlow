@@ -45,6 +45,13 @@ class StorefrontContentRefresh {
       profileRead && mediaRead && version != null && branchId != null;
 }
 
+typedef StorefrontWelcomeImageBuilder =
+    Widget Function({
+      required bool enabled,
+      required bool contentDirty,
+      required Future<bool> Function() prepareSave,
+    });
+
 /// One complete content draft, owned by the existing membership/restaurant
 /// editor identity. The server read controls access; no role test authorizes it.
 class StorefrontContentSection extends StatefulWidget {
@@ -85,8 +92,9 @@ class StorefrontContentSection extends StatefulWidget {
   final Future<StorefrontSourceOptions> Function()? reloadSources;
   final Uri Function(String)? publicUrlFor;
 
-  /// Existing profile media action; its CAS save remains separate from content.
-  final Widget? welcomeImageEditor;
+  /// The photo picker can stage an image while content is dirty. Preparing an
+  /// explicit image save serializes the two writers of the same CAS version.
+  final StorefrontWelcomeImageBuilder? welcomeImageEditor;
 
   // Presentation-only context; content/profile saves remain independent.
   final StorefrontProfile? bannerPreviewProfile;
@@ -1510,6 +1518,21 @@ class _ContentState extends State<StorefrontContentSection> {
     _setBusy(false);
   }
 
+  Future<bool> _prepareWelcomeImageSave() async {
+    if (!_editable) return false;
+    if (!_dirty) return true;
+    final binding = _bindingGeneration;
+    final snapshot = _read?.snapshot;
+    if (snapshot == null) return false;
+    await _save();
+    return _current(binding) &&
+        _editable &&
+        !_dirty &&
+        _message == 'saved' &&
+        _read?.snapshot?.branchId == snapshot.branchId &&
+        _read?.snapshot?.version == snapshot.version + 1;
+  }
+
   String? _fieldLabel(String? field) => switch (field?.split('.').first) {
     'hero_headline' => 'headline',
     'hero_subline' => 'subline',
@@ -2016,35 +2039,37 @@ class _ContentState extends State<StorefrontContentSection> {
                 ),
                 const Divider(height: 24),
                 _welcomeVideoEditor(),
-                if (widget.welcomeImageEditor != null) ...[
+                if (widget.welcomeImageEditor case final buildImage?) ...[
                   const Divider(height: 24),
                   Text(
                     c('welcomeImageTitle'),
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
-                  if (_dirty)
-                    Text(
-                      c('welcomeImageSaveFirst'),
-                      key: const Key('content-welcome-image-save-first'),
-                    ),
-                  widget.welcomeImageEditor!,
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: OutlinedButton.icon(
-                      key: const Key('content-welcome-use-image'),
-                      onPressed:
-                          _editable &&
-                              widget.bannerPreviewProfile?.mediaIdFor(
-                                    StorefrontSlot.hero,
-                                  ) !=
-                                  null
-                          ? () =>
-                                _changeAppearance('welcome_media_type', 'image')
-                          : null,
-                      icon: const Icon(Icons.image_outlined),
-                      label: Text(c('welcomeUseImage')),
-                    ),
+                  buildImage(
+                    enabled: _editable,
+                    contentDirty: _dirty,
+                    prepareSave: _prepareWelcomeImageSave,
                   ),
+                  if (widget.bannerPreviewProfile?.mediaIdFor(
+                            StorefrontSlot.hero,
+                          ) !=
+                          null &&
+                      (_draft?['appearance'] as Map?)?['welcome_media_type'] !=
+                          'image')
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: OutlinedButton.icon(
+                        key: const Key('content-welcome-use-image'),
+                        onPressed: _editable
+                            ? () => _changeAppearance(
+                                'welcome_media_type',
+                                'image',
+                              )
+                            : null,
+                        icon: const Icon(Icons.image_outlined),
+                        label: Text(c('welcomeUseImage')),
+                      ),
+                    ),
                 ],
                 const SizedBox(height: 16),
                 if (_dirty)

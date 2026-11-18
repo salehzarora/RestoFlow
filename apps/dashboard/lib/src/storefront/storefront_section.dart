@@ -1387,6 +1387,8 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     String? mediaId, {
     required bool reReadFirst,
     StorefrontSlotReplay? replay,
+    String? expectedBranchId,
+    int? expectedVersion,
   }) async {
     if (!mounted)
       return const StorefrontWriteResult(StorefrontWriteStatus.unavailable);
@@ -1398,6 +1400,15 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
       final fresh = await _safeRead(seams);
       if (!_currentBinding(generation) || _contentBusy || _contentDirty)
         return const StorefrontWriteResult(StorefrontWriteStatus.unavailable);
+      if (expectedBranchId != null) {
+        if (!fresh.isOk) {
+          return const StorefrontWriteResult(StorefrontWriteStatus.unavailable);
+        }
+        if (fresh.profile?.storefrontBranchId != expectedBranchId ||
+            (replay == null && fresh.profile?.version != expectedVersion)) {
+          return const StorefrontWriteResult(StorefrontWriteStatus.conflict);
+        }
+      }
       if (fresh.isOk) {
         setState(() {
           _read = fresh;
@@ -1871,7 +1882,20 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
           sources: _sources,
           reloadSources: _reloadSources,
           publicUrlFor: widget.seams!.publicUrlFor,
-          welcomeImageEditor: _welcomeImageEditor(l10n, theme, profile, dirty),
+          welcomeImageEditor:
+              ({
+                required enabled,
+                required contentDirty,
+                required prepareSave,
+              }) => _welcomeImageEditor(
+                l10n,
+                theme,
+                profile,
+                dirty,
+                enabled: enabled,
+                contentDirty: contentDirty,
+                prepareSave: prepareSave,
+              ),
           bannerPreviewProfile: profile,
           bannerPreviewLogoUrl: widget.seams!.publicUrlFor == null
               ? null
@@ -2842,11 +2866,28 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
     AppLocalizations l10n,
     ThemeData theme,
     StorefrontProfile profile,
-    bool dirty,
-  ) {
+    bool dirty, {
+    required bool enabled,
+    required bool contentDirty,
+    required Future<bool> Function() prepareSave,
+  }) {
     final seams = widget.seams!;
     final publisher = seams.publisher, upload = seams.backgroundUpload;
     final binding = _bindingGeneration;
+    int? preparedVersion;
+    bool available() =>
+        _currentBinding(binding) &&
+        _profile?.storefrontBranchId == profile.storefrontBranchId &&
+        !_saving &&
+        !_contentBusy &&
+        !_mediaBusy &&
+        !_stale &&
+        !_legacyBindingHold &&
+        !_dirty &&
+        !_homeDirty &&
+        !_featuredDirty &&
+        _homePending == null &&
+        _featuredPending == null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2857,13 +2898,20 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
             publisher: publisher,
             bindingIdentity:
                 '${seams.scopeIdentity}|${profile.storefrontBranchId}|$binding',
-            enabled:
-                !dirty &&
-                !_saving &&
-                !_contentBusy &&
-                !_contentDirty &&
-                !_mediaBusy &&
-                !_stale,
+            enabled: enabled && available(),
+            contentDirty: contentDirty,
+            prepareSave: () async {
+              if (!available() || !await prepareSave()) {
+                return false;
+              }
+              // Verify the actual parent state after the content reply, not
+              // render-time flags captured before its version advanced.
+              if (!available() || _contentDirty) {
+                return false;
+              }
+              preparedVersion = _profile?.version;
+              return preparedVersion != null;
+            },
             nonce: widget.nonce,
             onAssign:
                 (
@@ -2877,12 +2925,28 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
                       StorefrontWriteStatus.unavailable,
                     );
                   }
-                  return _assignSlot(
+                  final result = await _assignSlot(
                     slot,
                     mediaId,
                     reReadFirst: reReadFirst,
                     replay: replay,
+                    expectedBranchId: profile.storefrontBranchId,
+                    expectedVersion: preparedVersion,
                   );
+                  if (result.status == StorefrontWriteStatus.ok &&
+                      (!_currentBinding(binding) ||
+                          _stale ||
+                          _profile?.storefrontBranchId !=
+                              profile.storefrontBranchId ||
+                          _profile?.mediaIdFor(slot) != mediaId ||
+                          _media?.byId(mediaId ?? '')?.isLive != true)) {
+                    return StorefrontWriteResult(
+                      StorefrontWriteStatus.uncertain,
+                      requestId: result.requestId,
+                      expectedVersion: result.expectedVersion,
+                    );
+                  }
+                  return result;
                 },
             onRefresh: ({bool reloadSources = false}) async {
               if (_currentBinding(binding))
@@ -2901,6 +2965,10 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               child: Image.network(
                 seams.publicUrlFor!(image.objectKey).toString(),
                 key: const Key('welcome-current-image-preview'),
+                semanticLabel: storefrontContentCopy(
+                  l10n,
+                  'welcomeCurrentImage',
+                ),
                 width: 360,
                 height: 160,
                 fit: BoxFit.contain,
