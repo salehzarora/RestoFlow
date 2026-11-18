@@ -3404,6 +3404,15 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
   const imagePicker = 'اختيار صورة من الجهاز';
   const imageSave = 'حفظ الصورة والتعديلات';
   const imageConfirm = 'تأكيد الحفظ';
+  const focusImageControl = async (name: string) => {
+    // In this section Flutter can report a semantics rectangle that lags the
+    // canvas after scrolling. Focus the named control before ordinary Space.
+    const control = actualButton(page, name);
+    await expect(control).toHaveCount(1);
+    await expect(control).toBeEnabled();
+    await control.focus();
+    await expect(control).toBeFocused();
+  };
   const imageWrites: string[] = [];
   const observeImageWrite = (request: import('@playwright/test').Request) => {
     const { origin, pathname } = new URL(request.url());
@@ -3455,12 +3464,12 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       ...(isVideo ? { expectedKind: 'welcome_video_v1' as const } : { expectedSlot: 'hero' as const }) });
     let savedContentVersion: number | null = null;
     if (!isVideo) {
-      await tapRevealedButton(page, imageSave);
-      const confirm = actualButton(page, imageConfirm);
-      await expect(confirm).toBeVisible();
-      await expect(confirm).toBeEnabled();
+      await focusImageControl(imageSave);
+      await page.keyboard.press('Space');
+      await expect(actualButton(page, imageConfirm)).toBeVisible();
+      await focusImageControl(imageConfirm);
       expect(imageWrites, 'Opening image confirmation does not write').toEqual([]);
-      await tapRevealedButton(page, imageConfirm, true);
+      await page.keyboard.press('Space');
       const save = await contentSaved!;
       if (!save.ok) throw save.error;
       expect(save.value.status()).toBe(200);
@@ -3659,21 +3668,11 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     await fill(page, 'عنوان الواجهة الرئيسي', headline, { blur: true });
     await choose(/الخلفية الافتراضية/, 'صورة');
     await revealButton(page, imagePicker);
-    // The newly direct picker was tapped immediately after a reveal wheel
-    // step in the failed run. Use the same bounded pre-tap stability check
-    // as the video picker before sending the original physical action.
-    const picker = actualButton(page, imagePicker);
-    const settled = await settleScroll(page, await scrollScope(page, picker), true);
+    await focusImageControl(imagePicker);
     receipt.imageChooser = { status: 'WAITING_FOR_ORIGINAL_EVENT',
-      settled: { required: true, visibleNodes: settled.visibleNodes },
-      geometry: await targetGeometry(page, picker) };
-    try {
-      const name = 'welcome-dashboard-before-image-tap-test-data.png';
-      await page.screenshot({ path: resolve(out, name), fullPage: false, caret: 'initial' });
-      receipt.imageChooser.preTapScreenshot = name;
-    } catch { receipt.imageChooser.preTapScreenshot = 'UNAVAILABLE'; }
+      activation: 'Space', focusVerified: true };
     const chosen = observeResponse(page.waitForEvent('filechooser'));
-    const chooser = await responseAfterAction(chosen, () => tapRevealedButton(page, imagePicker));
+    const chooser = await responseAfterAction(chosen, () => page.keyboard.press('Space'));
     receipt.imageChooser.status = 'ORIGINAL_EVENT_OBSERVED';
     await chooser.setFiles(imagePath);
     await textContains(page, 'معاينة الصورة قبل الحفظ');
@@ -3811,11 +3810,6 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     receipt.controlReveals=revealTraces.get(page)??[];receipt.controlClicks=clickTraces.get(page)??[];
     if (phase === 'image-mode-text-draft-preview' && receipt.imageChooser?.status === 'WAITING_FOR_ORIGINAL_EVENT') {
       receipt.imageChooser.status = 'ORIGINAL_EVENT_NOT_OBSERVED';
-      try {
-        const name = 'welcome-dashboard-image-filechooser-failure-test-data.png';
-        await page.screenshot({ path: resolve(out, name), fullPage: false, caret: 'initial' });
-        receipt.imageChooser.failureScreenshot = name;
-      } catch { receipt.imageChooser.failureScreenshot = 'UNAVAILABLE'; }
     }
     if (phase === 'welcome-video-ui-upload-original-edge-response'
       && receipt.publisherObservations?.video?.chooser?.failureScreenshot !== 'welcome-dashboard-filechooser-failure-test-data.png') {
