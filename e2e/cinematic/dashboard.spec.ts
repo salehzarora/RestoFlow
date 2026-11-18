@@ -812,10 +812,10 @@ async function captureMediaLibrary(page: Page, mediaId: string, path: string): P
   await settleScroll(page, await scrollScope(page, row), true);
   await screenshot(page, path);
 }
-async function saveContent(page: Page, record?: (phase: 'request' | 'response', response: Response, body?: Obj) => void): Promise<void> {
-  await revealButton(page, L.save);
+async function saveContent(page: Page, record?: (phase: 'request' | 'response', response: Response, body?: Obj) => void, buttonName: string = L.save): Promise<void> {
+  await revealButton(page, buttonName);
   const saved = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_content_v1')));
-  const response = await responseAfterAction(saved, () => tapRevealedButton(page, L.save));
+  const response = await responseAfterAction(saved, () => tapRevealedButton(page, buttonName));
   record?.('request', response);
   expect(response.status(), 'Content writer HTTP result').toBe(200);
   const body = await response.json(); record?.('response', response, body);
@@ -3344,10 +3344,39 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     'logo_media_id', 'primary_color', 'accent_color', 'visual_preset', 'scene_preset',
     'locale_default', 'font_family', 'storefront_branch_id', 'is_published',
   ].map(key => [key, value[key] ?? null]));
-  const choose = async (current: RegExp, option: string) => {
+  const choose = async (current: RegExp, option: string, label = 'نوع الخلفية') => {
     const field = page.getByRole('button', { name: current, exact: false });
     await reveal(page, field, 'field', page.getByRole('button', { name: current, exact: false, includeHidden: true }));
     await selectRevealedDropdown(page, current, option);
+    const transition: Obj = { phase, status: 'VERIFYING_CLOSED_STATE' };
+    (receipt.dropdownTransitions ??= []).push(transition);
+    const closed = page.getByRole('button', { name: `${label} ${option}`, exact: true });
+    try {
+      // Selecting the item can return before the popup route has disappeared.
+      // Wait for its closed selected form control before another wheel.
+      // Flutter exports expanded=false on that node/ancestor; popup items
+      // have distinct menu/menuitem roles.
+      await expect(page.getByRole('menu'), 'The dropdown route has closed before scrolling the form').toHaveCount(0);
+      await expect(page.getByRole('menuitem'), 'No closing dropdown item remains accessible').toHaveCount(0);
+      // Flutter merges the field label and selected value with a newline;
+      // Playwright normalizes that whitespace. Match neither the upload
+      // button nor another image/video field by a value substring.
+      await expect(closed).toHaveCount(1);
+      await expect(closed).toBeVisible();
+      await expect(closed).toBeEnabled();
+      await expect.poll(() => closed.evaluate(el => el.closest('[aria-expanded]')?.getAttribute('aria-expanded')), {
+        message: 'The actual chosen dropdown is closed and enabled before form scrolling resumes',
+      }).toBe('false');
+      Object.assign(transition, { status: 'PASS', closedMenus: 0, closedItems: 0, closedChosenControls: 1 });
+    } catch (error) {
+      transition.status = 'FAIL';
+      try {
+        transition.observed = { menus: await page.getByRole('menu').count(), menuitems: await page.getByRole('menuitem').count(),
+          chosen: await closed.evaluateAll(elements => ({ matches: elements.length,
+            expanded: elements.length === 1 ? elements[0].closest('[aria-expanded]')?.getAttribute('aria-expanded') ?? null : null })) };
+      } catch { transition.observed = { status: 'UNAVAILABLE' }; }
+      throw error;
+    }
   };
   const backgroundGeometry = async (target: Page) => {
     const geometry = await target.locator('[data-sf-welcome-media]').evaluate(el => {
@@ -3379,7 +3408,8 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       assignment: { status: isVideo ? 'NOT_APPLICABLE' : 'PENDING', responseSeen: false, bodyRead: false } };
     receipt.publisherObservations ??= {}; receipt.publisherObservations[kind] = evidence;
     let native: PublisherNativeObservation | null = null;
-    const button = isVideo ? 'رفع ونشرMP4' : 'رفع صورة ترحيب';
+    let stopChooserObservation: (() => Promise<void>) | null = null;
+    const button = isVideo ? 'اختيار فيديو من الجهاز' : 'اختيار صورة من الجهاز';
     const privatePrefix = isVideo ? '/storage/v1/object/storefront-welcome-video-originals/' : '/storage/v1/object/restaurant-logos/';
     const uploaded = observeResponse(page.waitForResponse(r => new URL(r.url()).origin === API
       && new URL(r.url()).pathname.startsWith(privatePrefix) && r.request().method() === 'POST'));
@@ -3400,11 +3430,103 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     });
     try {
     await revealButton(page, button);
+    if (isVideo) {
+      evidence.chooser = { status: 'VERIFYING_SETTLED_CONTROL' };
+      // Use the existing bounded settling samples, but reject an unproven
+      // settled state instead of permitting the final possibly moving sample.
+      const settled = await settleScroll(page, await scrollScope(page, actualButton(page, button)), true);
+      evidence.chooser.settled = { required: true, visibleNodes: settled.visibleNodes };
+    }
     native = await observePublisherNative(page, { apiOrigin: API, deadlineAt: Date.now() + 120_000,
       ...(isVideo ? { expectedKind: 'welcome_video_v1' as const } : { expectedSlot: 'hero' as const }) });
     if (!isVideo) await tapRevealedButton(page, button);
+    if (isVideo) {
+      // The preceding real failure occurred before any video POST. Observe
+      // this original tap only: no callback/input interception or replay, and
+      // no labels, values, element IDs, credentials or surrounding DOM export.
+      evidence.chooser.status = 'WAITING_FOR_ORIGINAL_EVENT';
+      try { await actualButton(page, button).evaluate(target => {
+        const started = performance.now(), events: Obj[] = [];
+        let dropped = 0;
+        const state = () => {
+          const r = target.getBoundingClientRect(), nativeScroll: Obj[] = [];
+          let scanned = 0;
+          for (let node = target.parentElement; node && scanned++ < 32 && nativeScroll.length < 6; node = node.parentElement) {
+            if (node.scrollHeight <= node.clientHeight && node.scrollTop === 0) continue;
+            const box = node.getBoundingClientRect();
+            nativeScroll.push({ tag: ['FLT-SEMANTICS', 'FLT-SEMANTICS-CONTAINER', 'FLUTTER-VIEW', 'BODY', 'HTML'].includes(node.tagName) ? node.tagName : 'other',
+              scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight,
+              x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) });
+          }
+          return { ms: Math.round(performance.now() - started),
+          hasFocus: document.hasFocus(), visible: document.visibilityState === 'visible',
+          userActivation: navigator.userActivation.isActive,
+          hasBeenActive: navigator.userActivation.hasBeenActive,
+          targetConnected: target.isConnected, disabled: target.isConnected ? target.getAttribute('aria-disabled') === 'true' : null,
+          targetRect: target.isConnected ? { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) } : null,
+          windowScroll: { x: scrollX, y: scrollY },
+          nativeScroll, nativeScrollCapReached: nativeScroll.length === 6,
+          progressbars: document.querySelectorAll('[role="progressbar"]').length }; };
+        const before = state();
+        const record = (event: Event) => {
+          if (events.length >= 16) { dropped++; return; }
+          const hit = event.target instanceof Element ? event.target : null;
+          const view = target.closest('flutter-view'), box = target.getBoundingClientRect();
+          const point = event instanceof MouseEvent ? { x: Math.round(event.clientX), y: Math.round(event.clientY) } : null;
+          const tags = ['FLT-SEMANTICS', 'FLT-SEMANTICS-CONTAINER', 'FLT-GLASS-PANE', 'FLT-SCENE-HOST', 'FLUTTER-VIEW', 'BODY', 'HTML', 'INPUT', 'BUTTON'];
+          events.push({ ...state(), event: event.type, trusted: event.isTrusted, point,
+            withinTargetRect: point !== null && point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom,
+            hitTag: hit && tags.includes(hit.tagName) ? hit.tagName : 'other',
+            sameFlutterView: view !== null && hit?.closest('flutter-view') === view,
+            relation: !hit ? 'none' : hit === target ? 'self' : target.contains(hit) ? 'descendant' : hit.contains(target) ? 'ancestor' : 'other' });
+        };
+        const types = ['pointerdown', 'pointerup', 'click'];
+        for (const type of types) document.addEventListener(type, record, { capture: true, passive: true });
+        (globalThis as typeof globalThis & { __cinematicWelcomeChooser?: (stop: boolean) => Obj }).__cinematicWelcomeChooser = stop => {
+          if (stop) for (const type of types) document.removeEventListener(type, record, true);
+          return { before, after: state(), events: [...events], dropped };
+        };
+      }); evidence.chooser.observationSetup = 'ATTACHED'; }
+      catch { evidence.chooser.observationSetup = 'UNAVAILABLE'; }
+      stopChooserObservation = async () => {
+        try {
+          evidence.chooser.observation = await page.evaluate(() => {
+            const scope = globalThis as typeof globalThis & { __cinematicWelcomeChooser?: (stop: boolean) => Obj };
+            const value = scope.__cinematicWelcomeChooser?.(true) ?? null;
+            delete scope.__cinematicWelcomeChooser; return value;
+          });
+        } catch { evidence.chooser.observation = { status: 'UNAVAILABLE' }; }
+      };
+      try {
+        // A viewport capture only: the shared full-page helper normalizes
+        // scroll position and cannot establish the original tap's pixels.
+        await page.screenshot({ path: resolve(out, 'welcome-dashboard-before-video-tap-test-data.png'), fullPage: false, caret: 'initial' });
+        evidence.chooser.preTapScreenshot = 'welcome-dashboard-before-video-tap-test-data.png';
+      } catch { evidence.chooser.preTapScreenshot = 'UNAVAILABLE'; }
+    }
     const chosen = observeResponse(page.waitForEvent('filechooser'));
-    const chooser = await responseAfterAction(chosen, () => tapRevealedButton(page, isVideo ? button : 'رفع ونشر وتطبيق', !isVideo));
+    const chooser = await responseAfterAction(chosen, async () => {
+      await tapRevealedButton(page, isVideo ? button : 'اختيار الصورة', !isVideo);
+      if (isVideo) {
+        evidence.chooser.tapReturnedMs = Date.now() - began;
+        // Sample the current locator, not a captured node that Flutter may
+        // replace. Absence/ambiguity is unknown, never an enabled-state claim.
+        try { evidence.chooser.afterTap = await actualButton(page, button).evaluateAll(matches => ({
+          matches: matches.length,
+          disabled: matches.length === 1 ? matches[0].getAttribute('aria-disabled') === 'true' : null,
+          progressbars: document.querySelectorAll('[role="progressbar"]').length,
+          hasFocus: document.hasFocus(), visible: document.visibilityState === 'visible',
+          userActivation: navigator.userActivation.isActive,
+          windowScroll: { x: scrollX, y: scrollY },
+          targetRect: matches.length === 1 ? (() => { const r = matches[0].getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) }; })() : null,
+        })); } catch { evidence.chooser.afterTap = { status: 'UNAVAILABLE' }; }
+      }
+    });
+    if (isVideo) {
+      evidence.chooser.status = 'ORIGINAL_EVENT_OBSERVED';
+      evidence.chooser.observedMs = Date.now() - began;
+      await stopChooserObservation!(); stopChooserObservation = null;
+    }
     await chooser.setFiles(isVideo ? videoPath : imagePath);
     const storage = await uploaded;
     if (!storage.ok) throw storage.error;
@@ -3438,7 +3560,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
         .toEqual(['welcome_video_v1', request.request_id, f.ownerA.orgId, f.ownerA.restaurantId]);
       expect([body.media.width,body.media.height,body.media.duration_ms,body.media.bytes,body.media.content_hash])
         .toEqual([540,864,12042,660459,videoHash]);
-      await textContains(page, 'نُشر الفيديو. اختره واحفظ المحتوى لاستخدامه.');
+      await textContains(page, 'نُشر الفيديو. اضغط «استخدام هذا الفيديو» ثم احفظ صفحة الترحيب.');
     } else {
       expect(body.media.source_key).toBe(request.source_key);
       expect(body.media.variant).toBe('w960');
@@ -3447,7 +3569,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       const assignmentBody = await write.value.json(); evidence.assignment.bodyRead = true;
       evidence.assignment.ok = assignmentBody.ok === true;
       expect(assignmentBody.ok).toBe(true);
-      await textContains(page, 'طُبّقت صورة الترحيب. حفظ النصوص يبقى منفصلًا.');
+      await textContains(page, 'حُفظت صورة الترحيب. احفظ النصوص ونوع الخلفية من زر «حفظ صفحة الترحيب» بالأسفل.');
     }
     // The freshly uploaded original remains private and belongs to this owner.
     const key = request.source_key as string;
@@ -3470,8 +3592,18 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     } catch (error) {
       native?.firstError('probe-assertion'); evidence.status = 'FAIL';
       evidence.failure = bannerAssertionFailure(error);
+      if (isVideo && evidence.chooser && evidence.chooser.status !== 'ORIGINAL_EVENT_OBSERVED') {
+        evidence.chooser.status = evidence.chooser.status === 'VERIFYING_SETTLED_CONTROL'
+          ? 'CONTROL_PRECONDITION_FAILED' : 'ORIGINAL_EVENT_NOT_OBSERVED';
+        await stopChooserObservation?.(); stopChooserObservation = null;
+        try {
+          await page.screenshot({ path: resolve(out, 'welcome-dashboard-filechooser-failure-test-data.png'), fullPage: false, caret: 'initial' });
+          evidence.chooser.failureScreenshot = 'welcome-dashboard-filechooser-failure-test-data.png';
+        } catch { evidence.chooser.failureScreenshot = 'UNAVAILABLE'; }
+      }
       throw error; // Preserve the original failure; native bytes never replace it.
     } finally {
+      await stopChooserObservation?.();
       native?.cleanup('probe-finally');
       try { await native?.stop(); } catch { /* Observation cleanup cannot replace the original error. */ }
       evidence.native = native?.snapshot() ?? null; evidence.endedMs = Date.now() - began;
@@ -3498,12 +3630,12 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     stage('image-mode-text-draft-save-reload');
     const headline = 'ترحيب اختبار — صورة وفيديو';
     await fill(page, 'عنوان الواجهة الرئيسي', headline, { blur: true });
-    await choose(/السلوك السابق/, 'صورة');
+    await choose(/الخلفية الافتراضية/, 'صورة');
     const imageDraft = await read();
     expect(imageDraft.document.appearance.welcome_media_type).toBeNull();
     expect(imageDraft.document.hero_headline).toBe(before.document.hero_headline);
     expect(imageDraft.version).toBe(imageSelected.version);
-    await saveContent(page);
+    await saveContent(page, undefined, 'حفظ صفحة الترحيب');
     const imageReload = await reopen(true);
     expect([imageReload.document.hero_headline,imageReload.document.appearance.welcome_media_type]).toEqual([headline,'image']);
     expect((await profile()).profile.hero_media_id).toBe(image.id);
@@ -3528,19 +3660,25 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     await screenshot(intro, resolve(out, 'welcome-image-phone-test-data.png'));
     receipt.imageDisplay = {status:'PASS',background:true,publicUrl:await photo.getAttribute('src'),dimensions:await photo.evaluate(el=>({width:(el as HTMLImageElement).naturalWidth,height:(el as HTMLImageElement).naturalHeight}))}; done();
     stage('welcome-video-ui-upload-original-edge-response');
+    // Reproduce the owner's blocked path: changing the mode and text must not
+    // disable choosing a video or silently save either draft field.
+    const videoHeadline = headline + ' — فيديو';
+    await fill(page, 'عنوان الواجهة الرئيسي', videoHeadline, { blur: true });
+    await choose(/^صورة$|نوع الخلفية/, 'فيديو');
     const video = await publish('video');
     const notSelected = await read(); expect(notSelected.document.appearance.welcome_media_type).toBe('image');
     expect(notSelected.document.appearance.welcome_video_media_id).toBeNull();
     expect(notSelected.version).toBe(imageReload.version); done();
     stage('video-selection-draft-save-reload');
-    await choose(/^صورة$|نوع خلفية الترحيب/, 'فيديو');
-    await choose(/بدون فيديو — استخدام الصورة البديلة/, `540×864 · 12.0 s · ${video.id.slice(0,8)}`);
+    await revealButton(page, 'استخدام هذا الفيديو');
+    await tapRevealedButton(page, 'استخدام هذا الفيديو');
     const videoDraft = await read();
     expect(videoDraft.document.appearance.welcome_media_type).toBe('image');
     expect(videoDraft.document.appearance.welcome_video_media_id).toBeNull();
     expect(videoDraft.version).toBe(notSelected.version);
-    await saveContent(page);
+    await saveContent(page, undefined, 'حفظ صفحة الترحيب');
     const reloaded = await reopen(true);
+    expect(reloaded.document.hero_headline).toBe(videoHeadline);
     expect([reloaded.document.appearance.welcome_media_type,reloaded.document.appearance.welcome_video_media_id]).toEqual(['video',video.id]);
     expect(protectedDocument(reloaded.document)).toEqual(protectedDocument(before.document));
     expect((await profile()).profile.hero_media_id).toBe(image.id);
@@ -3588,8 +3726,8 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     receipt.videoDisplay={status:'PASS',publicUrl:await player.getAttribute('src'),width:540,height:864,
       fullPageBackground:true,muted:true,loop:true,actualAutoplay:true,userPlayPause:true,reducedMotionPaused:true};done();
     stage('missing-video-selection-retains-image-fallback');
-    await choose(/540×864/, 'بدون فيديو — استخدام الصورة البديلة');
-    await saveContent(page); const cleared=await reopen(true);
+    await choose(/540×864/, 'دون فيديو — إظهار الصورة', 'اختيار فيديو');
+    await saveContent(page, undefined, 'حفظ صفحة الترحيب'); const cleared=await reopen(true);
     expect([cleared.document.appearance.welcome_media_type,cleared.document.appearance.welcome_video_media_id]).toEqual(['video',null]);
     expect((await profile()).profile.hero_media_id).toBe(image.id);
     const fallback=await context.newPage();await fallback.setViewportSize({width:390,height:900});
@@ -3614,6 +3752,13 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     primary=error;receipt.failedPhase=phase;
     receipt.failure={classification:error instanceof Error ? error.name : 'unclassified',...bannerAssertionFailure(error)};
     receipt.controlReveals=revealTraces.get(page)??[];receipt.controlClicks=clickTraces.get(page)??[];
+    if (phase === 'welcome-video-ui-upload-original-edge-response'
+      && receipt.publisherObservations?.video?.chooser?.failureScreenshot !== 'welcome-dashboard-filechooser-failure-test-data.png') {
+      try {
+        await page.screenshot({ path: resolve(out, 'welcome-dashboard-filechooser-failure-test-data.png'), fullPage: false, caret: 'initial' });
+        receipt.failedPhaseViewport = 'welcome-dashboard-filechooser-failure-test-data.png';
+      } catch { receipt.failedPhaseViewport = 'UNAVAILABLE'; }
+    }
     throw error;
   }
   finally {

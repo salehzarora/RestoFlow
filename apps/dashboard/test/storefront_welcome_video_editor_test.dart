@@ -25,6 +25,12 @@ class _DelayedInvoker extends VideoInvoker {
   }
 }
 
+class _InvalidPublicUrlStorage extends VideoStorage {
+  @override
+  Uri publicWelcomeVideoUrl(String key) =>
+      super.publicWelcomeVideoUrl(key).replace(query: 'unexpected=1');
+}
+
 class _Harness extends StatefulWidget {
   const _Harness({
     required this.invoker,
@@ -51,10 +57,13 @@ class _HarnessState extends State<_Harness> {
   int reloads = 0;
   final drafts = <(String, Object?)>[];
   final busyEvents = <bool>[];
+  Completer<void>? reloadWait;
   List<StorefrontWelcomeVideoMedia> rows = [
     StorefrontWelcomeVideoMedia.fromJson(videoMedia()),
   ];
   void switchBinding() => setState(() => scope = 'B');
+  void replaceRows(List<StorefrontWelcomeVideoMedia> value) =>
+      setState(() => rows = value);
   @override
   Widget build(BuildContext context) => StorefrontWelcomeVideoEditor(
     media: rows,
@@ -97,6 +106,7 @@ class _HarnessState extends State<_Harness> {
     onReload: () async {
       reloads++;
       if (mounted) setState(() {});
+      if (reloadWait != null) await reloadWait!.future;
     },
     onBusyChanged: (value) {
       if (mounted)
@@ -157,20 +167,45 @@ Future<void> press(WidgetTester tester, String key) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> openDetails(WidgetTester tester) async {
+  final tile = find.descendant(
+    of: find.byKey(const Key('welcome-video-details')),
+    matching: find.byType(ExpansionTile),
+  );
+  await tester.ensureVisible(tile);
+  await tester.tap(tile);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   for (final entry in const [
-    ('ar', 'خلفية صفحة الترحيب', 'بلا صوت', 'تقليل الحركة', 'حفظ المحتوى'),
+    (
+      'ar',
+      'الخلفية',
+      'بلا صوت',
+      'تقليل الحركة',
+      'الرفع وحده لا يغيّر الصفحة',
+      'قد تُقصّ الأطراف',
+    ),
     (
       'en',
-      'Welcome-page background',
-      'silently',
+      'Background',
+      'without sound',
       'Reduced motion',
-      'Save content',
+      'Uploading does not change the page',
+      'Edges may be cropped',
     ),
-    ('he', 'רקע עמוד הפתיחה', 'ללא קול', 'בהפחתת תנועה', 'לשמור תוכן'),
+    (
+      'he',
+      'רקע',
+      'ללא קול',
+      'הפחתת תנועה',
+      'העלאה לבדה אינה משנה את העמוד',
+      'ייתכן חיתוך בשוליים',
+    ),
   ]) {
     testWidgets(
-      'background controls explain cover and fallback in ${entry.$1}',
+      'simple controls expose advanced cover and playback help in ${entry.$1} at 390px',
       (tester) async {
         final invoker = VideoInvoker([]), storage = VideoStorage();
         final key = await mount(
@@ -185,13 +220,26 @@ void main() {
         final background = tester.widget<Text>(
           find.byKey(const Key('welcome-background-help')),
         );
+        expect(background.data, isNotEmpty);
+        expect(
+          find.byKey(const Key('welcome-background-playback-help')),
+          findsNothing,
+        );
+        await openDetails(tester);
         final playback = tester.widget<Text>(
           find.byKey(const Key('welcome-background-playback-help')),
         );
-        expect(background.data, isNotEmpty);
         expect(playback.data, contains(entry.$3));
         expect(playback.data, contains(entry.$4));
         expect(find.textContaining(entry.$5), findsOneWidget);
+        expect(find.textContaining(entry.$6), findsOneWidget);
+        expect(find.textContaining('H.264'), findsOneWidget);
+        expect(
+          Directionality.of(
+            tester.element(find.byKey(const Key('welcome-video-editor'))),
+          ),
+          entry.$1 == 'en' ? TextDirection.ltr : TextDirection.rtl,
+        );
         expect(key.currentState!.drafts, isEmpty);
         expect(invoker.bodies, isEmpty);
         expect(storage.writes, isEmpty);
@@ -234,8 +282,15 @@ void main() {
       expect(key.currentState!.selection, isNull);
       expect(key.currentState!.busy, isFalse);
       expect(find.byKey(const Key('welcome-video-retry')), findsNothing);
+      expect(find.byKey(const Key('welcome-video-use')), findsNothing);
       expect(
-        find.text('نُشر الفيديو. اختره واحفظ المحتوى لاستخدامه.'),
+        find.byKey(const Key('welcome-video-public-preview')),
+        findsNothing,
+      );
+      expect(
+        find.text(
+          'نُشر الفيديو. اضغط «استخدام هذا الفيديو» ثم احفظ صفحة الترحيب.',
+        ),
         findsNothing,
       );
       expect(tester.takeException(), isNull);
@@ -264,7 +319,9 @@ void main() {
       expect(key.currentState!.mode, isNull);
       expect(key.currentState!.selection, isNull);
       expect(
-        find.text('نُشر الفيديو. اختره واحفظ المحتوى لاستخدامه.'),
+        find.text(
+          'نُشر الفيديو. اضغط «استخدام هذا الفيديو» ثم احفظ صفحة الترحيب.',
+        ),
         findsOneWidget,
       );
       expect(
@@ -272,6 +329,94 @@ void main() {
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'confirmed published video needs an explicit use action after busy; only two draft fields change',
+    (tester) async {
+      final invoker = VideoInvoker([
+            StorefrontFunctionReply.fromHttp(200, publishedVideo()),
+          ]),
+          storage = VideoStorage();
+      final key = await mount(tester, invoker, storage);
+      key.currentState!.reloadWait = Completer<void>();
+      await tester.tap(find.byKey(const Key('welcome-video-upload')));
+      await tester.pump();
+      await tester.pump();
+      expect(key.currentState!.reloads, 1);
+      expect(key.currentState!.busy, isTrue);
+      expect(invoker.bodies, hasLength(1));
+      expect(storage.writes, hasLength(1));
+      expect(key.currentState!.drafts, isEmpty);
+      final use = find.byKey(const Key('welcome-video-use'));
+      expect(use, findsOneWidget);
+      expect(tester.widget<OutlinedButton>(use).onPressed, isNull);
+      await tester.ensureVisible(use);
+      await tester.tap(use);
+      await tester.pump();
+      expect(key.currentState!.drafts, isEmpty);
+
+      key.currentState!.reloadWait!.complete();
+      await tester.pumpAndSettle();
+      expect(key.currentState!.busy, isFalse);
+      expect(key.currentState!.busyEvents, [true, false]);
+      expect(tester.widget<OutlinedButton>(use).onPressed, isNotNull);
+      await press(tester, 'welcome-video-use');
+      expect(key.currentState!.drafts, [
+        ('welcome_media_type', 'video'),
+        ('welcome_video_media_id', id),
+      ]);
+      expect(key.currentState!.mode, 'video');
+      expect(key.currentState!.selection, id);
+      expect(find.byKey(const Key('welcome-video-selected')), findsOneWidget);
+      expect(find.byKey(const Key('welcome-video-use')), findsNothing);
+      expect(invoker.bodies, hasLength(1));
+      expect(storage.writes, hasLength(1));
+      expect(key.currentState!.reloads, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'published response without its library row cannot offer a new video selection',
+    (tester) async {
+      final invoker = VideoInvoker([
+            StorefrontFunctionReply.fromHttp(200, publishedVideo()),
+          ]),
+          storage = VideoStorage();
+      final key = await mount(tester, invoker, storage);
+      key.currentState!.replaceRows([]);
+      await tester.pumpAndSettle();
+      await press(tester, 'welcome-video-upload');
+      expect(find.byKey(const Key('welcome-video-use')), findsNothing);
+      expect(key.currentState!.drafts, isEmpty);
+      expect(key.currentState!.mode, isNull);
+      expect(key.currentState!.selection, isNull);
+      expect(invoker.bodies, hasLength(1));
+      expect(storage.writes, hasLength(1));
+      expect(key.currentState!.reloads, 1);
+    },
+  );
+
+  testWidgets(
+    'confirmed video with a noncanonical public URL cannot be used or opened',
+    (tester) async {
+      final invoker = VideoInvoker([
+            StorefrontFunctionReply.fromHttp(200, publishedVideo()),
+          ]),
+          storage = _InvalidPublicUrlStorage();
+      final key = await mount(tester, invoker, storage);
+      await press(tester, 'welcome-video-upload');
+      expect(find.byKey(const Key('welcome-video-use')), findsNothing);
+      expect(
+        find.byKey(const Key('welcome-video-public-preview')),
+        findsNothing,
+      );
+      expect(key.currentState!.drafts, isEmpty);
+      expect(invoker.bodies, hasLength(1));
+      expect(storage.writes, hasLength(1));
+      expect(key.currentState!.reloads, 1);
     },
   );
 
@@ -287,6 +432,13 @@ void main() {
       await press(tester, 'welcome-video-upload');
       expect(invoker.bodies, hasLength(1));
       expect(find.byKey(const Key('welcome-video-retry')), findsOneWidget);
+      expect(find.byKey(const Key('welcome-video-use')), findsNothing);
+      expect(
+        find.byKey(const Key('welcome-video-public-preview')),
+        findsNothing,
+      );
+      expect(key.currentState!.mode, isNull);
+      expect(key.currentState!.selection, isNull);
       await tester.pumpAndSettle();
       expect(invoker.bodies, hasLength(1));
       await press(tester, 'welcome-video-retry');
@@ -373,7 +525,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('بدون فيديو — استخدام الصورة البديلة').last);
+      await tester.tap(find.text('دون فيديو — إظهار الصورة').last);
       await tester.pumpAndSettle();
       expect(key.currentState!.selection, isNull);
       expect(key.currentState!.mode, 'video');
@@ -406,10 +558,35 @@ void main() {
     );
     tester.view.physicalSize = const Size(390, 1300);
     await tester.pumpAndSettle();
-    expect(find.text('تعذرت قراءة مكتبة الفيديو.'), findsOneWidget);
-    expect(find.text('الفيديو المحفوظ غير متاح'), findsOneWidget);
+    expect(find.text('تعذّر تحميل قائمة الفيديوهات.'), findsOneWidget);
+    expect(find.text('الفيديو المختار غير متاح'), findsOneWidget);
     expect(key.currentState!.selection, request);
     expect(key.currentState!.drafts, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('390px Arabic video choices show a simple number, never a UUID', (
+    tester,
+  ) async {
+    final invoker = VideoInvoker([]), storage = VideoStorage();
+    final key = await mount(
+      tester,
+      invoker,
+      storage,
+      mode: 'video',
+      selected: id,
+    );
+    tester.view.physicalSize = const Size(390, 900);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('فيديو 1'), findsOneWidget);
+    expect(find.textContaining(id), findsNothing);
+    await tester.tap(find.byKey(ValueKey('welcome-video-selection-$id')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('فيديو 1'), findsWidgets);
+    expect(find.textContaining(id), findsNothing);
+    expect(key.currentState!.drafts, isEmpty);
+    expect(invoker.bodies, isEmpty);
+    expect(storage.writes, isEmpty);
     expect(tester.takeException(), isNull);
   });
 }

@@ -380,7 +380,9 @@ class _ContentState extends State<StorefrontContentSection> {
       onChanged: _changeAppearance,
       onReload: _reloadWelcomeVideos,
       enabled: _editable,
-      canPublish: !_dirty,
+      // Video publication refreshes only its library. It must not force an
+      // unrelated text/mode draft to be saved before choosing a video.
+      canPublish: _editable,
       bindingIdentity: '${widget.savedBranchId}|$_bindingGeneration',
       publisher: publisher == null
           ? null
@@ -1998,28 +2000,75 @@ class _ContentState extends State<StorefrontContentSection> {
                   },
                 ),
                 _text('hero_subline', 'subline', lines: 2),
-                _text('hero.eyebrow', 'eyebrow'),
-                _text('hero.stamp', 'stamp'),
-                _text('hero.footnote', 'footnote'),
-                _formatEditor(),
-                Text(c('welcomeSharedTextHelp')),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: FilledButton(
-                    key: const Key('content-welcome-save'),
-                    onPressed: _editable && _dirty ? () => _save() : null,
-                    child: Text(c('save')),
+                StorefrontSettingsGroup(
+                  key: const Key('content-group-welcome-options'),
+                  title: c('welcomeMore'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _text('hero.eyebrow', 'eyebrow'),
+                      _text('hero.stamp', 'stamp'),
+                      _text('hero.footnote', 'footnote'),
+                      _formatEditor(),
+                      Text(c('welcomeSharedTextHelp')),
+                    ],
                   ),
                 ),
-                const Divider(height: 32),
+                const Divider(height: 24),
                 _welcomeVideoEditor(),
                 if (widget.welcomeImageEditor != null) ...[
-                  const SizedBox(height: 12),
+                  const Divider(height: 24),
+                  Text(
+                    c('welcomeImageTitle'),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  if (_dirty)
+                    Text(
+                      c('welcomeImageSaveFirst'),
+                      key: const Key('content-welcome-image-save-first'),
+                    ),
                   widget.welcomeImageEditor!,
-                  Text(c('welcomeImageFallbackHelp')),
-                  const Divider(height: 32),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: OutlinedButton.icon(
+                      key: const Key('content-welcome-use-image'),
+                      onPressed:
+                          _editable &&
+                              widget.bannerPreviewProfile?.mediaIdFor(
+                                    StorefrontSlot.hero,
+                                  ) !=
+                                  null
+                          ? () =>
+                                _changeAppearance('welcome_media_type', 'image')
+                          : null,
+                      icon: const Icon(Icons.image_outlined),
+                      label: Text(c('welcomeUseImage')),
+                    ),
+                  ),
                 ],
+                const SizedBox(height: 16),
+                if (_dirty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      c('welcomeUnsaved'),
+                      key: const Key('content-welcome-unsaved'),
+                    ),
+                  )
+                else if (_message == 'saved')
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      c('welcomeSaved'),
+                      key: const Key('welcome-save-status'),
+                    ),
+                  ),
+                FilledButton.icon(
+                  key: const Key('content-welcome-save'),
+                  onPressed: _editable && _dirty ? () => _save() : null,
+                  icon: const Icon(Icons.save_outlined),
+                  label: Text(c('welcomeSave')),
+                ),
               ],
             ),
           ),

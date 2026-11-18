@@ -2892,7 +2892,31 @@ class _StorefrontEditorState extends State<_StorefrontEditor>
               if (_currentBinding(binding)) setState(() => _mediaBusy = busy);
             },
           ),
-        _mediaSlot(StorefrontSlot.hero, l10n, theme, profile, dirty),
+        if (_media?.byId(profile.mediaIdFor(StorefrontSlot.hero) ?? '')
+            case final image? when image.isLive && seams.publicUrlFor != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                seams.publicUrlFor!(image.objectKey).toString(),
+                key: const Key('welcome-current-image-preview'),
+                width: 360,
+                height: 160,
+                fit: BoxFit.contain,
+                errorBuilder: (_, _, _) => const SizedBox(
+                  width: 360,
+                  height: 160,
+                  child: Icon(Icons.image_not_supported_outlined),
+                ),
+              ),
+            ),
+          ),
+        StorefrontSettingsGroup(
+          key: const Key('welcome-image-library'),
+          title: storefrontContentCopy(l10n, 'welcomeImageLibrary'),
+          child: _mediaSlot(StorefrontSlot.hero, l10n, theme, profile, dirty),
+        ),
       ],
     );
   }

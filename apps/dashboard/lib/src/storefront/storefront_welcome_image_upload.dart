@@ -510,27 +510,27 @@ class _StorefrontWelcomeImageUploadState
 String _copy(AppLocalizations l10n, String key) {
   const values = <String, List<String>>{
     'help': [
-      'Upload an independent welcome image. Publishing and applying it is immediate; welcome text still uses Save content.',
-      'ارفع صورة مستقلة للترحيب. نشر الصورة وتطبيقها فوري؛ نصوص الترحيب تبقى ضمن «حفظ المحتوى».',
-      'העלו תמונת פתיחה עצמאית. הפרסום וההחלה מיידיים; טקסט הפתיחה נשמר בשמירת תוכן.',
+      'Choose a background image from your device. The image is saved after confirmation; text and background type use Save welcome page below.',
+      'اختر صورة خلفية من جهازك. تُحفظ الصورة بعد التأكيد؛ النصوص ونوع الخلفية من زر «حفظ صفحة الترحيب» بالأسفل.',
+      'בחרו תמונת רקע מהמכשיר. התמונה נשמרת לאחר אישור; הטקסט וסוג הרקע נשמרים בכפתור שמירת עמוד הפתיחה למטה.',
     ],
-    'upload': ['Upload welcome image', 'رفع صورة ترحيب', 'העלאת תמונת פתיחה'],
+    'upload': [
+      'Choose image from device',
+      'اختيار صورة من الجهاز',
+      'בחירת תמונה מהמכשיר',
+    ],
     'confirmTitle': [
-      'Publish and apply a welcome image?',
-      'نشر وتطبيق صورة الترحيب؟',
-      'לפרסם ולהחיל תמונת פתיחה?',
+      'Change the welcome image?',
+      'تغيير صورة الترحيب؟',
+      'להחליף את תמונת הפתיחה?',
     ],
     'confirmBody': [
-      'The selected file becomes a private original, then a public WebP copy is published and applied as the welcome image immediately. Receipt branding is unchanged. Welcome text is saved separately with Save content.',
-      'سيُرفع الملف كأصل خاص، ثم تُنشر نسخة WebP وتُطبَّق كصورة الترحيب فورًا. لا يتغير شعار الإيصال. نصوص الترحيب تُحفظ منفصلة بزر «حفظ المحتوى».',
-      'הקובץ יועלה כמקור פרטי, ואז עותק WebP ציבורי יפורסם ויוחל מיידית כתמונת הפתיחה. מיתוג הקבלה נשאר כפי שהוא. הטקסט נשמר בנפרד בשמירת תוכן.',
+      'A copy of the image will be visible to visitors and saved as the welcome image. Choose a file intended for public viewing. Text and background type are saved separately below.',
+      'ستُجهّز نسخة يراها الزوار وتُحفظ كصورة الترحيب. اختر صورة مناسبة للعرض العام. تُحفظ النصوص ونوع الخلفية من الزر بالأسفل.',
+      'עותק של התמונה יוצג למבקרים ויישמר כתמונת הפתיחה. בחרו קובץ המיועד לצפייה ציבורית. הטקסט וסוג הרקע נשמרים בנפרד למטה.',
     ],
-    'confirmAction': [
-      'Upload, publish and apply',
-      'رفع ونشر وتطبيق',
-      'העלאה, פרסום והחלה',
-    ],
-    'cancel': ['Cancel continuation', 'إلغاء المتابعة', 'ביטול ההמשך'],
+    'confirmAction': ['Choose image', 'اختيار الصورة', 'בחירת תמונה'],
+    'cancel': ['Cancel', 'إلغاء', 'ביטול'],
     'retry': [
       'Try the same operation again',
       'إعادة المحاولة نفسها',
@@ -541,25 +541,13 @@ String _copy(AppLocalizations l10n, String key) {
       'أكّد قبل الرفع.',
       'יש לאשר לפני ההעלאה.',
     ],
-    'uploading': [
-      'Uploading the private original…',
-      'جارٍ رفع الأصل الخاص…',
-      'מעלה את המקור הפרטי…',
-    ],
-    'publishing': [
-      'Publishing the welcome copy…',
-      'جارٍ نشر نسخة الترحيب…',
-      'מפרסם את עותק הפתיחה…',
-    ],
-    'assigning': [
-      'Applying the published image…',
-      'جارٍ تطبيق الصورة المنشورة…',
-      'מחיל את התמונה שפורסמה…',
-    ],
+    'uploading': ['Uploading image…', 'جارٍ رفع الصورة…', 'מעלה תמונה…'],
+    'publishing': ['Preparing image…', 'جارٍ تجهيز الصورة…', 'מכין תמונה…'],
+    'assigning': ['Saving image…', 'جارٍ حفظ الصورة…', 'שומר תמונה…'],
     'applied': [
-      'Welcome image applied. Welcome text is still saved separately.',
-      'طُبّقت صورة الترحيب. حفظ النصوص يبقى منفصلًا.',
-      'תמונת הפתיחה הוחלה. שמירת הטקסט נשארת נפרדת.',
+      'Welcome image saved. Use Save welcome page below for text and background type.',
+      'حُفظت صورة الترحيب. احفظ النصوص ونوع الخلفية من زر «حفظ صفحة الترحيب» بالأسفل.',
+      'תמונת הפתיחה נשמרה. שמרו את הטקסט וסוג הרקע בכפתור שמירת עמוד הפתיחה למטה.',
     ],
     'uploadFailed': [
       'The upload could not be confirmed. No published image was confirmed.',

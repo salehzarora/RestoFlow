@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'storefront_settings_group.dart';
 import 'storefront_welcome_video_copy.dart';
 import 'storefront_welcome_video_models.dart';
 import 'storefront_welcome_video_picker.dart';
@@ -213,13 +214,6 @@ class _EditorState extends State<StorefrontWelcomeVideoEditor> {
       children: [
         Text(c('title'), style: Theme.of(context).textTheme.titleSmall),
         Text(c('backgroundHelp'), key: const Key('welcome-background-help')),
-        Text(
-          c('playbackHelp'),
-          key: const Key('welcome-background-playback-help'),
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        Text(c('help')),
-        Text(c('publicCopyHelp'), style: Theme.of(context).textTheme.bodySmall),
         if (!widget.libraryAvailable) Text(c('readFailed')),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
@@ -246,55 +240,59 @@ class _EditorState extends State<StorefrontWelcomeVideoEditor> {
               : null,
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          key: ValueKey(
-            'welcome-video-selection-${widget.selectedId ?? 'none'}',
-          ),
-          initialValue: widget.selectedId ?? 'none',
-          isExpanded: true,
-          decoration: InputDecoration(labelText: c('choose')),
-          items: [
-            DropdownMenuItem(
-              value: 'none',
-              child: Text(
-                c('none'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+        if (rows.isNotEmpty || widget.selectedId != null)
+          DropdownButtonFormField<String>(
+            key: ValueKey(
+              'welcome-video-selection-${widget.selectedId ?? 'none'}',
             ),
-            for (final row in rows)
+            initialValue: widget.selectedId ?? 'none',
+            isExpanded: true,
+            decoration: InputDecoration(labelText: c('choose')),
+            items: [
               DropdownMenuItem(
-                value: row.id,
+                value: 'none',
                 child: Text(
-                  '${row.width}×${row.height} · ${(row.durationMs / 1000).toStringAsFixed(1)} s · ${row.id.substring(0, 8)}',
+                  c('none'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-            if (widget.selectedId != null && selected == null)
-              DropdownMenuItem(
-                value: widget.selectedId,
-                enabled: false,
-                child: Text(
-                  c('unavailableSelection'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              for (final row in rows)
+                DropdownMenuItem(
+                  value: row.id,
+                  child: Text(
+                    '${c('videoNumber').replaceAll('{number}', '${rows.indexOf(row) + 1}')} · ${(row.durationMs / 1000).toStringAsFixed(0)} s · ${row.width}×${row.height}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-          ],
-          onChanged: _editable
-              ? (value) => widget.onChanged(
-                  'welcome_video_media_id',
-                  value == 'none' ? null : value,
-                )
-              : null,
-        ),
+              if (widget.selectedId != null && selected == null)
+                DropdownMenuItem(
+                  value: widget.selectedId,
+                  enabled: false,
+                  child: Text(
+                    c('unavailableSelection'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: _editable
+                ? (value) {
+                    setState(() => _lastPublished = null);
+                    widget.onChanged(
+                      'welcome_video_media_id',
+                      value == 'none' ? null : value,
+                    );
+                  }
+                : null,
+          ),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
-            OutlinedButton.icon(
+            FilledButton.icon(
               key: const Key('welcome-video-upload'),
               onPressed:
                   _editable &&
@@ -323,6 +321,7 @@ class _EditorState extends State<StorefrontWelcomeVideoEditor> {
               ),
           ],
         ),
+        Text(c('publicCopyHelp'), style: Theme.of(context).textTheme.bodySmall),
         if (widget.uploader?.supported != true) Text(c('pickerUnavailable')),
         if (_busy) const LinearProgressIndicator(),
         if (_message != null)
@@ -332,17 +331,68 @@ class _EditorState extends State<StorefrontWelcomeVideoEditor> {
           ),
         if (url != null) ...[
           const SizedBox(height: 8),
-          Text(c('previewHelp')),
-          TextButton.icon(
-            key: const Key('welcome-video-public-preview'),
-            onPressed: welcomeVideoLinkSupported
-                ? () => openPublishedWelcomeVideo(url)
-                : null,
-            icon: const Icon(Icons.open_in_new),
-            label: Text(c('previewLink')),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (preview != null &&
+                  rows.any((row) => row.id == preview.id) &&
+                  (widget.mode != 'video' || widget.selectedId != preview.id))
+                OutlinedButton.icon(
+                  key: const Key('welcome-video-use'),
+                  onPressed: _editable
+                      ? () {
+                          widget.onChanged('welcome_media_type', 'video');
+                          widget.onChanged(
+                            'welcome_video_media_id',
+                            preview.id,
+                          );
+                          setState(() => _lastPublished = null);
+                        }
+                      : null,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: Text(c('useVideo')),
+                )
+              else if (widget.mode == 'video' && widget.selectedId != null)
+                Text(
+                  c('selectedVideo'),
+                  key: const Key('welcome-video-selected'),
+                ),
+              TextButton.icon(
+                key: const Key('welcome-video-public-preview'),
+                onPressed: welcomeVideoLinkSupported
+                    ? () => openPublishedWelcomeVideo(url)
+                    : null,
+                icon: const Icon(Icons.open_in_new),
+                label: Text(c('previewLink')),
+              ),
+            ],
           ),
-          SelectableText(url.toString(), textDirection: TextDirection.ltr),
         ],
+        StorefrontSettingsGroup(
+          key: const Key('welcome-video-details'),
+          title: c('more'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(c('help')),
+              Text(c('fileDetails')),
+              Text(
+                c('playbackHelp'),
+                key: const Key('welcome-background-playback-help'),
+              ),
+              Text(c('cropHelp')),
+              if (url != null) ...[
+                Text(c('previewHelp')),
+                SelectableText(
+                  url.toString(),
+                  textDirection: TextDirection.ltr,
+                ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }

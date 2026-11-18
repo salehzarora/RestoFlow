@@ -259,7 +259,7 @@ void main() {
       expect(rig.parentBusy, isFalse);
       expect(
         find.text(
-          'Welcome image applied. Welcome text is still saved separately.',
+          'Welcome image saved. Use Save welcome page below for text and background type.',
         ),
         findsOneWidget,
       );
@@ -355,7 +355,7 @@ void main() {
       );
       expect(
         find.text(
-          'Welcome image applied. Welcome text is still saved separately.',
+          'Welcome image saved. Use Save welcome page below for text and background type.',
         ),
         findsNothing,
       );
@@ -382,7 +382,7 @@ void main() {
       expect(find.textContaining('was not applied'), findsOneWidget);
       expect(
         find.text(
-          'Welcome image applied. Welcome text is still saved separately.',
+          'Welcome image saved. Use Save welcome page below for text and background type.',
         ),
         findsNothing,
       );
@@ -606,9 +606,9 @@ void main() {
     },
   );
   for (final (language, label) in [
-    ('ar', 'رفع صورة ترحيب'),
-    ('he', 'העלאת תמונת פתיחה'),
-    ('en', 'Upload welcome image'),
+    ('ar', 'اختيار صورة من الجهاز'),
+    ('he', 'בחירת תמונה מהמכשיר'),
+    ('en', 'Choose image from device'),
   ]) {
     testWidgets(
       'own localized upload labels support $language without modifying shared copy',
