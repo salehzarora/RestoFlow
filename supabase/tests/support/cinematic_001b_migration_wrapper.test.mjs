@@ -12,6 +12,7 @@ import {
   siteThemeSuccessor, siteThemeReleaseSources,
   menuBannerSuccessor, menuBannerReleaseSources, detailOriginalSuccessor, detailOriginalReleaseSources,
   responsiveBannerSuccessor, responsiveBannerReleaseSources,
+  welcomeVideoSuccessor, welcomeVideoReleaseSources,
 } from './cinematic_001b_migration_contract.mjs';
 
 test('historical migration removed exactly two outer statement lines', () => {
@@ -97,9 +98,9 @@ const refuses = (list, message) => assert.throws(() => proveMigrationSequence(li
 const successorNames = excludedSuccessors.map(item => item.name);
 const [posDutySuccessor, g1Successor] = excludedSuccessors;
 
-test('the sequence pins #379, payment 001D, product helpers, scene, background clarity and six later successors', () => {
+test('the sequence pins #379, payment 001D, product helpers, scene, background clarity and seven later successors', () => {
   assert.deepEqual(proveMigrationSequence(sources).summary, {
-    migrations: 194, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name), ...successorNames],
+    migrations: 195, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name), ...successorNames],
     prefix_names_sha256: prefixNamesFingerprint, follow_up_sha256: followUpFingerprint, follow_up_statements: 125,
     follow_up_no_embedded_transaction: true,
     visual_followups: followupMigrations.map(pin => ({ ...pin, version: pin.name.slice(0, 14), statements: statements(bytesOf(pin.name).toString('utf8')).length, no_embedded_transaction: true })),
@@ -110,6 +111,7 @@ test('the sequence pins #379, payment 001D, product helpers, scene, background c
       { label: 'menu banner', name: '20261111170713_bizbot_storefront_menu_banner_001.sql', sha256: '6661d0b97a12bbcf181d0bf12d43a64995d2def1bf5b11348a7b55795d2446b3' },
       { label: 'product detail original', name: '20261112011934_bizbot_storefront_product_detail_original_001.sql', sha256: 'c92d70304045a171de8660b8eaefc27f8df2072e6f213e0a28bfda49a1af3c73' },
       { label: 'responsive banner', name: '20261113134741_bizbot_storefront_responsive_banner_001.sql', sha256: '734c339d116a3ae4d64544676bda78cc17d543f1f7d2ce95c23f884a8d2dd75d' },
+      { label: 'welcome video', name: '20261116160533_bizbot_storefront_welcome_video_001.sql', sha256: 'c937eddae6c310d8a1c42a42c260d2e0c8765cc3a2647ba54d010b640366cfd9' },
     ],
   });
 });
@@ -295,7 +297,7 @@ test('the historical #379 / PR380 fixture plan omits 001D and three pinned succe
   assert.throws(() => visualReleaseSources(adding(['20261110000000_unreviewed_after_g1.sql', sql('select 1;\n')])), failsWith('Unexpected migration sequence after the #379 target'));
 });
 
-test('six pinned successors carry their exact identities and are excluded from both historical plans', () => {
+test('seven pinned successors carry their exact identities and are excluded from both historical plans', () => {
   assert.deepEqual(excludedSuccessors.map(pin => [pin.label, pin.name, pin.sha256]), [
     ['POS duty', '20261108085442_bizbot_pos_long_shift_alerts_001.sql', '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865'],
     ['G1', '20261109143313_bizbot_zcredit_001e_drop_evidence_001.sql', '1ac9a99048c0755a982d197099a7aed27d802a67ea02b38254b79453b92bad95'],
@@ -303,6 +305,7 @@ test('six pinned successors carry their exact identities and are excluded from b
     ['menu banner', '20261111170713_bizbot_storefront_menu_banner_001.sql', '6661d0b97a12bbcf181d0bf12d43a64995d2def1bf5b11348a7b55795d2446b3'],
     ['product detail original', '20261112011934_bizbot_storefront_product_detail_original_001.sql', 'c92d70304045a171de8660b8eaefc27f8df2072e6f213e0a28bfda49a1af3c73'],
     ['responsive banner', '20261113134741_bizbot_storefront_responsive_banner_001.sql', '734c339d116a3ae4d64544676bda78cc17d543f1f7d2ce95c23f884a8d2dd75d'],
+    ['welcome video', '20261116160533_bizbot_storefront_welcome_video_001.sql', 'c937eddae6c310d8a1c42a42c260d2e0c8765cc3a2647ba54d010b640366cfd9'],
   ]);
   assert.ok(Object.isFrozen(excludedSuccessors) && excludedSuccessors.every(pin => Object.isFrozen(pin)));
   for (const pin of excludedSuccessors) assert.equal(sha256(bytesOf(pin.name)), pin.sha256);
@@ -311,7 +314,7 @@ test('six pinned successors carry their exact identities and are excluded from b
   assert.equal(historical.length, 188);
   assert.deepEqual(historical, [...prefix, followUpName, ...followupMigrations.map(item => item.name)]);
   assert.deepEqual([...historical, ...successorNames], sources.map(([entry]) => entry));
-  assert.deepEqual(sources.slice(-6).map(([entry]) => entry), successorNames);
+  assert.deepEqual(sources.slice(-7).map(([entry]) => entry), successorNames);
   assert.ok(successorNames.every(name => !historical.includes(name) && !prefix.includes(name)));
   const visual = visualReleaseSources(sources).map(([entry]) => entry);
   assert.equal(visual.length, 187);
@@ -447,7 +450,7 @@ test('UX003 successor bytes and their transaction boundaries are exact', () => {
     { label: 'menu banner', name: '20261111170713_bizbot_storefront_menu_banner_001.sql', sha256: '6661d0b97a12bbcf181d0bf12d43a64995d2def1bf5b11348a7b55795d2446b3' },
     { label: 'product detail original', name: '20261112011934_bizbot_storefront_product_detail_original_001.sql', sha256: 'c92d70304045a171de8660b8eaefc27f8df2072e6f213e0a28bfda49a1af3c73' },
   ]);
-  assert.deepEqual(excludedSuccessors.slice(-3, -1), [menuBannerSuccessor, detailOriginalSuccessor]);
+  assert.deepEqual(excludedSuccessors.slice(3, 5), [menuBannerSuccessor, detailOriginalSuccessor]);
   for (const [pin, size] of [[menuBannerSuccessor, 58504], [detailOriginalSuccessor, 4004]]) {
     assert.ok(Object.isFrozen(pin));
     assert.equal(bytesOf(pin.name).length, size);
@@ -503,7 +506,7 @@ test('UX003 swaps and unknown future successors are refused by every plan', () =
 test('responsive banner has exactly one raw-byte pin and no embedded transaction control', () => {
   assert.deepEqual(responsiveBannerSuccessor, { label: 'responsive banner',
     name: '20261113134741_bizbot_storefront_responsive_banner_001.sql', sha256: '734c339d116a3ae4d64544676bda78cc17d543f1f7d2ce95c23f884a8d2dd75d' });
-  assert.equal(excludedSuccessors.at(-1), responsiveBannerSuccessor);
+  assert.equal(excludedSuccessors[5], responsiveBannerSuccessor);
   assert.ok(Object.isFrozen(responsiveBannerSuccessor));
   assert.equal(bytesOf(responsiveBannerSuccessor.name).length, 58437);
   assert.equal(sha256(bytesOf(responsiveBannerSuccessor.name)), responsiveBannerSuccessor.sha256);
@@ -511,7 +514,7 @@ test('responsive banner has exactly one raw-byte pin and no embedded transaction
 });
 test('responsive lifecycle appends only the reviewed successor and preserves every older plan', () => {
   const detail = detailOriginalReleaseSources(sources), plan = responsiveBannerReleaseSources(sources);
-  assert.equal(sources.length, 194); assert.equal(detail.length, 190); assert.equal(plan.length, 191);
+  assert.equal(sources.length, 195); assert.equal(detail.length, 190); assert.equal(plan.length, 191);
   assert.deepEqual(plan.map(([name]) => name), [...detail.map(([name]) => name), responsiveBannerSuccessor.name]);
   assert.ok(plan.every(([name, bytes]) => bytes === bytesOf(name)));
   assert.equal(plan.filter(([name]) => name === responsiveBannerSuccessor.name).length, 1);
@@ -536,5 +539,56 @@ test('responsive plan rejects swaps, copied bytes and unknown successors after i
   for (const name of [`${next}_unknown_after_responsive.sql`, '99991231235959_unknown_after_responsive.sql']) {
     const invalid = adding([name, sql('select 1;\n')]);
     for (const builder of builders) assert.throws(() => builder(invalid), failsWith('Unexpected migration sequence after the #379 target'));
+  }
+});
+
+
+// WELCOME-EDITOR-001: exact additive pin/plan. Never discover successors.
+test('welcome video has one exact raw-byte identity and no transaction wrapper', () => {
+  assert.deepEqual(welcomeVideoSuccessor, { label: 'welcome video',
+    name: '20261116160533_bizbot_storefront_welcome_video_001.sql',
+    sha256: 'c937eddae6c310d8a1c42a42c260d2e0c8765cc3a2647ba54d010b640366cfd9' });
+  assert.equal(excludedSuccessors.at(-1), welcomeVideoSuccessor);
+  assert.ok(Object.isFrozen(welcomeVideoSuccessor));
+  assert.equal(bytesOf(welcomeVideoSuccessor.name).length, 73441);
+  assert.equal(sha256(bytesOf(welcomeVideoSuccessor.name)), welcomeVideoSuccessor.sha256);
+  assert.deepEqual(topLevelTransactionControl(bytesOf(welcomeVideoSuccessor.name).toString('utf8')), []);
+});
+test('welcome lifecycle appends only welcome video after responsive and preserves every prior plan', () => {
+  const before = responsiveBannerReleaseSources(sources), plan = welcomeVideoReleaseSources(sources);
+  assert.equal(sources.length, 195); assert.equal(before.length, 191); assert.equal(plan.length, 192);
+  assert.deepEqual(plan.map(([name]) => name), [...before.map(([name]) => name), welcomeVideoSuccessor.name]);
+  assert.ok(plan.every(([name, bytes]) => bytes === bytesOf(name)));
+  assert.equal(plan.filter(([name]) => name === welcomeVideoSuccessor.name).length, 1);
+  assert.ok(!plan.some(([name]) => [followUpName, posDutySuccessor.name, g1Successor.name].includes(name)));
+  for (const [builder, size] of [[list => targetPrefixSources(list, bytesOf(migrationName)),184],
+    [visualReleaseSources,187], [siteThemeReleaseSources,188], [menuBannerReleaseSources,189],
+    [detailOriginalReleaseSources,190], [responsiveBannerReleaseSources,191]]) {
+    const historical = builder(sources);
+    assert.equal(historical.length, size);
+    assert.ok(!historical.some(([name]) => name === welcomeVideoSuccessor.name));
+  }
+});
+test('every welcome plan rejects altered, swapped, copied, renamed and unknown successor bytes', () => {
+  const builders = [list => targetPrefixSources(list, bytesOf(migrationName)), visualReleaseSources,
+    siteThemeReleaseSources, menuBannerReleaseSources, detailOriginalReleaseSources,
+    responsiveBannerReleaseSources, welcomeVideoReleaseSources];
+  const name = welcomeVideoSuccessor.name, original = bytesOf(name);
+  for (const other of excludedSuccessors.filter(pin => pin !== welcomeVideoSuccessor)) {
+    for (const builder of builders) assert.throws(() => builder(replacing(name, bytesOf(other.name))),
+      failsWith('Unreviewed welcome video successor bytes'));
+  }
+  for (const changed of [crlf(original), Buffer.concat([original, sql('\n')]),
+    Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),original])]) {
+    for (const builder of builders) assert.throws(() => builder(replacing(name,changed)),
+      failsWith('Unreviewed welcome video successor bytes'));
+  }
+  for (const builder of builders) {
+    assert.throws(() => builder(without(sources,name)), failsWith('Unexpected migration sequence after the #379 target'));
+    assert.throws(() => builder(replacing(sources[0][0],original)), failsWith('Reviewed welcome video bytes may appear only under their pinned name'));
+    assert.throws(() => builder(adding(['20261116160534_unknown_after_welcome.sql',sql('select 1;\n')])),
+      failsWith('Unexpected migration sequence after the #379 target'));
+    assert.throws(() => builder([...without(sources,name), ['20261116160534_renamed_welcome.sql',original]].sort(byName)),
+      failsWith('Unexpected migration sequence after the #379 target'));
   }
 });

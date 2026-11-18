@@ -1065,6 +1065,7 @@ String _refusalMessage(AppLocalizations l10n, String? code) => switch (code) {
   'output_too_large' => l10n.storefrontRefusalOutputTooLarge,
   'self_check_failed' => l10n.storefrontRefusalSelfCheckFailed,
   'source_stale' => l10n.storefrontItemImageFailed,
+  'source_unavailable' => storefrontContentCopy(l10n, 'mediaSourceUnavailable'),
   _ => l10n.storefrontRefusalUnknown(code ?? '-'),
 };
 

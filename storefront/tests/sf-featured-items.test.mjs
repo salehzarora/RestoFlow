@@ -1,4 +1,5 @@
 import './support/ts-resolver.mjs';
+import { withWelcomeMedia } from './support/welcome-envelope.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { syntheticEnvelope, SYNTH_IDS, NOT_FOUND_ENVELOPE } from './support/envelope.mjs';
@@ -78,16 +79,16 @@ test('independent tenant reads do not share mutable featured state', () => {
   assert.ok(b.view.items.every(item => !item.featured));
 });
 
-test('live source requests latest v11 once and retains featured selection on the successful read', async () => {
+test('live source requests latest v12 once and retains featured selection on the successful read', async () => {
   const previous = globalThis.fetch;
   const calls = [];
   const source = liveStorefrontSource({ url: ORIGIN, anonKey: 'sb_publishable_SYNTHETIC_not_real_00000' });
   try {
-    globalThis.fetch = async (url, init) => { calls.push({ url, init }); return { ok: true, json: async () => ({ ...v3([SYNTH_IDS.burger]), content_v1: defaultContentV1() }) }; };
+    globalThis.fetch = async (url, init) => { calls.push({ url, init }); return { ok: true, json: async () => withWelcomeMedia({ ...v3([SYNTH_IDS.burger]), content_v1: defaultContentV1() }) }; };
     const result = await source.getStorefront('sf-synth-a');
     assert.equal(result.view.items.find(item => item.id === SYNTH_IDS.burger).featured, true);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v11`);
+    assert.equal(calls[0].url, `${ORIGIN}/rest/v1/rpc/storefront_menu_v12`);
     assert.equal(calls[0].init.body, JSON.stringify({ p_slug: 'sf-synth-a' }));
     globalThis.fetch = async () => { calls.push('legacy'); return { ok: true, json: async () => v2() }; };
     await assert.rejects(source.getStorefront('sf-synth-a'), EnvelopeError);

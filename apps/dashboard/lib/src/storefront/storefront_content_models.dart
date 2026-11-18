@@ -36,6 +36,8 @@ const storefrontAppearanceOptionalKeys = {
   'menu_banner_desktop_height_px',
   'menu_banner_desktop_focal_x',
   'menu_banner_desktop_focal_y',
+  'welcome_media_type',
+  'welcome_video_media_id',
 };
 const storefrontFontFamilies = {'rubik', 'alexandria', 'system'};
 final storefrontAppearanceHex = RegExp(r'^#[0-9A-Fa-f]{6}$');
@@ -113,6 +115,8 @@ bool contentFieldPath(Object? value) => const {
   'appearance.menu_banner_desktop_height_px',
   'appearance.menu_banner_desktop_focal_x',
   'appearance.menu_banner_desktop_focal_y',
+  'appearance.welcome_media_type',
+  'appearance.welcome_video_media_id',
 }.contains(value);
 
 Object? _freeze(Object? value) => switch (value) {
@@ -183,6 +187,22 @@ class StorefrontContentDocument {
         throw const StorefrontDecodeException(
           'appearance.site_theme',
           'presentation_invalid',
+        );
+      }
+      final welcomeType = appearance['welcome_media_type'];
+      if (welcomeType != null &&
+          welcomeType != 'image' &&
+          welcomeType != 'video') {
+        throw const StorefrontDecodeException(
+          'appearance.welcome_media_type',
+          'presentation_invalid',
+        );
+      }
+      final welcomeVideo = appearance['welcome_video_media_id'];
+      if (welcomeVideo != null && !contentId(welcomeVideo)) {
+        throw const StorefrontDecodeException(
+          'appearance.welcome_video_media_id',
+          'media_invalid',
         );
       }
       for (final key in const [

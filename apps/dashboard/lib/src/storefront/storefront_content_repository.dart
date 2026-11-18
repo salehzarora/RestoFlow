@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
 import 'storefront_content_models.dart';
+import 'storefront_welcome_video_library.dart';
+import 'storefront_welcome_video_models.dart';
 import 'storefront_models.dart';
 import 'storefront_rpc.dart';
 
@@ -86,7 +88,7 @@ abstract interface class StorefrontContentRepositoryBinding {
 }
 
 class SupabaseStorefrontContentRepository
-    implements StorefrontContentRepository {
+    implements StorefrontContentRepository, StorefrontWelcomeVideoLibrary {
   SupabaseStorefrontContentRepository({
     required SyncRpcTransport transport,
     required this.organizationId,
@@ -97,15 +99,42 @@ class SupabaseStorefrontContentRepository
   final SyncRpcTransport _transport;
   final String organizationId, restaurantId;
   final int Function() _nonce;
-  // The v6 management read negotiates responsive banner support. No
+  // The v7 management read negotiates optional welcome video support. No
   // fallback: a legacy read cannot prove support for the new write field.
-  static const readFunction = 'get_restaurant_storefront_content_v6';
+  static const readFunction = 'get_restaurant_storefront_content_v7';
   static const writeFunction = 'set_restaurant_storefront_content_v1';
   static const mediaFunction = 'list_storefront_content_media_v2';
+  static const welcomeVideoFunction = 'list_storefront_welcome_videos_v1';
   Map<String, dynamic> get _scope => {
     'p_organization_id': organizationId,
     'p_restaurant_id': restaurantId,
   };
+
+  @override
+  Future<List<StorefrontWelcomeVideoMedia>?> listWelcomeVideos() async {
+    final result = await invokeStorefrontRpc(
+      _transport,
+      welcomeVideoFunction,
+      _scope,
+    );
+    if (!result.isResponded) return null;
+    final raw = result.response!;
+    if (raw.length != 3 ||
+        raw['ok'] != true ||
+        raw['entity'] != 'storefront_welcome_video' ||
+        raw['media'] is! List ||
+        (raw['media'] as List).length > 200)
+      return null;
+    try {
+      final rows = (raw['media'] as List)
+          .map((row) => StorefrontWelcomeVideoMedia.fromJson(row))
+          .toList(growable: false);
+      if (rows.map((row) => row.id).toSet().length != rows.length) return null;
+      return List.unmodifiable(rows);
+    } on StorefrontDecodeException {
+      return null;
+    }
+  }
 
   @override
   Future<StorefrontContentRead> readContent() async {
@@ -125,6 +154,15 @@ class SupabaseStorefrontContentRepository
     if (typedFailure && raw['error'] == 'permission_denied')
       return const StorefrontContentRead(StorefrontContentReadStatus.denied);
     try {
+      final document = raw['document'];
+      final appearance = document is Map ? document['appearance'] : null;
+      if (appearance is! Map ||
+          !appearance.containsKey('welcome_media_type') ||
+          !appearance.containsKey('welcome_video_media_id')) {
+        return const StorefrontContentRead(
+          StorefrontContentReadStatus.malformed,
+        );
+      }
       return StorefrontContentRead(
         StorefrontContentReadStatus.ok,
         snapshot: StorefrontContentSnapshot.fromJson(raw, restaurantId),

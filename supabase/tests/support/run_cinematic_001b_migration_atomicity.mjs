@@ -20,6 +20,7 @@ import {
   targetPrefixSources, visualReleaseSources, siteThemeSuccessor, siteThemeReleaseSources,
   menuBannerSuccessor, menuBannerReleaseSources, detailOriginalSuccessor, detailOriginalReleaseSources,
   responsiveBannerSuccessor, responsiveBannerReleaseSources,
+  welcomeVideoSuccessor, welcomeVideoReleaseSources,
 } from './cinematic_001b_migration_contract.mjs';
 
 requireEphemeralCi(process.env); // Must precede subprocesses, including Docker.
@@ -181,6 +182,35 @@ const responsiveLegacyReadersQuery = `select jsonb_agg(jsonb_build_object(
     'public.storefront_menu_v8(text)'::regprocedure,
     'public.storefront_menu_v9(text)'::regprocedure,
     'public.storefront_menu_v10(text)'::regprocedure);`;
+
+// WELCOME-EDITOR-001: current contract only, after every older proof.
+const welcomeReadinessQuery = `select json_build_object(
+  'content_v7',to_regprocedure('public.get_restaurant_storefront_content_v7(uuid,uuid)') is not null,
+  'menu_v12',to_regprocedure('public.storefront_menu_v12(text)') is not null,
+  'registry',to_regclass('app.storefront_welcome_video_media') is not null,
+  'preflight',to_regprocedure('public.preflight_storefront_welcome_video_v1(uuid,uuid,text,uuid)') is not null,
+  'register',to_regprocedure('public.register_storefront_welcome_video_v1(uuid,uuid,text,uuid,text,integer,integer,integer,integer)') is not null,
+  'publish',to_regprocedure('public.publish_storefront_welcome_video_v1(uuid,uuid,uuid,uuid)') is not null,
+  'list',to_regprocedure('public.list_storefront_welcome_videos_v1(uuid,uuid)') is not null)::text;`;
+const welcomeManagerSignatures = ['get_restaurant_storefront_content_v7(uuid,uuid)',
+  'preflight_storefront_welcome_video_v1(uuid,uuid,text,uuid)',
+  'register_storefront_welcome_video_v1(uuid,uuid,text,uuid,text,integer,integer,integer,integer)',
+  'publish_storefront_welcome_video_v1(uuid,uuid,uuid,uuid)', 'list_storefront_welcome_videos_v1(uuid,uuid)'];
+const welcomeGrantQuery = `select jsonb_agg(jsonb_build_object(
+  'identity',p.oid::regprocedure::text,'owner',pg_get_userbyid(p.proowner),
+  'search_path',p.proconfig,'definer',p.prosecdef,
+  'anon',has_function_privilege('anon',p.oid,'EXECUTE'),
+  'authenticated',has_function_privilege('authenticated',p.oid,'EXECUTE'),
+  'service_role',has_function_privilege('service_role',p.oid,'EXECUTE'),
+  'public_execute',exists(select 1 from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a where a.grantee=0 and a.privilege_type='EXECUTE'))
+  order by p.oid::regprocedure::text)::text from pg_proc p where p.oid in (
+  ${welcomeManagerSignatures.flatMap(sig => ['app','public'].map(schema => `'${schema}.${sig}'::regprocedure`)).join(',')},
+  'public.storefront_menu_v12(text)'::regprocedure);`;
+const welcomeRlsQuery = `select json_build_object(
+  'rls',relrowsecurity,'force',relforcerowsecurity,
+  'direct_client_grants',exists(select 1 from aclexplode(coalesce(relacl,acldefault('r',relowner))) a
+    where a.grantee=0 or a.grantee in (select oid from pg_roles where rolname in('anon','authenticated','service_role')))
+  )::text from pg_class where oid='app.storefront_welcome_video_media'::regclass;`;
 
 const historyVersionsQuery = "select coalesce(jsonb_agg(version order by version),'[]'::jsonb)::text from supabase_migrations.schema_migrations;";
 const historyThroughTargetQuery = `select coalesce(jsonb_agg(to_jsonb(h) order by version),'[]'::jsonb)::text
@@ -558,6 +588,48 @@ end;\n$cinematic_late_failure$;\n`;
   const finalResponsiveSources = await readMigrationSources(migrationsDirectory);
   assert.ok(finalResponsiveSources.length === sources.length && finalResponsiveSources.every(([name, bytes], index) =>
     name === sources[index][0] && bytes.equals(sources[index][1])), 'Every tracked migration source must remain byte-identical');
+
+  // WELCOME-EDITOR-001: separate new-contract phase, not an historical rewrite.
+  phase = 'apply_reviewed_welcome_video';
+  const welcomeKeys = ['content_v7','menu_v12','registry','preflight','register','publish','list'];
+  assert.deepEqual(JSON.parse(sql(welcomeReadinessQuery)), Object.fromEntries(welcomeKeys.map(k=>[k,false])),
+    'Welcome contract must be absent before its own phase');
+  const beforeWelcomeLegacy = sql(responsiveLegacyReadersQuery);
+  const welcomePlan = welcomeVideoReleaseSources(sources);
+  await writeFile(join(releaseWorkdir,'supabase/migrations',welcomeVideoSuccessor.name),sourceBytes.get(welcomeVideoSuccessor.name));
+  const welcomeWritten = await readMigrationSources(join(releaseWorkdir,'supabase/migrations'));
+  assert.deepEqual(welcomeWritten.map(([name])=>name),welcomePlan.map(([name])=>name),'Welcome plan names must match exactly');
+  assert.ok(welcomeWritten.every(([name,bytes])=>bytes.equals(sourceBytes.get(name))),'Welcome plan bytes must match exactly');
+  checked('supabase',['migration','up','--local','--workdir',releaseWorkdir]);
+  const welcomeVersion = welcomeVideoSuccessor.name.slice(0,14), welcomeHistory = JSON.parse(sql(historyQuery));
+  assert.deepEqual(welcomeHistory.map(row=>row.version),versionsOf(welcomePlan.map(([name])=>name)),'Only exact welcome plan may be applied');
+  assert.equal(welcomeHistory.filter(row=>row.version===welcomeVersion).length,1,'Welcome version must be recorded exactly once');
+  assert.deepEqual(welcomeHistory.filter(row=>row.version!==welcomeVersion),responsiveHistory,'Every earlier history row must survive welcome');
+  const welcomeReadiness = JSON.parse(sql(welcomeReadinessQuery));
+  assert.deepEqual(welcomeReadiness,Object.fromEntries(welcomeKeys.map(k=>[k,true])),'Welcome readers, registry and publisher RPCs must be ready');
+  const welcomeGrants = JSON.parse(sql(welcomeGrantQuery));
+  const expectedWelcomeGrants = [...welcomeManagerSignatures.flatMap(sig=>['app','public'].map(schema=>({
+    identity:`${schema}.${sig}`,owner:'postgres',search_path:['search_path=""'],definer:schema==='app',
+    anon:false,authenticated:true,service_role:false,public_execute:false}))),
+    {identity:'storefront_menu_v12(text)',owner:'postgres',search_path:['search_path=""'],definer:true,
+      anon:true,authenticated:true,service_role:false,public_execute:false}]
+    .map(row=>({...row,identity:row.identity.replace(/^public\./,'')}))
+    .sort((a,b)=>a.identity<b.identity?-1:a.identity>b.identity?1:0);
+  assert.deepEqual(welcomeGrants,expectedWelcomeGrants,'Welcome grants/owners/search_path must match exact reviewed surface');
+  assert.deepEqual(JSON.parse(sql(welcomeRlsQuery)),{rls:true,force:true,direct_client_grants:false},'Welcome registry must keep forced RLS and no direct client grants');
+  assert.equal(sql(responsiveLegacyReadersQuery),beforeWelcomeLegacy,'Existing legacy wrapper definitions/ACLs/owners must survive welcome');
+  assert.deepEqual(JSON.parse(sql(responsiveBannerReadinessQuery)),responsiveReadiness,'Responsive readiness must survive welcome');
+  assert.equal(sql("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname in ('card_provider_attempts','card_provider_private_events','card_payments_pilot_revisions','payment_terminals','card_attempt_identity_tombstones');"),'0',
+    'No unrelated payment schema may be introduced by welcome');
+  receipt.welcome_video_release = {status:'PASS',applied_version:welcomeVersion,migration_versions:welcomeHistory.map(row=>row.version),
+    prior_history_unchanged:true,readiness:welcomeReadiness,grants:welcomeGrants,legacy_wrappers_unchanged:true,
+    legacy_before_sha256:sha256(beforeWelcomeLegacy),legacy_after_sha256:sha256(sql(responsiveLegacyReadersQuery)),
+    pending_payment_schema_absent:true,schema_sha256:sha256(schemaSnapshot()),history_sha256:sha256(sql(historyQuery)),
+    ready_for_real_service_lifecycle:true,lifecycle_stack:'post_welcome_video_release',
+    responsive_banner_release_describes:'historical_pre_welcome_stack'};
+  const finalWelcomeSources = await readMigrationSources(migrationsDirectory);
+  assert.ok(finalWelcomeSources.length===sources.length && finalWelcomeSources.every(([name,bytes],index)=>
+    name===sources[index][0] && bytes.equals(sources[index][1])),'Every tracked migration source must remain byte-identical');
 
   receipt.status = 'PASS';
   phase = 'complete';

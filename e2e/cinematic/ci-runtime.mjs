@@ -2,6 +2,7 @@
 // Application code/repositories are unchanged; credentials and raw logs never
 // enter the public evidence directory. Only the loopback anon key enters builds.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, openSync, closeSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
@@ -10,7 +11,7 @@ import { installDashboardFontMirror } from './font-mirror.mjs';
 import { requireEphemeralCi } from '../../supabase/tests/support/cinematic_001b_migration_contract.mjs';
 import { capturePublisherRuntime } from './publisher-diagnostics.mjs';
 import { LOGICAL_ORIGIN } from './live-transport.mjs';
-import { measureLiveBudget } from './live-budget.mjs';
+import { measureLiveBudget, observeLiveBudgetTransport } from './live-budget.mjs';
 
 const marker = 'BIZBOT-STOREFRONT-CINEMATIC-001B';
 const api = 'http://127.0.0.1:54321';
@@ -45,6 +46,12 @@ export function assertHeightVideoEvidence(name, bytes) {
   assert.equal(bytes.subarray(0, 4).toString('hex'), '1a45dfa3', 'Expected EBML WebM header');
   assert.ok(bytes.subarray(0, 512).includes(Buffer.from('webm')), 'Expected WebM document type');
 }
+export function assertPublicEvidenceFilename(entry) {
+  // Retain the existing general evidence policy, with one explicit private
+  // partition artifact denied even if it is accidentally copied public.
+  assert.ok(typeof entry === 'string' && entry.toLowerCase() !== 'traditional-background-handoff.json'
+    && (entry === HEIGHT_VIDEO_FILE || /^(?:[a-z0-9_-]+\.json|[a-z0-9_-]+\.png)$/i.test(entry)), 'Unexpected evidence path');
+}
 
 function setup() {
   requireEphemeralCi(process.env); // Reject endpoint/context overrides before even `supabase start`.
@@ -75,19 +82,151 @@ function checked(command, args, options = {}) {
   return result.stdout?.trim();
 }
 
-async function waitUntil(url, accepts, child) {
+export async function waitUntil(url, accepts, child, fetchRequest = fetch) {
   const endpoint = new URL(url);
   assert.equal(endpoint.hostname, '127.0.0.1');
+  // The following synchronous browser runs prevent idle-socket close events
+  // from being processed here. Do not leave this readiness-only connection in
+  // the pool used later by the unchanged live measurer. Other services retain
+  // their existing options; fetchRequest is the native fetch in every CI call.
+  const storefrontReadiness = endpoint.origin === 'http://127.0.0.1:3000' && endpoint.pathname === '/' && !endpoint.search;
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     if (child && child.exitCode !== null) throw new Error('Local application exited during startup');
     try {
-      const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(2000) });
+      const response = await fetchRequest(url, { redirect: 'error', signal: AbortSignal.timeout(2000),
+        ...(storefrontReadiness ? { headers: { connection: 'close' } } : {}) });
       if (accepts(response)) return;
     } catch { /* Bounded service-readiness polling, never retry an acceptance test. */ }
     await new Promise(r => setTimeout(r, 500));
   }
   throw new Error(`Local service did not become ready on port ${endpoint.port}`);
+}
+
+// Public evidence projection only. The reviewed SQL/ACL producer and the
+// generic credential predicate below remain unchanged.
+export const WELCOME_GRANT_IDENTITIES = Object.freeze([
+  'app.get_restaurant_storefront_content_v7(uuid,uuid)',
+  'app.list_storefront_welcome_videos_v1(uuid,uuid)',
+  'app.preflight_storefront_welcome_video_v1(uuid,uuid,text,uuid)',
+  'app.publish_storefront_welcome_video_v1(uuid,uuid,uuid,uuid)',
+  'app.register_storefront_welcome_video_v1(uuid,uuid,text,uuid,text,integer,integer,integer,integer)',
+  'get_restaurant_storefront_content_v7(uuid,uuid)',
+  'list_storefront_welcome_videos_v1(uuid,uuid)',
+  'preflight_storefront_welcome_video_v1(uuid,uuid,text,uuid)',
+  'publish_storefront_welcome_video_v1(uuid,uuid,uuid,uuid)',
+  'register_storefront_welcome_video_v1(uuid,uuid,text,uuid,text,integer,integer,integer,integer)',
+  'storefront_menu_v12(text)',
+]);
+const sha256 = text => createHash('sha256').update(text).digest('hex');
+const evidenceFailure = reason => { const error = new Error(reason); error.evidenceReason = reason; throw error; };
+export function assertPublicEvidenceJson(text) {
+  JSON.parse(text);
+  assert.ok(!/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|"(?:access_token|refresh_token|password|service_role|anonKey|ANON_KEY)"\s*:/i.test(text),
+    'Credential-shaped data must not be published');
+}
+function sourceMatches(source, current) {
+  return /^[0-9a-f]{40}$/.test(source?.testedCheckout ?? '') && /^[0-9a-f]{40}$/.test(source?.testedTree ?? '') &&
+    source.testedCheckout === current?.checkout && source.testedTree === current?.tree;
+}
+export function projectMigrationGrantReceipt(entry, text, source, current) {
+  if (entry !== 'migration-atomicity.json') evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID');
+  if (!sourceMatches(source, current)) evidenceFailure('SOURCE_IDENTITY_MISMATCH');
+  const data = JSON.parse(text);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID');
+  // An earlier failed migration phase has no new role-audit structure. Preserve
+  // that original failure byte-for-byte; the unchanged generic guard still runs.
+  if (!Object.hasOwn(data, 'welcome_video_release')) return { text, manifest: null };
+  if (data.tested_commit !== source.testedCheckout || data.tested_tree !== source.testedTree)
+    evidenceFailure('SOURCE_IDENTITY_MISMATCH');
+  const release = data.welcome_video_release;
+  const rows = release?.grants;
+  if (!release || typeof release !== 'object' || Array.isArray(release) || !['PASS','FAIL'].includes(data.status) || !['PASS','FAIL'].includes(release.status) || !Array.isArray(rows) || rows.length !== 11)
+    evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID');
+  const keys = ['anon','authenticated','definer','identity','owner','public_execute','search_path','service_role'];
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index];
+    if (!row || typeof row !== 'object' || Array.isArray(row) || JSON.stringify(Object.keys(row).sort()) !== JSON.stringify(keys) ||
+        row.identity !== WELCOME_GRANT_IDENTITIES[index] || typeof row.owner !== 'string' ||
+        !(row.search_path === null || Array.isArray(row.search_path) && row.search_path.every(value => typeof value === 'string')) ||
+        ['anon','authenticated','definer','public_execute','service_role'].some(key => typeof row[key] !== 'boolean'))
+      evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID');
+  }
+  // Replace only the eleven literal property-name tokens in the original text.
+  // Never reserialize other fields: duplicate password keys, token strings,
+  // whitespace and every failure value remain visible to the original guard.
+  const tokens = [...text.matchAll(/"service_role"(?=\s*:)/g)];
+  if (tokens.length !== 11) evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID');
+  const projected = text.replace(/"service_role"(?=\s*:)/g, '"serviceRoleExecute"');
+  const expected = structuredClone(data);
+  expected.welcome_video_release.grants = rows.map(({ service_role, ...other }) => ({ ...other, serviceRoleExecute: service_role }));
+  try { assert.deepEqual(JSON.parse(projected), expected); }
+  catch { evidenceFailure('ROLE_AUDIT_PROJECTION_INVALID'); }
+  return { text: projected, manifest: {
+    status: 'DERIVED_PUBLIC_EVIDENCE', projection: 'WELCOME_VIDEO_GRANT_ROLE_KEY_V1', sourceFile: entry,
+    sourceSha256: sha256(text), projectedSha256: sha256(projected), rawOriginalRetainedPrivately: true,
+    testedCommit: source.testedCheckout, testedTree: source.testedTree, producerStatus: data.status,
+    renamedFields: rows.map((row, index) => ({ identity: row.identity,
+      sourcePath: `$.welcome_video_release.grants[${index}].service_role`,
+      publicPath: `$.welcome_video_release.grants[${index}].serviceRoleExecute`, value: row.service_role })),
+  } };
+}
+const diagnosticFiles = new Set(['source.json','migration-atomicity.json','migration-atomicity-public-projection.json',
+  'publisher-response-probe.json','publisher-response-probe-result.json','browser-result.json','welcome-browser-result.json',
+  'dashboard-publication-result.json','background-quality-publication.json','responsive-banner-case-result.json']);
+export function evidenceSanitizeDiagnostic(entry, error) {
+  const reasons = new Set(['ROLE_AUDIT_PROJECTION_INVALID','SOURCE_IDENTITY_MISMATCH']);
+  const reason = reasons.has(error?.evidenceReason) ? error.evidenceReason : error instanceof SyntaxError ? 'JSON_INVALID' :
+    error?.message === 'Credential-shaped data must not be published' ? 'CREDENTIAL_PATTERN_REJECTED' : 'EVIDENCE_SANITIZE_FAILED';
+  return { file: diagnosticFiles.has(entry) ? entry : null, reason };
+}
+// Only actual Playwright report values, bounded by this lane's one-hour job.
+// Missing/invalid durations stay unknown; never infer them from another run.
+const reportedDurationMs = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 60 * 60_000 ? value : null;
+function reportedStartTime(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) && new Date(ms).toISOString() === value ? value : null;
+}
+export function caseResultEvidence(result, clean) {
+  return { status: result.status, error: clean(result.error?.message),
+    startTime: reportedStartTime(result.startTime), durationMs: reportedDurationMs(result.duration) };
+}
+export function caseCollectionSummary(mode, result, report, reportPresent) {
+  const codes = new Set(['ENOENT','EACCES','EPERM','ETIMEDOUT','ENOBUFS','E2BIG']);
+  const signals = new Set(['SIGTERM','SIGKILL','SIGABRT','SIGINT','SIGSEGV']);
+  return { mode: ['probe','full','trace'].includes(mode) ? mode : 'unclassified', exitCode: Number.isInteger(result?.status) ? result.status : null,
+    signal: signals.has(result?.signal) ? result.signal : result?.signal ? 'OTHER' : null,
+    spawnError: result?.error ? { name: ['Error','TypeError','RangeError'].includes(result.error.name) ? result.error.name : 'OTHER',
+      code: codes.has(result.error.code) ? result.error.code : 'OTHER' } : null,
+    reportPresent: reportPresent === true, durationMs: reportedDurationMs(report?.stats?.duration),
+    globalErrorCount: Array.isArray(report?.errors) ? report.errors.length : 0,
+    globalErrors: (Array.isArray(report?.errors) ? report.errors : []).slice(0, 3).map(error => ({
+      messageSha256: sha256(String(error?.message ?? '')), classification: ['Error','TypeError','SyntaxError','ReferenceError'].includes(error?.name) ? error.name : 'unclassified',
+      sourceFrame: String(error?.stack ?? '').match(/(?:^|[\s(/])(?:e2e\/)?(cinematic\/[a-z0-9_-]+(?:\.spec)?\.(?:ts|mjs):[0-9]+:[0-9]+)(?=[)\s]|$)/m)?.[1] ?? null,
+    })),
+  };
+}
+export function probeDiagnosticScalars(value) {
+  const phases = new Set(['dashboard-load','owner-login','open-banner-editor','legacy-authenticated-pre-read',
+    'ui-upload-original-publisher-response','published-resource-preview','legacy-authenticated-post-read','native-dashboard-image-byte-guard','complete']);
+  const readErrors = new Set(['no-data','no-resource','get-body-error','context-closed','aborted','unclassified']);
+  return { status: ['PASS','FAIL','NOT_RUN'].includes(value?.status) ? value.status : 'unclassified',
+    phase: phases.has(value?.phase) ? value.phase : 'unclassified',
+    uiPublicationCalls: [0,1].includes(value?.uiPublicationCalls) ? value.uiPublicationCalls : null,
+    contentSaveCalls: value?.contentSaveCalls === 0 ? 0 : null,
+    matcher: typeof value?.failure?.matcher === 'string' && /^to[A-Za-z]{1,40}$/.test(value.failure.matcher) ? value.failure.matcher : 'unclassified',
+    sourceLine: Number.isInteger(value?.failure?.sourceLine) && value.failure.sourceLine > 0 ? value.failure.sourceLine : null,
+    readErrorDetail: readErrors.has(value?.readErrorDetail) ? value.readErrorDetail : 'unclassified' };
+}
+
+export function budgetChildProcessStates(dashboard, storefront) {
+  const signals = new Set(['SIGTERM','SIGKILL','SIGABRT','SIGINT','SIGSEGV','SIGILL','SIGBUS','SIGHUP','SIGQUIT']);
+  return [['dashboard',dashboard],['storefront',storefront]].filter(([, child]) => child !== null && typeof child === 'object').map(([label, child]) => ({
+    label, exitCode: Number.isInteger(child.exitCode) ? child.exitCode : null,
+    signal: child.signalCode === null || child.signalCode === undefined ? null : signals.has(child.signalCode) ? child.signalCode : 'OTHER',
+    killed: child.killed === true,
+  }));
 }
 
 async function main(action) {
@@ -108,21 +247,43 @@ async function main(action) {
   if (action === 'sanitize') {
     // Only explicit receipts, PNG screenshots and the one bounded synthetic height video. Never raw server logs, traces,
     // browser storage state, request dumps or the fixture/status files.
-    for (const entry of readdirSync(publicDir, { recursive: true })) {
-      const path = resolve(publicDir, entry);
-      assert.ok(relative(publicDir, path) !== '..' && !relative(publicDir, path).startsWith(`..${sep}`));
-      if (statSync(path).isDirectory()) continue;
-      assert.ok(entry === HEIGHT_VIDEO_FILE || /^(?:[a-z0-9_-]+\.json|[a-z0-9_-]+\.png)$/i.test(entry), 'Unexpected evidence path');
-      if (entry.endsWith('.json')) {
-        const text = readFileSync(path, 'utf8');
-        JSON.parse(text);
-        assert.ok(!/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|"(?:access_token|refresh_token|password|service_role|anonKey|ANON_KEY)"\s*:/i.test(text),
-          'Credential-shaped data must not be published');
-      } else if (entry === HEIGHT_VIDEO_FILE) {
-        assertHeightVideoEvidence(entry, readFileSync(path));
-      } else {
-        assert.equal(readFileSync(path).subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+    let entry = 'source.json';
+    try {
+      const source = JSON.parse(readFileSync(resolve(publicDir, entry), 'utf8'));
+      const current = { checkout: checked('git', ['rev-parse','HEAD']), tree: checked('git', ['rev-parse','HEAD^{tree}']) };
+      if (!sourceMatches(source, current)) evidenceFailure('SOURCE_IDENTITY_MISMATCH');
+      for (entry of readdirSync(publicDir, { recursive: true })) {
+        const path = resolve(publicDir, entry);
+        assert.ok(relative(publicDir, path) !== '..' && !relative(publicDir, path).startsWith(`..${sep}`));
+        if (statSync(path).isDirectory()) continue;
+        assertPublicEvidenceFilename(entry);
+        if (entry.endsWith('.json')) {
+          let text = readFileSync(path, 'utf8');
+          if (entry === 'migration-atomicity.json') {
+            const raw = resolve(privateDir, 'migration-atomicity.raw.json');
+            if (existsSync(raw)) assert.equal(readFileSync(raw,'utf8'),text,'Raw migration receipt identity changed');
+            else writeFileSync(raw,text,{mode:0o600,flag:'wx'});
+            const projection = projectMigrationGrantReceipt(entry,text,source,current);
+            text = projection.text;
+            if (projection.manifest) {
+              assertPublicEvidenceJson(text);
+              const manifest = JSON.stringify(projection.manifest,null,2)+'\n';
+              assertPublicEvidenceJson(manifest);
+              writeFileSync(path,text);
+              writeFileSync(resolve(publicDir,'migration-atomicity-public-projection.json'),manifest);
+            }
+          }
+          assertPublicEvidenceJson(text);
+        } else if (entry === HEIGHT_VIDEO_FILE) {
+          assertHeightVideoEvidence(entry, readFileSync(path));
+        } else {
+          assert.equal(readFileSync(path).subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+        }
       }
+    } catch (error) {
+      const diagnostic = evidenceSanitizeDiagnostic(entry,error);
+      console.error('CINEMATIC_EVIDENCE_REJECTED '+JSON.stringify(diagnostic));
+      throw new Error(`Evidence sanitization failed: ${diagnostic.reason}`);
     }
     return;
   }
@@ -173,6 +334,7 @@ async function main(action) {
     const child = spawn(command, args, { cwd, env, stdio: ['ignore', fd, fd] });
     closeSync(fd); children.push(child); return child;
   };
+  const budgetTransport = observeLiveBudgetTransport();
   try {
     const dashboard = launch('python3', ['-m', 'http.server', '57026', '--bind', '127.0.0.1', '--directory', 'build/web'],
       resolve(root, 'apps/dashboard'), process.env, 'dashboard.log');
@@ -203,15 +365,25 @@ async function main(action) {
       const collect = suites => { for (const suite of suites || []) {
         for (const spec of suite.specs || []) for (const item of spec.tests || []) {
           cases.push({ title: clean(spec.title), status: item.status,
-            results: (item.results || []).map(r => ({ status: r.status, error: clean(r.error?.message) })) });
+            results: (item.results || []).map(r => caseResultEvidence(r, clean)) });
         }
         collect(suite.suites);
       } };
-      const reported = existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : {};
+      const reportPresent = existsSync(report);
+      const reported = reportPresent ? JSON.parse(readFileSync(report, 'utf8')) : {};
       collect(reported.suites);
       const errors = (reported.errors || []).map(error => clean(error.message));
+      const collection = { ...caseCollectionSummary(mode,result,reported,reportPresent), cases: cases.length };
+      console.log('CINEMATIC_CASE_COLLECTION '+JSON.stringify(collection));
+      if (mode === 'probe') {
+        const probeReceipt = resolve(publicDir,'publisher-response-probe.json');
+        if (existsSync(probeReceipt)) {
+          try { console.log('CINEMATIC_PROBE_DIAGNOSTIC '+JSON.stringify(probeDiagnosticScalars(JSON.parse(readFileSync(probeReceipt,'utf8'))))); }
+          catch { console.log('CINEMATIC_PROBE_DIAGNOSTIC '+JSON.stringify({ status:'RECEIPT_UNREADABLE' })); }
+        } else console.log('CINEMATIC_PROBE_DIAGNOSTIC '+JSON.stringify({ status:'RECEIPT_ABSENT' }));
+      }
       const outcome = {
-        status: result.status === 0 ? 'PASS' : 'FAIL', exitCode: result.status,
+        status: result.status === 0 ? 'PASS' : 'FAIL', exitCode: result.status, collection,
         actualServices: true, retries: 0, cases, errors,
       };
       writeFileSync(resolve(publicDir, mode === 'probe' ? 'publisher-response-probe-result.json' : mode === 'trace' ? 'warm-clear-trace-result.json' : 'browser-result.json'), JSON.stringify(outcome, null, 2));
@@ -219,7 +391,7 @@ async function main(action) {
       return outcome;
     };
     // The short warm-clear diagnosis is retained as a separate exact selection.
-    // Normal final acceptance runs the unchanged three complete journeys; its
+    // Normal final acceptance retains the three complete journeys plus welcome; its
     // independent banner case now captures the same clear read/render chain.
     const probe = runCases('probe');
     // Stop before the expensive height/readback comparisons if the one-POST
@@ -231,11 +403,26 @@ async function main(action) {
     if (full.status === 'NOT_RUN') writeFileSync(resolve(publicDir, 'browser-result.json'), JSON.stringify(full, null, 2));
     // Run only after the independent UI lifecycle has finished. A size failure
     // cannot prevent Edge acceptance from executing or erase its own receipt.
-    const liveBudget = await measureLiveBudget(root, privateDir, publicDir, fixture.ownerA.slug);
+    let liveBudget;
+    try { liveBudget = await measureLiveBudget(root, privateDir, publicDir, fixture.ownerA.slug, budgetTransport); }
+    catch (error) {
+      // Observe only these already launched children, before the existing
+      // finally sends SIGTERM. No health fetch, wait, retry or connection change.
+      try {
+        const childProcesses = budgetChildProcessStates(dashboard, storefront);
+        const receiptPath = resolve(publicDir, 'live-firstload-budget.json');
+        if (existsSync(receiptPath)) {
+          const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+          writeFileSync(receiptPath, JSON.stringify({ ...receipt, childProcesses }, null, 2));
+        } else writeFileSync(resolve(publicDir, 'live-budget-child-state.json'), JSON.stringify({ childProcesses }, null, 2));
+      } catch { /* Retain the same original measurement failure even if evidence I/O fails. */ }
+      throw error;
+    }
     assert.equal(probe.status, 'PASS', 'Single publisher response reproduction failed; no publication/test retry');
     assert.equal(full.status, 'PASS', 'Real Dashboard acceptance failed; no automatic retry');
     assert.equal(liveBudget.status, 'PASS', 'Actual live first-load budget failed; unchanged caps remain a release gate');
   } finally {
+    budgetTransport.stop();
     for (const child of children) child.kill('SIGTERM');
   }
 }

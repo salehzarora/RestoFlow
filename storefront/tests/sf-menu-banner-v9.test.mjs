@@ -55,9 +55,10 @@ test('adapter preserves every old field and carries independent defaults without
     { image: null, enabled: false, showIntro: true, focalX: 50, focalY: 50 });
 });
 
-test('v9 fallback after exact missing v11 and v10 shares the original request/deadline and rejects v9 drift', async () => {
+test('v9 fallback after exact missing v12, v11 and v10 shares the original request/deadline and rejects v9 drift', async () => {
   const original = globalThis.fetch; const calls = [];
   const responses = (...entries) => {
+    entries.unshift([404, missing(12)]);
     calls.length = 0;
     globalThis.fetch = async (url, init) => {
       calls.push({ url, init }); assert.ok(entries.length, 'no unplanned fallback');
@@ -67,18 +68,18 @@ test('v9 fallback after exact missing v11 and v10 shares the original request/de
   try {
     responses([200, menu(selection)]);
     assert.equal((await fetchStorefrontMenu('sf-synth-a', config)).content_v1.appearance.menu_banner_enabled, true);
-    assert.equal(calls.length, 1); assert.equal(calls[0].url, origin + '/rest/v1/rpc/storefront_menu_v11');
+    assert.equal(calls.length, 2); assert.deepEqual(calls.map(c => c.url), [12,11].map(v => origin + '/rest/v1/rpc/storefront_menu_v' + v));
     for (const error of [missing(9), { code: '42883', message: 'function public.storefront_menu_v9(text) does not exist' }]) {
       responses([404, missing(11)], [404, missing(10)], [404, error], [200, menu()]);
       assert.deepEqual(await fetchStorefrontMenu('sf-synth-a', config), decodeStorefrontMenuV8(menu()));
-      assert.deepEqual(calls.map(c => c.url), [11, 10, 9, 8].map(v => origin + '/rest/v1/rpc/storefront_menu_v' + v));
+      assert.deepEqual(calls.map(c => c.url), [12, 11, 10, 9, 8].map(v => origin + '/rest/v1/rpc/storefront_menu_v' + v));
       assert.ok(calls.every(c => c.init === calls[0].init)); assert.equal(calls[0].init, calls[1].init); assert.equal(calls[1].init, calls[2].init); assert.equal(calls[0].init.body, JSON.stringify({ p_slug: 'sf-synth-a' }));
     }
     for (const [status, body] of [[404, missing(8)], [404, '<html>not found</html>'], [403, missing(9)], [500, missing(9)], [404, { ...missing(9), code: '42501' }], [200, menu({ menu_banner_enabled: 'false' })]]) {
-      responses([status, body]); await assert.rejects(() => fetchStorefrontMenu('sf-synth-a', config)); assert.equal(calls.length, 1);
+      responses([status, body]); await assert.rejects(() => fetchStorefrontMenu('sf-synth-a', config)); assert.equal(calls.length, 2);
     }
     responses([404, missing(11)], [404, missing(10)], [404, missing(9)], [200, menu(selection)]);
     await assert.rejects(() => fetchStorefrontMenu('sf-synth-a', config), EnvelopeError, 'v8 cannot silently accept the v9 wire');
-    assert.equal(calls.length, 4);
+    assert.equal(calls.length, 5);
   } finally { globalThis.fetch = original; }
 });

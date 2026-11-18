@@ -9,6 +9,9 @@ import 'package:restoflow_dashboard/src/storefront/storefront_sources.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_scene_preset_dialog.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'package:restoflow_dashboard/src/storefront/storefront_welcome_video_library.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_welcome_video_models.dart';
+
 import 'helpers/storefront_content_groups.dart';
 
 const restaurant = '22222222-2222-4222-8222-222222222222';
@@ -74,6 +77,30 @@ class ContentRepo implements StorefrontContentRepository {
   }
 }
 
+class WelcomeContentRepo extends ContentRepo
+    implements StorefrontWelcomeVideoLibrary {
+  int videoReads = 0;
+  @override
+  Future<List<StorefrontWelcomeVideoMedia>?> listWelcomeVideos() async {
+    videoReads++;
+    final key = '${'a' * 32}/${'b' * 64}.mp4';
+    return [
+      StorefrontWelcomeVideoMedia.fromJson({
+        'id': request,
+        'object_key': key,
+        'content_hash': 'b' * 64,
+        'mime_type': 'video/mp4',
+        'width': 540,
+        'height': 864,
+        'duration_ms': 12042,
+        'bytes': 660459,
+        'published': true,
+        'url': '/storage/v1/object/public/storefront-welcome-videos/$key',
+      }),
+    ];
+  }
+}
+
 class ContentCatalog implements StorefrontContentCatalog {
   final branches = <String>[];
   @override
@@ -130,6 +157,7 @@ Future<void> mount(
   double textScale = 1,
   Uri Function(String)? publicUrlFor,
   bool openGroups = true,
+  Widget? welcomeImageEditor,
 }) async {
   await tester.binding.setSurfaceSize(Size(width, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -158,6 +186,7 @@ Future<void> mount(
                   profileVersion: repo.version,
                   savedBranchId: branch,
                   enabled: enabled,
+                  welcomeImageEditor: welcomeImageEditor,
                   publicUrlFor: publicUrlFor,
                   onRefresh: () async {
                     update(() {});
@@ -209,6 +238,152 @@ Future<void> edit(WidgetTester tester, String key, String text) async {
 }
 
 void main() {
+  testWidgets(
+    'welcome video selection stays draft until ordinary content CAS and reread',
+    (tester) async {
+      final repo = WelcomeContentRepo();
+      final appearance = <String, Object?>{
+        'text_color': '#fff1da',
+        'button_text_color': '#20140c',
+        'welcome_media_type': null,
+        'welcome_video_media_id': null,
+        'site_theme': 'light',
+        'menu_background_dim': 15,
+      };
+      repo.doc = StorefrontContentDocument.fromJson(
+        repo.doc.editableCopy()..['appearance'] = appearance,
+      );
+      await mount(tester, repo, openGroups: false);
+      final mode = find.byKey(const ValueKey('welcome-video-mode-legacy'));
+      tester.widget<DropdownButtonFormField<String>>(mode).onChanged!('video');
+      await tester.pumpAndSettle();
+      final selection = find.byKey(
+        const ValueKey('welcome-video-selection-none'),
+      );
+      tester.widget<DropdownButtonFormField<String>>(selection).onChanged!(
+        request,
+      );
+      await tester.pumpAndSettle();
+      expect(repo.calls, isEmpty);
+      final save = find.byKey(const Key('content-welcome-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(repo.calls, hasLength(1));
+      expect(repo.calls.single.expectedBranchId, branch);
+      expect(repo.calls.single.document.json['appearance'], {
+        ...appearance,
+        'welcome_media_type': 'video',
+        'welcome_video_media_id': request,
+      });
+      expect(repo.videoReads, greaterThanOrEqualTo(2));
+      expect(
+        find.byKey(const ValueKey('welcome-video-mode-video')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('welcome-video-selection-$request')),
+        findsOneWidget,
+      );
+    },
+  );
+  testWidgets('denied content read never loads the welcome video catalogue', (
+    tester,
+  ) async {
+    final repo = WelcomeContentRepo()
+      ..readStatus = StorefrontContentReadStatus.denied;
+    await mount(tester, repo, openGroups: false);
+    expect(repo.videoReads, 0);
+    expect(find.byKey(const Key('welcome-video-editor')), findsNothing);
+  });
+  testWidgets(
+    'welcome groups each text and image once and saves only explicit content',
+    (tester) async {
+      final repo = ContentRepo();
+      var imageActions = 0;
+      await mount(
+        tester,
+        repo,
+        openGroups: false,
+        welcomeImageEditor: TextButton(
+          key: const Key('welcome-image-action'),
+          onPressed: () => imageActions++,
+          child: const Text('Existing image action'),
+        ),
+      );
+      final welcome = find.byKey(const Key('content-group-welcome'));
+      expect(welcome, findsOneWidget);
+      expect(
+        find.descendant(
+          of: welcome,
+          matching: find.byKey(const Key('content-hero-headline')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: welcome,
+          matching: find.byKey(const Key('welcome-image-action')),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('content-hero-headline')), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('content-welcome-save')))
+            .onPressed,
+        isNull,
+      );
+      await edit(tester, 'content-hero-headline', 'A new welcome');
+      expect(repo.calls, isEmpty);
+      final save = find.byKey(const Key('content-welcome-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(repo.calls, hasLength(1));
+      expect(repo.calls.single.expectedBranchId, branch);
+      expect(repo.calls.single.expectedVersion, 3);
+      expect(repo.calls.single.document.json['hero_headline'], 'A new welcome');
+      expect(
+        imageActions,
+        0,
+        reason:
+            'Content save never invokes the independent profile media action',
+      );
+      expect(repo.doc.json['hero_headline'], 'A new welcome');
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'Arabic welcome controls fit a narrow dashboard and disabled edits never write',
+    (tester) async {
+      final repo = ContentRepo();
+      await mount(
+        tester,
+        repo,
+        locale: 'ar',
+        width: 360,
+        textScale: 1.5,
+        enabled: false,
+        openGroups: false,
+      );
+      expect(find.text('صفحة الترحيب · قبل المنيو'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('content-hero-headline')))
+            .enabled,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('content-welcome-save')))
+            .onPressed,
+        isNull,
+      );
+      expect(repo.calls, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'site theme keeps legacy unset until an explicit content save and retains other draft appearance',
     (tester) async {
@@ -345,8 +520,9 @@ void main() {
       expect(find.byKey(Key('content-group-$name')), findsOneWidget);
     }
     final headline = find.byKey(const Key('content-hero-headline'));
+    await setContentGroup(tester, 'welcome', expanded: false);
     expect(headline, findsNothing);
-    await setContentGroup(tester, 'editorial');
+    await setContentGroup(tester, 'welcome');
     await edit(tester, 'content-hero-headline', 'Changed draft');
     final focus = tester
         .widget<EditableText>(
@@ -354,7 +530,7 @@ void main() {
         )
         .focusNode;
     expect(focus.hasFocus, isTrue);
-    await setContentGroup(tester, 'editorial', expanded: false);
+    await setContentGroup(tester, 'welcome', expanded: false);
     expect(headline, findsNothing);
     expect(
       focus.hasFocus,
@@ -363,12 +539,12 @@ void main() {
     );
     expect(repo.calls, isEmpty);
     expect(publisher.calls, isEmpty);
-    await setContentGroup(tester, 'editorial');
+    await setContentGroup(tester, 'welcome');
     expect(
       tester.widget<TextField>(headline).controller!.text,
       'Changed draft',
     );
-    await setContentGroup(tester, 'editorial', expanded: false);
+    await setContentGroup(tester, 'welcome', expanded: false);
     repo.status = StorefrontContentWriteStatus.uncertain;
     final save = find.byKey(const Key('content-save'));
     await tester.ensureVisible(save);
@@ -377,8 +553,8 @@ void main() {
     expect(repo.calls, hasLength(1));
     final attempt = repo.calls.single;
     expect(attempt.document.json, {...saved, 'hero_headline': 'Changed draft'});
-    await setContentGroup(tester, 'editorial');
-    await setContentGroup(tester, 'editorial', expanded: false);
+    await setContentGroup(tester, 'welcome');
+    await setContentGroup(tester, 'welcome', expanded: false);
     expect(repo.calls, hasLength(1));
     final retry = find.byKey(const Key('content-retry-save'));
     expect(tester.widget<OutlinedButton>(retry).onPressed, isNotNull);

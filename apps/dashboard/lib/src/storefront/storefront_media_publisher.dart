@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:supabase/supabase.dart';
 
 import 'storefront_models.dart';
+import 'storefront_welcome_video_models.dart';
+import 'storefront_welcome_video_storage.dart';
 
 /// STOREFRONT-PUBLISH-001 — the client side of the `storefront-media-publish`
 /// Edge Function (CONTRACT §2).
@@ -67,7 +70,8 @@ abstract interface class StorefrontFunctionInvoker {
 /// authenticated anon-key [SupabaseClient] (D-011): the SDK attaches the
 /// signed-in user's access token. Built ONCE per app lifetime in
 /// `buildDashboardRealAuth`.
-class SupabaseStorefrontFunctionInvoker implements StorefrontFunctionInvoker {
+class SupabaseStorefrontFunctionInvoker
+    implements StorefrontFunctionInvoker, StorefrontWelcomeVideoStorage {
   SupabaseStorefrontFunctionInvoker(
     this._client, {
     Duration timeout = const Duration(seconds: 60),
@@ -88,6 +92,38 @@ class SupabaseStorefrontFunctionInvoker implements StorefrontFunctionInvoker {
   /// signing); private originals never get a public URL.
   Uri publicMediaUrl(String objectKey) =>
       Uri.parse(_client.storage.from(publicBucket).getPublicUrl(objectKey));
+
+  @override
+  Future<void> uploadWelcomeVideo({
+    required String objectKey,
+    required Uint8List bytes,
+  }) async {
+    if (!welcomeVideoSourceKeyPattern.hasMatch(objectKey) ||
+        bytes.isEmpty ||
+        bytes.length > welcomeVideoMaxBytes) {
+      throw const FormatException('invalid welcome video upload');
+    }
+    await _client.storage
+        .from(welcomeVideoPrivateBucket)
+        .uploadBinary(
+          objectKey,
+          bytes,
+          fileOptions: const FileOptions(
+            contentType: 'video/mp4',
+            upsert: false,
+          ),
+        );
+  }
+
+  @override
+  Uri publicWelcomeVideoUrl(String objectKey) {
+    if (!RegExp(r'^[0-9a-f]{32}/[0-9a-f]{64}\.mp4$').hasMatch(objectKey)) {
+      throw const FormatException('invalid published welcome video');
+    }
+    return Uri.parse(
+      _client.storage.from(welcomeVideoPublicBucket).getPublicUrl(objectKey),
+    );
+  }
 
   @override
   Future<StorefrontFunctionReply> invoke(Map<String, Object?> body) async {
@@ -291,6 +327,15 @@ class StorefrontMediaPublisher {
   final StorefrontFunctionInvoker _invoker;
   final String organizationId;
   final String restaurantId;
+
+  /// Narrow signed-in-user capabilities for the separate welcome-video flow.
+  /// No client, credentials, session extraction or image-publisher behavior is
+  /// exposed or changed by these adapters.
+  StorefrontFunctionInvoker get welcomeVideoInvoker => _invoker;
+  StorefrontWelcomeVideoStorage? get welcomeVideoStorage =>
+      _invoker is StorefrontWelcomeVideoStorage
+      ? _invoker as StorefrontWelcomeVideoStorage
+      : null;
 
   /// Pause before the single retry of an ambiguous answer.
   final Duration retryDelay;

@@ -765,6 +765,39 @@ void main() {
     expect(storefrontRefusalMessage(l10n, 'x_new'), contains('x_new'));
   });
 
+  test(
+    'source_unavailable has localized refusal copy without accepting unknown codes',
+    () async {
+      expect(
+        kStorefrontRefusalCodes.where((code) => code == 'source_unavailable'),
+        hasLength(1),
+      );
+      expect(
+        kStorefrontPublishFaultCodes,
+        isNot(contains('source_unavailable')),
+      );
+      final messages = <String, String>{};
+      for (final locale in ['en', 'ar', 'he']) {
+        final l10n = await AppLocalizations.delegate.load(Locale(locale));
+        final message = storefrontRefusalMessage(l10n, 'source_unavailable');
+        expect(message, isNotEmpty);
+        expect(
+          message,
+          isNot(contains('source_unavailable')),
+          reason: 'The exact registered code must not use the unknown fallback',
+        );
+        expect(
+          storefrontRefusalMessage(l10n, 'future_unavailable'),
+          contains('future_unavailable'),
+        );
+        messages[locale] = message;
+      }
+      expect(messages.values.toSet(), hasLength(3));
+      expect(RegExp(r'[\u0600-\u06ff]').hasMatch(messages['ar']!), isTrue);
+      expect(RegExp(r'[\u0590-\u05ff]').hasMatch(messages['he']!), isTrue);
+    },
+  );
+
   testWidgets('403 / 401 / 404 / 409 map to their honest messages', (
     tester,
   ) async {

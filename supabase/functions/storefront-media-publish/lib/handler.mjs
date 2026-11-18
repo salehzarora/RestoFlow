@@ -38,6 +38,7 @@ import { createCallerClient, isPublisherPrincipal, readCapped, UpstreamError } f
 import { derivedRequestId } from './ids.mjs';
 import { BACKGROUND_RECIPE } from './background-bilinear.mjs';
 import { backgroundObjectKey, checkBackgroundBase, matchesBackgroundRegistration, validBackgroundSource } from './background.mjs';
+import { publishWelcomeVideo } from './welcome-video.mjs';
 
 export const MAX_BODY_BYTES = 4096;
 const MAX_TOKEN_CHARS = 8192;
@@ -137,6 +138,11 @@ export function createHandler({ supabaseUrl, anonKey, engine, retireWorker, fetc
       // SEC-1: an anonymous (paired device / kiosk) session, or any role / audience other
       // than 'authenticated', is refused here, before any RPC or download
       if (!isPublisherPrincipal(user)) return fail(401, 'unauthenticated');
+
+      // A separately typed, explicitly requested video never enters the image engine.
+      if (body !== null && typeof body === 'object' && body.kind === 'welcome_video_v1') {
+        return publishWelcomeVideo(body, caller, { reply, fail, logError });
+      }
 
       // (3) validate every field before any object lookup
       const v = validateRequest(body);

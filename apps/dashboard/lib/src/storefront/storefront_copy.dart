@@ -4,6 +4,11 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 /// untouched. Keys are internal constants, never server-provided text.
 String storefrontContentCopy(AppLocalizations l10n, String key) {
   const copy = <String, List<String>>{
+    'mediaSourceUnavailable': [
+      'The source file is unavailable or could not be read completely. Choose an available source file.',
+      'الملف المصدر غير متاح أو تعذرت قراءته كاملًا. اختر ملفًا مصدرًا متاحًا.',
+      'קובץ המקור אינו זמין או שלא ניתן לקרוא אותו במלואו. יש לבחור קובץ מקור זמין.',
+    ],
     'menuBannerTitle': [
       'Menu top banner',
       'بانر المنيو العلوي',
@@ -236,6 +241,31 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
       'Save or discard edits in the other Storefront controls first.',
       'احفظ أو تجاهل تعديلات بقية إعدادات المتجر أولًا.',
       'יש לשמור או לבטל תחילה שינויים בשאר הגדרות החנות.',
+    ],
+    'welcomePageTitle': [
+      'Welcome page · before the menu',
+      'صفحة الترحيب · قبل المنيو',
+      'עמוד פתיחה · לפני התפריט',
+    ],
+    'welcomePageHelp': [
+      'Customize the text and full-page image or video background guests see before Explore the menu. The store identity, colors, font, button and status remain real page elements above the background.',
+      'خصّص النصوص وخلفية الصفحة الكاملة بصورة أو فيديو قبل «استكشاف المنيو». تبقى هوية المتجر وألوانه وخطه والزر وحالته عناصر فعلية فوق الخلفية.',
+      'ערכו את הטקסט ורקע העמוד המלא בתמונה או בסרטון לפני הכניסה לתפריט. זהות החנות, הצבעים, הגופן, הכפתור ומצב החנות נשארים רכיבי עמוד אמיתיים מעל הרקע.',
+    ],
+    'welcomeCopyHelp': [
+      'Welcome text — use Save content below. Publishing or choosing an image is a separate action.',
+      'نصوص الترحيب — استخدم «حفظ المحتوى» بالأسفل. نشر الصورة أو اختيارها إجراء مستقل.',
+      'טקסט פתיחה — שמרו באמצעות שמירת התוכן למטה. פרסום או בחירת תמונה הם פעולה נפרדת.',
+    ],
+    'welcomeSharedTextHelp': [
+      'These campaign texts also appear in the menu introduction when it is enabled. Selecting a featured product there does not replace the welcome image.',
+      'تظهر نصوص الحملة أيضًا في مقدمة المنيو عند إظهارها. اختيار منتج بارز هناك لا يستبدل صورة الترحيب.',
+      'טקסטי הקמפיין מופיעים גם בפתיח התפריט כאשר הוא מוצג. בחירת מוצר מוביל שם אינה מחליפה את תמונת הפתיחה.',
+    ],
+    'welcomeImageFallbackHelp': [
+      'The selected welcome image is the video fallback. It also remains the menu background fallback when no separate menu background is selected. Clearing the selection does not delete the image file.',
+      'صورة الترحيب المحددة هي البديل عند تعذر عرض الفيديو. وتبقى خلفيةً بديلة للمنيو إذا لم تختر له خلفية مستقلة. مسح الاختيار لا يحذف ملف الصورة.',
+      'תמונת הפתיחה שנבחרה היא החלופה לסרטון. היא גם נשארת הרקע החלופי לתפריט כשלא נבחר רקע נפרד. ניקוי הבחירה אינו מוחק את קובץ התמונה.',
     ],
     'headline': ['Hero headline', 'عنوان الواجهة الرئيسي', 'כותרת ראשית'],
     'subline': ['Hero subline', 'النص الفرعي للواجهة', 'כותרת משנה'],

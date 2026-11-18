@@ -259,6 +259,8 @@ StorefrontPublishedPage storefrontPublishedPageOf(List<String> blockers) {
 /// failure (decode, resize or encode) as `decode_failed`.
 const List<String> kStorefrontRefusalCodes = [
   'source_stale',
+  // Welcome-video preflight or a bounded download can refuse this source.
+  'source_unavailable',
   'unsupported_format',
   'empty',
   'input_too_large',

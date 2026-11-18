@@ -3,6 +3,7 @@ import { CompanionObserver, type CompanionUi } from './companion-observer';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import assert from 'node:assert/strict';
 import { LOCAL_API, LOGICAL_ORIGIN, localMediaTarget } from './live-transport.mjs';
 export const backgroundFixture = resolve(__dirname, 'fixtures/background-quality/background-2816.jpg');
 const source = { width: 2816, height: 2112, bytes: 1463022, sha256: '3e6b8197d0f1e17da8a86b5f0db95330394e11bc30c34b16ca0a076959346d54' };
@@ -23,6 +24,50 @@ type Fixture = {
     };
 };
 type Json = Record<string, any>;
+export type BackgroundHandoffBinding = Record<'prHead' | 'prBase' | 'testedCheckout' | 'testedTree' | 'runId' | 'runAttempt' | 'orgId' | 'restaurantId' | 'branchId' | 'slug', string>;
+const exactKeys = (value: Json, keys: string[]) => {
+    assert(value && typeof value === 'object' && !Array.isArray(value), 'Expected bounded handoff record');
+    assert.deepEqual(Object.keys(value).sort(), [...keys].sort(), 'Unexpected handoff fields');
+};
+export function validateBackgroundHandoff(value: Json, expected: BackgroundHandoffBinding, currentVersions?: { contentVersion: number; profileVersion: number }): Json {
+    exactKeys(expected, ['prHead','prBase','testedCheckout','testedTree','runId','runAttempt','orgId','restaurantId','branchId','slug']);
+    for (const key of ['prHead','prBase','testedCheckout','testedTree'] as const) assert(/^[a-f0-9]{40}$/.test(expected[key]), 'Invalid current source binding');
+    for (const key of ['runId','runAttempt'] as const) assert(/^[1-9][0-9]*$/.test(expected[key]), 'Invalid current run binding');
+    for (const key of ['orgId','restaurantId','branchId'] as const) assert(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(expected[key]), 'Invalid synthetic tenant binding');
+    assert(/^cinematic-[a-z0-9-]+$/.test(expected.slug), 'Only the isolated tenant can receive this handoff');
+    exactKeys(value, ['schema','status','binding','firstMediaId','firstPublicUrl','pair','contentVersion','profileVersion','contentSha256','profileSha256','byteGuard','quality']);
+    assert.equal(value.schema, 'background-quality-handoff-v1'); assert.equal(value.status, 'FIRST_CASE_NATIVE_BYTE_GUARD_PASS');
+    assert.deepEqual(value.binding, expected, 'Handoff must belong to this exact run, source, tenant and branch');
+    assert(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value.firstMediaId), 'Invalid selected media identity');
+    const prefix = (salt: string) => createHash('sha256').update(salt + expected.restaurantId).digest('hex').slice(0, 32);
+    const basePrefix = prefix('storefront-media:'), highPrefix = prefix('storefront-menu-background-v1:');
+    assert.notEqual(basePrefix, highPrefix, 'The existing SQL requires distinct base and companion namespaces');
+    const basePath = '/storage/v1/object/public/storefront-media/' + basePrefix + '/' + base.sha256 + '.webp';
+    const highPath = '/storage/v1/object/public/storefront-media/' + highPrefix + '/' + high.sha256 + '.webp';
+    assert.equal(value.firstPublicUrl, LOCAL_API + basePath, 'The selected public resource belongs to the current restaurant namespace');
+    exactKeys(value.pair, ['baseUrl','highUrl']);
+    assert.equal(value.pair.baseUrl, LOGICAL_ORIGIN + basePath);
+    assert.equal(value.pair.highUrl, LOGICAL_ORIGIN + highPath);
+    for (const key of ['contentSha256','profileSha256']) assert(/^[a-f0-9]{64}$/.test(value[key]), 'Invalid authoritative snapshot hash');
+    for (const key of ['contentVersion','profileVersion'] as const) {
+        assert(Number.isSafeInteger(value[key]) && value[key] >= 0, 'Invalid authoritative CAS version');
+        if (currentVersions) {
+            assert(Number.isSafeInteger(currentVersions[key]) && currentVersions[key] >= 0, 'Invalid current CAS version');
+            assert.equal(value[key], currentVersions[key], 'The fresh authoritative CAS version must still match the producer');
+        }
+    }
+    exactKeys(value.byteGuard, ['status','mappedMedia','verifiedMediaBytes']); assert.equal(value.byteGuard.status, 'PASS');
+    assert(Number.isInteger(value.byteGuard.mappedMedia) && value.byteGuard.mappedMedia > 0, 'No empty browser-byte proof');
+    assert.equal(value.byteGuard.mappedMedia, value.byteGuard.verifiedMediaBytes, 'Every first-case browser image must be verified');
+    const q = value.quality;
+    exactKeys(q, ['baseMediaId','companionPublished','explicitRetry','originalReads','publishedReads','publisherResult','views']);
+    assert.equal(q.baseMediaId, value.firstMediaId); assert.equal(q.companionPublished, true); assert.equal(typeof q.explicitRetry, 'boolean');
+    assert.deepEqual(q.originalReads, [{ bytes: source.bytes, sha256: source.sha256 }]);
+    assert.deepEqual(q.publishedReads, [base, high]);
+    assert.deepEqual(q.publisherResult, { recipe: 'storefront-background-b1', variant: 'bg2560', rung: 0, ...high });
+    assert.deepEqual(q.views, [], 'All eight scene views must run freshly in the continuation; none are imported');
+    return structuredClone(value);
+}
 export class BackgroundQuality {
     readonly views: Record<string, unknown>[] = [];
     private readonly publisher = new CompanionObserver();
@@ -32,6 +77,7 @@ export class BackgroundQuality {
     private readonly originalReads: {bytes:number; sha256:string}[] = [];
     private readonly publishedReads: {width:number; height:number; bytes:number; sha256:string}[] = [];
     private publisherResult?: {recipe:string; variant:string; rung:number; width:number; height:number; bytes:number; sha256:string};
+    private priorCaseProof?: Json;
     constructor(private readonly dir: string) {
         const uploaded = readFileSync(backgroundFixture);
         expect([uploaded.length, sha(uploaded)], 'The selected file is the documented full-resolution camera copy')
@@ -46,7 +92,24 @@ export class BackgroundQuality {
             companionPublished: this.confirmed, explicitRetry: this.retried, originalVerifiedReads: this.originalReads, publishedReads:this.publishedReads, publisherResult:this.publisherResult,
             // Only bounded fixed-resource facts enter this receipt.
             publicationObserver:this.publisher.evidence(this.baseMediaId), views: this.views,
+            priorCaseProof: this.priorCaseProof,
         }, null, 2));
+    }
+    handoff(binding: BackgroundHandoffBinding, firstPublicUrl: string, pair: PublicPair, contentVersion: number, profileVersion: number, contentSha256: string, profileSha256: string, byteGuard: Json): Json {
+        return validateBackgroundHandoff({ schema: 'background-quality-handoff-v1', status: 'FIRST_CASE_NATIVE_BYTE_GUARD_PASS', binding,
+            firstMediaId: this.baseMediaId, firstPublicUrl, pair, contentVersion, profileVersion, contentSha256, profileSha256, byteGuard,
+            quality: { baseMediaId: this.baseMediaId, companionPublished: this.confirmed, explicitRetry: this.retried,
+                originalReads: this.originalReads, publishedReads: this.publishedReads, publisherResult: this.publisherResult, views: this.views } }, binding);
+    }
+    resume(value: Json, binding: BackgroundHandoffBinding): Json {
+        const checked = validateBackgroundHandoff(value, binding), q = checked.quality;
+        expect([this.originalReads.length, this.publishedReads.length, this.views.length, this.confirmed]).toEqual([0,0,0,false]);
+        this.baseMediaId = q.baseMediaId; this.confirmed = q.companionPublished; this.retried = q.explicitRetry;
+        this.originalReads.push(...q.originalReads); this.publishedReads.push(...q.publishedReads); this.views.push(...q.views); this.publisherResult = q.publisherResult;
+        this.priorCaseProof = { binding: checked.binding, byteGuard: checked.byteGuard,
+            meaning: 'Scalar facts from the first case of this exact run/source, after its native byte guard; not body bytes or second-case browser reads' };
+        this.record('same-run-first-case-proof-imported');
+        return checked;
     }
     async verifyPublication(baseMediaId: string, readUi: () => Promise<CompanionUi>, retry: () => Promise<void>) {
         this.baseMediaId=baseMediaId;
