@@ -39,10 +39,15 @@ export function validateBackgroundHandoff(value: Json, expected: BackgroundHando
     assert.equal(value.schema, 'background-quality-handoff-v1'); assert.equal(value.status, 'FIRST_CASE_NATIVE_BYTE_GUARD_PASS');
     assert.deepEqual(value.binding, expected, 'Handoff must belong to this exact run, source, tenant and branch');
     assert(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value.firstMediaId), 'Invalid selected media identity');
-    assert(new RegExp('^http://127\\.0\\.0\\.1:54321/storage/v1/object/public/storefront-media/[a-f0-9]{32}/' + base.sha256 + '\\.webp$').test(value.firstPublicUrl), 'Invalid selected public resource');
+    const prefix = (salt: string) => createHash('sha256').update(salt + expected.restaurantId).digest('hex').slice(0, 32);
+    const basePrefix = prefix('storefront-media:'), highPrefix = prefix('storefront-menu-background-v1:');
+    assert.notEqual(basePrefix, highPrefix, 'The existing SQL requires distinct base and companion namespaces');
+    const basePath = '/storage/v1/object/public/storefront-media/' + basePrefix + '/' + base.sha256 + '.webp';
+    const highPath = '/storage/v1/object/public/storefront-media/' + highPrefix + '/' + high.sha256 + '.webp';
+    assert.equal(value.firstPublicUrl, LOCAL_API + basePath, 'The selected public resource belongs to the current restaurant namespace');
     exactKeys(value.pair, ['baseUrl','highUrl']);
-    assert.equal(value.pair.baseUrl, LOGICAL_ORIGIN + new URL(value.firstPublicUrl).pathname);
-    assert.equal(value.pair.highUrl, value.pair.baseUrl.replace(base.sha256, high.sha256));
+    assert.equal(value.pair.baseUrl, LOGICAL_ORIGIN + basePath);
+    assert.equal(value.pair.highUrl, LOGICAL_ORIGIN + highPath);
     for (const key of ['contentSha256','profileSha256']) assert(/^[a-f0-9]{64}$/.test(value[key]), 'Invalid authoritative snapshot hash');
     for (const key of ['contentVersion','profileVersion'] as const) {
         assert(Number.isSafeInteger(value[key]) && value[key] >= 0, 'Invalid authoritative CAS version');

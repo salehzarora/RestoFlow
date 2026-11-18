@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import ts from 'typescript';
 import { deriver } from '../../supabase/functions/storefront-media-publish/test/engine.mjs';
+import { backgroundObjectKey } from '../../supabase/functions/storefront-media-publish/lib/background.mjs';
 
 function qualityHandoffUnit() {
   const source = readFileSync(new URL('./background-quality.ts', import.meta.url), 'utf8');
@@ -70,15 +71,31 @@ test('UNIT_ONLY: the actual binding helper rejects wrong source, event checkout,
 function handoffFixture() {
   const base = { width: 960, height: 720, bytes: 111406, sha256: '211a00daf75bb8f868cec1c95aaa1e4c5e7d1d9aba8b46e6867d2753a8ff2ed3' };
   const high = { width: 2560, height: 1920, bytes: 459258, sha256: 'c0120cc575b08c4227d3c060ac78af28ee4ec7085ec4fd85f510778933fcd85f' };
-  const path = '/storage/v1/object/public/storefront-media/' + 'a'.repeat(32) + '/' + base.sha256 + '.webp';
+  const prefix = salt => createHash('sha256').update(salt + binding.restaurantId).digest('hex').slice(0, 32);
+  const path = '/storage/v1/object/public/storefront-media/' + prefix('storefront-media:') + '/' + base.sha256 + '.webp';
+  const highPath = '/storage/v1/object/public/storefront-media/' + prefix('storefront-menu-background-v1:') + '/' + high.sha256 + '.webp';
   return { schema: 'background-quality-handoff-v1', status: 'FIRST_CASE_NATIVE_BYTE_GUARD_PASS', binding: structuredClone(binding),
     firstMediaId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', firstPublicUrl: 'http://127.0.0.1:54321' + path,
-    pair: { baseUrl: 'https://oqmevrndtivqxgyvcmwy.supabase.co' + path, highUrl: 'https://oqmevrndtivqxgyvcmwy.supabase.co' + path.replace(base.sha256, high.sha256) },
+    pair: { baseUrl: 'https://oqmevrndtivqxgyvcmwy.supabase.co' + path, highUrl: 'https://oqmevrndtivqxgyvcmwy.supabase.co' + highPath },
     contentVersion: 7, profileVersion: 7, contentSha256: '5'.repeat(64), profileSha256: '6'.repeat(64), byteGuard: { status: 'PASS', mappedMedia: 2, verifiedMediaBytes: 2 },
     quality: { baseMediaId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', companionPublished: true, explicitRetry: false,
       originalReads: [{ bytes: 1463022, sha256: '3e6b8197d0f1e17da8a86b5f0db95330394e11bc30c34b16ca0a076959346d54' }],
       publishedReads: [base, high], publisherResult: { recipe: 'storefront-background-b1', variant: 'bg2560', rung: 0, ...high }, views: [] } };
 }
+
+test('UNIT_ONLY: the actual producer handoff retains the independently namespaced pair required by existing SQL and publisher', async () => {
+  const u = qualityHandoffUnit(), input = handoffFixture(), quality = new u.BackgroundQuality('unit-no-write');
+  assert.equal(new URL(input.pair.highUrl).pathname,
+    '/storage/v1/object/public/storefront-media/' + await backgroundObjectKey(binding.restaurantId, input.quality.publishedReads[1].sha256));
+  assert.notEqual(new URL(input.pair.baseUrl).pathname.split('/').at(-2), new URL(input.pair.highUrl).pathname.split('/').at(-2));
+  // UNIT_ONLY producer state, with the existing pinned publication/source scalars.
+  // Invoke the shipped producer method, rather than validating a hand-built result alone.
+  Object.assign(quality, { baseMediaId: input.firstMediaId, confirmed: input.quality.companionPublished, retried: input.quality.explicitRetry,
+    originalReads: input.quality.originalReads, publishedReads: input.quality.publishedReads, publisherResult: input.quality.publisherResult });
+  const result = quality.handoff(binding, input.firstPublicUrl, input.pair, input.contentVersion, input.profileVersion,
+    input.contentSha256, input.profileSha256, input.byteGuard);
+  assert.deepEqual(result, input); assert.notEqual(result.quality.originalReads, input.quality.originalReads);
+});
 test('UNIT_ONLY: the same-source/run/tenant scalar handoff imports publication facts without accepting any scene or continuation byte proof', () => {
   const u = qualityHandoffUnit(), input = handoffFixture(), checked = u.validateBackgroundHandoff(input, binding);
   assert.deepEqual(checked, input); assert.notEqual(checked, input);
@@ -110,6 +127,24 @@ test('UNIT_ONLY: absent, stale, cross-run/source/tenant/branch or unverified bac
   }
   for (const version of [undefined, null, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
     for (const key of ['contentVersion','profileVersion']) { const bad = handoffFixture(); bad[key] = version; assert.throws(() => validate(bad, binding)); }
+  }
+});
+test('UNIT_ONLY: a companion cannot reuse the base prefix or another/unknown restaurant namespace, origin or filename', () => {
+  const { validateBackgroundHandoff: validate } = qualityHandoffUnit();
+  const reference = handoffFixture(), lowHash = reference.quality.publishedReads[0].sha256, highHash = reference.quality.publishedReads[1].sha256;
+  const otherRestaurant = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const prefix = (salt, restaurant) => createHash('sha256').update(salt + restaurant).digest('hex').slice(0, 32);
+  const lowPrefix = prefix('storefront-media:', binding.restaurantId), highPrefix = prefix('storefront-menu-background-v1:', binding.restaurantId);
+  for (const mutate of [v => { v.pair.highUrl = v.pair.baseUrl.replace(lowHash, highHash); },
+    v => { v.pair.highUrl = v.pair.highUrl.replace(highPrefix, 'f'.repeat(32)); },
+    v => { v.pair.highUrl = v.pair.highUrl.replace(highPrefix, prefix('storefront-menu-background-v1:', otherRestaurant)); },
+    v => { v.firstPublicUrl = v.firstPublicUrl.replace(lowPrefix, 'f'.repeat(32)); v.pair.baseUrl = v.pair.baseUrl.replace(lowPrefix, 'f'.repeat(32)); },
+    v => { v.firstPublicUrl = v.firstPublicUrl.replace(lowPrefix, prefix('storefront-media:', otherRestaurant)); v.pair.baseUrl = v.pair.baseUrl.replace(lowPrefix, prefix('storefront-media:', otherRestaurant)); },
+    v => { v.pair.highUrl += '?version=1'; }, v => { v.pair.highUrl += '#fragment'; },
+    v => { v.pair.highUrl = v.pair.highUrl.replace('/public/', '/authenticated/'); },
+    v => { v.pair.highUrl = v.pair.highUrl.replace('https://oqmevrndtivqxgyvcmwy.supabase.co', 'https://external.test'); },
+    v => { v.pair.highUrl = v.pair.highUrl.replace(highHash, 'f'.repeat(64)); }]) {
+    const wrong = handoffFixture(); mutate(wrong); assert.throws(() => validate(wrong, binding));
   }
 });
 
