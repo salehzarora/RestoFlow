@@ -2112,7 +2112,10 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
       const chosen = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file));
       stage = index === 0 ? 'upload-save-first-banner' : 'replace-save-banner'; recordPhase(stage);
       await openEditor(page, true); await openFoldedGroup(page, 'banner');
-      const publication = await upload(page, file, diagnostics(), 200, 'banner', chosen);
+      // Current run44232709445 aborted this first original publisher response.
+      // Reuse the bounded client lifecycle observer on this exact operation;
+      // later publications keep the default passive path. No retry or substitute.
+      const publication = await upload(page, file, diagnostics(), 200, 'banner', chosen, index === 0);
       expect(publication.recipe).toBe('storefront-media-c4'); expect(publication.media.variant).toBe('w960');
       await saveContent(page); await openEditor(page, true); await openFoldedGroup(page, 'banner');
       const document = await read();
