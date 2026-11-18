@@ -3379,6 +3379,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       assignment: { status: isVideo ? 'NOT_APPLICABLE' : 'PENDING', responseSeen: false, bodyRead: false } };
     receipt.publisherObservations ??= {}; receipt.publisherObservations[kind] = evidence;
     let native: PublisherNativeObservation | null = null;
+    let stopChooserObservation: (() => Promise<void>) | null = null;
     const button = isVideo ? 'اختيار فيديو من الجهاز' : 'اختيار صورة من الجهاز';
     const privatePrefix = isVideo ? '/storage/v1/object/storefront-welcome-video-originals/' : '/storage/v1/object/restaurant-logos/';
     const uploaded = observeResponse(page.waitForResponse(r => new URL(r.url()).origin === API
@@ -3403,8 +3404,72 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     native = await observePublisherNative(page, { apiOrigin: API, deadlineAt: Date.now() + 120_000,
       ...(isVideo ? { expectedKind: 'welcome_video_v1' as const } : { expectedSlot: 'hero' as const }) });
     if (!isVideo) await tapRevealedButton(page, button);
+    if (isVideo) {
+      // The preceding real failure occurred before any video POST. Observe
+      // this original tap only: no callback/input interception or replay, and
+      // no labels, values, element IDs, credentials or surrounding DOM export.
+      evidence.chooser = { status: 'WAITING_FOR_ORIGINAL_EVENT' };
+      try { await actualButton(page, button).evaluate(target => {
+        const started = performance.now(), events: Obj[] = [];
+        let dropped = 0;
+        const state = () => ({ ms: Math.round(performance.now() - started),
+          hasFocus: document.hasFocus(), visible: document.visibilityState === 'visible',
+          userActivation: navigator.userActivation.isActive,
+          hasBeenActive: navigator.userActivation.hasBeenActive,
+          targetConnected: target.isConnected, disabled: target.isConnected ? target.getAttribute('aria-disabled') === 'true' : null,
+          progressbars: document.querySelectorAll('[role="progressbar"]').length });
+        const before = state();
+        const record = (event: Event) => {
+          if (events.length >= 16) { dropped++; return; }
+          const hit = event.target instanceof Element ? event.target : null;
+          const view = target.closest('flutter-view'), box = target.getBoundingClientRect();
+          const point = event instanceof MouseEvent ? { x: Math.round(event.clientX), y: Math.round(event.clientY) } : null;
+          const tags = ['FLT-SEMANTICS', 'FLT-SEMANTICS-CONTAINER', 'FLT-GLASS-PANE', 'FLT-SCENE-HOST', 'FLUTTER-VIEW', 'BODY', 'HTML', 'INPUT', 'BUTTON'];
+          events.push({ ...state(), event: event.type, trusted: event.isTrusted, point,
+            withinTargetRect: point !== null && point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom,
+            hitTag: hit && tags.includes(hit.tagName) ? hit.tagName : 'other',
+            sameFlutterView: view !== null && hit?.closest('flutter-view') === view,
+            relation: !hit ? 'none' : hit === target ? 'self' : target.contains(hit) ? 'descendant' : hit.contains(target) ? 'ancestor' : 'other' });
+        };
+        const types = ['pointerdown', 'pointerup', 'click'];
+        for (const type of types) document.addEventListener(type, record, { capture: true, passive: true });
+        (globalThis as typeof globalThis & { __cinematicWelcomeChooser?: (stop: boolean) => Obj }).__cinematicWelcomeChooser = stop => {
+          if (stop) for (const type of types) document.removeEventListener(type, record, true);
+          return { before, after: state(), events: [...events], dropped };
+        };
+      }); evidence.chooser.observationSetup = 'ATTACHED'; }
+      catch { evidence.chooser.observationSetup = 'UNAVAILABLE'; }
+      stopChooserObservation = async () => {
+        try {
+          evidence.chooser.observation = await page.evaluate(() => {
+            const scope = globalThis as typeof globalThis & { __cinematicWelcomeChooser?: (stop: boolean) => Obj };
+            const value = scope.__cinematicWelcomeChooser?.(true) ?? null;
+            delete scope.__cinematicWelcomeChooser; return value;
+          });
+        } catch { evidence.chooser.observation = { status: 'UNAVAILABLE' }; }
+      };
+    }
     const chosen = observeResponse(page.waitForEvent('filechooser'));
-    const chooser = await responseAfterAction(chosen, () => tapRevealedButton(page, isVideo ? button : 'اختيار الصورة', !isVideo));
+    const chooser = await responseAfterAction(chosen, async () => {
+      await tapRevealedButton(page, isVideo ? button : 'اختيار الصورة', !isVideo);
+      if (isVideo) {
+        evidence.chooser.tapReturnedMs = Date.now() - began;
+        // Sample the current locator, not a captured node that Flutter may
+        // replace. Absence/ambiguity is unknown, never an enabled-state claim.
+        try { evidence.chooser.afterTap = await actualButton(page, button).evaluateAll(matches => ({
+          matches: matches.length,
+          disabled: matches.length === 1 ? matches[0].getAttribute('aria-disabled') === 'true' : null,
+          progressbars: document.querySelectorAll('[role="progressbar"]').length,
+          hasFocus: document.hasFocus(), visible: document.visibilityState === 'visible',
+          userActivation: navigator.userActivation.isActive,
+        })); } catch { evidence.chooser.afterTap = { status: 'UNAVAILABLE' }; }
+      }
+    });
+    if (isVideo) {
+      evidence.chooser.status = 'ORIGINAL_EVENT_OBSERVED';
+      evidence.chooser.observedMs = Date.now() - began;
+      await stopChooserObservation!(); stopChooserObservation = null;
+    }
     await chooser.setFiles(isVideo ? videoPath : imagePath);
     const storage = await uploaded;
     if (!storage.ok) throw storage.error;
@@ -3470,8 +3535,16 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     } catch (error) {
       native?.firstError('probe-assertion'); evidence.status = 'FAIL';
       evidence.failure = bannerAssertionFailure(error);
+      if (isVideo && evidence.chooser?.status === 'WAITING_FOR_ORIGINAL_EVENT') {
+        evidence.chooser.status = 'ORIGINAL_EVENT_NOT_OBSERVED';
+        try {
+          await screenshot(page, resolve(out, 'welcome-dashboard-filechooser-failure-test-data.png'));
+          evidence.chooser.failureScreenshot = 'welcome-dashboard-filechooser-failure-test-data.png';
+        } catch { evidence.chooser.failureScreenshot = 'UNAVAILABLE'; }
+      }
       throw error; // Preserve the original failure; native bytes never replace it.
     } finally {
+      await stopChooserObservation?.();
       native?.cleanup('probe-finally');
       try { await native?.stop(); } catch { /* Observation cleanup cannot replace the original error. */ }
       evidence.native = native?.snapshot() ?? null; evidence.endedMs = Date.now() - began;
