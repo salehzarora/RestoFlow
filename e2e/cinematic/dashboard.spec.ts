@@ -812,10 +812,10 @@ async function captureMediaLibrary(page: Page, mediaId: string, path: string): P
   await settleScroll(page, await scrollScope(page, row), true);
   await screenshot(page, path);
 }
-async function saveContent(page: Page, record?: (phase: 'request' | 'response', response: Response, body?: Obj) => void): Promise<void> {
-  await revealButton(page, L.save);
+async function saveContent(page: Page, record?: (phase: 'request' | 'response', response: Response, body?: Obj) => void, buttonName: string = L.save): Promise<void> {
+  await revealButton(page, buttonName);
   const saved = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/set_restaurant_storefront_content_v1')));
-  const response = await responseAfterAction(saved, () => tapRevealedButton(page, L.save));
+  const response = await responseAfterAction(saved, () => tapRevealedButton(page, buttonName));
   record?.('request', response);
   expect(response.status(), 'Content writer HTTP result').toBe(200);
   const body = await response.json(); record?.('response', response, body);
@@ -3379,7 +3379,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       assignment: { status: isVideo ? 'NOT_APPLICABLE' : 'PENDING', responseSeen: false, bodyRead: false } };
     receipt.publisherObservations ??= {}; receipt.publisherObservations[kind] = evidence;
     let native: PublisherNativeObservation | null = null;
-    const button = isVideo ? 'رفع ونشرMP4' : 'رفع صورة ترحيب';
+    const button = isVideo ? 'اختيار فيديو من الجهاز' : 'اختيار صورة من الجهاز';
     const privatePrefix = isVideo ? '/storage/v1/object/storefront-welcome-video-originals/' : '/storage/v1/object/restaurant-logos/';
     const uploaded = observeResponse(page.waitForResponse(r => new URL(r.url()).origin === API
       && new URL(r.url()).pathname.startsWith(privatePrefix) && r.request().method() === 'POST'));
@@ -3404,7 +3404,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       ...(isVideo ? { expectedKind: 'welcome_video_v1' as const } : { expectedSlot: 'hero' as const }) });
     if (!isVideo) await tapRevealedButton(page, button);
     const chosen = observeResponse(page.waitForEvent('filechooser'));
-    const chooser = await responseAfterAction(chosen, () => tapRevealedButton(page, isVideo ? button : 'رفع ونشر وتطبيق', !isVideo));
+    const chooser = await responseAfterAction(chosen, () => tapRevealedButton(page, isVideo ? button : 'اختيار الصورة', !isVideo));
     await chooser.setFiles(isVideo ? videoPath : imagePath);
     const storage = await uploaded;
     if (!storage.ok) throw storage.error;
@@ -3438,7 +3438,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
         .toEqual(['welcome_video_v1', request.request_id, f.ownerA.orgId, f.ownerA.restaurantId]);
       expect([body.media.width,body.media.height,body.media.duration_ms,body.media.bytes,body.media.content_hash])
         .toEqual([540,864,12042,660459,videoHash]);
-      await textContains(page, 'نُشر الفيديو. اختره واحفظ المحتوى لاستخدامه.');
+      await textContains(page, 'نُشر الفيديو. اضغط «استخدام هذا الفيديو» ثم احفظ صفحة الترحيب.');
     } else {
       expect(body.media.source_key).toBe(request.source_key);
       expect(body.media.variant).toBe('w960');
@@ -3447,7 +3447,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
       const assignmentBody = await write.value.json(); evidence.assignment.bodyRead = true;
       evidence.assignment.ok = assignmentBody.ok === true;
       expect(assignmentBody.ok).toBe(true);
-      await textContains(page, 'طُبّقت صورة الترحيب. حفظ النصوص يبقى منفصلًا.');
+      await textContains(page, 'حُفظت صورة الترحيب. احفظ النصوص ونوع الخلفية من زر «حفظ صفحة الترحيب» بالأسفل.');
     }
     // The freshly uploaded original remains private and belongs to this owner.
     const key = request.source_key as string;
@@ -3498,12 +3498,12 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     stage('image-mode-text-draft-save-reload');
     const headline = 'ترحيب اختبار — صورة وفيديو';
     await fill(page, 'عنوان الواجهة الرئيسي', headline, { blur: true });
-    await choose(/السلوك السابق/, 'صورة');
+    await choose(/الخلفية الافتراضية/, 'صورة');
     const imageDraft = await read();
     expect(imageDraft.document.appearance.welcome_media_type).toBeNull();
     expect(imageDraft.document.hero_headline).toBe(before.document.hero_headline);
     expect(imageDraft.version).toBe(imageSelected.version);
-    await saveContent(page);
+    await saveContent(page, undefined, 'حفظ صفحة الترحيب');
     const imageReload = await reopen(true);
     expect([imageReload.document.hero_headline,imageReload.document.appearance.welcome_media_type]).toEqual([headline,'image']);
     expect((await profile()).profile.hero_media_id).toBe(image.id);
@@ -3528,19 +3528,25 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     await screenshot(intro, resolve(out, 'welcome-image-phone-test-data.png'));
     receipt.imageDisplay = {status:'PASS',background:true,publicUrl:await photo.getAttribute('src'),dimensions:await photo.evaluate(el=>({width:(el as HTMLImageElement).naturalWidth,height:(el as HTMLImageElement).naturalHeight}))}; done();
     stage('welcome-video-ui-upload-original-edge-response');
+    // Reproduce the owner's blocked path: changing the mode and text must not
+    // disable choosing a video or silently save either draft field.
+    const videoHeadline = headline + ' — فيديو';
+    await fill(page, 'عنوان الواجهة الرئيسي', videoHeadline, { blur: true });
+    await choose(/^صورة$|نوع الخلفية/, 'فيديو');
     const video = await publish('video');
     const notSelected = await read(); expect(notSelected.document.appearance.welcome_media_type).toBe('image');
     expect(notSelected.document.appearance.welcome_video_media_id).toBeNull();
     expect(notSelected.version).toBe(imageReload.version); done();
     stage('video-selection-draft-save-reload');
-    await choose(/^صورة$|نوع خلفية الترحيب/, 'فيديو');
-    await choose(/بدون فيديو — استخدام الصورة البديلة/, `540×864 · 12.0 s · ${video.id.slice(0,8)}`);
+    await revealButton(page, 'استخدام هذا الفيديو');
+    await tapRevealedButton(page, 'استخدام هذا الفيديو');
     const videoDraft = await read();
     expect(videoDraft.document.appearance.welcome_media_type).toBe('image');
     expect(videoDraft.document.appearance.welcome_video_media_id).toBeNull();
     expect(videoDraft.version).toBe(notSelected.version);
-    await saveContent(page);
+    await saveContent(page, undefined, 'حفظ صفحة الترحيب');
     const reloaded = await reopen(true);
+    expect(reloaded.document.hero_headline).toBe(videoHeadline);
     expect([reloaded.document.appearance.welcome_media_type,reloaded.document.appearance.welcome_video_media_id]).toEqual(['video',video.id]);
     expect(protectedDocument(reloaded.document)).toEqual(protectedDocument(before.document));
     expect((await profile()).profile.hero_media_id).toBe(image.id);
@@ -3588,8 +3594,8 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     receipt.videoDisplay={status:'PASS',publicUrl:await player.getAttribute('src'),width:540,height:864,
       fullPageBackground:true,muted:true,loop:true,actualAutoplay:true,userPlayPause:true,reducedMotionPaused:true};done();
     stage('missing-video-selection-retains-image-fallback');
-    await choose(/540×864/, 'بدون فيديو — استخدام الصورة البديلة');
-    await saveContent(page); const cleared=await reopen(true);
+    await choose(/540×864/, 'دون فيديو — إظهار الصورة');
+    await saveContent(page, undefined, 'حفظ صفحة الترحيب'); const cleared=await reopen(true);
     expect([cleared.document.appearance.welcome_media_type,cleared.document.appearance.welcome_video_media_id]).toEqual(['video',null]);
     expect((await profile()).profile.hero_media_id).toBe(image.id);
     const fallback=await context.newPage();await fallback.setViewportSize({width:390,height:900});

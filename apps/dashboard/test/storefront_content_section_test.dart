@@ -11,6 +11,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'package:restoflow_dashboard/src/storefront/storefront_welcome_video_library.dart';
 import 'package:restoflow_dashboard/src/storefront/storefront_welcome_video_models.dart';
+import 'package:restoflow_dashboard/src/storefront/storefront_welcome_video_editor.dart';
 
 import 'helpers/storefront_content_groups.dart';
 
@@ -224,7 +225,13 @@ Future<void> mount(
   await tester.pumpAndSettle();
   if (openGroups &&
       find.byKey(const Key('content-group-appearance')).evaluate().isNotEmpty) {
-    for (final group in ['appearance', 'background', 'editorial', 'media']) {
+    for (final group in [
+      'welcome-options',
+      'appearance',
+      'background',
+      'editorial',
+      'media',
+    ]) {
       await setContentGroup(tester, group);
     }
   }
@@ -254,9 +261,24 @@ void main() {
         repo.doc.editableCopy()..['appearance'] = appearance,
       );
       await mount(tester, repo, openGroups: false);
+      await edit(
+        tester,
+        'content-hero-headline',
+        'Welcome draft before choosing a video',
+      );
       final mode = find.byKey(const ValueKey('welcome-video-mode-legacy'));
       tester.widget<DropdownButtonFormField<String>>(mode).onChanged!('video');
       await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<StorefrontWelcomeVideoEditor>(
+              find.byType(StorefrontWelcomeVideoEditor),
+            )
+            .canPublish,
+        isTrue,
+        reason:
+            'Choosing video must not require saving unrelated text or mode first',
+      );
       final selection = find.byKey(
         const ValueKey('welcome-video-selection-none'),
       );
@@ -270,6 +292,10 @@ void main() {
       await tester.tap(save);
       await tester.pumpAndSettle();
       expect(repo.calls, hasLength(1));
+      expect(
+        repo.calls.single.document.json['hero_headline'],
+        'Welcome draft before choosing a video',
+      );
       expect(repo.calls.single.expectedBranchId, branch);
       expect(repo.calls.single.document.json['appearance'], {
         ...appearance,
@@ -328,6 +354,17 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const Key('content-hero-headline')), findsOneWidget);
+      expect(find.byKey(const Key('content-headline-selection')), findsNothing);
+      expect(
+        tester.getTopLeft(find.byKey(const Key('content-welcome-save'))).dy,
+        greaterThan(
+          tester
+              .getBottomLeft(find.byKey(const Key('welcome-image-action')))
+              .dy,
+        ),
+        reason:
+            'The visible welcome save follows both background controls, not only the text fields',
+      );
       expect(
         tester
             .widget<FilledButton>(find.byKey(const Key('content-welcome-save')))
@@ -367,7 +404,7 @@ void main() {
         enabled: false,
         openGroups: false,
       );
-      expect(find.text('صفحة الترحيب · قبل المنيو'), findsOneWidget);
+      expect(find.text('صفحة الترحيب'), findsOneWidget);
       expect(
         tester
             .widget<TextField>(find.byKey(const Key('content-hero-headline')))
