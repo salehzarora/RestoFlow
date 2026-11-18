@@ -323,5 +323,7 @@ test('only explicit probe opt-in evaluates the one existing CDP main context and
  assert.equal(page.session.commands.filter(c=>c.name==='Runtime.evaluate').length,2);assert.equal(observer.snapshot().clientLifecycle.stopped,true);
  const ordinary=await setup();assert.equal(ordinary.s.commands.some(c=>c.name==='Runtime.evaluate'||c.name==='Page.getFrameTree'),false);assert.equal('clientLifecycle'in ordinary.o.snapshot(),false);await ordinary.o.stop();
  const spec=readFileSync(new URL('./dashboard.spec.ts',import.meta.url),'utf8');assert.equal((spec.match(/upload\(page, 'publisher-native-probe\.png', diagnostics, 200, 'banner', bytes, true\)/g)??[]).length,1);
- assert.equal((spec.match(/upload\(page, file, diagnostics\(\), 200, 'banner', chosen, index === 0\)/g)??[]).length,1);
+ // Full acceptance must exercise the fixed browser without the temporary client decorators.
+ assert.equal((spec.match(/upload\(page, file, diagnostics\(\), 200, 'banner', chosen, index === 0\)/g)??[]).length,0);
+ assert.equal((spec.match(/clientLifecycleProbe = false/g)??[]).length,1);
 });

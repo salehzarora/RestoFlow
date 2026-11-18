@@ -1,6 +1,5 @@
 // Passive observation of this test page's existing publisher POST.
-// The short probe and targeted current-failure banner uploads explicitly opt into
-// bounded client-call observations using the same existing session. Never
+// The short probe alone may opt into bounded client-call observations. Never
 // replace Response.json, a native body, or an acceptance outcome.
 import { createHash } from 'node:crypto';
 import type { Page, Request, Response, CDPSession } from '@playwright/test';
@@ -387,7 +386,7 @@ export async function observePublisherNative(page: Page, options: PublisherObser
         finalise(r); });
     }
     await bound(session.send('Network.enable'));
-    await bound(session.send('Runtime.enable')); // Lifecycle by default; explicit opt-in evaluates its bounded observer, never sessions.
+    await bound(session.send('Runtime.enable')); // Lifecycle by default; only the opt-in short probe evaluates its bounded observer, never sessions.
     if (options.clientLifecycleProbe === true) {
       try {
         const tree = await bound(session.send('Page.getFrameTree'));

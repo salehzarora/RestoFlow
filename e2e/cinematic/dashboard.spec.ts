@@ -1951,9 +1951,7 @@ async function runResponsiveBannerSettingsCase(page: Page, menu: Page, f: Fixtur
     save: () => saveContent(page),
     upload: index => {
       const file = `responsive-banner-${index}.png`;
-      // Trace the actual responsive desktop operation that failed in44237959633,
-      // preserving its owner, page, preceding saves, original body and errors.
-      return upload(page, file, diagnostics(), 200, 'desktop-banner', readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file)), true);
+      return upload(page, file, diagnostics(), 200, 'desktop-banner', readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file)));
     },
     reveal: target => reveal(page, target, 'field'), tap: target => tapRevealedControl(page, target),
     freshMenu: async width => {
@@ -2114,10 +2112,7 @@ async function verifyBannerJourney(page: Page, menu: Page, f: Fixture, token: st
       const chosen = readFileSync(resolve(dirname(process.env.CINEMATIC_FIXTURE_FILE!), file));
       stage = index === 0 ? 'upload-save-first-banner' : 'replace-save-banner'; recordPhase(stage);
       await openEditor(page, true); await openFoldedGroup(page, 'banner');
-      // Current run44232709445 aborted this first original publisher response.
-      // Reuse the bounded client lifecycle observer on this exact operation;
-      // later publications keep the default passive path. No retry or substitute.
-      const publication = await upload(page, file, diagnostics(), 200, 'banner', chosen, index === 0);
+      const publication = await upload(page, file, diagnostics(), 200, 'banner', chosen);
       expect(publication.recipe).toBe('storefront-media-c4'); expect(publication.media.variant).toBe('w960');
       await saveContent(page); await openEditor(page, true); await openFoldedGroup(page, 'banner');
       const document = await read();
