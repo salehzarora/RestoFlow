@@ -57,9 +57,58 @@ test('startup failure evidence survives absence of fixture and publisher receipt
     const text = readFileSync(join(publicDir, 'stack-startup.json'), 'utf8');
     const evidence = JSON.parse(text);
     assert.equal(evidence.localStatusFilePresent, false);
+    assert.equal(evidence.logBytes, Buffer.byteLength('Starting database\nTLS handshake timeout private-secret'));
+    assert.equal(evidence.tailLimitBytes, 4 * 1024 * 1024);
+    assert.equal(evidence.tailTruncated, false);
     assert.equal(evidence.classifications.network_timeout, 1);
     assert.equal(text.includes('private-secret'), false);
     assert.equal(evidence.bounded, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('official CLI readiness and HTTP errors expose only fixed counts, never private suffixes', () => {
+  const secret = 'SYNTHETIC_PRIVATE_SUFFIX';
+  const lines = [
+    `supabase_storage_${secret} container is not ready: starting`,
+    `supabase_rest_${secret} container is not running: exited`,
+    `failed to inspect container health: ${secret}`,
+    `Error status 503: ${secret}`,
+    `failed to execute http request: https://private.invalid/${secret}`,
+  ];
+  const result = summarizeStartupLog(lines.join('\n'));
+  for (const key of ['container_not_ready', 'container_not_running', 'container_health_inspection_failed', 'http_unexpected_status', 'http_execute_failed', 'readiness_storage', 'readiness_rest'])
+    assert.equal(result.classifications[key], 1);
+  assert.equal(result.classifications.stack_started, 0);
+  assert.ok(Object.values(result.classifications).every(Number.isInteger));
+  assert.equal(JSON.stringify(result).includes(secret), false);
+  assert.equal(JSON.stringify(result).includes('private.invalid'), false);
+  const generic = summarizeStartupLog(`Error status 503: ${secret}\nsupabase_auth_${secret} container logs:`);
+  for (const key of ['readiness_db', 'readiness_auth', 'readiness_rest', 'readiness_kong', 'readiness_storage', 'readiness_edge_runtime'])
+    assert.equal(generic.classifications[key], 0, 'HTTP or a log-dump header cannot attribute a failed service');
+  const named = summarizeStartupLog(['db', 'auth', 'rest', 'kong', 'storage', 'edge_runtime'].map(service =>
+    `supabase_${service}_${secret} container is not ready: starting`).join('\n'));
+  for (const key of ['readiness_db', 'readiness_auth', 'readiness_rest', 'readiness_kong', 'readiness_storage', 'readiness_edge_runtime'])
+    assert.equal(named.classifications[key], 1);
+  assert.equal(JSON.stringify(named).includes(secret), false);
+  assert.equal(summarizeStartupLog('container is not ready: starting\n'.repeat(10001)).classifications.container_not_ready, 9999);
+});
+
+test('a truncated startup tail reports its bound without exporting the omitted private prefix', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cinematic-startup-tail-'));
+  const privateDir = join(dir, 'private'); const publicDir = join(dir, 'public');
+  try {
+    mkdirSync(privateDir); mkdirSync(publicDir);
+    const log = 'SYNTHETIC_OMITTED_PRIVATE_PREFIX\n' + 'x'.repeat(4 * 1024 * 1024) + '\ncontainer is not ready: starting';
+    writeFileSync(join(privateDir, 'start.log'), log);
+    capturePublisherRuntime(privateDir, publicDir);
+    const text = readFileSync(join(publicDir, 'stack-startup.json'), 'utf8'), evidence = JSON.parse(text);
+    assert.equal(evidence.logBytes, Buffer.byteLength(log));
+    assert.equal(evidence.tailTruncated, true);
+    assert.equal(evidence.classifications.container_not_ready, 1);
+    assert.equal(evidence.localStatusFilePresent, false);
+    assert.equal(evidence.classifications.stack_started, 0);
+    assert.equal(text.includes('SYNTHETIC_OMITTED_PRIVATE_PREFIX'), false);
+    assert.equal(text.includes('container is not ready'), false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
