@@ -113,17 +113,40 @@ export function dashboardCodecImageHash({ url, method, resourceType, headers, fr
     || localMediaTarget(logicalMediaUrl(url), method) !== url) throw new Error('dashboard_codec_media_evidence_denied');
   return new URL(url).pathname.split('/').at(-1).slice(0, -5);
 }
-export async function dashboardCodecImageResponse(request) {
+export async function dashboardCodecImageResponse(request, observe) {
+  const evidence = { boundary: 'request-headers', reason: null, errorClass: null, httpStatus: null, bodyBytes: null };
+  const result = reason => {
+    evidence.reason = reason;
+    return reason === 'verified';
+  };
   try {
+    const headers = await request.allHeaders();
+    evidence.boundary = 'request-admission';
     const hash = dashboardCodecImageHash({ url: request.url(), method: request.method(), resourceType: request.resourceType(),
-      headers: await request.allHeaders(), frameUrl: request.frame().url() });
-    if (request.redirectedFrom() !== null) return false;
+      headers, frameUrl: request.frame().url() });
+    if (request.redirectedFrom() !== null) return result('incoming-redirect');
+    evidence.boundary = 'response';
     const response = await request.response();
-    if (!response || response.request() !== request || response.url() !== request.url()
-      || response.status() !== 200 || response.headers()['content-type']?.trim().toLowerCase() !== 'image/webp') return false;
+    if (!response) return result('no-response');
+    if (response.request() !== request || response.url() !== request.url()) return result('response-identity');
+    evidence.httpStatus = response.status();
+    if (evidence.httpStatus !== 200) return result('http-status');
+    if (response.headers()['content-type']?.trim().toLowerCase() !== 'image/webp') return result('content-type');
+    evidence.boundary = 'original-body-read';
     const bytes = await response.body(); // One mandatory original browser-body read; no alternate source.
-    return request.failure() === null && request.redirectedTo() === null && dashboardImageBytesMatch(hash, response.status(), bytes);
-  } catch { return false; }
+    evidence.bodyBytes = bytes instanceof Uint8Array ? bytes.byteLength : null;
+    evidence.boundary = 'terminal-request';
+    if (request.failure() !== null) return result('request-failed');
+    if (request.redirectedTo() !== null) return result('outgoing-redirect');
+    evidence.boundary = 'content-address';
+    if (!dashboardImageBytesMatch(hash, evidence.httpStatus, bytes)) return result('body-bytes');
+    return result('verified');
+  } catch (error) {
+    evidence.errorClass = classifyMediaReadError(error);
+    return result('observation-error');
+  } finally {
+    observe?.(evidence);
+  }
 }
 export function dashboardMediaReady(requests, verified, checks) {
   return Number.isInteger(requests) && requests > 0 && verified === requests
