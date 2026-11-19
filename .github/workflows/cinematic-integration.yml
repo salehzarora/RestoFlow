@@ -76,7 +76,7 @@ jobs:
           npm ci --prefix storefront
           npm ci --ignore-scripts --prefix apps/dashboard/cutout
           cd e2e
-          npx --no-install playwright install --with-deps chromium
+          npx --no-install playwright install chromium
 
       - name: Integration harness checks (not real-service evidence)
         run: |
