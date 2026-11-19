@@ -32,13 +32,30 @@ class StorefrontBackgroundUpload {
   }) async {
     if (!supported || !isCurrent()) return null;
     final picked = await _picker();
-    // A membership switch while the browser dialog is open must not upload
-    // through an obsolete authenticated binding.
     if (picked == null || !isCurrent()) return null;
+    return uploadImage(picked, isCurrent: isCurrent);
+  }
+
+  Future<PickedMenuImage?> pickImage() async {
+    if (!supported) return null;
+    final picked = await _picker();
+    if (picked != null) _validate(picked);
+    return picked;
+  }
+
+  void _validate(PickedMenuImage picked) {
     if (!isAllowedRestaurantLogoMime(picked.mimeType) ||
         !isWithinRestaurantLogoSizeLimit(picked.bytes.length)) {
       throw const FormatException('invalid background image');
     }
+  }
+
+  Future<StorefrontMediaSource?> uploadImage(
+    PickedMenuImage picked, {
+    required bool Function() isCurrent,
+  }) async {
+    if (!supported || !isCurrent()) return null;
+    _validate(picked);
     final mime = picked.mimeType.trim().toLowerCase();
     final key = buildRestaurantLogoObjectKey(
       organizationId: organizationId,

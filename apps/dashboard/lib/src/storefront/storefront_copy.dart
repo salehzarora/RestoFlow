@@ -276,10 +276,10 @@ String storefrontContentCopy(AppLocalizations l10n, String key) {
     'welcomeSaved': ['Changes saved', 'حُفظت التعديلات', 'השינויים נשמרו'],
     'welcomeImageTitle': ['Background image', 'صورة الخلفية', 'תמונת רקע'],
     'welcomeMore': ['More options', 'خيارات إضافية', 'אפשרויות נוספות'],
-    'welcomeImageSaveFirst': [
-      'Save the changes below before changing the background image.',
-      'احفظ التعديلات أدناه أولًا لتغيير صورة الخلفية.',
-      'שמרו קודם את השינויים למטה כדי לשנות את תמונת הרקע.',
+    'welcomeCurrentImage': [
+      'Current background image',
+      'صورة الخلفية الحالية',
+      'תמונת הרקע הנוכחית',
     ],
     'welcomeUseImage': [
       'Use image as background',
