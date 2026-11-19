@@ -126,12 +126,14 @@ function codecImageUnit(overrides = {}) {
   let bodyReads = 0;
   const facts = { url, method: 'GET', resourceType: 'xhr', headers: { accept: '*/*' }, frameUrl: 'http://127.0.0.1:57026/#/settings', ...overrides };
   const request = { url: () => facts.url, method: () => facts.method, resourceType: () => facts.resourceType,
-    allHeaders: async () => facts.headers, frame: () => ({ url: () => facts.frameUrl }),
+    allHeaders: async () => facts.headers, frame: () => overrides.frame ?? { url: () => facts.frameUrl },
+    isNavigationRequest: () => false,
     redirectedFrom: () => overrides.redirectedFrom ?? null, redirectedTo: () => overrides.redirectedTo ?? null,
     failure: () => overrides.failure ?? null, response: async () => overrides.missingResponse ? null : response };
   const response = { request: () => overrides.foreignResponse ? {} : request, url: () => overrides.responseUrl ?? facts.url,
     status: () => overrides.status ?? 200, headers: () => ({ 'content-type': overrides.contentType ?? 'image/webp' }),
-    body: async () => { bodyReads++; if (overrides.bodyError) throw overrides.bodyError;
+    body: async () => { bodyReads++; if (overrides.bodyWait) await overrides.bodyWait;
+      if (overrides.bodyError) throw overrides.bodyError;
       assert.equal(bodyReads, 1, 'Only the original browser response is read, once');
       return Object.hasOwn(overrides, 'bytes') ? overrides.bytes : bytes; } };
   return { facts, request, hash, reads: () => bodyReads };
@@ -161,17 +163,29 @@ test('UNIT_ONLY: codec observation requires one complete original body and fails
     assert.equal(await dashboardCodecImageResponse(bad.request), false);
     assert(bad.reads() <= 1, 'No retry or substitute body read on a failure');
   }
+  const unavailable = codecImageUnit({ bodyError: new Error('Network.getResponseBody: No data found for resource private-value') });
+  let evidence;
+  assert.equal(await dashboardCodecImageResponse(unavailable.request, value => { evidence = value; }), false);
+  assert.deepEqual(evidence, { boundary: 'original-body-read', reason: 'observation-error',
+    errorClass: 'body-unavailable', httpStatus: 200, bodyBytes: null });
+  assert.equal(unavailable.reads(), 1);
 });
 test('UNIT_ONLY: actual passive guard keeps HTML counts visible and accepts codec bytes only with nonzero complete native evidence', async () => {
   const text = readFileSync(new URL('./dashboard.spec.ts', import.meta.url), 'utf8');
   const start = text.indexOf('async function guardBrowser('), end = text.indexOf('async function rpc(', start);
   assert(start >= 0 && end > start);
   const code = ts.transpileModule(text.slice(start, end), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const unitExpect = Object.assign(value => ({
+    toBe: expected => assert.equal(value, expected), toBeGreaterThan: expected => assert(value > expected),
+  }), { poll: read => ({ toBe: async expected => {
+    for (let attempt = 0; attempt < 4 && read() !== expected; attempt++) await new Promise(setImmediate);
+    assert.equal(read(), expected);
+  } }) });
   const makeGuard = runInNewContext(code + '\nguardBrowser', { Date, Map, Set, URL, createHash,
     API: LOCAL_API, DASHBOARD: 'http://127.0.0.1:57026', STOREFRONT: 'http://127.0.0.1:3000', LOGICAL_ORIGIN,
     origins: new Set([LOCAL_API, 'http://127.0.0.1:57026', 'http://127.0.0.1:3000']),
     dashboardImageHash, dashboardImageBytesMatch, dashboardCodecImageResponse, dashboardMediaReady,
-    expect: value => ({ toBe: expected => assert.equal(value, expected), toBeGreaterThan: expected => assert(value > expected) }) });
+    structuredClone, expect: unitExpect });
   for (const mode of ['none', 'valid', 'aborted', 'mixed']) {
     const context = new EventEmitter(); let routeRegistrations = 0;
     context.route = async () => { routeRegistrations++; };
@@ -187,6 +201,24 @@ test('UNIT_ONLY: actual passive guard keeps HTML counts visible and accepts code
     assert.equal(facts.verifiedCodecXhrBytes, ['valid', 'mixed'].includes(mode) ? 1 : 0);
     assert.equal(facts.failedCodecResponses, ['aborted', 'mixed'].includes(mode) ? 1 : 0);
   }
+  // A settling wait cannot turn an aborted native read into passing evidence.
+  const context = new EventEmitter(), page = new EventEmitter(), otherPage = {};
+  const frame = { page: () => page, url: () => 'http://127.0.0.1:57026/' };
+  page.mainFrame = () => frame;
+  context.pages = () => [page];
+  context.route = async () => {};
+  const guard = await makeGuard(context, Buffer.from('synthetic welcome fixture'));
+  const bodyGate = Promise.withResolvers();
+  const unit = codecImageUnit({ frame, bodyWait: bodyGate.promise, bodyError: new Error('net::ERR_ABORTED') });
+  context.emit('request', unit.request);
+  let settled = false;
+  const readyForReload = guard.waitForDashboardMedia(page).then(() => { settled = true; });
+  await guard.waitForDashboardMedia(otherPage);
+  assert.equal(settled, false, 'The actual Dashboard page remains pending');
+  bodyGate.resolve();
+  await readyForReload;
+  assert.equal(unit.reads(), 1);
+  await assert.rejects(guard.checkDashboardMedia(() => {}));
 });
 
 test('passive public media diagnostics expose fixed classes, never raw exception values', () => {
