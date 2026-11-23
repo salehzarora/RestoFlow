@@ -83,6 +83,7 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
   const directMediaChecks: Promise<boolean>[] = [];
   let directMedia = 0, verifiedDirectMediaBytes = 0;
   const codecXhrChecks: Promise<boolean>[] = [];
+  const pendingCodecPages = new Map<NativeRequest, Page>();
   let codecXhrMedia = 0, verifiedCodecXhrBytes = 0;
   // Bounded annotations of the existing welcome-media reads, never an
   // alternative body source or a replacement for the unchanged byte guards.
@@ -92,6 +93,7 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
   let evidencePhase = 'welcome-bootstrap', contextClosedMs: number | null = null;
   let requestSequence = 0, factOverflow = 0, firstGuardCheckMs: number | null = null;
   const mediaFacts = new Map<NativeRequest, Obj>();
+  const codecFacts = new Map<NativeRequest, Obj>();
   const pages = new Map<Page, Obj>(), frames = new Map<NativeFrame, Obj>();
   const failedFacts: NativeRequest[] = [];
   const navigationFacts: Obj[] = [];
@@ -163,10 +165,11 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
     context.pages().forEach(watchPage); context.on('page', watchPage);
     context.on('close', () => { contextClosedMs = now(); });
     context.on('requestfinished', request => {
-      const fact = mediaFacts.get(request); if (fact) { fact.terminal = 'finished'; fact.terminalMs = now(); fact.atTerminal = location(request); }
+      const fact = mediaFacts.get(request) ?? codecFacts.get(request);
+      if (fact) { fact.terminal = 'finished'; fact.terminalMs = now(); fact.atTerminal = location(request); }
     });
     context.on('requestfailed', request => {
-      const fact = mediaFacts.get(request); if (!fact) return;
+      const fact = mediaFacts.get(request) ?? codecFacts.get(request); if (!fact) return;
       fact.terminal = 'failed'; fact.terminalMs = now(); fact.atTerminal = location(request);
       const error = request.failure()?.errorText ?? '';
       fact.failureCode = /^net::ERR_[A-Z_]{1,64}$/.test(error) ? error : 'unclassified';
@@ -195,10 +198,19 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
       // Flutter Image.network's default codec owns this existing native XHR.
       // Observe its actual response without initiating, mapping or rewriting it.
       codecXhrMedia++;
-      codecXhrChecks.push(dashboardCodecImageResponse(request).then(equal => {
+      if (welcomeVideoSource) {
+        try { pendingCodecPages.set(request, request.frame().page()); } catch { /* The original guard still checks this request. */ }
+        if (codecFacts.size < 16) codecFacts.set(request, { id: codecXhrMedia, requestMs: now(),
+          phaseAtRequest: evidencePhase, atRequest: location(request), terminal: 'pending' });
+      }
+      codecXhrChecks.push(dashboardCodecImageResponse(request, observation => {
+        const fact = codecFacts.get(request);
+        if (fact) Object.assign(fact, observation, { observationMs: now(),
+          phaseAtObservation: evidencePhase, atObservation: location(request) });
+      }).then(equal => {
         if (equal) verifiedCodecXhrBytes++;
         return equal;
-      }));
+      }).finally(() => pendingCodecPages.delete(request)));
       return;
     }
     if (request.resourceType() !== 'image') return;
@@ -355,6 +367,13 @@ async function guardBrowser(context: BrowserContext, welcomeVideoSource?: Buffer
         'Native Dashboard public images have canonical credential-free requests and exact content-addressed Storage bytes').toBe(true);
       return nativeMedia;
     },
+    waitForDashboardMedia: async (target: Page) => {
+      // Reload can abort an enrolled Flutter XHR or discard its original body.
+      // Let this page's existing reads settle without accepting any failure.
+      await expect.poll(() => [...pendingCodecPages.values()].filter(page => page === target).length,
+        { message: 'Original Dashboard codec image reads settle before reload' }).toBe(0);
+    },
+    dashboardCodecSnapshot: () => [...codecFacts.values()].map(fact => structuredClone(fact)),
     fontsReady: async () => { await expect.poll(() => fonts.has('Roboto') && fonts.has('Noto Sans Arabic'), { message: 'Exact Flutter text fallback fonts load from loopback' }).toBe(true); },
     fonts: () => [...fonts].sort(),
   };
@@ -3325,7 +3344,10 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     const value = await response.json(); expect(value.ok).toBe(true); return value;
   };
   const reopen = async (reload: boolean) => {
-    if (reload) await page.reload({ waitUntil: 'domcontentloaded' });
+    if (reload) {
+      await network.waitForDashboardMedia(page);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+    }
     await semantics(page);
     const observed = observeResponse(page.waitForResponse(r => requestIs(r, '/rest/v1/rpc/get_restaurant_storefront_content_v7')
       && r.request().postDataJSON()?.p_restaurant_id === f.ownerA.restaurantId));
@@ -3826,6 +3848,7 @@ test('welcome image and MP4 → actual Edge → owner save/reload → public wel
     page.off('request', observeImageWrite);
     receipt.phase=phase; receipt.actualServices=true; receipt.retries=0;
     receipt.resourceByteDiagnostics = network.mediaSnapshot();
+    receipt.dashboardCodecDiagnostics = network.dashboardCodecSnapshot();
     if (observedVideoPage && !observedVideoPage.isClosed()) {
       videoMediaDiagnostics.drainBeforeMs = network.mediaNow();
       try {

@@ -8,7 +8,9 @@ export function responsiveBannerReady(expected: { height: number; focus: string;
 export function dashboardImageHash(request: { url: string; method: string; resourceType: string; headers: Record<string, string> }): string;
 export function dashboardImageBytesMatch(hash: string, status: number, bytes: Uint8Array): boolean;
 export function dashboardCodecImageHash(request: { url: string; method: string; resourceType: string; headers: Record<string, string>; frameUrl: string }): string;
-export function dashboardCodecImageResponse(request: unknown): Promise<boolean>;
+export function dashboardCodecImageResponse(request: unknown, observe?: (evidence: {
+  boundary: string; reason: string; errorClass: string | null; httpStatus: number | null; bodyBytes: number | null;
+}) => void): Promise<boolean>;
 export function dashboardMediaReady(requests: number, verified: number, checks: boolean[]): boolean;
 export function classifyMediaReadError(error: unknown): 'body-unavailable' | 'context-closed' | 'aborted' | 'unclassified';
 export function evidenceScalar(value: unknown, present?: boolean): Record<string, unknown>;
