@@ -149,6 +149,22 @@ const startupPatterns = Object.freeze({
   port_conflict: /port is already allocated|address already in use/i,
   container_unhealthy: /container.*(?:unhealthy|not healthy)|failed to start.*container/i,
   health_timeout: /health check.*(?:fail|timeout)|timed out.*health/i,
+  // CLI2.107.0 status/fetcher can return its last health error without a
+  // literal health-timeout message. These counters reveal no container ID,
+  // HTTP response body or private error suffix and do not accept startup.
+  container_not_ready: /container is not ready:/i,
+  container_not_running: /container is not running:/i,
+  container_health_inspection_failed: /failed to inspect container health:/i,
+  http_unexpected_status: /Error status \d{3}:/i,
+  http_execute_failed: /failed to execute http request:/i,
+  // Attribute a fixed service only when named in that same terminal message;
+  // a generic HTTP status or subsequent container-log header proves no service.
+  readiness_db: /\bsupabase_db_[^\s]+ container is not (?:ready|running):/i,
+  readiness_auth: /\bsupabase_auth_[^\s]+ container is not (?:ready|running):/i,
+  readiness_rest: /\bsupabase_rest_[^\s]+ container is not (?:ready|running):/i,
+  readiness_kong: /\bsupabase_kong_[^\s]+ container is not (?:ready|running):/i,
+  readiness_storage: /\bsupabase_storage_[^\s]+ container is not (?:ready|running):/i,
+  readiness_edge_runtime: /\bsupabase_edge_runtime_[^\s]+ container is not (?:ready|running):/i,
   sql_syntax: /SQLSTATE 42601/,
   sql_missing_relation: /SQLSTATE 42P01/,
   sql_missing_function: /SQLSTATE 42883/,
@@ -172,8 +188,11 @@ export function summarizeStartupLog(text) {
 export function capturePublisherRuntime(privateDir, publicDir) {
   const startupPath = resolve(privateDir, 'start.log');
   if (existsSync(startupPath)) {
+    const logBytes = statSync(startupPath).size;
     writeFileSync(resolve(publicDir, 'stack-startup.json'), `${JSON.stringify({
       source: 'private_start_log', bounded: true,
+      logBytes, tailLimitBytes: 4 * 1024 * 1024,
+      tailTruncated: logBytes > 4 * 1024 * 1024,
       localStatusFilePresent: existsSync(resolve(privateDir, 'status.json')),
       correlation: 'startup classifications only; counts do not establish cause or service acceptance',
       ...summarizeStartupLog(privateLogTail(startupPath)),

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
+    show PickedMenuImage;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'storefront_background_upload.dart';
@@ -20,6 +22,8 @@ class StorefrontWelcomeImageUpload extends StatefulWidget {
     required this.onRefresh,
     required this.bindingIdentity,
     this.onBusyChanged,
+    this.prepareSave,
+    this.contentDirty = false,
     this.enabled = true,
     this.nonce,
     super.key,
@@ -35,6 +39,8 @@ class StorefrontWelcomeImageUpload extends StatefulWidget {
   /// callbacks against their captured binding before changing parent state.
   final Object bindingIdentity;
   final ValueChanged<bool>? onBusyChanged;
+  final Future<bool> Function()? prepareSave;
+  final bool contentDirty;
   final bool enabled;
   final int Function()? nonce;
 
@@ -50,12 +56,14 @@ class _Binding {
       identity = widget.bindingIdentity,
       assign = widget.onAssign,
       refresh = widget.onRefresh,
+      prepareSave = widget.prepareSave,
       busy = widget.onBusyChanged;
   final StorefrontBackgroundUpload upload;
   final StorefrontMediaPublisher publisher;
   final Object identity;
   final StorefrontSlotAssigner assign;
   final StorefrontRefresher refresh;
+  final Future<bool> Function()? prepareSave;
   final ValueChanged<bool>? busy;
 
   bool matches(StorefrontWelcomeImageUpload widget) =>
@@ -68,6 +76,7 @@ class _Operation {
   _Operation(this.binding, this.generation);
   final _Binding binding;
   final int generation;
+  bool holdsLock = false;
   bool released = false;
 }
 
@@ -92,6 +101,7 @@ class _StorefrontWelcomeImageUploadState
   _Operation? _active;
   _Retry? _retry;
   DialogRoute<bool>? _dialog;
+  PickedMenuImage? _picked;
 
   bool get _scopeSafe =>
       isCanonicalUuid(widget.upload.organizationId) &&
@@ -126,7 +136,7 @@ class _StorefrontWelcomeImageUploadState
   }
 
   void _release(_Operation operation, {bool defer = false}) {
-    if (operation.released) return;
+    if (!operation.holdsLock || operation.released) return;
     operation.released = true;
     // Release only the callback that acquired this operation. The parent guards
     // this old callback by binding; a replacement binding never receives it.
@@ -145,6 +155,7 @@ class _StorefrontWelcomeImageUploadState
     _active = null;
     _busy = false;
     _retry = null;
+    _picked = null;
     _unknown = false;
     _closeDialogLater();
     if (active != null) _release(active, defer: defer);
@@ -156,7 +167,7 @@ class _StorefrontWelcomeImageUploadState
     super.dispose();
   }
 
-  _Operation _start(_Binding binding, String message) {
+  _Operation _start(_Binding binding, String message, {bool lock = true}) {
     final operation = _Operation(binding, ++_generation);
     setState(() {
       _active = operation;
@@ -164,8 +175,13 @@ class _StorefrontWelcomeImageUploadState
       _message = message;
       _retry = null;
     });
-    binding.busy?.call(true);
+    if (lock) _lock(operation);
     return operation;
+  }
+
+  void _lock(_Operation operation) {
+    operation.holdsLock = true;
+    operation.binding.busy?.call(true);
   }
 
   void _finish(
@@ -203,8 +219,25 @@ class _StorefrontWelcomeImageUploadState
         !_scopeSafe ||
         !widget.upload.supported)
       return;
-    final operation = _start(_Binding(widget), 'confirming');
+    final operation = _start(_Binding(widget), 'choosing');
+    try {
+      final picked = await operation.binding.upload.pickImage();
+      if (_current(operation) && picked != null) _picked = picked;
+      _finish(operation, null);
+    } catch (_) {
+      _finish(operation, 'chooseFailed');
+    }
+  }
+
+  Future<void> _saveImage() async {
+    final picked = _picked;
+    if (picked == null || _busy || _unknown || !widget.enabled || !_scopeSafe)
+      return;
+    // Content/profile share a CAS version. Reserve the media lock only after
+    // the explicit content save has completed and been read back.
+    final operation = _start(_Binding(widget), 'confirming', lock: false);
     final l10n = AppLocalizations.of(context);
+    final saveDraft = widget.contentDirty;
     var answered = false;
     void answer(BuildContext dialogContext, bool choice) {
       if (answered || !_current(operation)) return;
@@ -217,7 +250,9 @@ class _StorefrontWelcomeImageUploadState
       builder: (dialogContext) => AlertDialog(
         key: const Key('welcome-image-upload-confirm'),
         title: Text(_copy(l10n, 'confirmTitle')),
-        content: Text(_copy(l10n, 'confirmBody')),
+        content: Text(
+          _copy(l10n, saveDraft ? 'confirmDraftBody' : 'confirmBody'),
+        ),
         actions: [
           TextButton(
             key: const Key('welcome-image-upload-confirm-cancel'),
@@ -243,10 +278,22 @@ class _StorefrontWelcomeImageUploadState
       _finish(operation, null);
       return;
     }
+    try {
+      final ready = await operation.binding.prepareSave?.call() ?? !saveDraft;
+      if (!_current(operation) || !ready) {
+        _finish(operation, 'saveBlocked');
+        return;
+      }
+    } catch (_) {
+      _finish(operation, 'saveBlocked');
+      return;
+    }
+    _lock(operation);
     setState(() => _message = 'uploading');
     StorefrontMediaSource? source;
     try {
-      source = await operation.binding.upload.pickAndUpload(
+      source = await operation.binding.upload.uploadImage(
+        picked,
         isCurrent: () => _current(operation),
       );
     } catch (_) {
@@ -419,6 +466,7 @@ class _StorefrontWelcomeImageUploadState
       );
       return;
     }
+    if (result.status == StorefrontWriteStatus.ok) _picked = null;
     _finish(operation, switch (result.status) {
       StorefrontWriteStatus.ok => 'applied',
       StorefrontWriteStatus.conflict => 'conflict',
@@ -458,6 +506,18 @@ class _StorefrontWelcomeImageUploadState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(_copy(l10n, 'help'), style: Theme.of(context).textTheme.bodySmall),
+        if (_picked case final picked?) ...[
+          const SizedBox(height: 8),
+          Image.memory(
+            picked.bytes,
+            key: const Key('welcome-image-draft-preview'),
+            semanticLabel: _copy(l10n, 'preview'),
+            width: 360,
+            height: 160,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => Text(_copy(l10n, 'previewFailed')),
+          ),
+        ],
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -476,6 +536,20 @@ class _StorefrontWelcomeImageUploadState
               icon: const Icon(Icons.upload_outlined),
               label: Text(_copy(l10n, 'upload')),
             ),
+            if (_picked != null)
+              FilledButton.icon(
+                key: const Key('welcome-image-upload-save'),
+                onPressed: widget.enabled && _scopeSafe && !_busy && !_unknown
+                    ? _saveImage
+                    : null,
+                icon: const Icon(Icons.save_outlined),
+                label: Text(
+                  _copy(
+                    l10n,
+                    widget.contentDirty ? 'saveTogether' : 'saveImage',
+                  ),
+                ),
+              ),
             if (_retry != null)
               OutlinedButton(
                 key: const Key('welcome-image-upload-retry'),
@@ -510,27 +584,59 @@ class _StorefrontWelcomeImageUploadState
 String _copy(AppLocalizations l10n, String key) {
   const values = <String, List<String>>{
     'help': [
-      'Upload an independent welcome image. Publishing and applying it is immediate; welcome text still uses Save content.',
-      'ارفع صورة مستقلة للترحيب. نشر الصورة وتطبيقها فوري؛ نصوص الترحيب تبقى ضمن «حفظ المحتوى».',
-      'העלו תמונת פתיחה עצמאית. הפרסום וההחלה מיידיים; טקסט הפתיחה נשמר בשמירת תוכן.',
+      'Choose an image to preview it before saving.',
+      'اختر صورة لمعاينتها قبل الحفظ.',
+      'בחרו תמונה לתצוגה מקדימה לפני השמירה.',
     ],
-    'upload': ['Upload welcome image', 'رفع صورة ترحيب', 'העלאת תמונת פתיחה'],
+    'upload': [
+      'Choose image from device',
+      'اختيار صورة من الجهاز',
+      'בחירת תמונה מהמכשיר',
+    ],
     'confirmTitle': [
-      'Publish and apply a welcome image?',
-      'نشر وتطبيق صورة الترحيب؟',
-      'לפרסם ולהחיל תמונת פתיחה?',
+      'Save the welcome image?',
+      'حفظ صورة الترحيب؟',
+      'לשמור את תמונת הפתיחה?',
     ],
     'confirmBody': [
-      'The selected file becomes a private original, then a public WebP copy is published and applied as the welcome image immediately. Receipt branding is unchanged. Welcome text is saved separately with Save content.',
-      'سيُرفع الملف كأصل خاص، ثم تُنشر نسخة WebP وتُطبَّق كصورة الترحيب فورًا. لا يتغير شعار الإيصال. نصوص الترحيب تُحفظ منفصلة بزر «حفظ المحتوى».',
-      'הקובץ יועלה כמקור פרטי, ואז עותק WebP ציבורי יפורסם ויוחל מיידית כתמונת הפתיחה. מיתוג הקבלה נשאר כפי שהוא. הטקסט נשמר בנפרד בשמירת תוכן.',
+      'A copy of this image will be saved and available to visitors.',
+      'ستُحفظ نسخة من الصورة وتكون متاحة للزوّار.',
+      'עותק של התמונה יישמר ויהיה זמין למבקרים.',
     ],
-    'confirmAction': [
-      'Upload, publish and apply',
-      'رفع ونشر وتطبيق',
-      'העלאה, פרסום והחלה',
+    'confirmDraftBody': [
+      'Your content changes will be saved first. Then a public copy of the image will be prepared and saved.',
+      'ستُحفظ تعديلات المحتوى أولاً، ثم تُجهّز نسخة من الصورة وتُحفظ لتظهر للزوّار.',
+      'שינויי התוכן יישמרו תחילה. לאחר מכן יוכן ויישמר עותק ציבורי של התמונה.',
     ],
-    'cancel': ['Cancel continuation', 'إلغاء المتابعة', 'ביטול ההמשך'],
+    'confirmAction': ['Confirm save', 'تأكيد الحفظ', 'אישור שמירה'],
+    'saveImage': ['Save image', 'حفظ الصورة', 'שמירת התמונה'],
+    'saveTogether': [
+      'Save image and changes',
+      'حفظ الصورة والتعديلات',
+      'שמירת התמונה והשינויים',
+    ],
+    'preview': [
+      'Image preview',
+      'معاينة الصورة قبل الحفظ',
+      'תצוגה מקדימה של התמונה',
+    ],
+    'previewFailed': [
+      'Could not preview this image.',
+      'تعذّرت معاينة هذه الصورة.',
+      'לא ניתן להציג תצוגה מקדימה של התמונה.',
+    ],
+    'saveBlocked': [
+      'The image has not been uploaded. Check the content save status and try again.',
+      'لم تُرفع الصورة. تحقّق من حالة حفظ التعديلات ثم أعد المحاولة.',
+      'התמונה לא הועלתה. בדקו את מצב שמירת התוכן ונסו שוב.',
+    ],
+    'choosing': ['Choosing image…', 'جارٍ اختيار الصورة…', 'בוחר תמונה…'],
+    'chooseFailed': [
+      'This image could not be opened. Choose a supported image.',
+      'تعذّر فتح الصورة. اختر صورة مدعومة.',
+      'לא ניתן לפתוח את התמונה. בחרו תמונה נתמכת.',
+    ],
+    'cancel': ['Cancel', 'إلغاء', 'ביטול'],
     'retry': [
       'Try the same operation again',
       'إعادة المحاولة نفسها',
@@ -541,25 +647,13 @@ String _copy(AppLocalizations l10n, String key) {
       'أكّد قبل الرفع.',
       'יש לאשר לפני ההעלאה.',
     ],
-    'uploading': [
-      'Uploading the private original…',
-      'جارٍ رفع الأصل الخاص…',
-      'מעלה את המקור הפרטי…',
-    ],
-    'publishing': [
-      'Publishing the welcome copy…',
-      'جارٍ نشر نسخة الترحيب…',
-      'מפרסם את עותק הפתיחה…',
-    ],
-    'assigning': [
-      'Applying the published image…',
-      'جارٍ تطبيق الصورة المنشورة…',
-      'מחיל את התמונה שפורסמה…',
-    ],
+    'uploading': ['Uploading image…', 'جارٍ رفع الصورة…', 'מעלה תמונה…'],
+    'publishing': ['Preparing image…', 'جارٍ تجهيز الصورة…', 'מכין תמונה…'],
+    'assigning': ['Saving image…', 'جارٍ حفظ الصورة…', 'שומר תמונה…'],
     'applied': [
-      'Welcome image applied. Welcome text is still saved separately.',
-      'طُبّقت صورة الترحيب. حفظ النصوص يبقى منفصلًا.',
-      'תמונת הפתיחה הוחלה. שמירת הטקסט נשארת נפרדת.',
+      'Welcome image saved.',
+      'حُفظت صورة الترحيب.',
+      'תמונת הפתיחה נשמרה.',
     ],
     'uploadFailed': [
       'The upload could not be confirmed. No published image was confirmed.',

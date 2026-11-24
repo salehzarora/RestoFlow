@@ -1,5 +1,6 @@
 // Local adapter/widget proof only. Real Storage/Edge/CAS persistence is NOT_RUN.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -20,12 +21,14 @@ const rest = '22222222-2222-4222-8222-222222222222';
 const image = '33333333-3333-4333-8333-333333333333';
 const media = '44444444-4444-4444-8444-444444444444';
 const assignment = '55555555-5555-4555-8555-555555555555';
-const source = '$org/$rest/logo/$image.jpg';
+const source = '$org/$rest/logo/$image.png';
 
 PickedMenuImage picked() => PickedMenuImage(
-  bytes: Uint8List.fromList([1, 2, 3]),
-  mimeType: 'image/jpeg',
-  fileName: 'private-name.jpg',
+  bytes: base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  ),
+  mimeType: 'image/png',
+  fileName: 'private-name.png',
 );
 
 class _Storage implements RestaurantLogoStorage {
@@ -95,12 +98,19 @@ class _Invoker implements StorefrontFunctionInvoker {
 }
 
 class _Rig {
-  _Rig({this.disableOnOwnBusy = false, this.locale = 'en'}) {
+  _Rig({
+    this.disableOnOwnBusy = false,
+    this.locale = 'en',
+    this.prepareSave,
+    this.contentDirty = false,
+  }) {
     upload = newUpload();
     publisher = newPublisher(invoker);
   }
   final String locale;
   final bool disableOnOwnBusy;
+  final Future<bool> Function()? prepareSave;
+  final bool contentDirty;
   final storage = _Storage(), invoker = _Invoker();
   late StorefrontBackgroundUpload upload;
   late StorefrontMediaPublisher publisher;
@@ -169,6 +179,8 @@ class _Rig {
                         publisher: capturedPublisher,
                         bindingIdentity: identity,
                         enabled: enabled && !(disableOnOwnBusy && parentBusy),
+                        prepareSave: prepareSave,
+                        contentDirty: contentDirty,
                         nonce: () => 17,
                         onAssign:
                             (slot, id, {required reReadFirst, replay}) async {
@@ -209,8 +221,16 @@ class _Rig {
   }
 }
 
-Future<void> begin(WidgetTester tester, {bool confirm = true}) async {
+Future<void> chooseImage(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('welcome-image-upload-pick')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> begin(WidgetTester tester, {bool confirm = true}) async {
+  await chooseImage(tester);
+  final save = find.byKey(const Key('welcome-image-upload-save'));
+  await tester.ensureVisible(save);
+  await tester.tap(save);
   await tester.pumpAndSettle();
   if (confirm) {
     await tester.tap(
@@ -222,12 +242,19 @@ Future<void> begin(WidgetTester tester, {bool confirm = true}) async {
 
 void main() {
   testWidgets(
-    'confirmation precedes picking; cancel makes no upload/publish/profile operation',
+    'local preview precedes saving; cancel retains it without writing',
     (tester) async {
       final rig = _Rig();
       await rig.pump(tester);
       await begin(tester, confirm: false);
-      expect(rig.picks, 0);
+      expect(rig.picks, 1);
+      expect(
+        find.byKey(const Key('welcome-image-draft-preview')),
+        findsOneWidget,
+      );
+      expect(rig.storage.uploads, isEmpty);
+      expect(rig.invoker.calls, isEmpty);
+      expect(rig.assignCalls, isEmpty);
       await tester.tap(
         find.byKey(const Key('welcome-image-upload-confirm-cancel')),
       );
@@ -235,8 +262,53 @@ void main() {
       expect(rig.storage.uploads, isEmpty);
       expect(rig.invoker.calls, isEmpty);
       expect(rig.assignCalls, isEmpty);
+      expect(
+        find.byKey(const Key('welcome-image-draft-preview')),
+        findsOneWidget,
+      );
       expect(rig.busyCalls.map((e) => e.value), [true, false]);
       expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'dirty content allows staging but an unconfirmed content save blocks image writes',
+    (tester) async {
+      var contentSaveCalls = 0;
+      final rig = _Rig(
+        contentDirty: true,
+        prepareSave: () async {
+          contentSaveCalls++;
+          return false;
+        },
+      );
+      await rig.pump(tester);
+      await begin(tester, confirm: false);
+      expect(rig.picks, 1);
+      expect(
+        find.byKey(const Key('welcome-image-draft-preview')),
+        findsOneWidget,
+      );
+      expect(contentSaveCalls, 0);
+      expect(rig.storage.uploads, isEmpty);
+      expect(rig.invoker.calls, isEmpty);
+      expect(rig.assignCalls, isEmpty);
+      await tester.tap(
+        find.byKey(const Key('welcome-image-upload-confirm-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(contentSaveCalls, 1);
+      expect(rig.storage.uploads, isEmpty);
+      expect(rig.invoker.calls, isEmpty);
+      expect(rig.assignCalls, isEmpty);
+      expect(
+        find.byKey(const Key('welcome-image-draft-preview')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('The image has not been uploaded.'),
+        findsOneWidget,
+      );
+      expect(rig.busyCalls.map((e) => e.value), [true, false]);
     },
   );
   testWidgets(
@@ -255,14 +327,9 @@ void main() {
       expect(rig.assignCalls.single.readFirst, isTrue);
       expect(rig.assignCalls.single.replay, isNull);
       expect(rig.contentDraft, {'headline': 'Unchanged welcome draft'});
-      expect(rig.busyCalls.map((e) => e.value), [true, false]);
+      expect(rig.busyCalls.map((e) => e.value), [true, false, true, false]);
       expect(rig.parentBusy, isFalse);
-      expect(
-        find.text(
-          'Welcome image applied. Welcome text is still saved separately.',
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('Welcome image saved.'), findsOneWidget);
     },
   );
   testWidgets('cancelling the file picker releases busy without publication', (
@@ -270,11 +337,13 @@ void main() {
   ) async {
     final rig = _Rig()..picker = Completer<PickedMenuImage?>();
     await rig.pump(tester);
-    await begin(tester);
+    await chooseImage(tester);
     rig.picker!.complete(null);
     await tester.pumpAndSettle();
     expect(rig.storage.uploads, isEmpty);
+    expect(rig.invoker.calls, isEmpty);
     expect(rig.assignCalls, isEmpty);
+    expect(find.byKey(const Key('welcome-image-draft-preview')), findsNothing);
     expect(rig.parentBusy, isFalse);
   });
   testWidgets(
@@ -353,12 +422,7 @@ void main() {
             .onPressed,
         isNull,
       );
-      expect(
-        find.text(
-          'Welcome image applied. Welcome text is still saved separately.',
-        ),
-        findsNothing,
-      );
+      expect(find.text('Welcome image saved.'), findsNothing);
       expect(rig.assignCalls, hasLength(1));
     },
   );
@@ -380,12 +444,7 @@ void main() {
       await conflict.pump(tester);
       await begin(tester);
       expect(find.textContaining('was not applied'), findsOneWidget);
-      expect(
-        find.text(
-          'Welcome image applied. Welcome text is still saved separately.',
-        ),
-        findsNothing,
-      );
+      expect(find.text('Welcome image saved.'), findsNothing);
     },
   );
   testWidgets(
@@ -427,7 +486,7 @@ void main() {
     (tester) async {
       final rig = _Rig()..picker = Completer<PickedMenuImage?>();
       await rig.pump(tester);
-      await begin(tester);
+      await chooseImage(tester);
       rig.update(() {
         rig.binding = 'member-b:branch-b';
         rig.parentBusy = false;
@@ -580,13 +639,13 @@ void main() {
       await tester.pump();
       rig.storage.pending!.complete();
       await tester.pumpAndSettle();
-      expect(rig.busyCalls.map((e) => e.value), [true, false]);
+      expect(rig.busyCalls.map((e) => e.value), [true, false, true, false]);
       expect(rig.assignCallbackCalls, 0);
       expect(tester.takeException(), isNull);
     },
   );
   testWidgets(
-    'changing binding during confirmation closes only that dialog and starts no picker',
+    'changing binding during confirmation clears the old preview and starts no upload',
     (tester) async {
       final rig = _Rig();
       await rig.pump(tester);
@@ -600,15 +659,21 @@ void main() {
         find.byKey(const Key('welcome-image-upload-confirm')),
         findsNothing,
       );
-      expect(rig.picks, 0);
+      expect(rig.picks, 1);
+      expect(
+        find.byKey(const Key('welcome-image-draft-preview')),
+        findsNothing,
+      );
+      expect(rig.storage.uploads, isEmpty);
+      expect(rig.invoker.calls, isEmpty);
       expect(rig.assignCalls, isEmpty);
       expect(tester.takeException(), isNull);
     },
   );
   for (final (language, label) in [
-    ('ar', 'رفع صورة ترحيب'),
-    ('he', 'העלאת תמונת פתיחה'),
-    ('en', 'Upload welcome image'),
+    ('ar', 'اختيار صورة من الجهاز'),
+    ('he', 'בחירת תמונה מהמכשיר'),
+    ('en', 'Choose image from device'),
   ]) {
     testWidgets(
       'own localized upload labels support $language without modifying shared copy',

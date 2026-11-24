@@ -45,6 +45,13 @@ class StorefrontContentRefresh {
       profileRead && mediaRead && version != null && branchId != null;
 }
 
+typedef StorefrontWelcomeImageBuilder =
+    Widget Function({
+      required bool enabled,
+      required bool contentDirty,
+      required Future<bool> Function() prepareSave,
+    });
+
 /// One complete content draft, owned by the existing membership/restaurant
 /// editor identity. The server read controls access; no role test authorizes it.
 class StorefrontContentSection extends StatefulWidget {
@@ -85,8 +92,9 @@ class StorefrontContentSection extends StatefulWidget {
   final Future<StorefrontSourceOptions> Function()? reloadSources;
   final Uri Function(String)? publicUrlFor;
 
-  /// Existing profile media action; its CAS save remains separate from content.
-  final Widget? welcomeImageEditor;
+  /// The photo picker can stage an image while content is dirty. Preparing an
+  /// explicit image save serializes the two writers of the same CAS version.
+  final StorefrontWelcomeImageBuilder? welcomeImageEditor;
 
   // Presentation-only context; content/profile saves remain independent.
   final StorefrontProfile? bannerPreviewProfile;
@@ -380,7 +388,9 @@ class _ContentState extends State<StorefrontContentSection> {
       onChanged: _changeAppearance,
       onReload: _reloadWelcomeVideos,
       enabled: _editable,
-      canPublish: !_dirty,
+      // Video publication refreshes only its library. It must not force an
+      // unrelated text/mode draft to be saved before choosing a video.
+      canPublish: _editable,
       bindingIdentity: '${widget.savedBranchId}|$_bindingGeneration',
       publisher: publisher == null
           ? null
@@ -1508,6 +1518,21 @@ class _ContentState extends State<StorefrontContentSection> {
     _setBusy(false);
   }
 
+  Future<bool> _prepareWelcomeImageSave() async {
+    if (!_editable) return false;
+    if (!_dirty) return true;
+    final binding = _bindingGeneration;
+    final snapshot = _read?.snapshot;
+    if (snapshot == null) return false;
+    await _save();
+    return _current(binding) &&
+        _editable &&
+        !_dirty &&
+        _message == 'saved' &&
+        _read?.snapshot?.branchId == snapshot.branchId &&
+        _read?.snapshot?.version == snapshot.version + 1;
+  }
+
   String? _fieldLabel(String? field) => switch (field?.split('.').first) {
     'hero_headline' => 'headline',
     'hero_subline' => 'subline',
@@ -1998,28 +2023,77 @@ class _ContentState extends State<StorefrontContentSection> {
                   },
                 ),
                 _text('hero_subline', 'subline', lines: 2),
-                _text('hero.eyebrow', 'eyebrow'),
-                _text('hero.stamp', 'stamp'),
-                _text('hero.footnote', 'footnote'),
-                _formatEditor(),
-                Text(c('welcomeSharedTextHelp')),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: FilledButton(
-                    key: const Key('content-welcome-save'),
-                    onPressed: _editable && _dirty ? () => _save() : null,
-                    child: Text(c('save')),
+                StorefrontSettingsGroup(
+                  key: const Key('content-group-welcome-options'),
+                  title: c('welcomeMore'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _text('hero.eyebrow', 'eyebrow'),
+                      _text('hero.stamp', 'stamp'),
+                      _text('hero.footnote', 'footnote'),
+                      _formatEditor(),
+                      Text(c('welcomeSharedTextHelp')),
+                    ],
                   ),
                 ),
-                const Divider(height: 32),
+                const Divider(height: 24),
                 _welcomeVideoEditor(),
-                if (widget.welcomeImageEditor != null) ...[
-                  const SizedBox(height: 12),
-                  widget.welcomeImageEditor!,
-                  Text(c('welcomeImageFallbackHelp')),
-                  const Divider(height: 32),
+                if (widget.welcomeImageEditor case final buildImage?) ...[
+                  const Divider(height: 24),
+                  Text(
+                    c('welcomeImageTitle'),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  buildImage(
+                    enabled: _editable,
+                    contentDirty: _dirty,
+                    prepareSave: _prepareWelcomeImageSave,
+                  ),
+                  if (widget.bannerPreviewProfile?.mediaIdFor(
+                            StorefrontSlot.hero,
+                          ) !=
+                          null &&
+                      (_draft?['appearance'] as Map?)?['welcome_media_type'] !=
+                          'image')
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: OutlinedButton.icon(
+                        key: const Key('content-welcome-use-image'),
+                        onPressed: _editable
+                            ? () => _changeAppearance(
+                                'welcome_media_type',
+                                'image',
+                              )
+                            : null,
+                        icon: const Icon(Icons.image_outlined),
+                        label: Text(c('welcomeUseImage')),
+                      ),
+                    ),
                 ],
+                const SizedBox(height: 16),
+                if (_dirty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      c('welcomeUnsaved'),
+                      key: const Key('content-welcome-unsaved'),
+                    ),
+                  )
+                else if (_message == 'saved')
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      c('welcomeSaved'),
+                      key: const Key('welcome-save-status'),
+                    ),
+                  ),
+                FilledButton.icon(
+                  key: const Key('content-welcome-save'),
+                  onPressed: _editable && _dirty ? () => _save() : null,
+                  icon: const Icon(Icons.save_outlined),
+                  label: Text(c('welcomeSave')),
+                ),
               ],
             ),
           ),
