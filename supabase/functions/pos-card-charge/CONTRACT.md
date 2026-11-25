@@ -94,13 +94,28 @@ reply is `failed` (no provider fact). The engine's `classifyLookup` holds the fu
 
 ## Gates
 
-No vendor wire profile ships (`index.ts` passes none), so every provider call answers
-`provider_unavailable` until the gated profile exists (packet §6, W1). A field the adapter drops from a
+The entrypoint supplies the reviewed provider candidate: `index.ts` passes `ZCREDIT_PROFILE_CANDIDATE`
+from `lib/provider/zcredit_profile.mjs` (version `zcredit-ws-pinpad-candidate-1`; wired by
+BIZBOT-PAYMENTS-ZCREDIT-PILOT-001H-PROFILE-WIRING-001, gate W1 of packet §6). The handler still takes a
+profile only as a constructor option (none by default), and no configuration selects one. That module is
+kept byte-identical, so its source, data, recovery and credential-member pins hold; its header comment
+("Only the tests import it", "index.ts keeps providerProfile: null") is historical - it describes the
+candidate as reviewed before the wiring and is not the runtime import invariant. With the master flag
+absent, `start` refuses before a database call. A start that reaches the claim also needs the existing
+revision and binding gates. Recovery operations (`status`, `release`) retain their existing behavior; no
+provider request from a missing attempt is possible through those paths. The no-provider-request
+conclusion for a disabled deployment therefore depends on the complete verified posture, including the
+absence of relevant recoverable attempts, not on the OFF flag alone: turning the flag OFF stops new
+starts and cancels no request already sent. A refusal does not validate the installed configuration,
+the credentials, the PIN-pad mapping or the profile against the provider; that wiring is local source
+until a separately approved deployment, and provider acceptance is observed only in a separately
+authorized TEST session. A field the adapter drops from a
 2xx JSON-object reply reaches the SQL-written `security.card_provider_field_dropped` event as
 `dropped_fields` tokens, recorded unless the attempt is resolved, final or out of scope or a commit reply
 arrives after the row left `sent` (gap G1, closed locally by DECISION D-062:
 docs/BIZBOT_PAYMENTS_ZCREDIT_PILOT_001E_DROP_EVIDENCE_001_EXECUTION.md).
-Q-047 / Q-049 stay hard owner gates.
+Q-047 / Q-049 and the owner gates of DEPLOYMENT §18 still govern every real provider action (DECISION
+D-065 closed Q-047 and closed Q-049 for the phase-1 TEST only; E2-B stays open).
 
 ## Local proof
 

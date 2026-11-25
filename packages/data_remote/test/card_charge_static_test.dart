@@ -674,29 +674,36 @@ void main() {
     });
   });
 
-  group('the provider profile stays unwired (read-only)', () {
-    test(
-      'index.ts keeps providerProfile: null and imports only the handler',
-      () {
-        final index = _read('supabase/functions/pos-card-charge/index.ts');
-        expect(
-          _count(
-            index,
-            RegExp(r'^\s*providerProfile: null,$', multiLine: true),
-          ),
-          1,
-        );
-        expect(
+  group('the provider profile is wired at the entrypoint only (read-only)', () {
+    test('index.ts passes exactly the candidate and imports only the handler '
+        'and the candidate', () {
+      final index = _read('supabase/functions/pos-card-charge/index.ts');
+      expect(_count(index, RegExp(r'\bproviderProfile\b')), 1);
+      expect(
+        _count(
+          index,
           RegExp(
-            r'^import .*$',
+            r'^\s*providerProfile: ZCREDIT_PROFILE_CANDIDATE,$',
             multiLine: true,
-          ).allMatches(index).map((m) => m.group(0)),
-          ['import { createHandler } from "./handler.mjs";'],
-        );
-      },
-    );
+          ),
+        ),
+        1,
+      );
+      expect(
+        RegExp(
+          r'^import .*$',
+          multiLine: true,
+        ).allMatches(index).map((m) => m.group(0)),
+        [
+          'import { createHandler } from "./handler.mjs";',
+          'import { ZCREDIT_PROFILE_CANDIDATE } from '
+              '"./lib/provider/zcredit_profile.mjs";',
+        ],
+      );
+    });
 
-    test('the Z-Credit candidate is imported only by its own test', () {
+    test('the Z-Credit candidate is imported only by index.ts and its own '
+        'test', () {
       final importers = [
         for (final path in _files('supabase/functions/pos-card-charge', [
           '.mjs',
@@ -709,6 +716,7 @@ void main() {
             path,
       ];
       expect(importers, [
+        'supabase/functions/pos-card-charge/index.ts',
         'supabase/functions/pos-card-charge/test/zcredit_profile.test.mjs',
       ]);
     });
