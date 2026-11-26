@@ -8,7 +8,6 @@ import 'package:path_provider/path_provider.dart'
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart'
     show
-        KitchenDispatchBytesRenderer,
         KitchenDispatchDocument,
         KitchenSpoolDatabaseFactory,
         KitchenSpoolKeyManager;
@@ -38,6 +37,7 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
         nativePrintRasterizerProvider;
 import 'package:restoflow_printing/restoflow_printing.dart'
     show
+        EncodedPrintJob,
         KitchenTransportOutcome,
         KitchenTransportOutcomeKind,
         ReceiptRasterizer,
@@ -53,7 +53,7 @@ import '../data/round_print_claim_store.dart'
         posInitialKitchenPrintClaimKey,
         posOrderEditDispatchClaimKey;
 import '../print/pos_kitchen_ticket_printer.dart'
-    show posRoundPrintClaimStoreProvider;
+    show posRoundPrintClaimStoreProvider, resolveKitchenPrinterTargetWith;
 import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
 import '../data/kitchen_mode_readiness.dart'
     show
@@ -68,6 +68,7 @@ import '../state/locale_controller.dart' show localeControllerProvider;
 import 'kitchen_mode_cache_seed.dart' show readVerifiedCachedMode;
 import 'kitchen_contained_ack.dart';
 import 'kitchen_print_containment.dart';
+import 'kitchen_print_worker.dart' show DestinationKitchenJobRenderer;
 import '../print/native_print_bridges.dart'
     show kPosNativePrintTimeout, posPrinterDestinationSendGateProvider;
 import '../state/pos_bluetooth_printer_config.dart'
@@ -111,25 +112,53 @@ import 'pos_secure_kitchen_mode_cache.dart';
 /// the spool runtime, its ownership or its send fences. An in-flight document
 /// keeps one immutable label bundle; invalid scope/provider reads fail closed.
 final class PosSelectedLocaleKitchenDispatchRenderer
-    implements KitchenDispatchBytesRenderer {
+    implements DestinationKitchenJobRenderer {
   PosSelectedLocaleKitchenDispatchRenderer({
     required String Function() languageCode,
     required bool Function() isCurrent,
+    Future<bool> Function(String destinationKey)? compactForDestination,
     ReceiptRasterizer? rasterizer,
     String? restaurantName,
   }) : _languageCode = languageCode,
        _isCurrent = isCurrent,
+       _compactForDestination = compactForDestination,
        _rasterizer = rasterizer,
        _restaurantName = restaurantName;
 
   final String Function() _languageCode;
   final bool Function() _isCurrent;
+  final Future<bool> Function(String destinationKey)? _compactForDestination;
   final ReceiptRasterizer? _rasterizer;
   final String? _restaurantName;
 
   @override
   Future<Uint8List> renderToBytes(
     KitchenDispatchDocument dispatch, {
+    String? customerPhoneOverride,
+  }) => _render(
+    dispatch,
+    compact: false,
+    customerPhoneOverride: customerPhoneOverride,
+  ).then((job) => job.bytes);
+
+  @override
+  Future<EncodedPrintJob> renderForDestination(
+    KitchenDispatchDocument dispatch, {
+    required String destinationKey,
+    String? customerPhoneOverride,
+  }) async {
+    if (!_isCurrent()) throw StateError('kitchen_print_scope_invalid');
+    final compact = await _compactForDestination?.call(destinationKey) ?? false;
+    return _render(
+      dispatch,
+      compact: compact,
+      customerPhoneOverride: customerPhoneOverride,
+    );
+  }
+
+  Future<EncodedPrintJob> _render(
+    KitchenDispatchDocument dispatch, {
+    required bool compact,
     String? customerPhoneOverride,
   }) async {
     if (!_isCurrent()) throw StateError('kitchen_print_scope_invalid');
@@ -147,12 +176,13 @@ final class PosSelectedLocaleKitchenDispatchRenderer
         rasterizer: _rasterizer,
       ),
     );
-    final bytes = await renderer.renderToBytes(
+    final job = await renderer.renderJob(
       dispatch,
+      compact: compact,
       customerPhoneOverride: customerPhoneOverride,
     );
     if (!_isCurrent()) throw StateError('kitchen_print_scope_invalid');
-    return bytes;
+    return job;
   }
 }
 
@@ -360,6 +390,12 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
     renderer: PosSelectedLocaleKitchenDispatchRenderer(
       languageCode: () => ref.read(localeControllerProvider).languageCode,
       isCurrent: () => current,
+      compactForDestination: (key) async {
+        // A durable job may still point to a previously assigned printer.
+        // Use fast roll mode only when the matching media profile is known.
+        final saved = await resolveKitchenPrinterTargetWith(ref.read);
+        return saved != null && saved.destinationKey == key && saved.compact;
+      },
       rasterizer: ref.watch(nativePrintRasterizerProvider),
       restaurantName: ref.watch(posRestaurantNameProvider),
     ),
@@ -370,10 +406,14 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
           bytes: bytes,
           timeout: kPosNativePrintTimeout,
         ),
-    bluetoothSend: ({required address, required bytes}) async =>
+    bluetoothSend: ({required address, required job}) async =>
         connector is ChannelBluetoothConnector
         ? classifyKitchenBluetoothAttempt(
-            await connector.sendOnceForKitchen(address: address, bytes: bytes),
+            await connector.sendOnceForKitchen(
+              address: address,
+              bytes: job.bytes,
+              wholeJob: job.wholeJob,
+            ),
           )
         : const KitchenTransportOutcome(
             KitchenTransportOutcomeKind.unsupported,

@@ -398,7 +398,7 @@ class _Harness {
         'synthetic',
       );
     },
-    bluetoothSend: ({required address, required bytes}) async {
+    bluetoothSend: ({required address, required job}) async {
       printerSends.add('bluetooth');
       return const KitchenTransportOutcome(
         KitchenTransportOutcomeKind.accepted,

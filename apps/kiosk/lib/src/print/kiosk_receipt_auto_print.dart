@@ -119,23 +119,28 @@ class KioskAutoPrintReceiptController extends AsyncNotifier<bool> {
   }
 }
 
-/// Send seam: encodes+delivers one ESC/POS document. The DEFAULT resolves
-/// the device's saved kiosk transport (network/Bluetooth) through the shared
-/// native store's READY provider (never the sync `.valueOrNull` snapshot —
-/// the documented cold-start first-print trap); web/tests without a printer
-/// resolve to null. Tests override the whole provider with a capturing fake.
-typedef KioskReceiptSend =
-    Future<pp.BridgeSubmitResult> Function(pp.PrintDocument document);
+/// Capture the configured transport, paper and physical gate key together for
+/// this order. Look up the saved printer before the first send after startup.
+typedef KioskReceiptTarget = ({
+  String destinationKey,
+  pp.MediaProfile media,
+  Future<pp.BridgeSubmitResult> Function(pp.EncodedPrintJob) send,
+});
 
 final kioskReceiptSendProvider =
-    Provider<Future<KioskReceiptSend?> Function()?>((ref) {
+    Provider<Future<KioskReceiptTarget?> Function()>((ref) {
       return () async {
-        final factory = await ref.read(
-          activeNativeTransportFactoryReadyProvider.future,
+        final target = await ref.read(
+          activeNativePrintTargetReadyProvider.future,
         );
-        if (factory == null) return null;
-        return (document) =>
-            NativeEscPosSender(transportFactory: factory).send(document);
+        if (target == null) return null;
+        return (
+          destinationKey: target.destinationKey,
+          media: target.media,
+          send: NativeEscPosSender(
+            transportFactory: target.transportFactory,
+          ).sendJob,
+        );
       };
     });
 
@@ -199,9 +204,8 @@ class KioskReceiptAutoPrint {
         _sentThisRun.add(orderId);
         return;
       }
-      final resolveSend = _ref.read(kioskReceiptSendProvider);
-      final send = resolveSend == null ? null : await resolveSend();
-      if (send == null) {
+      final target = await _ref.read(kioskReceiptSendProvider)();
+      if (target == null) {
         _publish(orderId, KioskReceiptPrintOutcome.notConfigured);
         return;
       }
@@ -228,39 +232,34 @@ class KioskReceiptAutoPrint {
           if (decoded != null) {
             raster = const pp.LogoRasterizer().rasterizeForProfile(
               decoded,
-              _ref.read(activeNativeMediaProfileProvider),
+              target.media,
             );
           }
         } catch (_) {
           raster = null; // logo raster failure => text-identity receipt
         }
       }
-      final profile = _ref.read(activeNativeMediaProfileProvider);
       final doc = buildKioskReceiptDocument(
         l10n: l10n,
         order: order,
         restaurantName: name,
         lang: lang,
         logoRaster: raster,
-        columns: profile.columns,
+        columns: target.media.columns,
       );
-      pp.PrintDocument rendered = doc;
-      try {
-        rendered = await pp.rasterizeForMediaProfile(
-          doc,
-          rasterizer: _ref.read(nativePrintRasterizerProvider),
-          profile: profile,
-        );
-      } catch (_) {
-        rendered = doc;
-      }
-      // 114B.2: the physical send serializes through the ONE process-wide
-      // destination gate, so a same-printer kitchen ticket never interleaves
-      // with this receipt. Semantics are otherwise byte-unchanged.
+      final compact = await _ref.read(
+        nativeCompactRollProvider(target.destinationKey).future,
+      );
+      final job = await pp.encodePrintJob(
+        doc,
+        compact: compact,
+        mediaProfile: target.media,
+        rasterizer: _ref.read(nativePrintRasterizerProvider),
+      );
       final gate = _ref.read(kioskPrinterDestinationSendGateProvider);
       final result = await gate.withDestination(
-        _customerDestinationKey(),
-        () => send(rendered),
+        target.destinationKey,
+        () => target.send(job),
       );
       if (result.ok) {
         _sentThisRun.add(orderId);
@@ -272,33 +271,6 @@ class KioskReceiptAutoPrint {
     } finally {
       _inFlight.remove(orderId);
     }
-  }
-
-  /// The customer role's canonical destination key for the gate (the saved
-  /// shared-store config; a resolvable-but-unread config degrades to one
-  /// conservative shared key so serialization still holds).
-  String _customerDestinationKey() {
-    try {
-      final kind =
-          _ref.read(selectedPrinterTransportProvider).valueOrNull ??
-          PrinterTransportKind.network;
-      switch (kind) {
-        case PrinterTransportKind.network:
-          final config = _ref.read(networkPrinterConfigProvider).valueOrNull;
-          if (config != null) {
-            return pp.PrinterDestinationSendGate.networkKey(
-              config.host,
-              config.port,
-            );
-          }
-        case PrinterTransportKind.bluetooth:
-          final config = _ref.read(bluetoothPrinterConfigProvider).valueOrNull;
-          if (config != null) {
-            return pp.PrinterDestinationSendGate.bluetoothKey(config.address);
-          }
-      }
-    } catch (_) {}
-    return 'kiosk|receipt|unresolved';
   }
 
   void _publish(String orderId, KioskReceiptPrintOutcome outcome) {

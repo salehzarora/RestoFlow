@@ -7,7 +7,12 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show kitchenTicketPrintLabelsForLanguageCode;
 import 'package:restoflow_native_printing/restoflow_native_printing.dart';
+import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart';
+import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/print/native_print_bridges.dart';
 import 'package:restoflow_pos/src/print/print_document.dart';
 import 'package:restoflow_pos/src/print/receipt_logo_asset.dart';
@@ -153,6 +158,71 @@ void main() {
       expect(kick.chunk, kBluetoothChunkBytes);
       expect(kick.pause, kBluetoothChunkDelay);
       expect(renderer.requests, hasLength(2));
+    },
+  );
+
+  test(
+    'the Orders kitchen reprint sends the entire money-free ticket to its saved printer',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'restoflow.printer.selected.pos.kitchen_ticket.local': 'bluetooth',
+        'restoflow.printer.bluetooth.pos.kitchen_ticket.local': jsonEncode({
+          'address': _address,
+        }),
+      });
+      final api = _BluetoothApi();
+      final raster = pp.FakeReceiptRasterizer();
+      final scope = _container(api, raster);
+      final key = pp.PrinterDestinationSendGate.bluetoothKey(_address);
+      final reprint = scope.read(posKitchenReprintProvider);
+      final order = SubmittedOrderView(
+        orderNumber: '#QA-40',
+        orderType: OrderType.takeaway,
+        currencyCode: 'ILS',
+        subtotalMinor: 493600,
+        lines: [
+          for (var i = 1; i <= 40; i++)
+            SubmittedLineView(
+              name: 'برجر $i',
+              quantity: 1,
+              lineTotalMinor: 12340,
+              currencyCode: 'ILS',
+              modifiers: const ['جبنة'],
+              note: 'ללא בצל',
+            ),
+        ],
+      );
+      final labels = kitchenTicketPrintLabelsForLanguageCode('ar');
+      expect(
+        await reprint(container: scope, order: order, labels: labels),
+        PosKitchenPrintOutcome.printed,
+      );
+      final fast = api.writes.single;
+      expect(fast.chunk, fast.bytes.length);
+      expect(fast.pause, Duration.zero);
+      final lines = raster.requests.single.lines;
+      expect(lines, contains(contains('برجر 40')));
+      expect(lines, contains(contains('ללא בצל')));
+      expect(lines, contains(contains('جبنة')));
+      expect(
+        lines.join(' '),
+        isNot(matches(RegExp(r'123[.,]40|4936[.,]00|BIZBOT'))),
+      );
+
+      expect(
+        await scope
+            .read(posCompactReceiptProvider(key).notifier)
+            .setEnabled(false),
+        isTrue,
+      );
+      expect(
+        await reprint(container: scope, order: order, labels: labels),
+        PosKitchenPrintOutcome.printed,
+      );
+      expect(api.writes, hasLength(2));
+      expect(api.writes.last.chunk, kBluetoothChunkBytes);
+      expect(api.writes.last.pause, kBluetoothChunkDelay);
+      expect(raster.requests.last.lines, lines);
     },
   );
 

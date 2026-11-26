@@ -65,7 +65,7 @@ class _PrinterSettingsSectionState
         ref.watch(posSelectedPrinterTransportFamily(_purpose)).valueOrNull ??
         PosPrinterTransportKind.network;
     final kitchen = _purpose == PosPrinterPurpose.kitchenTicket;
-    final customerEndpoint = kitchen ? null : _rollDestination(selected);
+    final endpoint = _rollDestination(selected);
     final customerHasPrinter =
         ref.watch(posNetworkPrinterConfigProvider).valueOrNull != null ||
         ref.watch(posBluetoothPrinterConfigProvider).valueOrNull != null;
@@ -192,10 +192,12 @@ class _PrinterSettingsSectionState
         // the CUSTOMER RECEIPT area only — the drawer plugs into the receipt
         // printer's drawer port (there is no kitchen drawer). Default OFF;
         // the setter persists into the authoritative per-device namespace.
+        if (endpoint != null) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          _CompactReceiptSwitch(destination: endpoint),
+        ],
         if (!kitchen) ...[
           const SizedBox(height: RestoflowSpacing.md),
-          if (customerEndpoint != null)
-            _CompactReceiptSwitch(destination: customerEndpoint),
           SwitchListTile(
             key: const Key('cash-drawer-auto-open-switch'),
             contentPadding: EdgeInsets.zero,
@@ -216,13 +218,15 @@ class _PrinterSettingsSectionState
     switch (transport) {
       case PosPrinterTransportKind.bluetooth:
         final printer = ref
-            .watch(posBluetoothPrinterConfigProvider)
+            .watch(posBluetoothPrinterConfigFamily(_purpose))
             .valueOrNull;
         return printer?.mediaProfile.id == pp.MediaProfileId.continuous80
             ? pp.PrinterDestinationSendGate.bluetoothKey(printer!.address)
             : null;
       case PosPrinterTransportKind.network:
-        final printer = ref.watch(posNetworkPrinterConfigProvider).valueOrNull;
+        final printer = ref
+            .watch(posNetworkPrinterConfigFamily(_purpose))
+            .valueOrNull;
         return printer?.mediaProfile.id == pp.MediaProfileId.continuous80
             ? pp.PrinterDestinationSendGate.networkKey(
                 printer!.host,

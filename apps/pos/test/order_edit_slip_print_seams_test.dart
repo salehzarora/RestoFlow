@@ -269,9 +269,10 @@ void main() {
         await PosKitchenTicketPrinter(
           _container(),
           targetOverride: _target(fake),
-          buildSlipBytes:
+          buildSlipJob:
               ({
                 required slip,
+                required compact,
                 required labels,
                 required changeLabels,
                 rasterizer,
@@ -322,9 +323,10 @@ void main() {
       final counting = PosKitchenTicketPrinter(
         c,
         targetOverride: _target(fake),
-        buildSlipBytes:
+        buildSlipJob:
             ({
               required slip,
+              required compact,
               required labels,
               required changeLabels,
               rasterizer,
@@ -332,7 +334,7 @@ void main() {
               restaurantName,
             }) async {
               slipBuilds++;
-              return Uint8List(0);
+              return (bytes: Uint8List(0), wholeJob: false);
             },
       );
       await counting.printChangeSlip(

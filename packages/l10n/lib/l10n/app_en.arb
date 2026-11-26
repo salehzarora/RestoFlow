@@ -925,9 +925,9 @@
   },
   "posReceiptPoweredBy": "Powered by BIZBOT",
   "posCompactReceiptTitle": "Fast printing with the app font",
-  "posCompactReceiptHelp": "Print the entire receipt in the app font on an 80 mm roll. Use with an Xprinter XP-T80Q or a compatible printer.",
+  "posCompactReceiptHelp": "Print receipts and kitchen tickets in the app font on an 80 mm roll. Turn this off if your printer needs slower transmission.",
   "@posReceiptPoweredBy": {"description": "Brand credit directly below the customer receipt thank-you."},
-  "@posCompactReceiptTitle": {"description": "On-device, per-printer switch for compact full-font customer receipts."},
+  "@posCompactReceiptTitle": {"description": "On-device, per-printer switch for compact full-font receipts and kitchen tickets."},
   "@posCompactReceiptHelp": {"description": "Explains the 80 mm roll and compatible printer requirement."},
   "posReceiptThankYou": "Thank you for your visit",
   "@posReceiptThankYou": {

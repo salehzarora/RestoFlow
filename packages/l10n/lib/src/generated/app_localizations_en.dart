@@ -1510,7 +1510,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posCompactReceiptHelp =>
-      'Print the entire receipt in the app font on an 80 mm roll. Use with an Xprinter XP-T80Q or a compatible printer.';
+      'Print receipts and kitchen tickets in the app font on an 80 mm roll. Turn this off if your printer needs slower transmission.';
 
   @override
   String get posReceiptThankYou => 'Thank you for your visit';

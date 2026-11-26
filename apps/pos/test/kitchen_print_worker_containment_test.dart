@@ -229,9 +229,9 @@ void main() {
         'synthetic',
       );
     },
-    bluetoothSend: ({required address, required bytes}) async {
+    bluetoothSend: ({required address, required job}) async {
       sends.add('bluetooth');
-      transmittedJobs.add(utf8.decode(bytes));
+      transmittedJobs.add(utf8.decode(job.bytes));
       return const KitchenTransportOutcome(
         KitchenTransportOutcomeKind.accepted,
         'synthetic',

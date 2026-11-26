@@ -86,6 +86,33 @@ String _fieldText(WidgetTester tester, String key) =>
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues(const {}));
 
+  testWidgets(
+    'fast mode is remembered for each KDS roll printer and hidden for labels',
+    (tester) async {
+      final c = _kdsContainer();
+      await _seedTwo(c);
+      await _pump(tester, container: c);
+      final toggle = find.byKey(const Key('compact-app-font-roll'));
+      bool enabled() => tester.widget<SwitchListTile>(toggle).value;
+      expect(enabled(), isTrue);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(enabled(), isFalse);
+      await tester.tap(find.text('Pass printer'));
+      await tester.pumpAndSettle();
+      expect(enabled(), isTrue);
+      await tester.tap(find.text('Kitchen printer'));
+      await tester.pumpAndSettle();
+      expect(enabled(), isFalse);
+      final config = await c.read(networkPrinterConfigProvider.future);
+      await c
+          .read(networkPrinterConfigProvider.notifier)
+          .save(config!.copyWith(mediaProfileId: 'label50x50'));
+      await tester.pumpAndSettle();
+      expect(toggle, findsNothing);
+    },
+  );
+
   testWidgets('1. the KDS list renders name and host:port, and marks ONLY the '
       'active row', (tester) async {
     final c = _kdsContainer();

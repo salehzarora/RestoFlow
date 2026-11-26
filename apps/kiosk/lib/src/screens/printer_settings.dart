@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_native_printing/restoflow_native_printing.dart';
 import 'package:restoflow_printing/restoflow_printing.dart'
-    show PrinterDestinationSendGate;
+    show PrinterDestinationSendGate, MediaProfileId;
 
 import '../design/kiosk_theme.dart';
 import '../print/kiosk_kitchen_auto_print.dart';
@@ -253,6 +253,9 @@ class _KioskPrinterSectionState extends ConsumerState<KioskPrinterSection> {
               ],
             ),
             const SizedBox(height: 24),
+            if (ref.watch(activeNativeRollDestinationProvider)
+                case final String destination)
+              _compactRollSwitch(l10n, destination),
             // ---- transport ---------------------------------------------
             Wrap(
               spacing: 12,
@@ -714,6 +717,13 @@ class _KioskKitchenPrinterBlockState
     final bluetooth = ref
         .watch(kioskKitchenBluetoothConfigProvider)
         .valueOrNull;
+    final target = switch (kind) {
+      PrinterTransportKind.network when network != null =>
+        KioskKitchenPrintTarget.network(network),
+      PrinterTransportKind.bluetooth when bluetooth != null =>
+        KioskKitchenPrintTarget.bluetooth(bluetooth),
+      _ => null,
+    };
     final printStatus = ref.watch(kioskKitchenPrintStatusProvider);
     _seedFrom(network);
 
@@ -755,6 +765,8 @@ class _KioskKitchenPrinterBlockState
           ],
         ),
         const SizedBox(height: 20),
+        if (target != null && target.media.id == MediaProfileId.continuous80)
+          _compactRollSwitch(l10n, target.destinationKey),
         Wrap(
           spacing: 12,
           children: [
@@ -1021,3 +1033,14 @@ class _KioskKitchenPrinterBlockState
     );
   }
 }
+
+Widget _compactRollSwitch(AppLocalizations l10n, String destination) =>
+    Material(
+      type: MaterialType.transparency,
+      child: NativeCompactRollSwitch(
+        destination: destination,
+        title: l10n.posCompactReceiptTitle,
+        help: l10n.posCompactReceiptHelp,
+        saveFailure: l10n.printerProfilesSaveFailure,
+      ),
+    );

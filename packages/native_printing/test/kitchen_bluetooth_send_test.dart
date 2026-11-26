@@ -14,6 +14,8 @@ class _ScriptedApi implements BluetoothPrintApi {
 
   final List<Future<BluetoothJobResult> Function()> _results;
   int printCalls = 0;
+  int? lastChunkSize;
+  Duration? lastChunkDelay;
 
   @override
   Future<bool> permissionsGranted() async => true;
@@ -39,6 +41,8 @@ class _ScriptedApi implements BluetoothPrintApi {
     Duration drainDelay = kBluetoothDrainDelay,
   }) {
     printCalls++;
+    lastChunkSize = chunkBytes;
+    lastChunkDelay = chunkDelay;
     return _results.removeAt(0)();
   }
 }
@@ -188,6 +192,65 @@ void main() {
       expect(outcome.kind, KitchenTransportOutcomeKind.ambiguous);
       expect(outcome.reasonCode, 'native_timeout_after_write');
     });
+  });
+
+  group('compact kitchen packet', () {
+    for (final sample in [
+      (
+        const BluetoothJobResult(
+          code: BluetoothJobCode.ok,
+          bytesSent: 3,
+          chunks: 1,
+        ),
+        KitchenTransportOutcomeKind.accepted,
+      ),
+      (
+        const BluetoothJobResult(
+          code: BluetoothJobCode.ok,
+          bytesSent: 2,
+          chunks: 1,
+        ),
+        KitchenTransportOutcomeKind.ambiguous,
+      ),
+      (
+        const BluetoothJobResult(
+          code: BluetoothJobCode.ok,
+          bytesSent: 3,
+          chunks: 2,
+        ),
+        KitchenTransportOutcomeKind.ambiguous,
+      ),
+      (
+        const BluetoothJobResult(code: BluetoothJobCode.writeFailed),
+        KitchenTransportOutcomeKind.ambiguous,
+      ),
+      (
+        const BluetoothJobResult(code: BluetoothJobCode.connectFailed),
+        KitchenTransportOutcomeKind.definitelyNotSent,
+      ),
+    ]) {
+      final (result, expected) = sample;
+      test(
+        '${result.code.name} (${result.chunks} writes, ${result.bytesSent} bytes) returns ${expected.name}',
+        () async {
+          final api = _ScriptedApi([() async => result]);
+          final attempt = await ChannelBluetoothConnector(api: api)
+              .sendOnceForKitchen(
+                address: 'DC:0D:30:AA:BB:CC',
+                bytes: bytes,
+                wholeJob: true,
+              );
+          expect(api.printCalls, 1);
+          expect(api.lastChunkSize, bytes.length);
+          expect(api.lastChunkDelay, Duration.zero);
+          final outcome = classifyKitchenBluetoothAttempt(attempt);
+          expect(outcome.kind, expected);
+          if (expected == KitchenTransportOutcomeKind.ambiguous) {
+            expect(outcome.isSafeToRetry, isFalse);
+          }
+        },
+      );
+    }
   });
 
   group('lost platform result', () {

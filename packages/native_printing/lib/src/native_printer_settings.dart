@@ -6,6 +6,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import 'bluetooth_printer.dart';
+import 'native_print_target.dart';
 import 'native_printer_store.dart';
 import 'network_printer_profile_providers.dart';
 import 'network_printer_profiles.dart';
@@ -22,6 +23,9 @@ class NativePrinterStrings {
     required this.transportHeading,
     required this.transportNetwork,
     required this.transportBluetooth,
+    required this.compactTitle,
+    required this.compactHelp,
+    required this.compactSaveFailure,
     required this.networkHeading,
     required this.networkHelp,
     required this.networkIpLabel,
@@ -67,6 +71,9 @@ class NativePrinterStrings {
   final String transportHeading;
   final String transportNetwork;
   final String transportBluetooth;
+  final String compactTitle;
+  final String compactHelp;
+  final String compactSaveFailure;
   final String networkHeading;
   final String networkHelp;
   final String networkIpLabel;
@@ -220,7 +227,56 @@ class NativePrinterSettingsSection extends ConsumerWidget {
             deviceLabel: deviceLabel,
           ),
         },
+        if (ref.watch(activeNativeRollDestinationProvider)
+            case final destination?)
+          NativeCompactRollSwitch(
+            destination: destination,
+            title: strings.compactTitle,
+            help: strings.compactHelp,
+            saveFailure: strings.compactSaveFailure,
+          ),
       ],
+    );
+  }
+}
+
+/// Device-local compatibility setting for one saved roll printer.
+class NativeCompactRollSwitch extends ConsumerWidget {
+  const NativeCompactRollSwitch({
+    required this.destination,
+    required this.title,
+    required this.help,
+    required this.saveFailure,
+    super.key,
+  });
+
+  final String destination;
+  final String title;
+  final String help;
+  final String saveFailure;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final provider = nativeCompactRollProvider(destination);
+    final current = ref.watch(provider);
+    return SwitchListTile(
+      key: const Key('compact-app-font-roll'),
+      contentPadding: EdgeInsets.zero,
+      value: current.valueOrNull ?? true,
+      title: Text(title),
+      subtitle: Text(help),
+      onChanged: current.isLoading || !current.hasValue
+          ? null
+          : (enabled) async {
+              final saved = await ref
+                  .read(provider.notifier)
+                  .setEnabled(enabled);
+              if (!saved && context.mounted) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(saveFailure)));
+              }
+            },
     );
   }
 }

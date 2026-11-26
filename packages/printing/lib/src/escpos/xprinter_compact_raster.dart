@@ -1,31 +1,32 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:restoflow_printing/restoflow_printing.dart' as pp;
+import '../print_document.dart';
+import 'escpos_command_builder.dart';
 
-typedef _Crop = ({int left, int width, pp.PrintAlignment align});
+typedef _Crop = ({int left, int width, PrintAlignment align});
 
 // ESC a justifies graphics within the configured print area. The caller selects
 // this path only for a 576-dot printer with a matching input bitmap.
 _Crop _crop(int first, int last, int pageWidth) {
-  if (last < first) return (left: 0, width: 1, align: pp.PrintAlignment.left);
+  if (last < first) return (left: 0, width: 1, align: PrintAlignment.left);
   final leftWidth = last + 1;
   final rightWidth = pageWidth - first;
   final inset = math.min(first, pageWidth - leftWidth);
   final centerWidth = pageWidth - 2 * inset;
   if (centerWidth < leftWidth && centerWidth < rightWidth) {
-    return (left: inset, width: centerWidth, align: pp.PrintAlignment.center);
+    return (left: inset, width: centerWidth, align: PrintAlignment.center);
   }
   if (rightWidth < leftWidth) {
-    return (left: first, width: rightWidth, align: pp.PrintAlignment.right);
+    return (left: first, width: rightWidth, align: PrintAlignment.right);
   }
-  return (left: 0, width: leftWidth, align: pp.PrintAlignment.left);
+  return (left: 0, width: leftWidth, align: PrintAlignment.left);
 }
 
 /// Sends the same black dots at the same paper coordinates as a full raster.
 /// GS v 0 advances by its exact height, even for an all-white narrow strip.
 /// The complete packet is prepared in memory for the existing whole-job send.
-Uint8List encodeXprinterCompactRaster(pp.PrintRasterImageLine image) {
+Uint8List encodeXprinterCompactRaster(PrintRasterImageLine image) {
   final width = image.widthBytes;
   final height = image.heightDots;
   const rowsPerTile = 8;
@@ -69,7 +70,7 @@ Uint8List encodeXprinterCompactRaster(pp.PrintRasterImageLine image) {
     }
   }
 
-  final commands = pp.EscPosCommandBuilder();
+  final commands = EscPosCommandBuilder();
   if (height <= 0xffff &&
       cost.first + 3 >= image.data.length + 8 + commandPenalty) {
     return (commands..rasterImage(
@@ -79,7 +80,7 @@ Uint8List encodeXprinterCompactRaster(pp.PrintRasterImageLine image) {
         ))
         .bytes();
   }
-  var alignment = pp.PrintAlignment.left;
+  var alignment = PrintAlignment.left;
   for (var start = 0; start < tiles; start = next[start]) {
     final crop = crops[start]!;
     if (alignment != crop.align) {
@@ -104,7 +105,6 @@ Uint8List encodeXprinterCompactRaster(pp.PrintRasterImageLine image) {
       heightDots: rows,
     );
   }
-  if (alignment != pp.PrintAlignment.left)
-    commands.align(pp.PrintAlignment.left);
+  if (alignment != PrintAlignment.left) commands.align(PrintAlignment.left);
   return commands.bytes();
 }

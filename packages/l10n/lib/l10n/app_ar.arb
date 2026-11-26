@@ -435,7 +435,7 @@
   "posReceiptOrderHeading": "طلب {orderNumber}",
   "posReceiptPoweredBy": "مدعوم من BIZBOT",
   "posCompactReceiptTitle": "طباعة سريعة بخط التطبيق",
-  "posCompactReceiptHelp": "يطبع الإيصال كاملًا بخط التطبيق على رول 80 مم. فعّله لطابعة Xprinter XP-T80Q أو طابعة متوافقة.",
+  "posCompactReceiptHelp": "يطبع فواتير الزبائن وتذاكر المطبخ بخط التطبيق على رول 80 مم. أوقفه إذا احتاجت طابعتك إرسالًا أبطأ.",
   "posReceiptThankYou": "شكراً لزيارتكم",
   "posOrderRejectedTitle": "لم يتم إرسال الطلب",
   "posOrderDeliveryUnconfirmedTitle": "لم يتم تأكيد إرسال الطلب",

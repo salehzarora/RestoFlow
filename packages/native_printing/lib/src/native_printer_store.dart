@@ -33,6 +33,61 @@ String _prefsKey(Ref ref, String kind) {
   return 'restoflow.printer.$kind.$namespace.$segment';
 }
 
+final _compactRollStorageKey = Provider.family<String, String>((ref, endpoint) {
+  final namespace = ref.watch(nativePrinterNamespaceProvider);
+  final device = ref.watch(nativePrinterDeviceIdProvider);
+  final segment = device == null || device.isEmpty
+      ? kNativePrinterLocalKey
+      : device;
+  return 'restoflow.printer.compact_receipt.${Uri.encodeComponent(namespace)}.'
+      '${Uri.encodeComponent(segment)}/${Uri.encodeComponent(endpoint)}';
+});
+
+/// Saved independently for each app, paired device, and physical endpoint.
+/// A new compatible roll printer starts in fast mode. An explicit false keeps
+/// slower printers on their existing transport.
+final nativeCompactRollProvider =
+    AsyncNotifierProvider.family<NativeCompactRollController, bool, String>(
+      NativeCompactRollController.new,
+    );
+
+class NativeCompactRollController extends FamilyAsyncNotifier<bool, String> {
+  @override
+  Future<bool> build(String arg) async {
+    final key = ref.watch(_compactRollStorageKey(arg));
+    try {
+      return (await SharedPreferences.getInstance()).getBool(key) ?? true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> setEnabled(bool enabled) async {
+    final previous = state.asData;
+    if (state.isLoading || previous == null) return false;
+    final key = ref.read(_compactRollStorageKey(arg));
+    state = const AsyncLoading<bool>().copyWithPrevious(previous);
+    var saved = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      saved = await prefs.setBool(key, enabled);
+    } catch (_) {
+      // Preserve the printer's current mode on a storage error.
+    }
+    if (key == ref.read(_compactRollStorageKey(arg))) {
+      state = saved ? AsyncData(enabled) : previous;
+    }
+    return saved;
+  }
+}
+
+/// Diagnostics can receive a host-specific storage resolver (e.g. the POS
+/// asynchronous pairing scope) without changing their transport interface.
+final nativePrintCompactModeProvider = Provider<Future<bool> Function(String)>(
+  (ref) =>
+      (destination) => ref.read(nativeCompactRollProvider(destination).future),
+);
+
 /// The saved network printer for THIS device, or null when none is configured.
 final networkPrinterConfigProvider =
     AsyncNotifierProvider<

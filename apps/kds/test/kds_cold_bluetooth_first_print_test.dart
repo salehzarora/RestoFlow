@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_feature_kitchen/kitchen_print.dart' as kit;
 import 'package:restoflow_kds/src/print/kds_native_printer.dart';
+import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_native_printing/restoflow_native_printing.dart';
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,6 +50,31 @@ class _RecordingConnector implements BluetoothPrinterConnector {
 
 const _address = '66:32:1E:0A:BB:CD';
 
+class _RecordingApi extends Fake implements BluetoothPrintApi {
+  final writes = <({int size, int chunkBytes, Duration delay})>[];
+
+  @override
+  Future<bool> permissionsGranted() async => true;
+
+  @override
+  Future<BluetoothJobResult> printBytes({
+    required String address,
+    required Uint8List bytes,
+    required Duration timeout,
+    int chunkBytes = kBluetoothChunkBytes,
+    Duration chunkDelay = kBluetoothChunkDelay,
+    Duration drainDelay = kBluetoothDrainDelay,
+  }) async {
+    expect(address, _address);
+    writes.add((size: bytes.length, chunkBytes: chunkBytes, delay: chunkDelay));
+    return BluetoothJobResult(
+      code: BluetoothJobCode.ok,
+      bytesSent: bytes.length,
+      chunks: (bytes.length + chunkBytes - 1) ~/ chunkBytes,
+    );
+  }
+}
+
 void _seedSavedBluetoothProfile() {
   SharedPreferences.setMockInitialValues(<String, Object>{
     'restoflow.printer.selected.kds.local': 'bluetooth',
@@ -60,11 +86,16 @@ void _seedSavedBluetoothProfile() {
 }
 
 /// A FRESH container over the same persisted profile — process recreation.
-ProviderContainer _coldContainer(BluetoothPrinterConnector connector) {
+ProviderContainer _coldContainer(
+  BluetoothPrinterConnector connector, {
+  pp.ReceiptRasterizer? rasterizer,
+}) {
   final container = ProviderContainer(
     overrides: [
       nativePrintingAvailableProvider.overrideWithValue(true),
       bluetoothPrinterConnectorProvider.overrideWithValue(connector),
+      if (rasterizer != null)
+        nativePrintRasterizerProvider.overrideWithValue(rasterizer),
       nativePrinterNamespaceProvider.overrideWithValue('kds'),
     ],
   );
@@ -93,6 +124,56 @@ Future<pp.BridgeSubmitResult?> _kitchenPrint(
 }
 
 void main() {
+  test(
+    'long kitchen ticket uses one compact write on cold start; saved compatibility mode restores pacing',
+    () async {
+      _seedSavedBluetoothProfile();
+      final api = _RecordingApi();
+      final connector = ChannelBluetoothConnector(api: api);
+      final ticket = kit.PrintDocument(
+        title: 'Kitchen',
+        lines: [
+          kit.PrintLine.title('#3F7A2C'),
+          for (var index = 0; index < 40; index++)
+            kit.PrintLine.item('1 × صحن سلطة / סלט $index', null),
+        ],
+      );
+      final first = _coldContainer(
+        connector,
+        rasterizer: const FlutterReceiptRasterizer(),
+      );
+      final bridge = await first.read(kdsActivePrintBridgeReadyProvider.future);
+      expect(
+        (await bridge!.submit(ticket)).outcome,
+        pp.BridgeSubmitOutcome.sentToPrinter,
+      );
+      final fast = api.writes.single;
+      expect(fast.chunkBytes, fast.size);
+      expect(fast.delay, Duration.zero);
+
+      final destination = first.read(activeNativeRollDestinationProvider)!;
+      await first
+          .read(nativeCompactRollProvider(destination).notifier)
+          .setEnabled(false);
+      final recreated = _coldContainer(
+        connector,
+        rasterizer: const FlutterReceiptRasterizer(),
+      );
+      final compatible = await recreated.read(
+        kdsActivePrintBridgeReadyProvider.future,
+      );
+      expect(
+        (await compatible!.submit(ticket)).outcome,
+        pp.BridgeSubmitOutcome.sentToPrinter,
+      );
+      expect(api.writes, hasLength(2));
+      final paced = api.writes.last;
+      expect(paced.chunkBytes, kBluetoothChunkBytes);
+      expect(paced.delay, kBluetoothChunkDelay);
+      expect(fast.size, lessThan(paced.size));
+    },
+  );
+
   test(
     'C. COLD START: the FIRST real kitchen ticket reaches the Bluetooth '
     'printer exactly once — no second ticket needed to warm the connection',

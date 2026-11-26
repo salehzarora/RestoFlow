@@ -1,5 +1,4 @@
 import 'dart:async' show Completer, unawaited;
-import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart'
@@ -16,7 +15,10 @@ import 'package:restoflow_feature_kitchen/kitchen_print.dart'
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart'
     show KdsItemView, KdsTicketMapper, KdsTicketView;
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
-    show kBluetoothPrintTimeout, nativePrintRasterizerProvider;
+    show
+        kBluetoothPrintTimeout,
+        nativePrintRasterizerProvider,
+        sendNativePrintBytes;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../data/order_submission.dart' show kPermanentRejectionCodes;
@@ -25,6 +27,7 @@ import '../state/cart_controller.dart'
 import '../state/outbox_controller.dart' show outboxControllerProvider;
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_bluetooth_printer_config.dart';
+import '../state/pos_compact_receipt.dart';
 import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
 import '../state/pos_printer_transport.dart';
@@ -32,7 +35,7 @@ import '../data/round_print_claim_store.dart';
 import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import 'bluetooth_printer.dart';
 import 'kitchen_ticket_render.dart'
-    show renderKitchenTicketBytes, renderOrderChangeSlipBytes;
+    show renderKitchenTicketJob, renderOrderChangeSlipJob;
 import 'native_print_bridges.dart'
     show kPosNativePrintTimeout, posPrinterDestinationSendGateProvider;
 
@@ -53,7 +56,7 @@ export 'kitchen_ticket_labels.dart' show kitchenTicketPrintLabelsFromL10n;
 /// [posPrinterDestinationSendGateProvider], so when both purposes point at the
 /// SAME physical printer the two documents serialize instead of interleaving.
 ///
-/// 001B: the ticket bytes come from [renderKitchenTicketBytes], which renders the
+/// 001B: the ticket bytes come from [renderKitchenTicketJob], which renders the
 /// SHARED `buildKdsTicketPrintDocument` layout the KDS live print uses — so a
 /// ticket printed straight from the POS carries the SAME operational detail
 /// (structured modifiers, whole-order kitchen counts, prep, kitchen notes,
@@ -126,6 +129,7 @@ final class ResolvedKitchenPrinter {
     required this.destinationKey,
     required this.transportFactory,
     this.mediaProfile = pp.MediaProfile.continuous80,
+    this.compact = false,
   });
 
   /// Canonical per-endpoint key for the SHARED send gate (never logged). Equal
@@ -139,6 +143,7 @@ final class ResolvedKitchenPrinter {
   /// PRINT-LAYOUT-001A: the KITCHEN assignment's selected media profile — width
   /// + margins + pagination for the ticket. Default = backward-compatible 80mm.
   final pp.MediaProfile mediaProfile;
+  final bool compact;
 }
 
 /// ORDER-EDIT-001F — reads a provider exactly like `ProviderContainer.read`
@@ -173,11 +178,12 @@ Future<ResolvedKitchenPrinter?> resolveKitchenPrinterTargetWith(
     case PosPrinterTransportKind.network:
       final net = await read(posKitchenNetworkPrinterConfigProvider.future);
       if (net == null) return null;
+      final key = pp.PrinterDestinationSendGate.networkKey(net.host, net.port);
       return ResolvedKitchenPrinter(
-        destinationKey: pp.PrinterDestinationSendGate.networkKey(
-          net.host,
-          net.port,
-        ),
+        destinationKey: key,
+        compact:
+            !net.mediaProfile.paginates &&
+            await read(posCompactReceiptProvider(key).future),
         mediaProfile: net.mediaProfile,
         transportFactory: () => pp.NetworkTcpPrintTransport(
           host: net.host,
@@ -189,8 +195,12 @@ Future<ResolvedKitchenPrinter?> resolveKitchenPrinterTargetWith(
       final bt = await read(posKitchenBluetoothPrinterConfigProvider.future);
       if (bt == null) return null;
       final connector = read(bluetoothPrinterConnectorProvider);
+      final key = pp.PrinterDestinationSendGate.bluetoothKey(bt.address);
       return ResolvedKitchenPrinter(
-        destinationKey: pp.PrinterDestinationSendGate.bluetoothKey(bt.address),
+        destinationKey: key,
+        compact:
+            !bt.mediaProfile.paginates &&
+            await read(posCompactReceiptProvider(key).future),
         mediaProfile: bt.mediaProfile,
         transportFactory: () => BluetoothClassicPrintTransport(
           connector: connector,
@@ -447,8 +457,9 @@ final kitchenPrintTransportOverrideProvider =
     );
 
 /// The signature of the money-free bytes builder (injectable for tests).
-typedef KitchenBytesBuilder =
-    Future<Uint8List> Function({
+typedef KitchenJobBuilder =
+    Future<pp.EncodedPrintJob> Function({
+      required bool compact,
       required KdsTicketView ticket,
       required KitchenTicketPrintLabels labels,
       pp.ReceiptRasterizer? rasterizer,
@@ -458,8 +469,9 @@ typedef KitchenBytesBuilder =
 
 /// ORDER-EDIT-001F — the signature of the money-free CHANGE-SLIP bytes
 /// builder (injectable for tests); `renderOrderChangeSlipBytes` by default.
-typedef ChangeSlipBytesBuilder =
-    Future<Uint8List> Function({
+typedef ChangeSlipJobBuilder =
+    Future<pp.EncodedPrintJob> Function({
+      required bool compact,
       required OrderChangeSlipView slip,
       required KitchenTicketPrintLabels labels,
       required KitchenChangeSlipLabels changeLabels,
@@ -473,13 +485,13 @@ typedef ChangeSlipBytesBuilder =
 class PosKitchenTicketPrinter {
   PosKitchenTicketPrinter(
     ProviderContainer container, {
-    KitchenBytesBuilder buildBytes = renderKitchenTicketBytes,
-    ChangeSlipBytesBuilder buildSlipBytes = renderOrderChangeSlipBytes,
+    KitchenJobBuilder buildJob = renderKitchenTicketJob,
+    ChangeSlipJobBuilder buildSlipJob = renderOrderChangeSlipJob,
     ResolvedKitchenPrinter? targetOverride,
   }) : this.withReader(
          container.read,
-         buildBytes: buildBytes,
-         buildSlipBytes: buildSlipBytes,
+         buildJob: buildJob,
+         buildSlipJob: buildSlipJob,
          targetOverride: targetOverride,
        );
 
@@ -487,16 +499,16 @@ class PosKitchenTicketPrinter {
   /// [PosProviderReader] — a controller passes its `ref.read`.
   PosKitchenTicketPrinter.withReader(
     this._read, {
-    KitchenBytesBuilder buildBytes = renderKitchenTicketBytes,
-    ChangeSlipBytesBuilder buildSlipBytes = renderOrderChangeSlipBytes,
+    KitchenJobBuilder buildJob = renderKitchenTicketJob,
+    ChangeSlipJobBuilder buildSlipJob = renderOrderChangeSlipJob,
     ResolvedKitchenPrinter? targetOverride,
-  }) : _buildBytes = buildBytes,
-       _buildSlipBytes = buildSlipBytes,
+  }) : _buildJob = buildJob,
+       _buildSlipJob = buildSlipJob,
        _targetOverride = targetOverride;
 
   final PosProviderReader _read;
-  final KitchenBytesBuilder _buildBytes;
-  final ChangeSlipBytesBuilder _buildSlipBytes;
+  final KitchenJobBuilder _buildJob;
+  final ChangeSlipJobBuilder _buildSlipJob;
 
   /// Injectable resolved target for tests; real callers leave it null so the
   /// kitchen slot is resolved from this device's local config.
@@ -508,7 +520,8 @@ class PosKitchenTicketPrinter {
     required KdsTicketView ticket,
     required KitchenTicketPrintLabels labels,
   }) => _send(
-    (resolved) => _buildBytes(
+    (resolved) => _buildJob(
+      compact: resolved.compact,
       ticket: ticket,
       labels: labels,
       rasterizer: _read(nativePrintRasterizerProvider),
@@ -532,7 +545,8 @@ class PosKitchenTicketPrinter {
     required KitchenTicketPrintLabels labels,
     required KitchenChangeSlipLabels changeLabels,
   }) => _send(
-    (resolved) => _buildSlipBytes(
+    (resolved) => _buildSlipJob(
+      compact: resolved.compact,
       slip: slip,
       labels: labels,
       changeLabels: changeLabels,
@@ -546,7 +560,7 @@ class PosKitchenTicketPrinter {
   /// transport-accepted send is `printed`; a render failure, a refused or
   /// thrown send is `failed` (never ambiguous on this path).
   Future<PosKitchenPrintOutcome> _send(
-    Future<Uint8List> Function(ResolvedKitchenPrinter resolved) render,
+    Future<pp.EncodedPrintJob> Function(ResolvedKitchenPrinter resolved) render,
   ) async {
     if (!_read(posNativePrintingAvailableProvider)) {
       return PosKitchenPrintOutcome.unavailable;
@@ -555,9 +569,9 @@ class PosKitchenTicketPrinter {
         _targetOverride ?? await resolveKitchenPrinterTargetWith(_read);
     if (resolved == null) return PosKitchenPrintOutcome.noPrinterConfigured;
 
-    final Uint8List bytes;
+    final pp.EncodedPrintJob job;
     try {
-      bytes = await render(resolved);
+      job = await render(resolved);
     } catch (_) {
       return PosKitchenPrintOutcome.failed;
     }
@@ -570,7 +584,8 @@ class PosKitchenTicketPrinter {
     try {
       final result = await gate.withDestination(
         resolved.destinationKey,
-        () => transport.send(bytes),
+        () =>
+            sendNativePrintBytes(transport, job.bytes, wholeJob: job.wholeJob),
       );
       return result.ok
           ? PosKitchenPrintOutcome.printed

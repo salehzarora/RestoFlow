@@ -133,6 +133,63 @@ void main() {
 
   group('NativeEscPosSender', () {
     test(
+      'saved compact mode survives restart and stays scoped to one physical destination, app and device',
+      () async {
+        ProviderContainer station(String app, String device) {
+          final container = ProviderContainer(
+            overrides: [
+              nativePrinterNamespaceProvider.overrideWithValue(app),
+              nativePrinterDeviceIdProvider.overrideWithValue(device),
+            ],
+          );
+          addTearDown(container.dispose);
+          return container;
+        }
+
+        final target = pp.PrinterDestinationSendGate.bluetoothKey(
+          'AA:BB:CC:DD:EE:FF',
+        );
+        final other = pp.PrinterDestinationSendGate.networkKey(
+          '192.0.2.10',
+          9100,
+        );
+        final kitchen = station('kds', 'device-a');
+        expect(
+          await kitchen.read(nativePrintCompactModeProvider)(target),
+          isTrue,
+        );
+        expect(
+          await kitchen
+              .read(nativeCompactRollProvider(target).notifier)
+              .setEnabled(false),
+          isTrue,
+        );
+        expect(
+          await kitchen.read(nativePrintCompactModeProvider)(other),
+          isTrue,
+        );
+        expect(
+          await station('kds', 'device-a').read(nativePrintCompactModeProvider)(
+            target,
+          ),
+          isFalse,
+        );
+        expect(
+          await station('kds', 'device-b').read(nativePrintCompactModeProvider)(
+            target,
+          ),
+          isTrue,
+        );
+        expect(
+          await station(
+            'kiosk',
+            'device-a',
+          ).read(nativePrintCompactModeProvider)(target),
+          isTrue,
+        );
+      },
+    );
+    test(
       'maps a delivered transport write to sentToPrinter + disposes',
       () async {
         final transport = _FakeTransport(const pp.PrintResult.success());

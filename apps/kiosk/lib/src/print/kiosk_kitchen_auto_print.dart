@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_data_local/kitchen_dispatch_document.dart'
     show
@@ -64,7 +62,7 @@ final kioskKitchenAckProvider = Provider<KioskKitchenAck?>((ref) => null);
 /// injected.
 typedef KioskKitchenTransportSend =
     Future<pp.KitchenTransportOutcome> Function(
-      Uint8List bytes,
+      pp.EncodedPrintJob job,
       KioskKitchenPrintTarget target,
     );
 
@@ -220,12 +218,20 @@ class KioskKitchenTicketPrinter {
             labels: kitchenTicketPrintLabelsForLanguageCode(lang),
             rasterizer: rasterizer,
             restaurantName: await _restaurantName(),
+            mediaProfile: target.media,
             voidRenderer: KitchenTicketRenderer(
               labels: KitchenTicketLabels.forLanguageCode(lang),
               rasterizer: rasterizer,
             ),
           );
-      final bytes = await renderer.renderToBytes(doc);
+      final job = renderer is CanonicalKitchenDispatchRenderer
+          ? await renderer.renderJob(
+              doc,
+              compact: await _ref.read(
+                nativeCompactRollProvider(target.destinationKey).future,
+              ),
+            )
+          : (bytes: await renderer.renderToBytes(doc), wholeJob: false);
 
       // ONE physical attempt, serialized per destination by the process-wide
       // gate (a same-printer receipt never interleaves).
@@ -233,7 +239,7 @@ class KioskKitchenTicketPrinter {
       final gate = _ref.read(kioskPrinterDestinationSendGateProvider);
       final outcome = await gate.withDestination(
         target.destinationKey,
-        () => send(bytes, target),
+        () => send(job, target),
       );
 
       switch (outcome.kind) {
@@ -284,7 +290,7 @@ class KioskKitchenTicketPrinter {
 
   /// The REAL kitchen-safe physical send (no automatic resend of any kind).
   Future<pp.KitchenTransportOutcome> _realSend(
-    Uint8List bytes,
+    pp.EncodedPrintJob job,
     KioskKitchenPrintTarget target,
   ) async {
     final network = target.network;
@@ -292,7 +298,7 @@ class KioskKitchenTicketPrinter {
       return pp.sendKitchenBytesOverTcp(
         host: network.host,
         port: network.port,
-        bytes: bytes,
+        bytes: job.bytes,
       );
     }
     final connector = _ref.read(bluetoothPrinterConnectorProvider);
@@ -304,7 +310,8 @@ class KioskKitchenTicketPrinter {
     }
     final attempt = await connector.sendOnceForKitchen(
       address: target.bluetooth!.address,
-      bytes: bytes,
+      bytes: job.bytes,
+      wholeJob: job.wholeJob,
     );
     return classifyKitchenBluetoothAttempt(attempt);
   }

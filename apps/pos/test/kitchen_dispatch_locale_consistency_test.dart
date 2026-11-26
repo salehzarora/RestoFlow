@@ -290,6 +290,47 @@ class _TargetRepository implements OnlineOrderPrintRepository {
 }
 
 void main() {
+  test(
+    'fast and paced POS spool jobs retain the same lines and styles for all dispatch kinds and languages',
+    () async {
+      const endpoint = 'net|sample.invalid|9100';
+      for (final locale in ['ar', 'he', 'en']) {
+        for (final kind in KitchenSpoolDispatchType.values) {
+          final document = _document(kind);
+          final painter = pp.FakeReceiptRasterizer();
+          var enabled = false;
+          final renderer = PosSelectedLocaleKitchenDispatchRenderer(
+            languageCode: () => locale,
+            isCurrent: () => true,
+            rasterizer: painter,
+            restaurantName: 'QA kitchen',
+            compactForDestination: (key) async {
+              expect(key, endpoint);
+              return enabled;
+            },
+          );
+          final paced = await renderer.renderForDestination(
+            document,
+            destinationKey: endpoint,
+          );
+          final original = painter.requests.single;
+          expect(paced.wholeJob, isFalse);
+          enabled = true;
+          final fast = await renderer.renderForDestination(
+            document,
+            destinationKey: endpoint,
+          );
+          expect(fast.wholeJob, isTrue, reason: '$locale $kind');
+          expect(fast.bytes, isNotEmpty);
+          expect(painter.requests, hasLength(2));
+          expect(painter.requests.last.lines, original.lines);
+          expect(painter.requests.last.styles, original.styles);
+          expect(painter.requests.last.direction, original.direction);
+        }
+      }
+    },
+  );
+
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -563,7 +604,7 @@ void main() {
             'fake_transport_only',
           );
         },
-        bluetoothSend: ({required address, required bytes}) async =>
+        bluetoothSend: ({required address, required job}) async =>
             throw StateError('Bluetooth forbidden in offline test'),
         sendGate: pp.PrinterDestinationSendGate(),
       );

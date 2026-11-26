@@ -9,9 +9,8 @@ import 'bluetooth_printer.dart';
 /// KITCHEN-MODE-001C2C — the SINGLE-ATTEMPT kitchen Bluetooth seam.
 ///
 /// The receipt-oriented [ChannelBluetoothConnector.send] performs ONE clean
-/// automatic retry after a retryable failure — including a FULL resend after
-/// a PARTIAL write. That is acceptable for customer receipts and a
-/// double-ticket hazard for the kitchen. This seam executes EXACTLY one
+/// automatic retry after a proven pre-write connection failure.
+/// The background kitchen spool owns its retry policy. This seam executes one
 /// native dispatch, never resends, never prompts for permissions (the
 /// native job re-checks and reports `permission` itself — a background
 /// worker must not raise UI), and preserves the RAW byte-count evidence the
@@ -20,6 +19,7 @@ final class KitchenBluetoothSendAttempt {
   const KitchenBluetoothSendAttempt({
     required this.result,
     required this.nativeResponded,
+    this.wholeJob = false,
   });
 
   /// The native job result. Meaningful ONLY when [nativeResponded] is true.
@@ -29,6 +29,10 @@ final class KitchenBluetoothSendAttempt {
   /// result was LOST after dispatch (outer backstop fired / channel threw)
   /// — bytes may be mid-write, so nothing may claim they were not sent.
   final bool nativeResponded;
+
+  /// In single-write mode the native byte counter advances only after flush.
+  /// A failed first flush can therefore report zero for a partially sent job.
+  final bool wholeJob;
 }
 
 extension KitchenBluetoothSingleAttempt on ChannelBluetoothConnector {
@@ -37,20 +41,21 @@ extension KitchenBluetoothSingleAttempt on ChannelBluetoothConnector {
     required String address,
     required Uint8List bytes,
     Duration timeout = kBluetoothPrintTimeout,
+    bool wholeJob = false,
   }) async {
     final outer = timeout * 2 + outerTimeoutMargin;
     try {
-      final result = await api
-          .printBytes(
-            address: address,
-            bytes: bytes,
-            timeout: timeout,
-            chunkBytes: chunkBytes,
-            chunkDelay: chunkDelay,
-            drainDelay: drainDelay,
-          )
-          .timeout(outer);
-      return KitchenBluetoothSendAttempt(result: result, nativeResponded: true);
+      final result = await dispatchPrintBytes(
+        address: address,
+        bytes: bytes,
+        timeout: timeout,
+        wholeJob: wholeJob,
+      ).timeout(outer);
+      return KitchenBluetoothSendAttempt(
+        result: result,
+        nativeResponded: true,
+        wholeJob: wholeJob && bytes.isNotEmpty,
+      );
     } on TimeoutException {
       return const KitchenBluetoothSendAttempt(
         result: BluetoothJobResult(
@@ -82,7 +87,8 @@ extension KitchenBluetoothSingleAttempt on ChannelBluetoothConnector {
 ///  * not bonded / channel unsupported          -> unsupported (permanent)
 ///  * connect failed, zero bytes                -> definitelyNotSent
 ///  * native timeout, zero bytes (connect)      -> timeoutBeforeWrite
-///  * write failed, ZERO bytes                  -> definitelyNotSent
+///  * whole-job write failed, even ZERO counted -> ambiguous
+///  * paced write failed, ZERO bytes            -> definitelyNotSent
 ///  * write failed, PARTIAL bytes               -> ambiguous (NEVER resent)
 ///  * anything unproven                         -> ambiguous
 ///
@@ -140,6 +146,11 @@ KitchenTransportOutcome classifyKitchenBluetoothAttempt(
               KitchenTransportOutcomeKind.ambiguous,
               'native_timeout_after_write',
             ),
+    BluetoothJobCode.writeFailed when attempt.wholeJob =>
+      const KitchenTransportOutcome(
+        KitchenTransportOutcomeKind.ambiguous,
+        'whole_job_write_failed',
+      ),
     BluetoothJobCode.writeFailed =>
       zeroBytes
           ? const KitchenTransportOutcome(

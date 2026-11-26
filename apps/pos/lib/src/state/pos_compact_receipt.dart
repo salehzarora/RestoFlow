@@ -20,7 +20,7 @@ class PosCompactReceiptController extends FamilyAsyncNotifier<bool, String> {
     final segment = await ref.watch(posPrinterScopeSegmentProvider.future);
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool(_key(segment)) ?? false;
+      return prefs.getBool(_key(segment)) ?? true;
     } catch (_) {
       return false;
     }

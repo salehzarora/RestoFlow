@@ -12,4 +12,8 @@
 library;
 
 export 'package:restoflow_feature_kitchen/kitchen_print.dart'
-    show renderKitchenTicketBytes, renderOrderChangeSlipBytes;
+    show
+        renderKitchenTicketBytes,
+        renderKitchenTicketJob,
+        renderOrderChangeSlipBytes,
+        renderOrderChangeSlipJob;

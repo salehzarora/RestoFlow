@@ -10,7 +10,6 @@ import 'package:restoflow_pos/src/print/native_print_bridges.dart';
 import 'package:restoflow_pos/src/print/print_bridge.dart'
     show receiptToEscPosDocument;
 import 'package:restoflow_pos/src/print/receipt_logo_asset.dart';
-import 'package:restoflow_pos/src/print/xprinter_compact_raster.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/receipt_print_preview.dart'
     show buildBillDocument, buildReceiptDocument;
@@ -88,7 +87,7 @@ void main() {
                 };
               }
             }
-            final packet = encodeXprinterCompactRaster(
+            final packet = pp.encodeXprinterCompactRaster(
               pp.PrintRasterImageLine(
                 data: data,
                 widthBytes: width,
@@ -123,7 +122,7 @@ void main() {
         data[y * width + x] = (y % 2 == 0) ? 0x81 : 0x1b;
         data[y * width + x + 1] = (y % 3 == 0) ? 0x76 : 0x8f;
       }
-      final packet = encodeXprinterCompactRaster(
+      final packet = pp.encodeXprinterCompactRaster(
         pp.PrintRasterImageLine(
           data: data,
           widthBytes: width,

@@ -1487,7 +1487,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posCompactReceiptHelp =>
-      'כל הקבלה תודפס בגופן האפליקציה על גליל 80 מ״מ. מתאים למדפסת Xprinter XP-T80Q או למדפסת תואמת.';
+      'הדפסת קבלות וכרטיסי מטבח בגופן האפליקציה על גליל 80 מ״מ. אם המדפסת זקוקה לשידור איטי יותר, אפשר לכבות את האפשרות.';
 
   @override
   String get posReceiptThankYou => 'תודה על ביקורכם';
