@@ -923,6 +923,12 @@
     "description": "PRINT-LAYOUT-001: the big, customer-facing order-number heading printed at the top of the receipt (the internal receipt number is no longer printed).",
     "placeholders": { "orderNumber": { "type": "String" } }
   },
+  "posReceiptPoweredBy": "Powered by BIZBOT",
+  "posCompactReceiptTitle": "Fast printing with the app font",
+  "posCompactReceiptHelp": "Print the entire receipt in the app font on an 80 mm roll. Use with an Xprinter XP-T80Q or a compatible printer.",
+  "@posReceiptPoweredBy": {"description": "Brand credit directly below the customer receipt thank-you."},
+  "@posCompactReceiptTitle": {"description": "On-device, per-printer switch for compact full-font customer receipts."},
+  "@posCompactReceiptHelp": {"description": "Explains the 80 mm roll and compatible printer requirement."},
   "posReceiptThankYou": "Thank you for your visit",
   "@posReceiptThankYou": {
     "description": "PRINT-LAYOUT-001: a short thank-you footer line on the cashier receipt."

@@ -1503,6 +1503,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get posReceiptPoweredBy => 'Powered by BIZBOT';
+
+  @override
+  String get posCompactReceiptTitle => 'Fast printing with the app font';
+
+  @override
+  String get posCompactReceiptHelp =>
+      'Print the entire receipt in the app font on an 80 mm roll. Use with an Xprinter XP-T80Q or a compatible printer.';
+
+  @override
   String get posReceiptThankYou => 'Thank you for your visit';
 
   @override
