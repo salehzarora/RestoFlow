@@ -313,6 +313,7 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
     required String address,
     required Uint8List bytes,
     Duration timeout = kBluetoothPrintTimeout,
+    bool wholeJob = false,
   }) async {
     if (!await ensurePermissions()) {
       // Nothing was ever dispatched toward the printer.
@@ -328,9 +329,10 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
     // method has been dispatched and the OUTCOME is unknown (an outer timeout, a
     // mid-write failure, a lost acknowledgement), there is NO second dispatch —
     // a partial physical print may already exist, so only the operator may retry.
-    var attempt = await _job(address, bytes, timeout);
+    final singleWrite = wholeJob && bytes.isNotEmpty;
+    var attempt = await _job(address, bytes, timeout, singleWrite: singleWrite);
     if (!attempt.job.ok && _retryable(attempt)) {
-      attempt = await _job(address, bytes, timeout);
+      attempt = await _job(address, bytes, timeout, singleWrite: singleWrite);
     }
     return _toPrintResult(attempt);
   }
@@ -349,8 +351,9 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
   Future<_BtAttempt> _job(
     String address,
     Uint8List bytes,
-    Duration timeout,
-  ) async {
+    Duration timeout, {
+    required bool singleWrite,
+  }) async {
     // Outer never-hang backstop: two native connect attempts (secure +
     // insecure) plus the whole chunked write + drain must fit comfortably.
     final outer = timeout * 2 + outerTimeoutMargin;
@@ -365,11 +368,25 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
             address: address,
             bytes: bytes,
             timeout: timeout,
-            chunkBytes: chunkBytes,
-            chunkDelay: chunkDelay,
+            chunkBytes: singleWrite ? bytes.length : chunkBytes,
+            chunkDelay: singleWrite ? Duration.zero : chunkDelay,
             drainDelay: drainDelay,
           )
           .timeout(outer);
+      if (singleWrite &&
+          job.ok &&
+          (job.chunks != 1 || job.bytesSent != bytes.length)) {
+        // A short/unknown write can already have moved the paper. The caller
+        // must not retry or report a fully delivered receipt.
+        return _BtAttempt(
+          BluetoothJobResult(
+            code: BluetoothJobCode.unknown,
+            detail: 'incomplete_receipt_write',
+            bytesSent: job.bytesSent,
+          ),
+          pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
+        );
+      }
       return _BtAttempt(job, _nativeOutcome(job));
     } on TimeoutException {
       // The native job never answered. It WAS dispatched (see the boundary note),
@@ -473,8 +490,18 @@ class BluetoothClassicPrintTransport implements pp.PrintTransport {
   final Duration timeout;
 
   @override
-  Future<pp.PrintResult> send(Uint8List bytes) =>
-      connector.send(address: address, bytes: bytes, timeout: timeout);
+  Future<pp.PrintResult> send(Uint8List bytes, {bool wholeJob = false}) {
+    final channel = connector;
+    if (wholeJob && channel is ChannelBluetoothConnector) {
+      return channel.send(
+        address: address,
+        bytes: bytes,
+        timeout: timeout,
+        wholeJob: true,
+      );
+    }
+    return connector.send(address: address, bytes: bytes, timeout: timeout);
+  }
 
   @override
   Future<void> dispose() async {}

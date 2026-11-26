@@ -1496,6 +1496,16 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get posReceiptPoweredBy => 'مدعوم من BIZBOT';
+
+  @override
+  String get posCompactReceiptTitle => 'طباعة سريعة بخط التطبيق';
+
+  @override
+  String get posCompactReceiptHelp =>
+      'يطبع الإيصال كاملًا بخط التطبيق على رول 80 مم. فعّله لطابعة Xprinter XP-T80Q أو طابعة متوافقة.';
+
+  @override
   String get posReceiptThankYou => 'شكراً لزيارتكم';
 
   @override

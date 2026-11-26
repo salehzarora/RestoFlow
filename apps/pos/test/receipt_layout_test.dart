@@ -9,7 +9,7 @@ import 'package:restoflow_pos/src/print/print_bridge.dart'
 import 'package:restoflow_pos/src/print/print_document.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/receipt_print_preview.dart'
-    show buildReceiptDocument;
+    show buildBillDocument, buildReceiptDocument;
 
 /// PRINT-LAYOUT-001: the cashier receipt layout. The internal receipt number is
 /// no longer printed to the customer; the customer-facing ORDER number is a big
@@ -131,19 +131,34 @@ void main() {
       },
     );
 
-    test('adds a short thank-you footer', () async {
-      final l10n = await _l10n('en');
-      final doc = buildReceiptDocument(
-        l10n,
-        _order(),
-        _payment(),
-        isDemo: false,
+    for (final (locale, credit) in const [
+      ('ar', 'مدعوم من BIZBOT'),
+      ('he', 'מופעל על ידי BIZBOT'),
+      ('en', 'Powered by BIZBOT'),
+    ]) {
+      test(
+        'customer bill and receipt end in a single localized $locale credit',
+        () async {
+          final l10n = await _l10n(locale);
+          for (final doc in [
+            buildBillDocument(l10n, _order(), isDemo: false),
+            buildReceiptDocument(l10n, _order(), _payment(), isDemo: false),
+          ]) {
+            final lines = doc.lines;
+            expect(lines[lines.length - 2].left, l10n.posReceiptThankYou);
+            expect(lines.last.kind, PrintLineKind.center);
+            expect(lines.last.left, credit);
+            final native = receiptToEscPosDocument(doc);
+            final nativeCredit = native.lines
+                .whereType<pp.PrintTextLine>()
+                .singleWhere((line) => line.text == credit);
+            expect(nativeCredit.alignment, pp.PrintAlignment.center);
+            expect(nativeCredit.emphasis, pp.TextEmphasis.normal);
+            expect(credit.allMatches(documentToHtml(doc)).length, 1);
+          }
+        },
       );
-      expect(
-        doc.lines.any((l) => (l.left ?? '') == l10n.posReceiptThankYou),
-        isTrue,
-      );
-    });
+    }
 
     test(
       'preserves the emphasised TOTAL with the money value (money untouched)',

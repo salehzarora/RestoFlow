@@ -2698,6 +2698,24 @@ abstract class AppLocalizations {
   /// **'Order {orderNumber}'**
   String posReceiptOrderHeading(String orderNumber);
 
+  /// Brand credit directly below the customer receipt thank-you.
+  ///
+  /// In en, this message translates to:
+  /// **'Powered by BIZBOT'**
+  String get posReceiptPoweredBy;
+
+  /// On-device, per-printer switch for compact full-font customer receipts.
+  ///
+  /// In en, this message translates to:
+  /// **'Fast printing with the app font'**
+  String get posCompactReceiptTitle;
+
+  /// Explains the 80 mm roll and compatible printer requirement.
+  ///
+  /// In en, this message translates to:
+  /// **'Print the entire receipt in the app font on an 80 mm roll. Use with an Xprinter XP-T80Q or a compatible printer.'**
+  String get posCompactReceiptHelp;
+
   /// PRINT-LAYOUT-001: a short thank-you footer line on the cashier receipt.
   ///
   /// In en, this message translates to:

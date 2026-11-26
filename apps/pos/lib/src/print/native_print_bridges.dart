@@ -10,6 +10,7 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../state/pos_bluetooth_printer_config.dart';
+import '../state/pos_compact_receipt.dart';
 import '../state/pos_device_context.dart' show posPrinterScopeSegmentProvider;
 import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_assignments.dart';
@@ -19,6 +20,7 @@ import '../state/receipt_print_controller.dart'
 import 'bluetooth_printer.dart';
 import 'print_bridge.dart';
 import 'print_document.dart' as app;
+import 'xprinter_compact_raster.dart';
 
 /// The bounded timeout for a native print attempt (ANDROID-003): a Wi-Fi/BT
 /// printer that is off or out of range fails fast instead of hanging the UI.
@@ -39,6 +41,7 @@ class NativeTransportPrintBridge implements PosPrintBridge {
     this.profile = pp.PrinterProfile.escPos80mm,
     this.mediaProfile = pp.MediaProfile.continuous80,
     this.rasterizer,
+    this.compactReceipt = false,
     this.sendGate,
     this.destinationKey,
     this.pageLabel,
@@ -78,8 +81,31 @@ class NativeTransportPrintBridge implements PosPrintBridge {
   /// correctly on printers without a Unicode codepage.
   final pp.ReceiptRasterizer? rasterizer;
 
+  /// Enabled for this saved customer printer by its operator. Compact raster
+  /// bands rely on the configured print area being exactly 576 dots wide.
+  final bool compactReceipt;
+
+  bool get _useCompact =>
+      compactReceipt &&
+      mediaProfile.id == pp.MediaProfileId.continuous80 &&
+      mediaProfile.widthDots == pp.MediaProfile.continuous80.widthDots &&
+      !mediaProfile.paginates &&
+      profile.paperWidth == pp.PaperWidth.mm80 &&
+      profile.capabilities.supportsRaster &&
+      rasterizer != null;
+
   @override
   Future<pp.BridgeSubmitResult> submit(app.PrintDocument document) async {
+    if (_useCompact) {
+      Uint8List? compact;
+      try {
+        compact = await _encodeCompact(document);
+      } catch (_) {
+        // No bytes have been dispatched. The normal renderer can still print
+        // the original document, including its logo, with the normal pacing.
+      }
+      if (compact != null) return _send(compact, wholeJob: true);
+    }
     // PRINT-BRANDING-LOGO-001 (§4): the logo can only be omitted BEFORE the
     // transport begins. If ENCODING the logo-bearing document fails (a raster
     // encoding failure — case A), strip the logo and re-encode text-only; nothing
@@ -140,6 +166,36 @@ class NativeTransportPrintBridge implements PosPrintBridge {
         ],
       );
 
+  Future<Uint8List?> _encodeCompact(app.PrintDocument document) async {
+    final escpos = receiptToEscPosDocument(
+      document,
+      columns: mediaProfile.columns,
+    );
+    if (!escpos.lines.any((line) => line is pp.PrintTextLine)) return null;
+    // Use the app font for every language, including an all-ASCII receipt.
+    // Keep the existing renderer's RTL handling, semantic styles, logo,
+    // and blank bottom row. Only the wire format of the body changes.
+    final rendered = await pp.rasterizeTextDocument(
+      escpos,
+      rasterizer: rasterizer!,
+      widthDots: mediaProfile.widthDots,
+    );
+    final preamble = pp.leadingPreambleLines(escpos);
+    final body = rendered.lines[preamble.length] as pp.PrintRasterImageLine;
+    final tail = pp.EscPosCommandBuilder()..feed(mediaProfile.feedLines);
+    if (profile.capabilities.supportsCut) {
+      tail
+        ..init()
+        ..feed(2)
+        ..cut();
+    }
+    return (BytesBuilder(copy: false)
+          ..add(adapter.encode(pp.PrintDocument(preamble), profile))
+          ..add(encodeXprinterCompactRaster(body))
+          ..add(tail.bytes()))
+        .takeBytes();
+  }
+
   Future<Uint8List> _encode(app.PrintDocument document) async {
     // PRINT-LAYOUT-001A: text columns + raster width + margins + pagination all
     // come from the selected media profile — never a hardcoded 80mm/576/48.
@@ -166,16 +222,23 @@ class NativeTransportPrintBridge implements PosPrintBridge {
     return adapter.encode(doc, profile);
   }
 
-  Future<pp.BridgeSubmitResult> _send(Uint8List bytes) async {
+  Future<pp.BridgeSubmitResult> _send(
+    Uint8List bytes, {
+    bool wholeJob = false,
+  }) async {
     final transport = transportFactory();
     try {
       // Only the PHYSICAL transport operation runs under the shared
       // destination gate; document building/encoding already happened.
       final gate = sendGate;
       final key = destinationKey;
+      Future<pp.PrintResult> send() =>
+          wholeJob && transport is BluetoothClassicPrintTransport
+          ? transport.send(bytes, wholeJob: true)
+          : transport.send(bytes);
       final result = (gate != null && key != null)
-          ? await gate.withDestination(key, () => transport.send(bytes))
-          : await transport.send(bytes);
+          ? await gate.withDestination(key, send)
+          : await send();
       if (result.ok) {
         return const pp.BridgeSubmitResult.sentToPrinter(mode: 'native');
       }
@@ -228,16 +291,18 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
     case PosPrinterTransportKind.bluetooth:
       final bt = ref.watch(posBluetoothPrinterConfigProvider).valueOrNull;
       if (bt != null) {
+        final key = pp.PrinterDestinationSendGate.bluetoothKey(bt.address);
         final connector = ref.watch(bluetoothPrinterConnectorProvider);
         return NativeTransportPrintBridge(
           rasterizer: rasterizer,
           // PRINT-LAYOUT-001A: the CUSTOMER-receipt assignment's selected media
           // profile drives width + pagination for this send.
           mediaProfile: bt.mediaProfile,
+          compactReceipt:
+              !bt.mediaProfile.paginates &&
+              ref.watch(posCompactReceiptProvider(key)).valueOrNull == true,
           sendGate: ref.watch(posPrinterDestinationSendGateProvider),
-          destinationKey: pp.PrinterDestinationSendGate.bluetoothKey(
-            bt.address,
-          ),
+          destinationKey: key,
           transportFactory: () => BluetoothClassicPrintTransport(
             connector: connector,
             address: bt.address,
@@ -251,14 +316,18 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
     case PosPrinterTransportKind.network:
       final net = ref.watch(posNetworkPrinterConfigProvider).valueOrNull;
       if (net != null) {
+        final key = pp.PrinterDestinationSendGate.networkKey(
+          net.host,
+          net.port,
+        );
         return NativeTransportPrintBridge(
           rasterizer: rasterizer,
           mediaProfile: net.mediaProfile,
+          compactReceipt:
+              !net.mediaProfile.paginates &&
+              ref.watch(posCompactReceiptProvider(key)).valueOrNull == true,
           sendGate: ref.watch(posPrinterDestinationSendGateProvider),
-          destinationKey: pp.PrinterDestinationSendGate.networkKey(
-            net.host,
-            net.port,
-          ),
+          destinationKey: key,
           transportFactory: () => pp.NetworkTcpPrintTransport(
             host: net.host,
             port: net.port,
@@ -299,14 +368,16 @@ final posActivePrintBridgeReadyProvider = FutureProvider<PosPrintBridge?>((
     case PosPrinterTransportKind.bluetooth:
       final bt = await ref.watch(posBluetoothPrinterConfigProvider.future);
       if (bt != null) {
+        final key = pp.PrinterDestinationSendGate.bluetoothKey(bt.address);
         final connector = ref.watch(bluetoothPrinterConnectorProvider);
         return NativeTransportPrintBridge(
           rasterizer: rasterizer,
           mediaProfile: bt.mediaProfile,
+          compactReceipt:
+              !bt.mediaProfile.paginates &&
+              await ref.watch(posCompactReceiptProvider(key).future),
           sendGate: ref.watch(posPrinterDestinationSendGateProvider),
-          destinationKey: pp.PrinterDestinationSendGate.bluetoothKey(
-            bt.address,
-          ),
+          destinationKey: key,
           transportFactory: () => BluetoothClassicPrintTransport(
             connector: connector,
             address: bt.address,
@@ -317,14 +388,18 @@ final posActivePrintBridgeReadyProvider = FutureProvider<PosPrintBridge?>((
     case PosPrinterTransportKind.network:
       final net = await ref.watch(posNetworkPrinterConfigProvider.future);
       if (net != null) {
+        final key = pp.PrinterDestinationSendGate.networkKey(
+          net.host,
+          net.port,
+        );
         return NativeTransportPrintBridge(
           rasterizer: rasterizer,
           mediaProfile: net.mediaProfile,
+          compactReceipt:
+              !net.mediaProfile.paginates &&
+              await ref.watch(posCompactReceiptProvider(key).future),
           sendGate: ref.watch(posPrinterDestinationSendGateProvider),
-          destinationKey: pp.PrinterDestinationSendGate.networkKey(
-            net.host,
-            net.port,
-          ),
+          destinationKey: key,
           transportFactory: () => pp.NetworkTcpPrintTransport(
             host: net.host,
             port: net.port,

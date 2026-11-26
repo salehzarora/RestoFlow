@@ -270,6 +270,11 @@ class ReceiptPrintPreview extends ConsumerWidget {
                               ),
                             ),
                           ),
+                          Text(
+                            l10n.posReceiptPoweredBy,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall,
+                          ),
                           const SizedBox(height: RestoflowSpacing.sm),
                           // TABLET-UX-001 (E): only demo mode carries its
                           // provisional/demo caveats. A real receipt no longer
@@ -553,6 +558,7 @@ PrintDocument _buildCustomerDocument(
       ],
       // Footer — a short thank-you, then (demo only) the mode notes.
       PrintLine.center(l10n.posReceiptThankYou),
+      PrintLine.center(l10n.posReceiptPoweredBy),
       // TABLET-UX-001 (E): a printer-status message must NEVER be baked into the
       // printed receipt — it would print "printing not connected" ON the paper
       // even when the print succeeded. Printer status is UI-only feedback now.

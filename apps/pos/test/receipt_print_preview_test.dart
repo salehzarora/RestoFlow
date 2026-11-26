@@ -101,6 +101,12 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const Key('preview-thank-you')), findsOneWidget);
+      final credit = find.descendant(
+        of: dialog,
+        matching: find.text(l10n.posReceiptPoweredBy),
+      );
+      expect(credit, findsOneWidget);
+      expect(tester.widget<Text>(credit).textAlign, TextAlign.center);
       expect(
         tester.widget<Text>(find.byKey(const Key('preview-total'))).data,
         '₪42.00',
@@ -140,6 +146,7 @@ void main() {
     // …while the customer-facing order number + thank-you ARE.
     expect(html, contains('DEMO-0001')); // order number (in the heading)
     expect(html, contains(l10n.posReceiptThankYou)); // thank-you footer
+    expect(l10n.posReceiptPoweredBy.allMatches(html).length, 1);
     expect(html, contains('Classic Burger')); // item
     expect(html, contains('₪42.00')); // total + cash
     expect(html, contains('₪0.00')); // change

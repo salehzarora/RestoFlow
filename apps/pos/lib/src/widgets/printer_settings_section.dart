@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../state/pos_bluetooth_printer_config.dart';
 import '../state/pos_cash_drawer_setting.dart';
+import '../state/pos_compact_receipt.dart';
 import '../state/pos_kitchen_printer_copy.dart';
 import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_purpose.dart';
@@ -63,6 +65,7 @@ class _PrinterSettingsSectionState
         ref.watch(posSelectedPrinterTransportFamily(_purpose)).valueOrNull ??
         PosPrinterTransportKind.network;
     final kitchen = _purpose == PosPrinterPurpose.kitchenTicket;
+    final customerEndpoint = kitchen ? null : _rollDestination(selected);
     final customerHasPrinter =
         ref.watch(posNetworkPrinterConfigProvider).valueOrNull != null ||
         ref.watch(posBluetoothPrinterConfigProvider).valueOrNull != null;
@@ -191,6 +194,8 @@ class _PrinterSettingsSectionState
         // the setter persists into the authoritative per-device namespace.
         if (!kitchen) ...[
           const SizedBox(height: RestoflowSpacing.md),
+          if (customerEndpoint != null)
+            _CompactReceiptSwitch(destination: customerEndpoint),
           SwitchListTile(
             key: const Key('cash-drawer-auto-open-switch'),
             contentPadding: EdgeInsets.zero,
@@ -204,6 +209,57 @@ class _PrinterSettingsSectionState
           ),
         ],
       ],
+    );
+  }
+
+  String? _rollDestination(PosPrinterTransportKind transport) {
+    switch (transport) {
+      case PosPrinterTransportKind.bluetooth:
+        final printer = ref
+            .watch(posBluetoothPrinterConfigProvider)
+            .valueOrNull;
+        return printer?.mediaProfile.id == pp.MediaProfileId.continuous80
+            ? pp.PrinterDestinationSendGate.bluetoothKey(printer!.address)
+            : null;
+      case PosPrinterTransportKind.network:
+        final printer = ref.watch(posNetworkPrinterConfigProvider).valueOrNull;
+        return printer?.mediaProfile.id == pp.MediaProfileId.continuous80
+            ? pp.PrinterDestinationSendGate.networkKey(
+                printer!.host,
+                printer.port,
+              )
+            : null;
+    }
+  }
+}
+
+class _CompactReceiptSwitch extends ConsumerWidget {
+  const _CompactReceiptSwitch({required this.destination});
+  final String destination;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final provider = posCompactReceiptProvider(destination);
+    final current = ref.watch(provider);
+    return SwitchListTile(
+      key: const Key('compact-app-font-receipt'),
+      contentPadding: EdgeInsets.zero,
+      title: Text(l10n.posCompactReceiptTitle),
+      subtitle: Text(l10n.posCompactReceiptHelp),
+      value: current.valueOrNull ?? false,
+      onChanged: current.isLoading
+          ? null
+          : (enabled) async {
+              final saved = await ref
+                  .read(provider.notifier)
+                  .setEnabled(enabled);
+              if (!saved && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(l10n.printerProfilesSaveFailure)),
+                );
+              }
+            },
     );
   }
 }

@@ -1480,6 +1480,16 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String get posReceiptPoweredBy => 'מופעל על ידי BIZBOT';
+
+  @override
+  String get posCompactReceiptTitle => 'הדפסה מהירה בגופן האפליקציה';
+
+  @override
+  String get posCompactReceiptHelp =>
+      'כל הקבלה תודפס בגופן האפליקציה על גליל 80 מ״מ. מתאים למדפסת Xprinter XP-T80Q או למדפסת תואמת.';
+
+  @override
   String get posReceiptThankYou => 'תודה על ביקורכם';
 
   @override
