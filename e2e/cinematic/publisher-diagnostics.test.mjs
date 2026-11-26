@@ -46,6 +46,47 @@ test('startup classification never exports raw credentials, SQL or arbitrary err
   assert.equal(summarizeStartupLog('failed to pull\n'.repeat(10001)).classifications.image_pull_failed, 9999);
 });
 
+test('an actual CLI retry is separate from its returned pull error after cleanup', () => {
+  const ref = 'public.ecr.aws/supabase/realtime:v2.107.5';
+  const privateValue = 'PRIVATE_URL?key=synthetic-private-value';
+  const failed = `failed to pull docker image: unexpected status from HEAD request to "https://public.ecr.aws/v2/supabase/realtime/manifests/v2.107.5": 403 Forbidden ${privateValue}`;
+  const log = [
+    'Starting database...', 'Initialising schema...', failed, `Retrying after 4s: ${ref}`,
+    `failed to display json stream: toomanyrequests: ${privateValue}`, `Retrying after 8s: ${ref}`,
+    'Stopping containers...', failed, 'failed to pull docker image: manifest unknown',
+  ].join('\r\n');
+  const result = summarizeStartupLog(log);
+  assert.equal(result.classifications.schema_initializing, 1);
+  assert.deepEqual(result.imagePulls, {
+    retries: [{ image: 'realtime:v2.107.5', error: 'http_forbidden' }, { image: 'realtime:v2.107.5', error: 'rate_limited' }],
+    firstTerminalPull: { image: 'realtime:v2.107.5', error: 'http_forbidden' },
+  });
+  assert.ok(!JSON.stringify(result).includes(privateValue));
+  assert.ok(!JSON.stringify(result).includes('public.ecr.aws'));
+  const recovered = summarizeStartupLog(log.split('Stopping containers...')[0] + '\nStarted supabase local development setup.');
+  assert.equal(recovered.imagePulls.firstTerminalPull, null);
+});
+
+test('pull diagnostics reject foreign references, arbitrary tags and blind attribution', () => {
+  const secret = 'SYNTHETIC_PRIVATE_MARKER';
+  const lines = [
+    `failed to pull docker image: unexpected status from registry: ${secret}`,
+    `Retrying after 4s: public.ecr.aws/supabase/postgres:${secret}`,
+    `failed to pull docker image: ${secret} (status code: 429)`,
+    'Retrying after 8s: public.ecr.aws/supabase/postgres:17.6.1.136',
+    'Stopping containers...',
+    `failed to pull docker image: error from https://foreign.invalid/public.ecr.aws/supabase/postgres:17.6.1.136: ${secret} 403 Forbidden`,
+  ];
+  const result = summarizeStartupLog(lines.join('\n'));
+  assert.deepEqual(result.imagePulls, {
+    retries: [{ image: null, error: 'unexpected_status' }, { image: 'postgres:17.6.1.136', error: 'rate_limited' }],
+    firstTerminalPull: { image: null, error: 'http_forbidden' },
+  });
+  assert.ok(!JSON.stringify(result).includes(secret));
+  assert.ok(!JSON.stringify(result).includes('foreign.invalid'));
+  assert.equal(summarizeStartupLog(Array(50).fill(lines[1]).join('\n')).imagePulls.retries.length, 16);
+});
+
 test('startup failure evidence survives absence of fixture and publisher receipts', () => {
   const dir = mkdtempSync(join(tmpdir(), 'cinematic-startup-diagnostics-'));
   const privateDir = join(dir, 'private'); const publicDir = join(dir, 'public');

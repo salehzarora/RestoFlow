@@ -171,18 +171,74 @@ const startupPatterns = Object.freeze({
   sql_permission: /SQLSTATE 42501/,
   sql_constraint: /SQLSTATE 23(?:502|503|505|514)/,
   database_started: /Starting database/i,
+  schema_initializing: /Initialising schema\.\.\./i,
   migrations_started: /Applying migration/i,
   containers_started: /Starting containers/i,
   health_checks_started: /Waiting for health checks/i,
   stack_started: /Started supabase local development setup/i,
 });
 
+// CLI 2.107.0 prints each retry target, even when Docker's error omits it.
+// Return only predeclared public image tags. Registry URLs, unknown tags,
+// response bodies and credentials must never become diagnostic output.
+const startupImages = new Set([
+  'postgres:17.6.1.136', 'realtime:v2.107.5', 'storage-api:v1.60.20', 'gotrue:v2.190.0',
+  'edge-runtime:v1.74.1', 'postgrest:v14.13', 'kong:2.8.1', 'mailpit:v1.22.3',
+]);
+function publicPullImage(line) {
+  const refs = line.matchAll(/(?:^|[\s"'(])(?:https?:\/\/)?public\.ecr\.aws\/(?:v2\/)?supabase\/([\w-]+)(?::|\/manifests\/)([\w.-]+)(?=$|[\s"',:)?])/g);
+  const images = new Set();
+  for (const [, name, tag] of refs) {
+    const id = `${name}:${tag}`;
+    if (startupImages.has(id)) images.add(id);
+  }
+  return images.size === 1 ? [...images][0] : null;
+}
+
+const pullFailure = /^(?:Error:\s*)?(?:failed to pull docker image|failed to display json stream):/i;
+function pullError(line) {
+  if (/toomanyrequests|too many requests|(?:http|status(?: code)?)[\s:=]+429\b|:\s*429\b/i.test(line)) return 'rate_limited';
+  if (/403 forbidden|(?:http|status(?: code)?)[\s:=]+403\b|:\s*403\b/i.test(line)) return 'http_forbidden';
+  if (/unauthorized|authentication required|401 Unauthorized/i.test(line)) return 'unauthorized';
+  if (/pull access denied|denied:|access denied/i.test(line)) return 'access_denied';
+  if (/manifest unknown|manifest_unknown/i.test(line)) return 'manifest_unknown';
+  if (/blob unknown|blob_unknown/i.test(line)) return 'blob_unknown';
+  if (startupPatterns.network_timeout.test(line)) return 'network_timeout';
+  if (startupPatterns.network_resolution.test(line)) return 'network_resolution';
+  if (/unexpected status|unexpected HTTP/i.test(line)) return 'unexpected_status';
+  return 'unclassified';
+}
+
+function summarizeImagePulls(lines) {
+  const retries = [];
+  let cleanup = false;
+  let firstTerminalPull = null;
+  for (const [index, raw] of lines.entries()) {
+    const line = raw.trim();
+    const retry = /^Retrying after (?:4|8)s: (\S+)$/.exec(line);
+    if (retry && retries.length < 16) {
+      const previous = lines[index - 1]?.trim() ?? '';
+      const image = /^public\.ecr\.aws\/supabase\/([\w.-]+:[\w.-]+)$/.exec(retry[1])?.[1];
+      retries.push({ image: startupImages.has(image) ? image : null,
+        error: pullFailure.test(previous) ? pullError(previous) : 'unclassified' });
+    }
+    // On fatal startup errors Run() executes DockerRemoveAll, which prints
+    // this marker before the CLI reports the returned error. Earlier errors
+    // can recover. A previous retry never supplies a missing terminal image.
+    if (line === 'Stopping containers...') cleanup = true;
+    if (cleanup && !firstTerminalPull && pullFailure.test(line)) {
+      firstTerminalPull = { image: publicPullImage(line), error: pullError(line) };
+    }
+  }
+  return { retries, firstTerminalPull };
+}
+
 export function summarizeStartupLog(text) {
-  // Export fixed enum counts only. Even startup errors can embed local keys,
+  // Export fixed classifications only. Even startup errors can embed local keys,
   // database URLs, environment values or SQL data; never retain raw lines.
   const lines = String(text).split('\n');
   return { classifications: Object.fromEntries(Object.entries(startupPatterns).map(([name, pattern]) =>
-    [name, Math.min(9999, lines.filter(line => pattern.test(line)).length)])) };
+    [name, Math.min(9999, lines.filter(line => pattern.test(line)).length)])), imagePulls: summarizeImagePulls(lines) };
 }
 
 export function capturePublisherRuntime(privateDir, publicDir) {
