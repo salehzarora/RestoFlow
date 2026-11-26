@@ -273,6 +273,7 @@ void main() {
               ({
                 required slip,
                 required compact,
+                required compactEncoder,
                 required labels,
                 required changeLabels,
                 rasterizer,
@@ -327,6 +328,7 @@ void main() {
             ({
               required slip,
               required compact,
+              required compactEncoder,
               required labels,
               required changeLabels,
               rasterizer,

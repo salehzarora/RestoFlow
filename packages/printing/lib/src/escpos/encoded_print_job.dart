@@ -21,6 +21,7 @@ Future<Uint8List?> tryEncodeCompactRoll(
   required MediaProfile mediaProfile,
   required PrinterProfile profile,
   required ReceiptRasterizer? rasterizer,
+  CompactRasterEncoder compactEncoder = encodeXprinterCompactRaster,
   PrintAdapter adapter = const EscPosPrintAdapter(),
 }) async {
   if (rasterizer == null ||
@@ -54,7 +55,7 @@ Future<Uint8List?> tryEncodeCompactRoll(
     }
     return (BytesBuilder(copy: false)
           ..add(adapter.encode(PrintDocument(preamble), profile))
-          ..add(encodeXprinterCompactRaster(body))
+          ..add(compactEncoder(body))
           ..add(tail.bytes()))
         .takeBytes();
   } catch (_) {
@@ -70,6 +71,7 @@ Future<EncodedPrintJob> encodePrintJob(
   required MediaProfile mediaProfile,
   required ReceiptRasterizer? rasterizer,
   PrinterProfile profile = PrinterProfile.escPos80mm,
+  CompactRasterEncoder compactEncoder = encodeXprinterCompactRaster,
   PrintAdapter adapter = const EscPosPrintAdapter(),
   PageLineLabel? pageLabel,
   PageLineLabel? continuationHeader,
@@ -81,6 +83,7 @@ Future<EncodedPrintJob> encodePrintJob(
       profile: profile,
       rasterizer: rasterizer,
       adapter: adapter,
+      compactEncoder: compactEncoder,
     );
     if (bytes != null) return (bytes: bytes, wholeJob: true);
   }

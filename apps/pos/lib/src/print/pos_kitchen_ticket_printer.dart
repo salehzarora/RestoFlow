@@ -460,6 +460,7 @@ final kitchenPrintTransportOverrideProvider =
 typedef KitchenJobBuilder =
     Future<pp.EncodedPrintJob> Function({
       required bool compact,
+      required pp.CompactRasterEncoder compactEncoder,
       required KdsTicketView ticket,
       required KitchenTicketPrintLabels labels,
       pp.ReceiptRasterizer? rasterizer,
@@ -472,6 +473,7 @@ typedef KitchenJobBuilder =
 typedef ChangeSlipJobBuilder =
     Future<pp.EncodedPrintJob> Function({
       required bool compact,
+      required pp.CompactRasterEncoder compactEncoder,
       required OrderChangeSlipView slip,
       required KitchenTicketPrintLabels labels,
       required KitchenChangeSlipLabels changeLabels,
@@ -522,6 +524,7 @@ class PosKitchenTicketPrinter {
   }) => _send(
     (resolved) => _buildJob(
       compact: resolved.compact,
+      compactEncoder: pp.encodeXprinterSparseRaster,
       ticket: ticket,
       labels: labels,
       rasterizer: _read(nativePrintRasterizerProvider),
@@ -547,6 +550,7 @@ class PosKitchenTicketPrinter {
   }) => _send(
     (resolved) => _buildSlipJob(
       compact: resolved.compact,
+      compactEncoder: pp.encodeXprinterSparseRaster,
       slip: slip,
       labels: labels,
       changeLabels: changeLabels,

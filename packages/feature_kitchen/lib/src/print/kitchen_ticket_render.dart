@@ -40,6 +40,7 @@ Future<Uint8List> renderKitchenTicketBytes({
 /// carries the send policy for the bytes the encoder actually produced.
 Future<pp.EncodedPrintJob> renderKitchenTicketJob({
   required bool compact,
+  pp.CompactRasterEncoder compactEncoder = pp.encodeXprinterCompactRaster,
   required KdsTicketView ticket,
   required KitchenTicketPrintLabels labels,
   pp.ReceiptRasterizer? rasterizer,
@@ -59,6 +60,7 @@ Future<pp.EncodedPrintJob> renderKitchenTicketJob({
   return pp.encodePrintJob(
     kitchenTicketToEscPosDocument(document, columns: media.columns),
     compact: compact,
+    compactEncoder: compactEncoder,
     mediaProfile: media,
     rasterizer: rasterizer,
     adapter: adapter,
@@ -98,6 +100,7 @@ Future<Uint8List> renderOrderChangeSlipBytes({
 /// carries the send policy for the bytes the encoder actually produced.
 Future<pp.EncodedPrintJob> renderOrderChangeSlipJob({
   required bool compact,
+  pp.CompactRasterEncoder compactEncoder = pp.encodeXprinterCompactRaster,
   required OrderChangeSlipView slip,
   required KitchenChangeSlipLabels changeLabels,
   required KitchenTicketPrintLabels labels,
@@ -119,6 +122,7 @@ Future<pp.EncodedPrintJob> renderOrderChangeSlipJob({
   return pp.encodePrintJob(
     kitchenTicketToEscPosDocument(document, columns: media.columns),
     compact: compact,
+    compactEncoder: compactEncoder,
     mediaProfile: media,
     rasterizer: rasterizer,
     adapter: adapter,

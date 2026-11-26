@@ -291,6 +291,41 @@ class _TargetRepository implements OnlineOrderPrintRepository {
 
 void main() {
   test(
+    'POS spool selects sparse encoding for every kitchen dispatch kind',
+    () async {
+      const rasterizer = FlutterReceiptRasterizer();
+      final pos = PosSelectedLocaleKitchenDispatchRenderer(
+        languageCode: () => 'ar',
+        isCurrent: () => true,
+        rasterizer: rasterizer,
+        restaurantName: 'QA kitchen',
+        compactForDestination: (_) async => true,
+      );
+      final canonical = _manualRenderer('ar', rasterizer);
+      for (final kind in KitchenSpoolDispatchType.values) {
+        final document = _document(kind);
+        final sent = await pos.renderForDestination(
+          document,
+          destinationKey: 'printer',
+        );
+        final sparse = await canonical.renderJob(
+          document,
+          compact: true,
+          compactEncoder: pp.encodeXprinterSparseRaster,
+        );
+        final compact = await canonical.renderJob(document, compact: true);
+        expect(sent.wholeJob, isTrue);
+        expect(sent.bytes, orderedEquals(sparse.bytes), reason: '$kind');
+        expect(
+          sent.bytes.length,
+          lessThan(compact.bytes.length),
+          reason: '$kind',
+        );
+      }
+    },
+  );
+
+  test(
     'fast and paced POS spool jobs retain the same lines and styles for all dispatch kinds and languages',
     () async {
       const endpoint = 'net|sample.invalid|9100';

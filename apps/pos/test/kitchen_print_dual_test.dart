@@ -759,6 +759,7 @@ void main() {
             ({
               required ticket,
               required compact,
+              required compactEncoder,
               required labels,
               rasterizer,
               mediaProfile,

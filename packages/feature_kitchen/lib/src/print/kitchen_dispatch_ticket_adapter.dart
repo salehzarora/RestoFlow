@@ -268,6 +268,7 @@ final class CanonicalKitchenDispatchRenderer
   Future<pp.EncodedPrintJob> renderJob(
     KitchenDispatchDocument dispatch, {
     required bool compact,
+    pp.CompactRasterEncoder compactEncoder = pp.encodeXprinterCompactRaster,
     String? customerPhoneOverride,
   }) {
     switch (dispatch.kind) {
@@ -284,6 +285,7 @@ final class CanonicalKitchenDispatchRenderer
               customerPhoneOverride: customerPhoneOverride,
             ),
             compact: true,
+            compactEncoder: compactEncoder,
             mediaProfile: media,
             rasterizer: _voidRenderer.rasterizer,
             adapter: _voidRenderer.adapter,
@@ -306,6 +308,7 @@ final class CanonicalKitchenDispatchRenderer
         // The slip never prints a phone, so [customerPhoneOverride] is unused.
         return renderOrderChangeSlipJob(
           compact: compact,
+          compactEncoder: compactEncoder,
           slip: orderChangeSlipViewFromKitchenDispatch(dispatch),
           labels: labels,
           changeLabels: slipLabels,
@@ -317,6 +320,7 @@ final class CanonicalKitchenDispatchRenderer
       case KitchenSpoolDispatchType.serviceRound:
         return renderKitchenTicketJob(
           compact: compact,
+          compactEncoder: compactEncoder,
           ticket: kdsTicketViewFromKitchenDispatch(
             dispatch,
             customerPhoneOverride: customerPhoneOverride,

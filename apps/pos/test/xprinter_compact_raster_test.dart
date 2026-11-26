@@ -87,17 +87,21 @@ void main() {
                 };
               }
             }
-            final packet = pp.encodeXprinterCompactRaster(
-              pp.PrintRasterImageLine(
-                data: data,
-                widthBytes: width,
-                heightDots: height,
-              ),
+            final image = pp.PrintRasterImageLine(
+              data: data,
+              widthBytes: width,
+              heightDots: height,
             );
-            final page = _readPrintedArea(packet, width);
-            expect(page.rows, height);
-            expect(listEquals(page.pixels, data), isTrue);
-            expect(packet.length, lessThanOrEqualTo(8 + width * height));
+            for (final encode in [
+              pp.encodeXprinterCompactRaster,
+              pp.encodeXprinterSparseRaster,
+            ]) {
+              final packet = encode(image);
+              final page = _readPrintedArea(packet, width);
+              expect(page.rows, height);
+              expect(listEquals(page.pixels, data), isTrue);
+              expect(packet.length, lessThanOrEqualTo(8 + width * height));
+            }
           }
         }
       }
@@ -234,6 +238,11 @@ void main() {
             job.length - tail.length,
           );
           final decoded = _readPrintedArea(packet, media.widthBytes);
+          expect(packet, orderedEquals(pp.encodeXprinterSparseRaster(full)));
+          expect(
+            packet.length,
+            lessThan(pp.encodeXprinterCompactRaster(full).length),
+          );
           expect(decoded.rows, full.heightDots);
           expect(listEquals(decoded.pixels, full.data), isTrue);
           expect(decoded.bandAlignments.length, greaterThan(1));

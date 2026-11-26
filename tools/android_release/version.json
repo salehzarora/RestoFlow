@@ -99,6 +99,41 @@
   },
   "previousOfficialReleases": [
     {
+      "versionName": "0.0.81",
+      "versionCode": 81,
+      "signing": "restoflow-production",
+      "status": "BUILT / PRODUCTION-SIGNED / VERIFIED / CONSUMED",
+      "sourceSha": "dbf4dc0572b811664779cb84f523af5ef552a6eb",
+      "buildDate": "2026-11-26",
+      "versionSymmetrySatisfied": true,
+      "certificateSha256": "4E:E0:03:49:AD:BD:65:24:49:6A:04:96:0B:AE:63:33:36:EE:BC:87:CB:6B:82:DF:7D:07:5C:F8:C4:7E:FA:E7",
+      "artifacts": {
+        "pos": {
+          "filename": "RestoFlow-POS-official-v81-dbf4dc0.apk",
+          "packageId": "com.restoflow.pos",
+          "sizeBytes": 77426409,
+          "sha256": "cd5e40fea4b037a8ff13b27af5b95da5c7ad3030ee86c23a14157da2dc1e420c"
+        },
+        "kds": {
+          "filename": "RestoFlow-KDS-official-v81-dbf4dc0.apk",
+          "packageId": "com.restoflow.kds",
+          "sizeBytes": 57938786,
+          "sha256": "6b07fe9a956b96bcb74d6c338aa4390b19eb55197ad7fbe99a3a0f2f9031609a"
+        }
+      },
+      "reservationAsRecorded": {
+        "versionName": "0.0.81",
+        "versionCode": 81,
+        "signing": "restoflow-production",
+        "status": "RESERVED - OFFICIAL PRINT UPDATE / BUILD PENDING",
+        "intendedSource": "Protected main merge of the BIZBOT-POS-PRINT-FLOW-001 official receipt update. Build the synchronized pair from that exact verified commit.",
+        "notes": [
+          "Preserve the official POS package, production certificate, real-mode backend, and background order alerts used for v80. The companion KDS artifact follows the existing pair policy.",
+          "The shared package/version claim reserves code 81 for this build. Device installation and payment activation are separate operations."
+        ]
+      }
+    },
+    {
       "versionName": "0.0.80",
       "versionCode": 80,
       "signing": "restoflow-production",
@@ -1141,14 +1176,13 @@
     }
   ],
   "nextOfficialRelease": {
-    "versionName": "0.0.81",
-    "versionCode": 81,
+    "versionName": "0.0.82",
+    "versionCode": 82,
     "signing": "restoflow-production",
-    "status": "RESERVED - OFFICIAL PRINT UPDATE / BUILD PENDING",
-    "intendedSource": "Protected main merge of the BIZBOT-POS-PRINT-FLOW-001 official receipt update. Build the synchronized pair from that exact verified commit.",
+    "status": "RESERVED - OFFICIAL ROLL PRINTING UPDATE / BUILD PENDING",
+    "intendedSource": "Protected main merge of BIZBOT-POS-PRINT-ALL-002.",
     "notes": [
-      "Preserve the official POS package, production certificate, real-mode backend, and background order alerts used for v80. The companion KDS artifact follows the existing pair policy.",
-      "The shared package/version claim reserves code 81 for this build. Device installation and payment activation are separate operations."
+      "Build POS and KDS together from the same source and preserve the POS background order alert configuration from v81."
     ]
   },
   "ownerReportedAcceptanceRecords": [
@@ -1404,13 +1438,10 @@
     "versionName": "0.2.25",
     "versionCode": 27,
     "signing": "restoflow-production",
-    "status": "planned - NOT required yet / NOT built / NOT installed / NOT uploaded",
-    "intendedSource": "to be decided when a kiosk change needs a new build",
+    "status": "RESERVED - OFFICIAL ROLL PRINTING UPDATE / BUILD PENDING",
+    "intendedSource": "Protected main merge of BIZBOT-POS-PRINT-ALL-002.",
     "notes": [
-      "Independent lineage outside the POS/KDS pair contract: 0.2.24 / 26 is built and",
-      "recorded in kioskReleases. The v56 and v57 pairs change no kiosk code, so no kiosk build",
-      "is planned with them. 0.2.25 / 27 follows the 0.2.<code-2> progression and is",
-      "reserved for the next kiosk change; build only when the owner authorizes it."
+      "Build the next kiosk release from the same source as the v82 POS/KDS pair. Its independent lineage follows 0.2.24 / 26."
     ]
   },
   "dashboardReleases": [

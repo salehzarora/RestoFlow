@@ -4,10 +4,11 @@ import 'dart:typed_data';
 import '../print_document.dart';
 import 'escpos_command_builder.dart';
 
+typedef CompactRasterEncoder = Uint8List Function(PrintRasterImageLine image);
+typedef _Span = ({int row, int left, int right});
 typedef _Crop = ({int left, int width, PrintAlignment align});
 
-// ESC a justifies graphics within the configured print area. The caller selects
-// this path only for a 576-dot printer with a matching input bitmap.
+// ESC a justifies graphics within the configured 576-dot print area.
 _Crop _crop(int first, int last, int pageWidth) {
   if (last < first) return (left: 0, width: 1, align: PrintAlignment.left);
   final leftWidth = last + 1;
@@ -23,44 +24,73 @@ _Crop _crop(int first, int last, int pageWidth) {
   return (left: 0, width: leftWidth, align: PrintAlignment.left);
 }
 
-/// Sends the same black dots at the same paper coordinates as a full raster.
-/// GS v 0 advances by its exact height, even for an all-white narrow strip.
-/// The complete packet is prepared in memory for the existing whole-job send.
-Uint8List encodeXprinterCompactRaster(PrintRasterImageLine image) {
+// Both encoders send the same black dots at the same paper coordinates. A
+// one-byte-wide white GS v 0 band still advances the exact number of rows.
+List<_Span> _scan(PrintRasterImageLine image, {required bool splitBlankRuns}) {
+  final width = image.widthBytes;
+  final spans = <_Span>[];
+  var start = 0;
+  var left = width;
+  var right = -1;
+  var previousFirst = width;
+  var previousLast = -1;
+  for (var row = 0; row < image.heightDots; row++) {
+    final offset = row * width;
+    var first = 0;
+    while (first < width && image.data[offset + first] == 0) {
+      first++;
+    }
+    var last = first == width ? -1 : width - 1;
+    while (last > first && image.data[offset + last] == 0) {
+      last--;
+    }
+    final blankTransition = (last < 0) != (previousLast < 0);
+    final widthChange = first != previousFirst || last != previousLast;
+    final boundary = splitBlankRuns
+        ? blankTransition || row % 16 == 0 || (row % 8 == 0 && widthChange)
+        : row % 8 == 0;
+    if (row > start && boundary) {
+      spans.add((row: start, left: left, right: right));
+      start = row;
+      left = width;
+      right = -1;
+    }
+    left = math.min(left, first);
+    right = math.max(right, last);
+    previousFirst = first;
+    previousLast = last;
+  }
+  spans.add((row: start, left: left, right: right));
+  return spans;
+}
+
+Uint8List _encodeBands(
+  PrintRasterImageLine image,
+  List<_Span> spans, {
+  required int commandPenalty,
+  required int maxRows,
+  required bool allowSingleFullRaster,
+}) {
   final width = image.widthBytes;
   final height = image.heightDots;
-  const rowsPerTile = 8;
-  final tiles = (height + rowsPerTile - 1) ~/ rowsPerTile;
-  final first = List.filled(tiles, width);
-  final last = List.filled(tiles, -1);
-  for (var y = 0; y < height; y++) {
-    final tile = y ~/ rowsPerTile;
-    final row = y * width;
-    for (var x = 0; x < width; x++) {
-      if (image.data[row + x] == 0) continue;
-      first[tile] = math.min(first[tile], x);
-      last[tile] = math.max(last[tile], x);
-    }
-  }
+  final count = spans.length;
+  final cost = List.filled(count + 1, 0);
+  final next = List.filled(count, 0);
+  final crops = List<_Crop?>.filled(count, null);
+  int rowAt(int index) => index == count ? height : spans[index].row;
 
-  // Each raster command can introduce work at the print head. Charge it a
-  // planning penalty so tiny byte savings do not fragment the job. On the
-  // 40-item reference this kept 17 bands versus 82 with a 256-byte penalty.
-  // Look ahead at most 512 rows to keep planning linear in receipt length.
-  const commandPenalty = 1024;
-  const maxTilesPerBand = 64;
-  final cost = List.filled(tiles + 1, 0);
-  final next = List.filled(tiles, 0);
-  final crops = List<_Crop?>.filled(tiles, null);
-  for (var start = tiles - 1; start >= 0; start--) {
+  // A raster command costs time at the print head as well as bytes on the
+  // wire. The bounded lookahead keeps planning linear in receipt length.
+  for (var start = count - 1; start >= 0; start--) {
     var left = width;
     var right = -1;
-    final limit = math.min(tiles, start + maxTilesPerBand);
-    for (var end = start + 1; end <= limit; end++) {
-      left = math.min(left, first[end - 1]);
-      right = math.max(right, last[end - 1]);
+    for (var end = start + 1; end <= count; end++) {
+      final rows = rowAt(end) - spans[start].row;
+      if (rows > maxRows) break;
+      final span = spans[end - 1];
+      left = math.min(left, span.left);
+      right = math.max(right, span.right);
       final crop = _crop(left, right, width);
-      final rows = math.min(height, end * rowsPerTile) - start * rowsPerTile;
       final score = rows * crop.width + 8 + 3 + commandPenalty + cost[end];
       if (next[start] == 0 || score <= cost[start]) {
         cost[start] = score;
@@ -69,9 +99,9 @@ Uint8List encodeXprinterCompactRaster(PrintRasterImageLine image) {
       }
     }
   }
-
   final commands = EscPosCommandBuilder();
-  if (height <= 0xffff &&
+  if (allowSingleFullRaster &&
+      height <= 0xffff &&
       cost.first + 3 >= image.data.length + 8 + commandPenalty) {
     return (commands..rasterImage(
           data: image.data,
@@ -81,14 +111,14 @@ Uint8List encodeXprinterCompactRaster(PrintRasterImageLine image) {
         .bytes();
   }
   var alignment = PrintAlignment.left;
-  for (var start = 0; start < tiles; start = next[start]) {
+  for (var start = 0; start < count; start = next[start]) {
     final crop = crops[start]!;
     if (alignment != crop.align) {
       commands.align(crop.align);
       alignment = crop.align;
     }
-    final y = start * rowsPerTile;
-    final rows = math.min(height, next[start] * rowsPerTile) - y;
+    final y = spans[start].row;
+    final rows = rowAt(next[start]) - y;
     final pixels = Uint8List(rows * crop.width);
     for (var row = 0; row < rows; row++) {
       final source = (y + row) * width + crop.left;
@@ -107,4 +137,28 @@ Uint8List encodeXprinterCompactRaster(PrintRasterImageLine image) {
   }
   if (alignment != PrintAlignment.left) commands.align(PrintAlignment.left);
   return commands.bytes();
+}
+
+/// Fixed eight-row tiles keep the field-tested KDS and Kiosk band layout.
+Uint8List encodeXprinterCompactRaster(PrintRasterImageLine image) =>
+    _encodeBands(
+      image,
+      _scan(image, splitBlankRuns: false),
+      commandPenalty: 1024,
+      maxRows: 512,
+      allowSingleFullRaster: true,
+    );
+
+/// For POS, split at the actual boundaries of blank runs. Prefer the original
+/// encoding on ties and whenever splitting would produce a larger packet.
+Uint8List encodeXprinterSparseRaster(PrintRasterImageLine image) {
+  final sparse = _encodeBands(
+    image,
+    _scan(image, splitBlankRuns: true),
+    commandPenalty: 512,
+    maxRows: 1024,
+    allowSingleFullRaster: false,
+  );
+  final compact = encodeXprinterCompactRaster(image);
+  return sparse.length < compact.length ? sparse : compact;
 }

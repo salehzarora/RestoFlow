@@ -92,6 +92,7 @@ class NativeTransportPrintBridge implements PosPrintBridge {
     if (compactReceipt) {
       final bytes = await pp.tryEncodeCompactRoll(
         receiptToEscPosDocument(document, columns: mediaProfile.columns),
+        compactEncoder: pp.encodeXprinterSparseRaster,
         mediaProfile: mediaProfile,
         profile: profile,
         rasterizer: rasterizer,

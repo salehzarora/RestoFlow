@@ -6,6 +6,11 @@ import 'native_print_target.dart';
 import 'native_printer_store.dart';
 import 'printer_config.dart';
 
+/// Matches the app's production compact encoder when printing a diagnostic.
+final nativePrintCompactEncoderProvider = Provider<pp.CompactRasterEncoder>(
+  (ref) => pp.encodeXprinterCompactRaster,
+);
+
 /// The "Test print" seam for a local network printer (ANDROID-002).
 ///
 /// Builds the money-free ESC/POS diagnostic document, encodes it for an 80mm
@@ -33,6 +38,7 @@ class DefaultNetworkPrinterTester implements NetworkPrinterTester {
     this.profile = pp.PrinterProfile.escPos80mm,
     this.rasterizer,
     this.compactMode,
+    this.compactEncoder = pp.encodeXprinterCompactRaster,
     this.timeout = const Duration(seconds: 6),
   });
 
@@ -46,6 +52,7 @@ class DefaultNetworkPrinterTester implements NetworkPrinterTester {
   /// SELECTED media profile through the SAME pipeline as production.
   final pp.ReceiptRasterizer? rasterizer;
   final Future<bool> Function(String)? compactMode;
+  final pp.CompactRasterEncoder compactEncoder;
   final Duration timeout;
 
   @override
@@ -70,6 +77,7 @@ class DefaultNetworkPrinterTester implements NetworkPrinterTester {
           !config.mediaProfile.paginates &&
           await compactMode?.call(destination) == true,
       mediaProfile: config.mediaProfile,
+      compactEncoder: compactEncoder,
       rasterizer: rasterizer,
       adapter: adapter,
       profile: profile,
@@ -92,6 +100,7 @@ final networkPrinterTesterProvider = Provider<NetworkPrinterTester>(
   (ref) => DefaultNetworkPrinterTester(
     rasterizer: ref.watch(nativePrintRasterizerProvider),
     compactMode: ref.watch(nativePrintCompactModeProvider),
+    compactEncoder: ref.watch(nativePrintCompactEncoderProvider),
   ),
 );
 
@@ -117,10 +126,12 @@ class DefaultBluetoothPrinterTester implements BluetoothPrinterTester {
     this.profile = pp.PrinterProfile.escPos80mm,
     this.rasterizer,
     this.compactMode,
+    this.compactEncoder = pp.encodeXprinterCompactRaster,
   });
 
   final BluetoothPrinterConnector connector;
   final Future<bool> Function(String)? compactMode;
+  final pp.CompactRasterEncoder compactEncoder;
   final pp.EscPosPrintAdapter adapter;
   final pp.PrinterProfile profile;
 
@@ -149,6 +160,7 @@ class DefaultBluetoothPrinterTester implements BluetoothPrinterTester {
           !config.mediaProfile.paginates &&
           await compactMode?.call(destination) == true,
       mediaProfile: config.mediaProfile,
+      compactEncoder: compactEncoder,
       rasterizer: rasterizer,
       adapter: adapter,
       profile: profile,
@@ -174,5 +186,6 @@ final bluetoothPrinterTesterProvider = Provider<BluetoothPrinterTester>(
     ref.watch(bluetoothPrinterConnectorProvider),
     rasterizer: ref.watch(nativePrintRasterizerProvider),
     compactMode: ref.watch(nativePrintCompactModeProvider),
+    compactEncoder: ref.watch(nativePrintCompactEncoderProvider),
   ),
 );

@@ -38,6 +38,7 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
 import 'package:restoflow_printing/restoflow_printing.dart'
     show
         EncodedPrintJob,
+        encodeXprinterSparseRaster,
         KitchenTransportOutcome,
         KitchenTransportOutcomeKind,
         ReceiptRasterizer,
@@ -179,6 +180,7 @@ final class PosSelectedLocaleKitchenDispatchRenderer
     final job = await renderer.renderJob(
       dispatch,
       compact: compact,
+      compactEncoder: encodeXprinterSparseRaster,
       customerPhoneOverride: customerPhoneOverride,
     );
     if (!_isCurrent()) throw StateError('kitchen_print_scope_invalid');
