@@ -98,9 +98,9 @@ const refuses = (list, message) => assert.throws(() => proveMigrationSequence(li
 const successorNames = excludedSuccessors.map(item => item.name);
 const [posDutySuccessor, g1Successor] = excludedSuccessors;
 
-test('the sequence pins #379, payment 001D, product helpers, scene, background clarity and seven later successors', () => {
+test('the sequence pins #379, payment 001D, product helpers, scene, background clarity and eight later successors', () => {
   assert.deepEqual(proveMigrationSequence(sources).summary, {
-    migrations: 195, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name), ...successorNames],
+    migrations: 196, before_target: 183, predecessor: predecessorName, target: migrationName, later_than_target: [followUpName, ...followupMigrations.map(item => item.name), ...successorNames],
     prefix_names_sha256: prefixNamesFingerprint, follow_up_sha256: followUpFingerprint, follow_up_statements: 125,
     follow_up_no_embedded_transaction: true,
     visual_followups: followupMigrations.map(pin => ({ ...pin, version: pin.name.slice(0, 14), statements: statements(bytesOf(pin.name).toString('utf8')).length, no_embedded_transaction: true })),
@@ -112,6 +112,7 @@ test('the sequence pins #379, payment 001D, product helpers, scene, background c
       { label: 'product detail original', name: '20261112011934_bizbot_storefront_product_detail_original_001.sql', sha256: 'c92d70304045a171de8660b8eaefc27f8df2072e6f213e0a28bfda49a1af3c73' },
       { label: 'responsive banner', name: '20261113134741_bizbot_storefront_responsive_banner_001.sql', sha256: '734c339d116a3ae4d64544676bda78cc17d543f1f7d2ce95c23f884a8d2dd75d' },
       { label: 'welcome video', name: '20261116160533_bizbot_storefront_welcome_video_001.sql', sha256: 'c937eddae6c310d8a1c42a42c260d2e0c8765cc3a2647ba54d010b640366cfd9' },
+      { label: 'POS customer suggestions', name: '20261126170723_bizbot_pos_branch_customer_suggestions_001.sql', sha256: '28745cf2f684b325a5991e372785cbe2b14687d00506719ccf9e6adb7491d6cf' },
     ],
   });
 });
@@ -297,7 +298,7 @@ test('the historical #379 / PR380 fixture plan omits 001D and three pinned succe
   assert.throws(() => visualReleaseSources(adding(['20261110000000_unreviewed_after_g1.sql', sql('select 1;\n')])), failsWith('Unexpected migration sequence after the #379 target'));
 });
 
-test('seven pinned successors carry their exact identities and are excluded from both historical plans', () => {
+test('eight pinned successors carry their exact identities and are excluded from both historical plans', () => {
   assert.deepEqual(excludedSuccessors.map(pin => [pin.label, pin.name, pin.sha256]), [
     ['POS duty', '20261108085442_bizbot_pos_long_shift_alerts_001.sql', '7bd3b8946cde2979519a4e302c6c5ecef25399725234072df617359168b4a865'],
     ['G1', '20261109143313_bizbot_zcredit_001e_drop_evidence_001.sql', '1ac9a99048c0755a982d197099a7aed27d802a67ea02b38254b79453b92bad95'],
@@ -306,6 +307,7 @@ test('seven pinned successors carry their exact identities and are excluded from
     ['product detail original', '20261112011934_bizbot_storefront_product_detail_original_001.sql', 'c92d70304045a171de8660b8eaefc27f8df2072e6f213e0a28bfda49a1af3c73'],
     ['responsive banner', '20261113134741_bizbot_storefront_responsive_banner_001.sql', '734c339d116a3ae4d64544676bda78cc17d543f1f7d2ce95c23f884a8d2dd75d'],
     ['welcome video', '20261116160533_bizbot_storefront_welcome_video_001.sql', 'c937eddae6c310d8a1c42a42c260d2e0c8765cc3a2647ba54d010b640366cfd9'],
+    ['POS customer suggestions', '20261126170723_bizbot_pos_branch_customer_suggestions_001.sql', '28745cf2f684b325a5991e372785cbe2b14687d00506719ccf9e6adb7491d6cf'],
   ]);
   assert.ok(Object.isFrozen(excludedSuccessors) && excludedSuccessors.every(pin => Object.isFrozen(pin)));
   for (const pin of excludedSuccessors) assert.equal(sha256(bytesOf(pin.name)), pin.sha256);
@@ -314,7 +316,7 @@ test('seven pinned successors carry their exact identities and are excluded from
   assert.equal(historical.length, 188);
   assert.deepEqual(historical, [...prefix, followUpName, ...followupMigrations.map(item => item.name)]);
   assert.deepEqual([...historical, ...successorNames], sources.map(([entry]) => entry));
-  assert.deepEqual(sources.slice(-7).map(([entry]) => entry), successorNames);
+  assert.deepEqual(sources.slice(-8).map(([entry]) => entry), successorNames);
   assert.ok(successorNames.every(name => !historical.includes(name) && !prefix.includes(name)));
   const visual = visualReleaseSources(sources).map(([entry]) => entry);
   assert.equal(visual.length, 187);
@@ -514,7 +516,7 @@ test('responsive banner has exactly one raw-byte pin and no embedded transaction
 });
 test('responsive lifecycle appends only the reviewed successor and preserves every older plan', () => {
   const detail = detailOriginalReleaseSources(sources), plan = responsiveBannerReleaseSources(sources);
-  assert.equal(sources.length, 195); assert.equal(detail.length, 190); assert.equal(plan.length, 191);
+  assert.equal(sources.length, 196); assert.equal(detail.length, 190); assert.equal(plan.length, 191);
   assert.deepEqual(plan.map(([name]) => name), [...detail.map(([name]) => name), responsiveBannerSuccessor.name]);
   assert.ok(plan.every(([name, bytes]) => bytes === bytesOf(name)));
   assert.equal(plan.filter(([name]) => name === responsiveBannerSuccessor.name).length, 1);
@@ -548,7 +550,7 @@ test('welcome video has one exact raw-byte identity and no transaction wrapper',
   assert.deepEqual(welcomeVideoSuccessor, { label: 'welcome video',
     name: '20261116160533_bizbot_storefront_welcome_video_001.sql',
     sha256: 'c937eddae6c310d8a1c42a42c260d2e0c8765cc3a2647ba54d010b640366cfd9' });
-  assert.equal(excludedSuccessors.at(-1), welcomeVideoSuccessor);
+  assert.equal(excludedSuccessors[6], welcomeVideoSuccessor);
   assert.ok(Object.isFrozen(welcomeVideoSuccessor));
   assert.equal(bytesOf(welcomeVideoSuccessor.name).length, 73441);
   assert.equal(sha256(bytesOf(welcomeVideoSuccessor.name)), welcomeVideoSuccessor.sha256);
@@ -556,8 +558,9 @@ test('welcome video has one exact raw-byte identity and no transaction wrapper',
 });
 test('welcome lifecycle appends only welcome video after responsive and preserves every prior plan', () => {
   const before = responsiveBannerReleaseSources(sources), plan = welcomeVideoReleaseSources(sources);
-  assert.equal(sources.length, 195); assert.equal(before.length, 191); assert.equal(plan.length, 192);
+  assert.equal(sources.length, 196); assert.equal(before.length, 191); assert.equal(plan.length, 192);
   assert.deepEqual(plan.map(([name]) => name), [...before.map(([name]) => name), welcomeVideoSuccessor.name]);
+  assert.ok(!plan.some(([name]) => name === '20261126170723_bizbot_pos_branch_customer_suggestions_001.sql'));
   assert.ok(plan.every(([name, bytes]) => bytes === bytesOf(name)));
   assert.equal(plan.filter(([name]) => name === welcomeVideoSuccessor.name).length, 1);
   assert.ok(!plan.some(([name]) => [followUpName, posDutySuccessor.name, g1Successor.name].includes(name)));
