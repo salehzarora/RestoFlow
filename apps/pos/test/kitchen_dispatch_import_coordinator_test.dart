@@ -831,7 +831,7 @@ void main() {
           'flushed',
         );
       },
-      bluetoothSend: ({required address, required bytes}) async =>
+      bluetoothSend: ({required address, required job}) async =>
           const pp.KitchenTransportOutcome(
             pp.KitchenTransportOutcomeKind.unsupported,
             'not_in_this_test',

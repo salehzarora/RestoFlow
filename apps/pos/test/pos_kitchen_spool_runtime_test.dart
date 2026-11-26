@@ -327,7 +327,7 @@ void main() {
           }
         : null,
     bluetoothSend: wireDrain
-        ? ({required address, required bytes}) async =>
+        ? ({required address, required job}) async =>
               const KitchenTransportOutcome(
                 KitchenTransportOutcomeKind.accepted,
                 'native_flushed_drained',

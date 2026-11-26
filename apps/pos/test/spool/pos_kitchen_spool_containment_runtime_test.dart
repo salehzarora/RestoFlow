@@ -256,7 +256,7 @@ void main() {
         'fake_accepted',
       );
     },
-    bluetoothSend: ({required address, required bytes}) async {
+    bluetoothSend: ({required address, required job}) async {
       fail('no Bluetooth bytes authorized in this synthetic network fixture');
     },
     sendGate: PrinterDestinationSendGate(),

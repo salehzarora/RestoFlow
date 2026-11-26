@@ -17,11 +17,15 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/src/spool/flutter_secure_kitchen_spool_key_store.dart';
 import 'package:restoflow_pos/src/spool/kitchen_dispatch_import_coordinator.dart';
 import 'package:restoflow_pos/src/spool/kitchen_print_worker.dart';
+import 'package:restoflow_pos/src/spool/pos_kitchen_spool_composition_native.dart'
+    show PosSelectedLocaleKitchenDispatchRenderer;
 import 'package:restoflow_pos/src/spool/kitchen_void_reconciliation.dart';
 import 'package:restoflow_pos/src/spool/pending_kitchen_ack_coordinator.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';
 import 'package:restoflow_printing/restoflow_printing.dart'
     show
+        EncodedPrintJob,
+        FakeReceiptRasterizer,
         KitchenTransportOutcome,
         KitchenTransportOutcomeKind,
         PrinterDestinationSendGate;
@@ -99,7 +103,7 @@ class _FakeSecureStorage extends Fake implements FlutterSecureStorage {
 class _SendScript {
   final List<KitchenTransportOutcome> outcomes = [];
   final List<(String, int, Uint8List)> networkCalls = [];
-  final List<(String, Uint8List)> bluetoothCalls = [];
+  final List<(String, EncodedPrintJob)> bluetoothCalls = [];
   Completer<void>? holdUntil;
 
   Future<KitchenTransportOutcome> network({
@@ -115,9 +119,9 @@ class _SendScript {
 
   Future<KitchenTransportOutcome> bluetooth({
     required String address,
-    required Uint8List bytes,
+    required EncodedPrintJob job,
   }) async {
-    bluetoothCalls.add((address, bytes));
+    bluetoothCalls.add((address, job));
     return outcomes.removeAt(0);
   }
 }
@@ -484,6 +488,47 @@ void main() {
         KitchenSpoolJobStatus.imported,
       );
     });
+    test(
+      'Storefront target uses its verified pinned printer mode in one send',
+      () async {
+        const address = 'DC:0D:30:AA:BB:CC';
+        await seedRunnable(
+          'web-target',
+          localJobId: targetId,
+          bluetoothAddress: address,
+        );
+        final pins = <String>[];
+        final renderer = PosSelectedLocaleKitchenDispatchRenderer(
+          languageCode: () => 'he',
+          isCurrent: () => true,
+          rasterizer: FakeReceiptRasterizer(),
+          compactForDestination: (key) async {
+            pins.add(key);
+            return key == PrinterDestinationSendGate.bluetoothKey(address);
+          },
+        );
+        sends.outcomes.add(
+          const KitchenTransportOutcome(
+            KitchenTransportOutcomeKind.accepted,
+            'flushed',
+          ),
+        );
+        final report = await worker(
+          renderer: renderer,
+          onlyLocalJobId: targetId,
+          beforeTargetSend: (_) async => true,
+          finishTargetSend: (_) async => true,
+        ).run();
+        expect((report.accepted, report.acked), (1, 1));
+        expect(pins, [PrinterDestinationSendGate.bluetoothKey(address)]);
+        final sent = sends.bluetoothCalls.single;
+        expect(sent.$1, address);
+        expect(sent.$2.wholeJob, isTrue);
+        expect(sent.$2.bytes, isNotEmpty);
+        expect(sends.networkCalls, isEmpty);
+      },
+    );
+
     test(
       'exact target leaves older historical row untouched and needs fresh grant',
       () async {

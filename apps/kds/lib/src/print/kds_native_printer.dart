@@ -23,6 +23,7 @@ class NativeKdsPrintBridge implements KdsPrintBridge {
     this.sender, {
     this.rasterizer,
     this.mediaProfile = pp.MediaProfile.continuous80,
+    this.compact = true,
     this.pageLabel,
     this.continuationHeader,
   });
@@ -40,6 +41,10 @@ class NativeKdsPrintBridge implements KdsPrintBridge {
   /// backward-compatible 80mm continuous roll (576 dots / 48 columns / feed 3).
   final pp.MediaProfile mediaProfile;
 
+  /// The operator's local choice for this printer. The shared encoder also
+  /// checks the actual media width and keeps fixed labels on their own layout.
+  final bool compact;
+
   /// Localized page-number / continuation-header builders for a multi-page
   /// fixed-media kitchen ticket (null => none).
   final pp.PageLineLabel? pageLabel;
@@ -52,22 +57,17 @@ class NativeKdsPrintBridge implements KdsPrintBridge {
       document,
       columns: mediaProfile.columns,
     );
-    // Raster Arabic/Hebrew (+ ×) tickets; ASCII-only stays text on a continuous
-    // roll. A FIXED label always rasterizes + paginates at its real width. A
-    // rasterizer failure falls back to the text ticket. Money-free by contract.
-    var doc = text;
-    try {
-      doc = await pp.rasterizeForMediaProfile(
-        text,
-        rasterizer: rasterizer,
-        profile: mediaProfile,
-        pageLabel: pageLabel,
-        continuationHeader: continuationHeader,
-      );
-    } catch (_) {
-      doc = text;
-    }
-    return sender.send(doc);
+    final job = await pp.encodePrintJob(
+      text,
+      compact: compact,
+      rasterizer: rasterizer,
+      mediaProfile: mediaProfile,
+      profile: sender.profile,
+      adapter: sender.adapter,
+      pageLabel: pageLabel,
+      continuationHeader: continuationHeader,
+    );
+    return sender.sendJob(job);
   }
 
   @override
@@ -83,8 +83,13 @@ class NativeKdsPrintBridge implements KdsPrintBridge {
 final kdsActivePrintBridgeProvider = Provider<KdsPrintBridge?>((ref) {
   final transportFactory = ref.watch(activeNativeTransportFactoryProvider);
   if (transportFactory != null) {
+    final destination = ref.watch(activeNativeRollDestinationProvider);
     return NativeKdsPrintBridge(
       NativeEscPosSender(transportFactory: transportFactory),
+      compact:
+          destination != null &&
+          ref.watch(nativeCompactRollProvider(destination)).asData?.value ==
+              true,
       // PRINT-RTL-001: the app injects the real raster renderer; null keeps text.
       rasterizer: ref.watch(nativePrintRasterizerProvider),
       // PRINT-LAYOUT-001A: the KDS kitchen printer's selected media profile.
@@ -112,14 +117,17 @@ final kdsActivePrintBridgeProvider = Provider<KdsPrintBridge?>((ref) {
 final kdsActivePrintBridgeReadyProvider = FutureProvider<KdsPrintBridge?>((
   ref,
 ) async {
-  final transportFactory = await ref.watch(
-    activeNativeTransportFactoryReadyProvider.future,
-  );
-  if (transportFactory != null) {
+  final target = await ref.watch(activeNativePrintTargetReadyProvider.future);
+  if (target != null) {
     return NativeKdsPrintBridge(
-      NativeEscPosSender(transportFactory: transportFactory),
+      NativeEscPosSender(transportFactory: target.transportFactory),
+      compact:
+          target.media.id == pp.MediaProfileId.continuous80 &&
+          await ref.watch(
+            nativeCompactRollProvider(target.destinationKey).future,
+          ),
       rasterizer: ref.watch(nativePrintRasterizerProvider),
-      mediaProfile: ref.watch(activeNativeMediaProfileProvider),
+      mediaProfile: target.media,
     );
   }
   return ref.watch(kdsPrintBridgeProvider);
@@ -134,6 +142,9 @@ NativePrinterStrings kdsNativePrinterStrings(
   transportHeading: l10n.posPrinterTransportHeading,
   transportNetwork: l10n.kdsPrinterTransportNetwork,
   transportBluetooth: l10n.kdsPrinterTransportBluetooth,
+  compactTitle: l10n.posCompactReceiptTitle,
+  compactHelp: l10n.posCompactReceiptHelp,
+  compactSaveFailure: l10n.printerProfilesSaveFailure,
   networkHeading: l10n.posNetworkPrinterHeading,
   networkHelp: l10n.posNetworkPrinterHelp,
   networkIpLabel: l10n.kdsPrinterNetworkIp,

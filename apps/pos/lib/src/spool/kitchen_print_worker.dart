@@ -8,6 +8,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show SupabaseKitchenDispatchAckRepository;
 import 'package:restoflow_printing/restoflow_printing.dart'
     show
+        EncodedPrintJob,
         KitchenTransportOutcome,
         KitchenTransportOutcomeKind,
         PrinterDestinationSendGate,
@@ -93,8 +94,19 @@ typedef KitchenNetworkSend =
 typedef KitchenBluetoothSend =
     Future<KitchenTransportOutcome> Function({
       required String address,
-      required Uint8List bytes,
+      required EncodedPrintJob job,
     });
+
+/// A format-aware renderer must choose the mode for the destination already
+/// verified from this job, including on recovery after a printer reassignment.
+abstract interface class DestinationKitchenJobRenderer
+    implements KitchenDispatchBytesRenderer {
+  Future<EncodedPrintJob> renderForDestination(
+    KitchenDispatchDocument dispatch, {
+    required String destinationKey,
+    String? customerPhoneOverride,
+  });
+}
 
 /// Opaque durable IDs distinguish targeted web jobs from ordinary spool jobs.
 /// Every worker, including lifecycle workers without a fence, fails closed.
@@ -628,7 +640,7 @@ final class KitchenPrintWorker {
       return const _PrepFailure('kitchen_paper_width_not_80mm');
     }
     final String gateKey;
-    final Future<KitchenTransportOutcome> Function(Uint8List bytes) sendBytes;
+    final Future<KitchenTransportOutcome> Function(EncodedPrintJob job) send;
     switch (payload.destination) {
       case NetworkKitchenDestination(:final host, :final port):
         if (job.transportKind != 'network' ||
@@ -637,8 +649,7 @@ final class KitchenPrintWorker {
           return const _PrepFailure('kitchen_destination_invalid');
         }
         gateKey = PrinterDestinationSendGate.networkKey(host, port);
-        sendBytes = (bytes) =>
-            _networkSend(host: host, port: port, bytes: bytes);
+        send = (job) => _networkSend(host: host, port: port, bytes: job.bytes);
       case BluetoothKitchenDestination(:final address):
         if (job.transportKind != 'bluetooth' ||
             job.destinationFingerprint !=
@@ -646,7 +657,7 @@ final class KitchenPrintWorker {
           return const _PrepFailure('kitchen_destination_invalid');
         }
         gateKey = PrinterDestinationSendGate.bluetoothKey(address);
-        sendBytes = (bytes) => _bluetoothSend(address: address, bytes: bytes);
+        send = (job) => _bluetoothSend(address: address, job: job);
       case MissingKitchenDestination():
         // Should be structurally impossible for a runnable job (blocked
         // imports have no fingerprint) — treat as corruption, fail closed.
@@ -654,20 +665,30 @@ final class KitchenPrintWorker {
     }
 
     // 9–10: money-free render + 80mm ESC/POS encode, outside the gate.
-    final Uint8List bytes;
+    final EncodedPrintJob encoded;
     try {
       // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): render the OPTIONAL phone from
       // the decrypted local payload (a crash-recovery replay keeps the phone that
       // the server-derived `dispatch` deliberately never carried). Null on legacy
       // rows -> byte-identical to before.
-      bytes = await _renderer.renderToBytes(
-        dispatch,
-        customerPhoneOverride: payload.customerPhone,
-      );
+      final renderer = _renderer;
+      encoded = renderer is DestinationKitchenJobRenderer
+          ? await renderer.renderForDestination(
+              dispatch,
+              destinationKey: gateKey,
+              customerPhoneOverride: payload.customerPhone,
+            )
+          : (
+              bytes: await renderer.renderToBytes(
+                dispatch,
+                customerPhoneOverride: payload.customerPhone,
+              ),
+              wholeJob: false,
+            );
     } on Object {
       return const _PrepFailure('kitchen_render_failed');
     }
-    return _Prepared(gateKey: gateKey, send: () => sendBytes(bytes));
+    return _Prepared(gateKey: gateKey, send: () => send(encoded));
   }
 
   static String _fingerprint(String canonical) =>

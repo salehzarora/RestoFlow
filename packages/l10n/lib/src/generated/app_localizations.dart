@@ -2704,7 +2704,7 @@ abstract class AppLocalizations {
   /// **'Powered by BIZBOT'**
   String get posReceiptPoweredBy;
 
-  /// On-device, per-printer switch for compact full-font customer receipts.
+  /// On-device, per-printer switch for compact full-font receipts and kitchen tickets.
   ///
   /// In en, this message translates to:
   /// **'Fast printing with the app font'**
@@ -2713,7 +2713,7 @@ abstract class AppLocalizations {
   /// Explains the 80 mm roll and compatible printer requirement.
   ///
   /// In en, this message translates to:
-  /// **'Print the entire receipt in the app font on an 80 mm roll. Use with an Xprinter XP-T80Q or a compatible printer.'**
+  /// **'Print receipts and kitchen tickets in the app font on an 80 mm roll. Turn this off if your printer needs slower transmission.'**
   String get posCompactReceiptHelp;
 
   /// PRINT-LAYOUT-001: a short thank-you footer line on the cashier receipt.

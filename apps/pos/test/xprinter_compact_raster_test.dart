@@ -10,7 +10,6 @@ import 'package:restoflow_pos/src/print/native_print_bridges.dart';
 import 'package:restoflow_pos/src/print/print_bridge.dart'
     show receiptToEscPosDocument;
 import 'package:restoflow_pos/src/print/receipt_logo_asset.dart';
-import 'package:restoflow_pos/src/print/xprinter_compact_raster.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/receipt_print_preview.dart'
     show buildBillDocument, buildReceiptDocument;
@@ -88,17 +87,21 @@ void main() {
                 };
               }
             }
-            final packet = encodeXprinterCompactRaster(
-              pp.PrintRasterImageLine(
-                data: data,
-                widthBytes: width,
-                heightDots: height,
-              ),
+            final image = pp.PrintRasterImageLine(
+              data: data,
+              widthBytes: width,
+              heightDots: height,
             );
-            final page = _readPrintedArea(packet, width);
-            expect(page.rows, height);
-            expect(listEquals(page.pixels, data), isTrue);
-            expect(packet.length, lessThanOrEqualTo(8 + width * height));
+            for (final encode in [
+              pp.encodeXprinterCompactRaster,
+              pp.encodeXprinterSparseRaster,
+            ]) {
+              final packet = encode(image);
+              final page = _readPrintedArea(packet, width);
+              expect(page.rows, height);
+              expect(listEquals(page.pixels, data), isTrue);
+              expect(packet.length, lessThanOrEqualTo(8 + width * height));
+            }
           }
         }
       }
@@ -123,7 +126,7 @@ void main() {
         data[y * width + x] = (y % 2 == 0) ? 0x81 : 0x1b;
         data[y * width + x + 1] = (y % 3 == 0) ? 0x76 : 0x8f;
       }
-      final packet = encodeXprinterCompactRaster(
+      final packet = pp.encodeXprinterCompactRaster(
         pp.PrintRasterImageLine(
           data: data,
           widthBytes: width,
@@ -235,6 +238,11 @@ void main() {
             job.length - tail.length,
           );
           final decoded = _readPrintedArea(packet, media.widthBytes);
+          expect(packet, orderedEquals(pp.encodeXprinterSparseRaster(full)));
+          expect(
+            packet.length,
+            lessThan(pp.encodeXprinterCompactRaster(full).length),
+          );
           expect(decoded.rows, full.heightDots);
           expect(listEquals(decoded.pixels, full.data), isTrue);
           expect(decoded.bandAlignments.length, greaterThan(1));

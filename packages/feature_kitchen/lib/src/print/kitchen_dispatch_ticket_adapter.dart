@@ -8,7 +8,7 @@ import '../kds_ticket_mapper.dart' show KdsTicketMapper;
 import '../kds_ticket_view.dart';
 import 'kds_ticket_print_builder.dart' show KitchenTicketPrintLabels;
 import 'kitchen_ticket_render.dart'
-    show renderKitchenTicketBytes, renderOrderChangeSlipBytes;
+    show renderKitchenTicketJob, renderOrderChangeSlipJob;
 import 'order_change_slip_view.dart';
 
 /// KIOSK-PRINT-114B.5A — the CANONICAL dispatch → kitchen-ticket adapter.
@@ -211,14 +211,14 @@ OrderChangeSlipView orderChangeSlipViewFromKitchenDispatch(
 ///
 /// For every normal dispatch (initial order / service round) it adapts the
 /// document through [kdsTicketViewFromKitchenDispatch] and encodes it through
-/// the ONE shared [renderKitchenTicketBytes] seam — the exact bytes the POS
+/// the ONE shared [renderKitchenTicketJob] seam — the exact bytes the POS
 /// direct print emits for the same order. A VOID notice has no canonical
 /// representation (the shared builder knows initial/addition kinds only), so it
 /// is delegated UNCHANGED to the legacy [KitchenTicketRenderer] frame: void
 /// paper keeps its banner, reason and affected-count lines byte-for-byte.
 ///
 /// ORDER-EDIT-001C: an `order_edit` dispatch prints the CHANGE SLIP through
-/// [renderOrderChangeSlipBytes] with [changeLabels]. Without [changeLabels] it
+/// [renderOrderChangeSlipJob] with [changeLabels]. Without [changeLabels] it
 /// FAILS CLOSED with a [StateError] — the worker records it as a visible
 /// `kitchen_render_failed`, never an item-less ticket or a misprint. The
 /// routing is an exhaustive switch on the dispatch kind, so a future kind
@@ -259,13 +259,45 @@ final class CanonicalKitchenDispatchRenderer
   Future<Uint8List> renderToBytes(
     KitchenDispatchDocument dispatch, {
     String? customerPhoneOverride,
+  }) => renderJob(
+    dispatch,
+    compact: false,
+    customerPhoneOverride: customerPhoneOverride,
+  ).then((job) => job.bytes);
+
+  Future<pp.EncodedPrintJob> renderJob(
+    KitchenDispatchDocument dispatch, {
+    required bool compact,
+    pp.CompactRasterEncoder compactEncoder = pp.encodeXprinterCompactRaster,
+    String? customerPhoneOverride,
   }) {
     switch (dispatch.kind) {
       case KitchenSpoolDispatchType.voidNotice:
-        return _voidRenderer.renderToBytes(
-          dispatch,
-          customerPhoneOverride: customerPhoneOverride,
-        );
+        // Void notices retain their original frame (banner, reason and count).
+        // A custom raster width or a fixed medium keeps the established path.
+        final media = mediaProfile ?? pp.MediaProfile.continuous80;
+        if (compact &&
+            !media.paginates &&
+            media.widthDots == _voidRenderer.rasterWidthDots) {
+          return pp.encodePrintJob(
+            _voidRenderer.buildDocument(
+              dispatch,
+              customerPhoneOverride: customerPhoneOverride,
+            ),
+            compact: true,
+            compactEncoder: compactEncoder,
+            mediaProfile: media,
+            rasterizer: _voidRenderer.rasterizer,
+            adapter: _voidRenderer.adapter,
+            profile: _voidRenderer.profile,
+          );
+        }
+        return _voidRenderer
+            .renderToBytes(
+              dispatch,
+              customerPhoneOverride: customerPhoneOverride,
+            )
+            .then((bytes) => (bytes: bytes, wholeJob: false));
       case KitchenSpoolDispatchType.orderEdit:
         final slipLabels = changeLabels;
         if (slipLabels == null) {
@@ -274,7 +306,9 @@ final class CanonicalKitchenDispatchRenderer
           );
         }
         // The slip never prints a phone, so [customerPhoneOverride] is unused.
-        return renderOrderChangeSlipBytes(
+        return renderOrderChangeSlipJob(
+          compact: compact,
+          compactEncoder: compactEncoder,
           slip: orderChangeSlipViewFromKitchenDispatch(dispatch),
           labels: labels,
           changeLabels: slipLabels,
@@ -284,7 +318,9 @@ final class CanonicalKitchenDispatchRenderer
         );
       case KitchenSpoolDispatchType.initialOrder:
       case KitchenSpoolDispatchType.serviceRound:
-        return renderKitchenTicketBytes(
+        return renderKitchenTicketJob(
+          compact: compact,
+          compactEncoder: compactEncoder,
           ticket: kdsTicketViewFromKitchenDispatch(
             dispatch,
             customerPhoneOverride: customerPhoneOverride,

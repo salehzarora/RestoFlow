@@ -3,7 +3,13 @@ import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import 'bluetooth_printer.dart';
 import 'native_print_target.dart';
+import 'native_printer_store.dart';
 import 'printer_config.dart';
+
+/// Matches the app's production compact encoder when printing a diagnostic.
+final nativePrintCompactEncoderProvider = Provider<pp.CompactRasterEncoder>(
+  (ref) => pp.encodeXprinterCompactRaster,
+);
 
 /// The "Test print" seam for a local network printer (ANDROID-002).
 ///
@@ -31,6 +37,8 @@ class DefaultNetworkPrinterTester implements NetworkPrinterTester {
     this.adapter = const pp.EscPosPrintAdapter(),
     this.profile = pp.PrinterProfile.escPos80mm,
     this.rasterizer,
+    this.compactMode,
+    this.compactEncoder = pp.encodeXprinterCompactRaster,
     this.timeout = const Duration(seconds: 6),
   });
 
@@ -43,6 +51,8 @@ class DefaultNetworkPrinterTester implements NetworkPrinterTester {
   /// PRINT-LAYOUT-001A: the raster renderer, so the Test Print renders at the
   /// SELECTED media profile through the SAME pipeline as production.
   final pp.ReceiptRasterizer? rasterizer;
+  final Future<bool> Function(String)? compactMode;
+  final pp.CompactRasterEncoder compactEncoder;
   final Duration timeout;
 
   @override
@@ -57,27 +67,28 @@ class DefaultNetworkPrinterTester implements NetworkPrinterTester {
           printerName: config.name,
           deviceLabel: deviceLabel,
         );
-    // PRINT-LAYOUT-001A: render at the config's media profile (exact width +
-    // fixed-media pagination) — never a hardcoded 80mm/576. Continuous80 with an
-    // ASCII doc stays byte-identical (rasterizeForMediaProfile is a no-op there).
-    var rendered = doc;
-    try {
-      rendered = await pp.rasterizeForMediaProfile(
-        doc,
-        rasterizer: rasterizer,
-        profile: config.mediaProfile,
-      );
-    } catch (_) {
-      rendered = doc;
-    }
-    final bytes = adapter.encode(rendered, profile);
+    final destination = pp.PrinterDestinationSendGate.networkKey(
+      config.host,
+      config.port,
+    );
+    final job = await pp.encodePrintJob(
+      doc,
+      compact:
+          !config.mediaProfile.paginates &&
+          await compactMode?.call(destination) == true,
+      mediaProfile: config.mediaProfile,
+      compactEncoder: compactEncoder,
+      rasterizer: rasterizer,
+      adapter: adapter,
+      profile: profile,
+    );
     final transport = pp.NetworkTcpPrintTransport(
       host: config.host,
       port: config.port,
       timeout: timeout,
     );
     try {
-      return await transport.send(bytes);
+      return await transport.send(job.bytes);
     } finally {
       await transport.dispose();
     }
@@ -88,6 +99,8 @@ class DefaultNetworkPrinterTester implements NetworkPrinterTester {
 final networkPrinterTesterProvider = Provider<NetworkPrinterTester>(
   (ref) => DefaultNetworkPrinterTester(
     rasterizer: ref.watch(nativePrintRasterizerProvider),
+    compactMode: ref.watch(nativePrintCompactModeProvider),
+    compactEncoder: ref.watch(nativePrintCompactEncoderProvider),
   ),
 );
 
@@ -112,9 +125,13 @@ class DefaultBluetoothPrinterTester implements BluetoothPrinterTester {
     this.adapter = const pp.EscPosPrintAdapter(),
     this.profile = pp.PrinterProfile.escPos80mm,
     this.rasterizer,
+    this.compactMode,
+    this.compactEncoder = pp.encodeXprinterCompactRaster,
   });
 
   final BluetoothPrinterConnector connector;
+  final Future<bool> Function(String)? compactMode;
+  final pp.CompactRasterEncoder compactEncoder;
   final pp.EscPosPrintAdapter adapter;
   final pp.PrinterProfile profile;
 
@@ -134,17 +151,20 @@ class DefaultBluetoothPrinterTester implements BluetoothPrinterTester {
           printerName: config.name,
           deviceLabel: deviceLabel,
         );
-    var rendered = doc;
-    try {
-      rendered = await pp.rasterizeForMediaProfile(
-        doc,
-        rasterizer: rasterizer,
-        profile: config.mediaProfile,
-      );
-    } catch (_) {
-      rendered = doc;
-    }
-    final bytes = adapter.encode(rendered, profile);
+    final destination = pp.PrinterDestinationSendGate.bluetoothKey(
+      config.address,
+    );
+    final job = await pp.encodePrintJob(
+      doc,
+      compact:
+          !config.mediaProfile.paginates &&
+          await compactMode?.call(destination) == true,
+      mediaProfile: config.mediaProfile,
+      compactEncoder: compactEncoder,
+      rasterizer: rasterizer,
+      adapter: adapter,
+      profile: profile,
+    );
     final transport = BluetoothClassicPrintTransport(
       connector: connector,
       address: config.address,
@@ -153,7 +173,7 @@ class DefaultBluetoothPrinterTester implements BluetoothPrinterTester {
       timeout: kBluetoothPrintTimeout,
     );
     try {
-      return await transport.send(bytes);
+      return await transport.send(job.bytes, wholeJob: job.wholeJob);
     } finally {
       await transport.dispose();
     }
@@ -165,5 +185,7 @@ final bluetoothPrinterTesterProvider = Provider<BluetoothPrinterTester>(
   (ref) => DefaultBluetoothPrinterTester(
     ref.watch(bluetoothPrinterConnectorProvider),
     rasterizer: ref.watch(nativePrintRasterizerProvider),
+    compactMode: ref.watch(nativePrintCompactModeProvider),
+    compactEncoder: ref.watch(nativePrintCompactEncoderProvider),
   ),
 );

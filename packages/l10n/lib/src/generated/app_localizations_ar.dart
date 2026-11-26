@@ -1503,7 +1503,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posCompactReceiptHelp =>
-      'يطبع الإيصال كاملًا بخط التطبيق على رول 80 مم. فعّله لطابعة Xprinter XP-T80Q أو طابعة متوافقة.';
+      'يطبع فواتير الزبائن وتذاكر المطبخ بخط التطبيق على رول 80 مم. أوقفه إذا احتاجت طابعتك إرسالًا أبطأ.';
 
   @override
   String get posReceiptThankYou => 'شكراً لزيارتكم';

@@ -97,6 +97,49 @@ Uint8List _bytes([int length = 1200]) =>
     Uint8List.fromList(List.generate(length, (i) => i % 251));
 
 void main() {
+  test(
+    'diagnostic button uses the physical printer preference and the canonical packet',
+    () async {
+      const config = BluetoothPrinterConfig(address: 'AB:CD');
+      const document = pp.PrintDocument([
+        pp.PrintTextLine('العربية / עברית / English'),
+      ]);
+      final key = pp.PrinterDestinationSendGate.bluetoothKey(config.address);
+      for (final enabled in [false, true]) {
+        final expected = await pp.encodePrintJob(
+          document,
+          compact: enabled,
+          mediaProfile: config.mediaProfile,
+          rasterizer: pp.FakeReceiptRasterizer(),
+        );
+        final api = _FakeApi(
+          jobs: [
+            BluetoothJobResult(
+              code: BluetoothJobCode.ok,
+              bytesSent: expected.bytes.length,
+              chunks: 1,
+            ),
+          ],
+        );
+        final tester = DefaultBluetoothPrinterTester(
+          _connector(api),
+          rasterizer: pp.FakeReceiptRasterizer(),
+          compactMode: (destination) async {
+            expect(destination, key);
+            return enabled;
+          },
+        );
+        expect((await tester.testPrint(config, document: document)).ok, isTrue);
+        final send = api.printCalls.single;
+        expect(send.bytes, expected.bytes);
+        expect(
+          send.chunkBytes,
+          enabled ? expected.bytes.length : kBluetoothChunkBytes,
+        );
+        expect(send.chunkDelay, enabled ? Duration.zero : kBluetoothChunkDelay);
+      }
+    },
+  );
   group('permissions', () {
     test('granted -> no request dialog, job runs', () async {
       final api = _FakeApi(granted: true);

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
@@ -31,22 +33,41 @@ class NativeEscPosSender {
   int get columns => profile == pp.PrinterProfile.escPos80mm ? 48 : 32;
 
   Future<pp.BridgeSubmitResult> send(pp.PrintDocument escpos) async {
-    final bytes = adapter.encode(escpos, profile);
+    return sendJob((bytes: adapter.encode(escpos, profile), wholeJob: false));
+  }
+
+  Future<pp.BridgeSubmitResult> sendJob(pp.EncodedPrintJob job) async {
     final transport = transportFactory();
     try {
-      final result = await transport.send(bytes);
+      final result = await sendNativePrintBytes(
+        transport,
+        job.bytes,
+        wholeJob: job.wholeJob,
+      );
       if (result.ok) {
         return const pp.BridgeSubmitResult.sentToPrinter(mode: 'native');
       }
       return pp.BridgeSubmitResult.failed(
         result.category ?? pp.PrinterErrorCategory.unknown,
         result.message,
+        result.physicalOutcome,
+        result.bytesSent,
       );
     } finally {
       await transport.dispose();
     }
   }
 }
+
+/// TCP already submits the packet in one send. Only the Bluetooth channel
+/// needs an explicit request for the prepared whole-job packet.
+Future<pp.PrintResult> sendNativePrintBytes(
+  pp.PrintTransport transport,
+  Uint8List bytes, {
+  bool wholeJob = false,
+}) => wholeJob && transport is BluetoothClassicPrintTransport
+    ? transport.send(bytes, wholeJob: true)
+    : transport.send(bytes);
 
 /// PRINT-RTL-001 seam: the raster text renderer for on-device Arabic/Hebrew (and
 /// non-ASCII ₪/× ) printing. Null (the DEFAULT) => native prints stay ESC/POS
@@ -120,31 +141,61 @@ final activeNativeTransportFactoryProvider =
 /// is unchanged and still owns everything below this line.
 final activeNativeTransportFactoryReadyProvider =
     FutureProvider<pp.PrintTransport Function()?>((ref) async {
-      if (!ref.watch(nativePrintingAvailableProvider)) return null;
-      final selected = await ref.watch(selectedPrinterTransportProvider.future);
-      switch (selected) {
-        case PrinterTransportKind.bluetooth:
-          final bt = await ref.watch(bluetoothPrinterConfigProvider.future);
-          if (bt != null) {
-            final connector = ref.watch(bluetoothPrinterConnectorProvider);
-            return () => BluetoothClassicPrintTransport(
+      final target = await ref.watch(
+        activeNativePrintTargetReadyProvider.future,
+      );
+      return target?.transportFactory;
+    });
+
+/// Snapshot taken from a single saved assignment. Keep its physical endpoint,
+/// media and transport together while reading the preference and encoding.
+typedef NativePrintTarget = ({
+  String destinationKey,
+  pp.MediaProfile media,
+  pp.PrintTransport Function() transportFactory,
+});
+
+final activeNativePrintTargetReadyProvider = FutureProvider<NativePrintTarget?>(
+  (ref) async {
+    if (!ref.watch(nativePrintingAvailableProvider)) return null;
+    final selected = await ref.watch(selectedPrinterTransportProvider.future);
+    switch (selected) {
+      case PrinterTransportKind.bluetooth:
+        final bt = await ref.watch(bluetoothPrinterConfigProvider.future);
+        if (bt != null) {
+          final connector = ref.watch(bluetoothPrinterConnectorProvider);
+          return (
+            destinationKey: pp.PrinterDestinationSendGate.bluetoothKey(
+              bt.address,
+            ),
+            media: bt.mediaProfile,
+            transportFactory: () => BluetoothClassicPrintTransport(
               connector: connector,
               address: bt.address,
               timeout: kBluetoothPrintTimeout,
-            );
-          }
-        case PrinterTransportKind.network:
-          final net = await ref.watch(networkPrinterConfigProvider.future);
-          if (net != null) {
-            return () => pp.NetworkTcpPrintTransport(
+            ),
+          );
+        }
+      case PrinterTransportKind.network:
+        final net = await ref.watch(networkPrinterConfigProvider.future);
+        if (net != null) {
+          return (
+            destinationKey: pp.PrinterDestinationSendGate.networkKey(
+              net.host,
+              net.port,
+            ),
+            media: net.mediaProfile,
+            transportFactory: () => pp.NetworkTcpPrintTransport(
               host: net.host,
               port: net.port,
               timeout: kNativePrintTimeout,
-            );
-          }
-      }
-      return null;
-    });
+            ),
+          );
+        }
+    }
+    return null;
+  },
+);
 
 /// PRINT-LAYOUT-001A: the media profile of THIS device's ACTIVE native printer
 /// assignment (the config for the selected transport), or the backward-compatible
@@ -165,6 +216,31 @@ final activeNativeMediaProfileProvider = Provider<pp.MediaProfile>((ref) {
       ref.watch(networkPrinterConfigProvider).valueOrNull?.mediaProfile,
   };
   return profile ?? pp.MediaProfile.continuous80;
+});
+
+/// Canonical endpoint for the selected continuous roll. On a cold start
+/// the ready transport provider awaits the selection and config before a job
+/// reads this key, so the first print uses the saved preference as well.
+final activeNativeRollDestinationProvider = Provider<String?>((ref) {
+  final selected = ref.watch(selectedPrinterTransportProvider).asData?.value;
+  switch (selected) {
+    case PrinterTransportKind.bluetooth:
+      final config = ref.watch(bluetoothPrinterConfigProvider).asData?.value;
+      if (config == null ||
+          config.mediaProfile.id != pp.MediaProfileId.continuous80) {
+        return null;
+      }
+      return pp.PrinterDestinationSendGate.bluetoothKey(config.address);
+    case PrinterTransportKind.network:
+      final config = ref.watch(networkPrinterConfigProvider).asData?.value;
+      if (config == null ||
+          config.mediaProfile.id != pp.MediaProfileId.continuous80) {
+        return null;
+      }
+      return pp.PrinterDestinationSendGate.networkKey(config.host, config.port);
+    case null:
+      return null;
+  }
 });
 
 /// Whether THIS device has a native printer configured for the selected

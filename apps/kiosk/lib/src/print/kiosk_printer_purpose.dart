@@ -222,6 +222,8 @@ class KioskKitchenPrintTarget {
   final NetworkPrinterConfig? network;
   final BluetoothPrinterConfig? bluetooth;
 
+  pp.MediaProfile get media => network?.mediaProfile ?? bluetooth!.mediaProfile;
+
   String get destinationKey => network != null
       ? pp.PrinterDestinationSendGate.networkKey(network!.host, network!.port)
       : pp.PrinterDestinationSendGate.bluetoothKey(bluetooth!.address);

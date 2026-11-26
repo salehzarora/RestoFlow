@@ -24,40 +24,43 @@ class _OfflineBluetooth extends Fake implements BluetoothPrinterConnector {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  test('saved opt-in belongs to the physical endpoint and the till', () async {
-    ProviderContainer openTill(String id) {
-      final container = ProviderContainer(
-        overrides: [
-          posPrinterScopeSegmentProvider.overrideWith((ref) async => id),
-        ],
-      );
-      addTearDown(container.dispose);
-      return container;
-    }
+  test(
+    'fast rolls default on and a saved choice belongs to the endpoint and till',
+    () async {
+      ProviderContainer openTill(String id) {
+        final container = ProviderContainer(
+          overrides: [
+            posPrinterScopeSegmentProvider.overrideWith((ref) async => id),
+          ],
+        );
+        addTearDown(container.dispose);
+        return container;
+      }
 
-    final first = posCompactReceiptProvider(
-      pp.PrinterDestinationSendGate.networkKey('192.0.2.1', 9100),
-    );
-    final otherPort = posCompactReceiptProvider(
-      pp.PrinterDestinationSendGate.networkKey('192.0.2.1', 9101),
-    );
-    final otherConnection = posCompactReceiptProvider(
-      pp.PrinterDestinationSendGate.bluetoothKey('02:00:00:00:00:01'),
-    );
-    final a = openTill('A');
-    expect(await a.read(first.future), isFalse);
-    expect(await a.read(first.notifier).setEnabled(true), isTrue);
-    expect(await a.read(otherPort.future), isFalse);
-    expect(await a.read(otherConnection.future), isFalse);
-    expect(await openTill('B').read(first.future), isFalse);
-    final reopened = openTill('A');
-    expect(await reopened.read(first.future), isTrue);
-    expect(await reopened.read(first.notifier).setEnabled(false), isTrue);
-    expect(await openTill('A').read(first.future), isFalse);
-  });
+      final first = posCompactReceiptProvider(
+        pp.PrinterDestinationSendGate.networkKey('192.0.2.1', 9100),
+      );
+      final otherPort = posCompactReceiptProvider(
+        pp.PrinterDestinationSendGate.networkKey('192.0.2.1', 9101),
+      );
+      final otherConnection = posCompactReceiptProvider(
+        pp.PrinterDestinationSendGate.bluetoothKey('02:00:00:00:00:01'),
+      );
+      final a = openTill('A');
+      expect(await a.read(first.future), isTrue);
+      expect(await a.read(first.notifier).setEnabled(false), isTrue);
+      expect(await a.read(otherPort.future), isTrue);
+      expect(await a.read(otherConnection.future), isTrue);
+      expect(await openTill('B').read(first.future), isTrue);
+      final reopened = openTill('A');
+      expect(await reopened.read(first.future), isFalse);
+      expect(await reopened.read(first.notifier).setEnabled(true), isTrue);
+      expect(await openTill('A').read(first.future), isTrue);
+    },
+  );
 
   testWidgets(
-    'customer roll toggle saves and reloads separately for Wi-Fi and Bluetooth',
+    'both roles share the roll choice only for the same physical destination',
     (tester) async {
       final toggle = find.byKey(const Key('compact-app-font-receipt'));
       final labels = await AppLocalizations.delegate.load(const Locale('en'));
@@ -104,9 +107,9 @@ void main() {
       const roll = PosNetworkPrinterConfig(host: '192.0.2.1', port: 9100);
       await c.read(posNetworkPrinterConfigProvider.notifier).save(roll);
       await tester.pumpAndSettle();
-      expect(value(), isFalse);
-      await tap(toggle);
       expect(value(), isTrue);
+      await tap(toggle);
+      expect(value(), isFalse);
       await tap(find.text(labels.posPrinterTransportBluetooth));
       expect(toggle, findsNothing);
       const bt = '02:00:00:00:00:01';
@@ -114,23 +117,25 @@ void main() {
           .read(posBluetoothPrinterConfigProvider.notifier)
           .save(const PosBluetoothPrinterConfig(address: bt));
       await tester.pumpAndSettle();
-      expect(value(), isFalse);
-      await tap(toggle);
       expect(value(), isTrue);
+      await tap(toggle);
+      expect(value(), isFalse);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
       final fresh = await open();
-      expect(value(), isTrue); // Persisted Bluetooth selection and setting.
+      expect(value(), isFalse); // Persisted Bluetooth selection and setting.
       await tap(toggle);
-      expect(value(), isFalse);
+      expect(value(), isTrue);
       await tap(find.text(labels.posPrinterTransportNetwork));
-      expect(value(), isTrue); // Bluetooth edit did not change Wi-Fi.
+      expect(value(), isFalse); // Bluetooth edit did not change Wi-Fi.
       await fresh
           .read(posKitchenNetworkPrinterConfigProvider.notifier)
           .save(roll);
       await tap(find.text(labels.posPrinterPurposeKitchen));
-      expect(toggle, findsNothing);
+      expect(value(), isFalse); // Same network printer, same stored choice.
+      await tap(toggle);
+      expect(value(), isTrue);
       await tap(find.text(labels.posPrinterPurposeCustomer));
       expect(value(), isTrue);
       await fresh

@@ -47,6 +47,8 @@ export 'src/drawer/cash_drawer_kick_dispatcher.dart';
 export 'src/drawer/cash_drawer_kick_input.dart';
 export 'src/escpos/escpos_command_builder.dart';
 export 'src/escpos/escpos_print_adapter.dart';
+export 'src/escpos/encoded_print_job.dart';
+export 'src/escpos/xprinter_compact_raster.dart';
 // PRINT-LAYOUT-001: the typed print MEDIA profile (50×50 / 80×80 fixed labels +
 // the backward-compatible 80mm continuous default) that carries printable
 // width/height in dots, safe margins, font scale, line spacing, and feed — the

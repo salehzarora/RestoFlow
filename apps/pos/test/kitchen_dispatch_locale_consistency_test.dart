@@ -290,6 +290,82 @@ class _TargetRepository implements OnlineOrderPrintRepository {
 }
 
 void main() {
+  test(
+    'POS spool selects sparse encoding for every kitchen dispatch kind',
+    () async {
+      const rasterizer = FlutterReceiptRasterizer();
+      final pos = PosSelectedLocaleKitchenDispatchRenderer(
+        languageCode: () => 'ar',
+        isCurrent: () => true,
+        rasterizer: rasterizer,
+        restaurantName: 'QA kitchen',
+        compactForDestination: (_) async => true,
+      );
+      final canonical = _manualRenderer('ar', rasterizer);
+      for (final kind in KitchenSpoolDispatchType.values) {
+        final document = _document(kind);
+        final sent = await pos.renderForDestination(
+          document,
+          destinationKey: 'printer',
+        );
+        final sparse = await canonical.renderJob(
+          document,
+          compact: true,
+          compactEncoder: pp.encodeXprinterSparseRaster,
+        );
+        final compact = await canonical.renderJob(document, compact: true);
+        expect(sent.wholeJob, isTrue);
+        expect(sent.bytes, orderedEquals(sparse.bytes), reason: '$kind');
+        expect(
+          sent.bytes.length,
+          lessThan(compact.bytes.length),
+          reason: '$kind',
+        );
+      }
+    },
+  );
+
+  test(
+    'fast and paced POS spool jobs retain the same lines and styles for all dispatch kinds and languages',
+    () async {
+      const endpoint = 'net|sample.invalid|9100';
+      for (final locale in ['ar', 'he', 'en']) {
+        for (final kind in KitchenSpoolDispatchType.values) {
+          final document = _document(kind);
+          final painter = pp.FakeReceiptRasterizer();
+          var enabled = false;
+          final renderer = PosSelectedLocaleKitchenDispatchRenderer(
+            languageCode: () => locale,
+            isCurrent: () => true,
+            rasterizer: painter,
+            restaurantName: 'QA kitchen',
+            compactForDestination: (key) async {
+              expect(key, endpoint);
+              return enabled;
+            },
+          );
+          final paced = await renderer.renderForDestination(
+            document,
+            destinationKey: endpoint,
+          );
+          final original = painter.requests.single;
+          expect(paced.wholeJob, isFalse);
+          enabled = true;
+          final fast = await renderer.renderForDestination(
+            document,
+            destinationKey: endpoint,
+          );
+          expect(fast.wholeJob, isTrue, reason: '$locale $kind');
+          expect(fast.bytes, isNotEmpty);
+          expect(painter.requests, hasLength(2));
+          expect(painter.requests.last.lines, original.lines);
+          expect(painter.requests.last.styles, original.styles);
+          expect(painter.requests.last.direction, original.direction);
+        }
+      }
+    },
+  );
+
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -563,7 +639,7 @@ void main() {
             'fake_transport_only',
           );
         },
-        bluetoothSend: ({required address, required bytes}) async =>
+        bluetoothSend: ({required address, required job}) async =>
             throw StateError('Bluetooth forbidden in offline test'),
         sendGate: pp.PrinterDestinationSendGate(),
       );

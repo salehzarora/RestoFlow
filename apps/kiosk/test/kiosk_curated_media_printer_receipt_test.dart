@@ -428,7 +428,7 @@ void main() {
     Future<
       ({
         ProviderContainer container,
-        List<pp.PrintDocument> sent,
+        List<pp.EncodedPrintJob> sent,
         KioskPrintedReceiptLedger ledger,
       })
     >
@@ -442,22 +442,26 @@ void main() {
         if (enabled) kioskAutoPrintPrefKey('dev-1'): true,
       });
       final prefs = await SharedPreferences.getInstance();
-      final sent = <pp.PrintDocument>[];
+      final sent = <pp.EncodedPrintJob>[];
       final ledger = KioskPrintedReceiptLedger(prefs);
       final container = ProviderContainer(
         overrides: [
           kioskPrintedReceiptLedgerProvider.overrideWithValue(ledger),
           kioskReceiptSendProvider.overrideWithValue(() async {
             if (!configured) return null;
-            return (doc) async {
-              sent.add(doc);
-              return failSend
-                  ? const pp.BridgeSubmitResult.failed(
-                      pp.PrinterErrorCategory.unknown,
-                      'boom',
-                    )
-                  : const pp.BridgeSubmitResult.sentToPrinter(mode: 'native');
-            };
+            return (
+              destinationKey: 'kiosk-test-receipt',
+              media: pp.MediaProfile.continuous80,
+              send: (job) async {
+                sent.add(job);
+                return failSend
+                    ? const pp.BridgeSubmitResult.failed(
+                        pp.PrinterErrorCategory.unknown,
+                        'boom',
+                      )
+                    : const pp.BridgeSubmitResult.sentToPrinter(mode: 'native');
+              },
+            );
           }),
           if (branding != null)
             kioskReceiptBrandingProvider.overrideWith((ref) async => branding),
@@ -560,10 +564,7 @@ void main() {
       await h.container
           .read(kioskReceiptAutoPrintProvider)
           .onOrderAccepted(order: _snapshot(), lang: 'en');
-      final texts = [
-        for (final line in h.sent.single.lines)
-          if (line is pp.PrintTextLine) line.text,
-      ].join('\n');
+      final texts = String.fromCharCodes(h.sent.single.bytes);
       expect(texts, contains('Real Rest'));
       expect(texts.toUpperCase(), isNot(contains('EMBER')));
     });

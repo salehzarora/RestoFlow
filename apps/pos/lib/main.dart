@@ -10,7 +10,10 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
-    show nativePrintRasterizerProvider;
+    show
+        nativePrintRasterizerProvider,
+        nativePrintCompactModeProvider,
+        nativePrintCompactEncoderProvider;
 import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -50,6 +53,7 @@ import 'src/state/pos_offline_state.dart'
         posOfflineReconnectProbeIntervalProvider;
 import 'src/state/pos_orders_realtime_bridge.dart'
     show posInvalidationSourceFactoryProvider;
+import 'src/state/pos_compact_receipt.dart';
 import 'src/state/pos_printer_assignments.dart';
 import 'src/state/pos_receipt_logo.dart' show posReceiptLogoReaderProvider;
 import 'src/state/pos_session.dart';
@@ -171,6 +175,13 @@ List<Override> _posOverrides(
   // PRINT-RTL-001: render Arabic/Hebrew (+ ₪/×) receipts as a raster image
   // on the native Android printer path so they print correctly instead of
   // "?????". Web/loopback stays ESC/POS text (the native path is Android-only).
+  nativePrintCompactEncoderProvider.overrideWithValue(
+    encodeXprinterSparseRaster,
+  ),
+  nativePrintCompactModeProvider.overrideWith(
+    (ref) =>
+        (key) => ref.read(posCompactReceiptProvider(key).future),
+  ),
   nativePrintRasterizerProvider.overrideWithValue(
     const FlutterReceiptRasterizer(),
   ),

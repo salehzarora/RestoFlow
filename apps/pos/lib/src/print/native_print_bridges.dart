@@ -6,7 +6,10 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
 import 'package:restoflow_core/restoflow_core.dart'
     show Failure, Result, Success;
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
-    show kBluetoothPrintTimeout, nativePrintRasterizerProvider;
+    show
+        kBluetoothPrintTimeout,
+        nativePrintRasterizerProvider,
+        sendNativePrintBytes;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../state/pos_bluetooth_printer_config.dart';
@@ -20,7 +23,6 @@ import '../state/receipt_print_controller.dart'
 import 'bluetooth_printer.dart';
 import 'print_bridge.dart';
 import 'print_document.dart' as app;
-import 'xprinter_compact_raster.dart';
 
 /// The bounded timeout for a native print attempt (ANDROID-003): a Wi-Fi/BT
 /// printer that is off or out of range fails fast instead of hanging the UI.
@@ -85,26 +87,18 @@ class NativeTransportPrintBridge implements PosPrintBridge {
   /// bands rely on the configured print area being exactly 576 dots wide.
   final bool compactReceipt;
 
-  bool get _useCompact =>
-      compactReceipt &&
-      mediaProfile.id == pp.MediaProfileId.continuous80 &&
-      mediaProfile.widthDots == pp.MediaProfile.continuous80.widthDots &&
-      !mediaProfile.paginates &&
-      profile.paperWidth == pp.PaperWidth.mm80 &&
-      profile.capabilities.supportsRaster &&
-      rasterizer != null;
-
   @override
   Future<pp.BridgeSubmitResult> submit(app.PrintDocument document) async {
-    if (_useCompact) {
-      Uint8List? compact;
-      try {
-        compact = await _encodeCompact(document);
-      } catch (_) {
-        // No bytes have been dispatched. The normal renderer can still print
-        // the original document, including its logo, with the normal pacing.
-      }
-      if (compact != null) return _send(compact, wholeJob: true);
+    if (compactReceipt) {
+      final bytes = await pp.tryEncodeCompactRoll(
+        receiptToEscPosDocument(document, columns: mediaProfile.columns),
+        compactEncoder: pp.encodeXprinterSparseRaster,
+        mediaProfile: mediaProfile,
+        profile: profile,
+        rasterizer: rasterizer,
+        adapter: adapter,
+      );
+      if (bytes != null) return _send(bytes, wholeJob: true);
     }
     // PRINT-BRANDING-LOGO-001 (§4): the logo can only be omitted BEFORE the
     // transport begins. If ENCODING the logo-bearing document fails (a raster
@@ -166,36 +160,6 @@ class NativeTransportPrintBridge implements PosPrintBridge {
         ],
       );
 
-  Future<Uint8List?> _encodeCompact(app.PrintDocument document) async {
-    final escpos = receiptToEscPosDocument(
-      document,
-      columns: mediaProfile.columns,
-    );
-    if (!escpos.lines.any((line) => line is pp.PrintTextLine)) return null;
-    // Use the app font for every language, including an all-ASCII receipt.
-    // Keep the existing renderer's RTL handling, semantic styles, logo,
-    // and blank bottom row. Only the wire format of the body changes.
-    final rendered = await pp.rasterizeTextDocument(
-      escpos,
-      rasterizer: rasterizer!,
-      widthDots: mediaProfile.widthDots,
-    );
-    final preamble = pp.leadingPreambleLines(escpos);
-    final body = rendered.lines[preamble.length] as pp.PrintRasterImageLine;
-    final tail = pp.EscPosCommandBuilder()..feed(mediaProfile.feedLines);
-    if (profile.capabilities.supportsCut) {
-      tail
-        ..init()
-        ..feed(2)
-        ..cut();
-    }
-    return (BytesBuilder(copy: false)
-          ..add(adapter.encode(pp.PrintDocument(preamble), profile))
-          ..add(encodeXprinterCompactRaster(body))
-          ..add(tail.bytes()))
-        .takeBytes();
-  }
-
   Future<Uint8List> _encode(app.PrintDocument document) async {
     // PRINT-LAYOUT-001A: text columns + raster width + margins + pagination all
     // come from the selected media profile — never a hardcoded 80mm/576/48.
@@ -233,9 +197,7 @@ class NativeTransportPrintBridge implements PosPrintBridge {
       final gate = sendGate;
       final key = destinationKey;
       Future<pp.PrintResult> send() =>
-          wholeJob && transport is BluetoothClassicPrintTransport
-          ? transport.send(bytes, wholeJob: true)
-          : transport.send(bytes);
+          sendNativePrintBytes(transport, bytes, wholeJob: wholeJob);
       final result = (gate != null && key != null)
           ? await gate.withDestination(key, send)
           : await send();

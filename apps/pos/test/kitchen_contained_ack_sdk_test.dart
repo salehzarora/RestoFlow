@@ -377,7 +377,7 @@ class _SpoolHarness {
         'synthetic',
       );
     },
-    bluetoothSend: ({required address, required bytes}) async {
+    bluetoothSend: ({required address, required job}) async {
       fail('Unexpected synthetic Bluetooth print');
     },
     sendGate: PrinterDestinationSendGate(),

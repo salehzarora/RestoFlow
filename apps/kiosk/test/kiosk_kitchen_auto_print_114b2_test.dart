@@ -112,10 +112,10 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         kioskKitchenTransportSendProvider.overrideWithValue((
-          bytes,
+          job,
           target,
         ) async {
-          sends.add(bytes);
+          sends.add(job.bytes);
           return outcome;
         }),
         kioskKitchenAckProvider.overrideWithValue(({

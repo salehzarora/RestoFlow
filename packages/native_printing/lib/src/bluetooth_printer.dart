@@ -329,10 +329,9 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
     // method has been dispatched and the OUTCOME is unknown (an outer timeout, a
     // mid-write failure, a lost acknowledgement), there is NO second dispatch —
     // a partial physical print may already exist, so only the operator may retry.
-    final singleWrite = wholeJob && bytes.isNotEmpty;
-    var attempt = await _job(address, bytes, timeout, singleWrite: singleWrite);
+    var attempt = await _job(address, bytes, timeout, wholeJob: wholeJob);
     if (!attempt.job.ok && _retryable(attempt)) {
-      attempt = await _job(address, bytes, timeout, singleWrite: singleWrite);
+      attempt = await _job(address, bytes, timeout, wholeJob: wholeJob);
     }
     return _toPrintResult(attempt);
   }
@@ -352,7 +351,7 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
     String address,
     Uint8List bytes,
     Duration timeout, {
-    required bool singleWrite,
+    required bool wholeJob,
   }) async {
     // Outer never-hang backstop: two native connect attempts (secure +
     // insecure) plus the whole chunked write + drain must fit comfortably.
@@ -363,30 +362,12 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
     // TimeoutException here therefore ALWAYS means the payload was already
     // dispatched and the physical outcome is UNKNOWN — never a pre-dispatch state.
     try {
-      final job = await api
-          .printBytes(
-            address: address,
-            bytes: bytes,
-            timeout: timeout,
-            chunkBytes: singleWrite ? bytes.length : chunkBytes,
-            chunkDelay: singleWrite ? Duration.zero : chunkDelay,
-            drainDelay: drainDelay,
-          )
-          .timeout(outer);
-      if (singleWrite &&
-          job.ok &&
-          (job.chunks != 1 || job.bytesSent != bytes.length)) {
-        // A short/unknown write can already have moved the paper. The caller
-        // must not retry or report a fully delivered receipt.
-        return _BtAttempt(
-          BluetoothJobResult(
-            code: BluetoothJobCode.unknown,
-            detail: 'incomplete_receipt_write',
-            bytesSent: job.bytesSent,
-          ),
-          pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
-        );
-      }
+      final job = await dispatchPrintBytes(
+        address: address,
+        bytes: bytes,
+        timeout: timeout,
+        wholeJob: wholeJob,
+      ).timeout(outer);
       return _BtAttempt(job, _nativeOutcome(job));
     } on TimeoutException {
       // The native job never answered. It WAS dispatched (see the boundary note),
@@ -410,7 +391,37 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
     }
   }
 
-  /// The physical dispatch stage of a DEFINITIVE native result. A connect-phase
+  /// One platform dispatch. Each caller owns its permission, timeout, and
+  /// pre-write retry policy. A compact job requires an exact one-write reply.
+  Future<BluetoothJobResult> dispatchPrintBytes({
+    required String address,
+    required Uint8List bytes,
+    required Duration timeout,
+    required bool wholeJob,
+  }) async {
+    final singleWrite = wholeJob && bytes.isNotEmpty;
+    final result = await api.printBytes(
+      address: address,
+      bytes: bytes,
+      timeout: timeout,
+      chunkBytes: singleWrite ? bytes.length : chunkBytes,
+      chunkDelay: singleWrite ? Duration.zero : chunkDelay,
+      drainDelay: drainDelay,
+    );
+    if (singleWrite &&
+        result.ok &&
+        (result.chunks != 1 || result.bytesSent != bytes.length)) {
+      return BluetoothJobResult(
+        code: BluetoothJobCode.unknown,
+        detail: 'incomplete_receipt_write',
+        bytesSent: result.bytesSent,
+        chunks: result.chunks,
+      );
+    }
+    return result;
+  }
+
+  /// The physical dispatch stage of a definitive native result. A connect-phase
   /// failure proves zero bytes reached the printer; a write-phase failure (or any
   /// positive byte count) means a partial print may exist.
   static pp.PrintPhysicalOutcome _nativeOutcome(BluetoothJobResult job) {
