@@ -4,11 +4,9 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-import '../data/customer_phone.dart';
-import '../data/order_submission.dart' show kCustomerNameMaxLength;
 import '../design/pos_visual_tokens.dart' show PosThemePair;
-import '../pos_palette.dart';
 import '../state/order_setup_controller.dart';
+import 'customer_suggestion_fields.dart';
 import 'table_picker_sheet.dart';
 
 /// The active order's service-mode controls in the cart (RF-114): an order-type
@@ -63,47 +61,7 @@ class OrderSetupSection extends ConsumerWidget {
           else
             _TakeawayHint(message: l10n.posTableNotNeeded),
           const SizedBox(height: RestoflowSpacing.sm),
-          // ORDER-CUSTOMER-001 / POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the two
-          // OPTIONAL customer fields. Neither gates submit, except that a
-          // non-empty MALFORMED phone still blocks Send exactly as before.
-          //
-          // POS-VISUAL-REDESIGN-PHASE-1-007 Step 2: they were the two tallest,
-          // loudest elements in the cart despite being optional and rarely
-          // used, pushing the actual order below the fold. They now SHARE one
-          // row wherever the cart is at least kPosCartPairedFieldsMinWidth
-          // wide, and stack below it — each keeping its full height, its key,
-          // its onChanged, its maxLength and its errorText.
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final name = _CustomerNameField(
-                setup: setup,
-                controller: controller,
-              );
-              final phone = _CustomerPhoneField(
-                setup: setup,
-                controller: controller,
-              );
-              // The threshold is the SECTION's width, so add back the
-              // horizontal padding this LayoutBuilder sits inside.
-              final sectionWidth =
-                  constraints.maxWidth + 2 * RestoflowSpacing.lg;
-              if (sectionWidth < kPosCartPairedFieldsMinWidth) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [name, phone],
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: name),
-                  const SizedBox(width: RestoflowSpacing.sm),
-                  Expanded(child: phone),
-                ],
-              );
-            },
-          ),
+          const CustomerSuggestionFields(),
         ],
       ),
     );
@@ -260,164 +218,6 @@ class _SegmentCell extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The OPTIONAL customer-name input (ORDER-CUSTOMER-001). A stateful field so it
-/// owns a [TextEditingController] whose text is cleared when the order-setup
-/// state resets (customer name -> null) after a successful submit / new order.
-class _CustomerNameField extends ConsumerStatefulWidget {
-  const _CustomerNameField({required this.setup, required this.controller});
-
-  final OrderSetupState setup;
-  final OrderSetupController controller;
-
-  @override
-  ConsumerState<_CustomerNameField> createState() => _CustomerNameFieldState();
-}
-
-class _CustomerNameFieldState extends ConsumerState<_CustomerNameField> {
-  late final TextEditingController _text = TextEditingController(
-    text: widget.setup.customerName ?? '',
-  );
-
-  @override
-  void dispose() {
-    _text.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    // Clear the field when the order-setup state resets (name -> null) after a
-    // successful submit / new order — without disturbing the cashier's typing.
-    ref.listen(orderSetupControllerProvider, (previous, next) {
-      if (next.customerName == null && _text.text.isNotEmpty) {
-        _text.clear();
-      }
-    });
-    return TextField(
-      key: const Key('customer-name-field'),
-      controller: _text,
-      // A display name is free text (ar/he/en + digits + spaces + punctuation);
-      // we only cap the length and normalize (trim/empty->null) on read — no
-      // charset filter that could reject a valid Arabic/Hebrew name.
-      maxLength: kCustomerNameMaxLength,
-      textInputAction: TextInputAction.done,
-      onChanged: widget.controller.setCustomerName,
-      // REFERENCE-REDESIGN-002: the optional customer fields wear the same
-      // quiet filled treatment as the menu search (decoration ONLY — the
-      // field widgets, focus behaviour and 008 keyboard identity are
-      // untouched).
-      decoration: InputDecoration(
-        isDense: true,
-        counterText: '',
-        prefixIcon: const Icon(Icons.person_outline),
-        labelText: l10n.customerNameLabel,
-        hintText: l10n.customerNamePlaceholder,
-        filled: true,
-        fillColor: kPosInnerSurface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(RestoflowRadii.md),
-          borderSide: const BorderSide(color: kPosInputBorder),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(RestoflowRadii.md),
-          borderSide: const BorderSide(color: kPosInputBorder),
-        ),
-      ),
-    );
-  }
-}
-
-/// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer-phone input. A
-/// stateful field owning a [TextEditingController] so its text is cleared when the
-/// order-setup state resets after a submit / new order, and FILLED when a draft is
-/// restored from recovery into an empty field (without disturbing active typing).
-/// Shows a localized inline error for a non-empty malformed value; a valid or empty
-/// phone never blocks submit.
-class _CustomerPhoneField extends ConsumerStatefulWidget {
-  const _CustomerPhoneField({required this.setup, required this.controller});
-
-  final OrderSetupState setup;
-  final OrderSetupController controller;
-
-  @override
-  ConsumerState<_CustomerPhoneField> createState() =>
-      _CustomerPhoneFieldState();
-}
-
-class _CustomerPhoneFieldState extends ConsumerState<_CustomerPhoneField> {
-  late final TextEditingController _text = TextEditingController(
-    text: widget.setup.customerPhoneInput,
-  );
-
-  @override
-  void dispose() {
-    _text.dispose();
-    super.dispose();
-  }
-
-  String? _errorFor(CustomerPhoneError? error, AppLocalizations l10n) {
-    switch (error) {
-      case CustomerPhoneError.unsupportedCharacters:
-        return l10n.customerPhoneErrorChars;
-      case CustomerPhoneError.tooFewDigits:
-        return l10n.customerPhoneErrorDigits;
-      case CustomerPhoneError.tooLong:
-        return l10n.customerPhoneErrorInvalid;
-      case null:
-        return null;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    // Sync the controller to the setup state on RESET (input -> '') and on a
-    // recovery RESTORE (input -> a value while the field is empty), never while
-    // the cashier is actively typing (both non-empty => leave the field alone, so
-    // a stale async restore can never overwrite a newer in-progress draft).
-    ref.listen(orderSetupControllerProvider, (previous, next) {
-      final want = next.customerPhoneInput;
-      if (want.isEmpty && _text.text.isNotEmpty) {
-        _text.clear();
-      } else if (want.isNotEmpty && _text.text.isEmpty) {
-        _text.text = want;
-      }
-    });
-    return TextField(
-      key: const Key('customer-phone-field'),
-      controller: _text,
-      keyboardType: TextInputType.phone,
-      // The 32-char cap is enforced here AND server-side; digits/space/+-() only
-      // are validated on read (normalizeCustomerPhone) — no input formatter that
-      // could fight an RTL keyboard or a legitimate paste.
-      maxLength: kCustomerPhoneMaxLength,
-      textInputAction: TextInputAction.done,
-      onChanged: widget.controller.setCustomerPhone,
-      // REFERENCE-REDESIGN-002: same quiet filled treatment (decoration
-      // ONLY; behaviour, validation and identity untouched).
-      decoration: InputDecoration(
-        isDense: true,
-        counterText: '',
-        prefixIcon: const Icon(Icons.phone_outlined),
-        labelText: l10n.customerPhoneLabel,
-        hintText: l10n.customerPhonePlaceholder,
-        errorText: _errorFor(widget.setup.customerPhoneError, l10n),
-        filled: true,
-        fillColor: kPosInnerSurface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(RestoflowRadii.md),
-          borderSide: const BorderSide(color: kPosInputBorder),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(RestoflowRadii.md),
-          borderSide: const BorderSide(color: kPosInputBorder),
         ),
       ),
     );

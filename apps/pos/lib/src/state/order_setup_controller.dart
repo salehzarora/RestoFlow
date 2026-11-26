@@ -132,6 +132,19 @@ class OrderSetupController extends Notifier<OrderSetupState> {
     );
   }
 
+  /// Apply the cashier's chosen suggestion as one draft update.
+  void selectCustomer({required String name, required String phone}) {
+    final displayName = normalizeCustomerName(name);
+    final displayPhone = normalizeCustomerPhone(phone);
+    if (displayName == null || displayPhone == null) return;
+    state = OrderSetupState(
+      orderType: state.orderType,
+      assignedTable: state.assignedTable,
+      customerName: displayName,
+      customerPhoneInput: displayPhone,
+    );
+  }
+
   /// Resets to the default (takeaway, no table, no customer name/phone) — used
   /// after submit / new order. build() yields empty customerPhoneInput, so the
   /// field auto-clears.

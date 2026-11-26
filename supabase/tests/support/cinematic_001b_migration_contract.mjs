@@ -187,6 +187,7 @@ export const excludedSuccessors = Object.freeze([
   detailOriginalSuccessor,
   responsiveBannerSuccessor,
   welcomeVideoSuccessor,
+  Object.freeze({ label: 'POS customer suggestions', name: '20261126170723_bizbot_pos_branch_customer_suggestions_001.sql', sha256: '28745cf2f684b325a5991e372785cbe2b14687d00506719ccf9e6adb7491d6cf' }),
 ]);
 
 export const targetFunctions = [
